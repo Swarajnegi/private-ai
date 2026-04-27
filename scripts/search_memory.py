@@ -18,11 +18,16 @@ from dataclasses import dataclass
 from sentence_transformers import SentenceTransformer
 import numpy as np
 
+# Resolve KB_PATH from jarvis_core.config so this script works on any machine
+# without per-OS path edits. config.JARVIS_ROOT honors the JARVIS_ROOT env var
+# and falls back to the repo root via Path(__file__).resolve().
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "js-development"))
+from jarvis_core.config import KB_PATH
+
 # ============================================================================
 # PART 1: Configuration
 # ============================================================================
 
-KB_PATH = Path("E:/J.A.R.V.I.S/jarvis_data/knowledge_base.jsonl")
 EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"  # 384-dim, fast
 SIMILARITY_THRESHOLD = 0.3  # Lower = more results
 

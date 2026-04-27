@@ -291,6 +291,7 @@ def extract_images(
 if __name__ == "__main__":
     import sys as _sys
     _sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+    from jarvis_core.config import DATA_ROOT
 
     print("=" * 55)
     print("  PdfImageExtractor - Smoke Test")
@@ -298,7 +299,7 @@ if __name__ == "__main__":
 
     if len(_sys.argv) > 1:
         pdf_file = _sys.argv[1]
-        output = _sys.argv[2] if len(_sys.argv) > 2 else "E:/J.A.R.V.I.S/jarvis_data/extracted_images"
+        output = _sys.argv[2] if len(_sys.argv) > 2 else str(DATA_ROOT / "extracted_images")
         print(f"  PDF    : {pdf_file}")
         print(f"  Output : {output}")
         saved = extract_images(pdf_file, output)
