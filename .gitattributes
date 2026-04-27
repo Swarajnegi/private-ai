@@ -1,0 +1,47 @@
+# =============================================================================
+# JARVIS .gitattributes
+# Cross-platform sanity for Linux (work laptop) <-> Windows (personal laptop).
+# Without this, line-ending conversions create spurious diffs on every commit.
+# =============================================================================
+
+# Default: detect text vs binary, normalize line endings to LF in the repo,
+# convert to native (CRLF on Windows, LF on Linux) on checkout.
+* text=auto eol=lf
+
+# -- Force binary handling (no line-ending conversion, no diff) ---------------
+*.pdf      binary
+*.png      binary
+*.jpg      binary
+*.jpeg     binary
+*.gif      binary
+*.webp     binary
+*.sqlite3  binary
+*.db       binary
+*.tar.gz   binary
+*.tgz      binary
+*.zip      binary
+*.gz       binary
+*.parquet  binary
+*.bin      binary
+*.so       binary
+*.dll      binary
+*.pyc      binary
+
+# -- JSONL: text but each line is a logical record ----------------------------
+# merge=union: when both sides append entries, git unions them automatically
+# instead of declaring a conflict. Critical for knowledge_base.jsonl.
+*.jsonl    text eol=lf merge=union
+
+# -- Shell scripts: always LF, executable bit preserved -----------------------
+*.sh       text eol=lf
+*.bash     text eol=lf
+
+# -- Windows-specific scripts: CRLF -------------------------------------------
+*.bat      text eol=crlf
+*.cmd      text eol=crlf
+*.ps1      text eol=crlf
+
+# -- Lock files: text, no merge attempts --------------------------------------
+*.lock     text -merge
+package-lock.json   text -merge
+bun.lock           text -merge

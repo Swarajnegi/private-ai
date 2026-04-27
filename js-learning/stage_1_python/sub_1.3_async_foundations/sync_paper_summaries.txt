@@ -1,0 +1,149 @@
+JARVIS Research Paper Summaries (SYNC Pipeline)
+Generated: 2026-02-28 17:57:54
+======================================================================
+
+======================================================================
+  Paper 1: 1603.09320v4.pdf
+======================================================================
+  Title:      IEEE TRANSACTIONS ON JOURNAL NAME,  MANUSCRIPT ID
+  Pages:      13
+  Words:      11,069
+  Embed dim:  384
+  Extract:    300ms
+  Embed:      153ms
+
+  ABSTRACT SNIPPET:
+  — We present a new approach for the approximate K-nearest neighbor search based on navigable small world graphs with controllable hierarchy (Hierarchical NSW, HNSW). The proposed solution is fully graph-based, without any need for additional search structures, which are typically used at the coarse search stage of the most proximity graph techniques. Hierarchical NSW incrementally builds a multi-layer structure consisting from hierarchical set of proximity graphs (layers) for nested subsets of the stored elements. The maximum layer in which an element is present is selected randomly with an exponentially decaying probability distribution. This allows producing graphs similar to the previously studied Navigable Small World (NSW) structures while additionally having the links separated by th
+
+======================================================================
+  Paper 2: 1706.03762v7.pdf
+======================================================================
+  Title:      Provided proper attribution is provided, Google hereby grants permission to
+  Pages:      15
+  Words:      6,095
+  Embed dim:  384
+  Extract:    162ms
+  Embed:      151ms
+
+  ABSTRACT SNIPPET:
+  The dominant sequence transduction models are based on complex recurrent or convolutional neural networks that include an encoder and a decoder. The best performing models also connect the encoder and decoder through an attention mechanism. We propose a new simple network architecture, the Transformer, based solely on attention mechanisms, dispensing with recurrence and convolutions entirely. Experiments on two machine translation tasks show these models to be superior in quality while being more parallelizable and requiring significantly less time to train. Our model achieves 28.4 BLEU on the WMT 2014 English- to-German translation task, improving over the existing best results, including ensembles, by over 2 BLEU. On the WMT 2014 English-to-French translation task, our model establishes 
+
+======================================================================
+  Paper 3: 1707.06347v2.pdf
+======================================================================
+  Title:      Proximal Policy Optimization Algorithms
+  Pages:      12
+  Words:      4,392
+  Embed dim:  384
+  Extract:    180ms
+  Embed:      151ms
+
+  ABSTRACT SNIPPET:
+  We propose a new family of policy gradient methods for reinforcement learning, which al- ternate between sampling data through interaction with the environment, and optimizing a “surrogate” objective function using stochastic gradient ascent. Whereas standard policy gra- dient methods perform one gradient update per data sample, we propose a novel objective function that enables multiple epochs of minibatch updates. The new methods, which we call proximal policy optimization (PPO), have some of the beneﬁts of trust region policy optimiza- tion (TRPO), but they are much simpler to implement, more general, and have better sample complexity (empirically). Our experiments test PPO on a collection of benchmark tasks, includ- ing simulated robotic locomotion and Atari game playing, and we show t
+
+======================================================================
+  Paper 4: 1908.10084v1.pdf
+======================================================================
+  Title:      Sentence-BERT: Sentence Embeddings using Siamese BERT-Networks
+  Pages:      11
+  Words:      6,667
+  Embed dim:  384
+  Extract:    54ms
+  Embed:      151ms
+
+  ABSTRACT SNIPPET:
+  BERT (Devlin et al., 2018) and RoBERTa (Liu et al., 2019) has set a new state-of-the-art performance on sentence-pair regression tasks like semantic textual similarity (STS). How- ever, it requires that both sentences are fed into the network, which causes a massive com- putational overhead: Finding the most sim- ilar pair in a collection of 10,000 sentences requires about 50 million inference computa- tions (~65 hours) with BERT. The construction of BERT makes it unsuitable for semantic sim- ilarity search as well as for unsupervised tasks like clustering. In this publication, we present Sentence-BERT (SBERT), a modiﬁcation of the pretrained BERT network that use siamese and triplet net- work structures to derive semantically mean- ingful sentence embeddings that can be com- pared using c
+
+======================================================================
+  Paper 5: 1909.08593v2.pdf
+======================================================================
+  Title:      Fine-Tuning Language Models from Human Preferences
+  Pages:      26
+  Words:      15,122
+  Embed dim:  384
+  Extract:    158ms
+  Embed:      151ms
+
+  ABSTRACT SNIPPET:
+  Reward learning enables the application of rein- forcement learning (RL) to tasks where reward is deﬁned by human judgment, building a model of reward by asking humans questions. Most work on reward learning has used simulated environ- ments, but complex information about values is of- ten expressed in natural language, and we believe reward learning for language is a key to making RL practical and safe for real-world tasks. In this paper, we build on advances in generative pretrain- ing of language models to apply reward learning to four natural language tasks: continuing text with positive sentiment or physically descriptive language, and summarization tasks on the TL;DR and CNN/Daily Mail datasets. For stylistic con- tinuation we achieve good results with only 5,000 comparisons evaluate
+
+======================================================================
+  Paper 6: 2005.11401v4.pdf
+======================================================================
+  Title:      Retrieval-Augmented Generation for
+  Pages:      19
+  Words:      9,886
+  Embed dim:  384
+  Extract:    91ms
+  Embed:      151ms
+
+  ABSTRACT SNIPPET:
+  Large pre-trained language models have been shown to store factual knowledge in their parameters, and achieve state-of-the-art results when ﬁne-tuned on down- stream NLP tasks. However, their ability to access and precisely manipulate knowl- edge is still limited, and hence on knowledge-intensive tasks, their performance lags behind task-speciﬁc architectures. Additionally, providing provenance for their decisions and updating their world knowledge remain open research problems. Pre- trained models with a differentiable access mechanism to explicit non-parametric memory have so far been only investigated for extractive downstream tasks. We explore a general-purpose ﬁne-tuning recipe for retrieval-augmented generation (RAG) — models which combine pre-trained parametric and non-parametric me
+
+======================================================================
+  Paper 7: 2201.11903v6.pdf
+======================================================================
+  Title:      Chain-of-Thought Prompting Elicits Reasoning
+  Pages:      43
+  Words:      22,641
+  Embed dim:  384
+  Extract:    206ms
+  Embed:      152ms
+
+  ABSTRACT SNIPPET:
+  We explore how generating a chain of thought—a series of intermediate reasoning steps—signiﬁcantly improves the ability of large language models to perform complex reasoning. In particular, we show how such reasoning abilities emerge naturally in sufﬁciently large language models via a simple method called chain-of- thought prompting, where a few chain of thought demonstrations are provided as exemplars in prompting. Experiments on three large language models show that chain-of-thought prompting improves performance on a range of arithmetic, commonsense, and symbolic reasoning tasks. The empirical gains can be striking. For instance, prompting a PaLM 540B with just eight chain-of-thought exemplars achieves state-of-the-art accuracy on the GSM8K benchmark of math word problems, surpassing e
+
+======================================================================
+  Paper 8: 2210.03629v3.pdf
+======================================================================
+  Title:      Published as a conference paper at ICLR 2023
+  Pages:      33
+  Words:      17,108
+  Embed dim:  384
+  Extract:    223ms
+  Embed:      151ms
+
+  ABSTRACT SNIPPET:
+  While large language models (LLMs) have demonstrated impressive performance across tasks in language understanding and interactive decision making, their abilities for reasoning (e.g. chain-of-thought prompting) and acting (e.g. action plan generation) have primarily been studied as separate topics. In this paper, we explore the use of LLMs to generate both reasoning traces and task-speciﬁc actions in an interleaved manner, allowing for greater synergy between the two: reasoning traces help the model induce, track, and update action plans as well as handle exceptions, while actions allow it to interface with and gather additional information from external sources such as knowledge bases or environments. We apply our approach, named ReAct, to a diverse set of language and decision making ta
+
+======================================================================
+  Paper 9: 2302.04761v1.pdf
+======================================================================
+  Title:      Toolformer: Language Models Can Teach Themselves to Use Tools
+  Pages:      17
+  Words:      11,907
+  Embed dim:  384
+  Extract:    97ms
+  Embed:      151ms
+
+  ABSTRACT SNIPPET:
+  Language models (LMs) exhibit remarkable abilities to solve new tasks from just a few examples or textual instructions, especially at scale. They also, paradoxically, struggle with basic functionality, such as arithmetic or fac- tual lookup, where much simpler and smaller models excel. In this paper, we show that LMs can teach themselves to use external tools via simple APIs and achieve the best of both worlds. We introduce Toolformer, a model trained to decide which APIs to call, when to call them, what arguments to pass, and how to best incorporate the results into future token prediction. This is done in a self-supervised way, requiring nothing more than a handful of demonstrations for each API. We incorporate a range of tools, including a calculator, a Q&A system, a search engine, a tr
+
+======================================================================
+  Paper 10: 2304.08485v2.pdf
+======================================================================
+  Title:      Visual Instruction Tuning
+  Pages:      25
+  Words:      13,507
+  Embed dim:  384
+  Extract:    237ms
+  Embed:      152ms
+
+  ABSTRACT SNIPPET:
+  Instruction tuning large language models (LLMs) using machine-generated instruction-following data has been shown to improve zero-shot capabilities on new tasks, but the idea is less explored in the multimodal field. We present the first attempt to use language-only GPT-4 to generate multimodal language-image instruction-following data. By instruction tuning on such generated data, we in- troduce LLaVA: Large Language and Vision Assistant, an end-to-end trained large multimodal model that connects a vision encoder and an LLM for general- purpose visual and language understanding. To facilitate future research on visual instruction following, we construct two evaluation benchmarks with diverse and challenging application-oriented tasks. Our experiments show that LLaVA demon- strates impress
+
+======================================================================
+  Paper 11: 2310.08560v2.pdf
+======================================================================
+  Title:      MemGPT: Towards LLMs as Operating Systems
+  Pages:      13
+  Words:      8,479
+  Embed dim:  384
+  Extract:    144ms
+  Embed:      151ms
+
+  ABSTRACT SNIPPET:
+  Large language models (LLMs) have revolution- ized AI, but are constrained by limited context windows, hindering their utility in tasks like ex- tended conversations and document analysis. To enable using context beyond limited context win- dows, we propose virtual context management, a technique drawing inspiration from hierarchical memory systems in traditional operating systems which provide the illusion of an extended vir- tual memory via paging between physical mem- ory and disk. Using this technique, we introduce MemGPT (MemoryGPT), a system that intelli- gently manages different storage tiers in order to effectively provide extended context within the LLM’s limited context window. We evalu- ate our OS-inspired design in two domains where the limited context windows of modern LLMs se
+
+
+Total papers: 11
