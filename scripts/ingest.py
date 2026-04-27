@@ -7,9 +7,9 @@ Run with (activate venv first):
     python scripts/ingest.py <path_to_pdf> [--category ai] [--collection research_papers]
 
 Examples:
-    python scripts/ingest.py "E:/J.A.R.V.I.S/Research Papers/RAGs/2407.19813v3.pdf"
-    python scripts/ingest.py "E:/J.A.R.V.I.S/Research Papers/RAGs/2407.19813v3.pdf" --category biology
-    python scripts/ingest.py "E:/path/to/paper.pdf" --category physics --collection research_papers
+    python scripts/ingest.py "research papers/RAGs/2407.19813v3.pdf"
+    python scripts/ingest.py "research papers/RAGs/2407.19813v3.pdf" --category biology
+    python scripts/ingest.py "/absolute/path/to/paper.pdf" --category physics --collection research_papers
 
 =============================================================================
 THE BIG PICTURE

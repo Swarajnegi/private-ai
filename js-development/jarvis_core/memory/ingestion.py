@@ -331,13 +331,14 @@ class IngestionPipeline:
 if __name__ == "__main__":
     import sys
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+    from jarvis_core.config import JARVIS_ROOT, DB_ROOT, DATA_ROOT
 
     print("=" * 60)
     print("  JARVIS IngestionPipeline — Live Run")
     print("=" * 60)
 
     pipeline = IngestionPipeline(collection_name="research_papers")
-    target   = "E:/J.A.R.V.I.S/Research Papers/RAGs/2407.19813v3.pdf"
+    target = str(JARVIS_ROOT / "research papers" / "RAGs" / "2407.19813v3.pdf")
 
     print(f"\n  Target     : {Path(target).name}")
     print(f"  Collection : research_papers")
@@ -361,6 +362,6 @@ if __name__ == "__main__":
 
     print("\n" + "=" * 60)
     print("  Data Locations:")
-    print(f"  Text Vectors -> E:/J.A.R.V.I.S/jarvis_data/chromadb/")
-    print(f"  Raw Images   -> E:/J.A.R.V.I.S/jarvis_data/extracted_images/")
+    print(f"  Text Vectors -> {DB_ROOT}")
+    print(f"  Raw Images   -> {DATA_ROOT / 'extracted_images'}")
     print("=" * 60)
