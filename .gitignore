@@ -1,0 +1,67 @@
+# =============================================================================
+# JARVIS .gitignore
+# Tracked: source code, docs, knowledge_base.jsonl, model_catalog.json,
+#          .agent/ rules and workflows, learning materials.
+# Excluded: regenerable binaries, third-party clones, large static reference.
+# =============================================================================
+
+# -- Binary regenerables (rebuild from source code + research papers) ---------
+jarvis_data/chromadb/
+jarvis_data/chromadb_backups/
+jarvis_data/extracted_images/
+
+# ChromaDB persistence created by learning exercises or scratch tests anywhere
+# in the tree (sqlite + the UUID-named binary index dirs alongside them)
+**/chroma.sqlite3*
+**/demo_metadata_db/
+**/test_jarvis_persistence_db/
+**/*_chromadb/
+**/*_chroma_db/
+
+# -- Third-party clones (re-clone fresh on each laptop) -----------------------
+OpenClaude/
+OpenJarvis/
+Open-Claude-Cowork/
+
+# -- Large static reference --------------------------------------------------
+# Research papers are ~50 MB and almost never change.
+# Bulk-copy them once via the HDD's jarvis-bulk/ folder, not via git.
+research papers/
+
+# -- Python ------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.pytest_cache/
+.venv/
+venv/
+env/
+.eggs/
+
+# -- Node --------------------------------------------------------------------
+node_modules/
+*.log
+npm-debug.log*
+
+# -- Editor / IDE / OS junk --------------------------------------------------
+.vscode/
+.idea/
+*.swp
+*~
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# -- Local secrets / env -----------------------------------------------------
+.env
+.env.local
+*.local
+*.pem
+*.key
+
+# -- Build artifacts ---------------------------------------------------------
+dist/
+build/
+*.tar.gz
+*.zip
