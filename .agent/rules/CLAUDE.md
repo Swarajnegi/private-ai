@@ -27,9 +27,7 @@ In this repo you are **Chief Systems Architect & Strategic Co-Founder** for JARV
 | Work laptop (this one) | Linux | Claude Code (Opus 4.7) | Daytime | Heavy lifting; scratchpad |
 | Personal laptop | Windows | Antigravity | Evenings | Learning + brainstorming via slash-command workflows; canonical machine |
 
-**Sync:** external HDD as portable git remote. Setup in [SYNC.md](SYNC.md), daily commands in [RUNBOOK.md](RUNBOOK.md). **Single-user-at-a-time** — no concurrent edits.
-
-GitHub is blocked on this work laptop. Don't suggest cloud git as a sync option.
+**Sync:** GitHub at https://github.com/Swarajnegi/private-ai (public repo). Standard `git pull` / `git push` flow. Push from work laptop requires a fine-grained PAT in `$GH_TOKEN` env var (Contents: Read and write scope). Pull is auth-free since the repo is public. **Single-user-at-a-time** — no concurrent edits, so `merge=union` on `*.jsonl` (set in `.gitattributes`) handles the rare append-from-both-sides case automatically.
 
 ---
 
@@ -96,14 +94,15 @@ Match it. Don't invent your own conventions.
 
 ---
 
-## Migration discipline (work laptop → personal laptop)
+## Migration discipline (work laptop ↔ personal laptop)
 
-The user manually ports work-laptop changes through HDD git pulls. **Every write costs migration time.**
+Changes flow via GitHub: `git push` from work laptop → `git pull` on personal laptop. Single-user-at-a-time keeps it conflict-free.
 
-- **Migration manifest at the end of every write turn.** Compact table: Action, Path, Note (Copy / Re-run / Skip).
+- **Migration manifest at the end of every write turn.** Compact table: Action, Path, Note. Helps verify what's about to land in the next push.
 - Prefer **additive over destructive** edits. Prefer **one-file changes** over scattered diffs.
-- **Binary regenerables** (ChromaDB, extracted images, third-party clones, research papers) are never committed. Regenerate per [RUNBOOK.md](RUNBOOK.md) instead of zip-transferring.
+- **Binary regenerables** (ChromaDB, extracted images, third-party clones, research papers) are never committed — see `.gitignore`. Personal laptop regenerates them locally via `python scripts/sync_chromadb.py` (replays manifest) and `python scripts/ingest.py <pdf>` (one-off ingestion).
 - Memory in `~/.claude/projects/-home-swara-unix-work-JARVIS/memory/` is **machine-local** — does not migrate. Don't put project-canonical knowledge there; use [jarvis_data/knowledge_base.jsonl](jarvis_data/knowledge_base.jsonl).
+- `CLAUDE.md` (root), `SYNC.md`, `RUNBOOK.md` are gitignored — they were transitional or work-laptop-only. The substantive operating context is THIS file (`.agent/rules/CLAUDE.md`), which Antigravity loads via `trigger: always_on`.
 
 ---
 
@@ -168,8 +167,7 @@ No fluff. Depth over brevity. Be direct. When the user is wrong, say so with rea
 | Endgame architecture | [.agent/rules/JARVIS_ENDGAME.md](.agent/rules/JARVIS_ENDGAME.md) |
 | Antigravity always-on protocol | [.agent/rules/js-workspace-rule.md](.agent/rules/js-workspace-rule.md) |
 | OpenClaude integration plan | [STAGE_3_OPENCLAUDE_STRATEGY.md](STAGE_3_OPENCLAUDE_STRATEGY.md) |
-| Sync setup (HDD git) | [SYNC.md](SYNC.md) |
-| Daily command reference | [RUNBOOK.md](RUNBOOK.md) |
+| GitHub remote | https://github.com/Swarajnegi/private-ai |
 | Master roadmap | [js-learning/JARVIS_MASTER_ROADMAP.md](js-learning/JARVIS_MASTER_ROADMAP.md) |
 | Knowledge base | [jarvis_data/knowledge_base.jsonl](jarvis_data/knowledge_base.jsonl) |
 | Ingestion manifest | [jarvis_data/ingestion_manifest.jsonl](jarvis_data/ingestion_manifest.jsonl) |
