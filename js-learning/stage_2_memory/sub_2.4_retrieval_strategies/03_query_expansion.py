@@ -1,7 +1,14 @@
 """
 03_query_expansion.py — Stage 2.4.3
 
-Lesson: Query Expansion (HyDE + Multi-Query + RRF)
+Lesson: Query Expansion (HyDE + Multi-Query + RRF + Adaptive Gate)
+
+This lesson now consumes the production module at
+`jarvis_core.memory.expansion`. The retrieval primitives (HyDE,
+Multi-Query+RRF, the should_expand gate, RRF formula) all live in
+production code; the lesson contributes the LLM client wrapper that
+production deliberately does not own (Memory layer stays LLM-agnostic
+via dependency injection).
 
 =============================================================================
 THE BIG PICTURE
@@ -9,66 +16,76 @@ THE BIG PICTURE
 
 User queries are short. Corpus chunks are long. A 2-word query like
 "agentic RAG" produces a MiniLM embedding that aligns with chunks
-containing those exact tokens — but misses chunks that discuss the same
+containing those exact tokens — but misses chunks discussing the same
 *concept* using different wording (e.g. "iterative refinement loops",
 "reflective autonomous agents"). Query expansion fixes that.
 
-Two techniques worth implementing in JARVIS:
+Two techniques implemented in production:
 
-  HyDE        : Have an LLM hallucinate a hypothetical answer paragraph,
-                then embed THAT instead of the raw query. The answer-style
+  HyDE        : LLM hallucinates a hypothetical answer paragraph,
+                embed THAT instead of the raw query. The answer-style
                 vector lives in the same neighborhood as actual answer
                 chunks, so retrieval pulls them in.
 
-  Multi-Query : Have an LLM generate 3-5 paraphrasings / sub-questions,
-                retrieve top-k for each, fuse via Reciprocal Rank Fusion
-                (RRF). RRF score for a doc d in any query's results:
-                    score(d) = sum over all queries q of 1 / (60 + rank_q(d))
+  Multi-Query : LLM generates 3-5 paraphrasings / sub-questions,
+                retrieve top-k for each, fuse via Reciprocal Rank
+                Fusion. RRF score for a doc d in any query's results:
+                    score(d) = sum_q 1 / (60 + rank_q(d))
                 The constant 60 dampens lower-ranked hits. Top-k by
                 fused score = expanded retrieval.
 
+The adaptive gate (`should_expand`) skips expansion for queries
+already shaped like long detailed prompts, identifier lookups, or
+acronym-specific searches.
+
 =============================================================================
-THE FLOW
+THE FLOW (this demo)
 =============================================================================
 
-STEP 1 : User query "agentic RAG"
+STEP 1 : Query "agentic RAG"
          |
-STEP 2a: HyDE       -> LLM("generate hypothetical answer") -> ~200 token paragraph
-         STEP 3a   : embed(paragraph) -> ChromaDB.query -> top-5
+STEP 2 : Run BASELINE top-k via store.query_collection
          |
-STEP 2b: Multi-Q   -> LLM("generate 3 paraphrasings")    -> 3 queries (+ original)
-         STEP 3b   : embed each, ChromaDB.query each, RRF-fuse top-k
+STEP 3 : Run hyde_query  -> LLM-generated hypothetical, embed, retrieve
          |
-STEP 4 : Compare baseline vs HyDE vs Multi-Q on the same query
+STEP 4 : Run multi_query_search -> 3 paraphrasings + RRF fusion
+         |
+STEP 5 : Demonstrate should_expand() decisions on a sample of queries,
+         with one honest edge case (acronym false negative).
 
 Run:
     OPENROUTER_API_KEY=sk-... python3 03_query_expansion.py
-or without the key — script falls back to a deterministic template-based
-expansion so the lesson is still demonstrable.
+or without the key — falls back to a deterministic template-based
+LLM stub so the lesson is still demonstrable.
 
 JARVIS connection:
-    Memory Layer pre-retrieval hook. The Brain (Stage 4) calls
-    expand_then_query(...) instead of query_collection(...) on conceptual
-    questions. Adaptive — skipped for queries containing identifiers
-    (function names, error codes) where expansion hurts precision.
+    Stage 3+ ReAct agents will call expand_then_query(...) instead of
+    store.query_collection(...) directly when their sub-questions are
+    short and conceptual. The user's natural detailed prompts go
+    straight to baseline retrieval (gate skips expansion).
 """
 from __future__ import annotations
 
 import os
-import re
 import sys
-from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Tuple
 
 # Make jarvis_core importable from the learning artifact
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "js-development"))
 
+# All retrieval primitives live in production. The lesson consumes them.
 from jarvis_core.memory.store import JarvisMemoryStore
+from jarvis_core.memory.expansion import (
+    expand_then_query,
+    hyde_query,
+    multi_query_search,
+    should_expand,
+)
 
 
 # =============================================================================
-# Part 1: LLM CALL (graceful degradation when no API key)
+# Part 1: LLM CLIENT (this is the lesson's contribution — production
+# expansion module deliberately doesn't own one; caller injects)
 # =============================================================================
 
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
@@ -77,8 +94,8 @@ DEFAULT_MODEL = "deepseek/deepseek-chat"
 
 def call_llm(prompt: str, max_tokens: int = 300, model: str = DEFAULT_MODEL) -> str:
     """Single LLM call via OpenRouter. Falls back to template expansion if
-    OPENROUTER_API_KEY is unset — that fallback is a teaching scaffold, not
-    a production path."""
+    OPENROUTER_API_KEY is unset — that fallback is a teaching scaffold,
+    not a production path."""
     api_key = os.environ.get("OPENROUTER_API_KEY")
     if not api_key:
         return _template_fallback(prompt)
@@ -107,7 +124,6 @@ def _template_fallback(prompt: str) -> str:
     """Deterministic stub so the lesson runs without an API key.
     NOT for production — real HyDE quality requires a real model."""
     if "hypothetical" in prompt.lower():
-        # Pull the query from between the first pair of double quotes
         try:
             query = prompt.split('"')[1]
         except IndexError:
@@ -134,151 +150,10 @@ def _template_fallback(prompt: str) -> str:
 
 
 # =============================================================================
-# Part 1.5: ADAPTIVE GATE — when expansion is worth it
-# =============================================================================
-#
-# HyDE and Multi-Query exist to bridge the lexical gap between short/sparse
-# user queries and long answer-style corpus chunks. Detailed multi-sentence
-# prompts already embed in the answer neighborhood — expansion on them is
-# wasted cost (LLM call + latency) and can hurt precision when the
-# hypothetical drifts from intent. Gate expansion in production callers via
-# this predicate; default to OFF for direct user prompts and ON for
-# agent-generated sub-queries (Stage 3+ ReAct loops).
-
-_IDENTIFIER_CHARS = "()[]{}/_.<>"
-_ACRONYM_PATTERN = re.compile(r"\b[A-Z]{2,}[a-z]?\b")
-
-# Tunable. Calibrated against the user's natural prompt style: detailed
-# multi-claim paragraphs averaging ~150 words. Below ~30 words = sparse.
-_LONG_PROMPT_WORD_THRESHOLD = 30
-
-
-def should_expand(query: str) -> bool:
-    """Predicate: is this query the right shape for HyDE / Multi-Query?
-
-    Returns False (skip expansion) when:
-      - query is already long and detailed (>30 words)
-      - query contains identifier characters (paths, function calls, code refs)
-      - query contains an acronym or model name (signals specific lookup)
-    Returns True (expand) for short conceptual queries — typically
-    agent-emitted sub-questions or cold-start exploratory retrievals.
-    """
-    if len(query.split()) > _LONG_PROMPT_WORD_THRESHOLD:
-        return False
-    if any(c in query for c in _IDENTIFIER_CHARS):
-        return False
-    if _ACRONYM_PATTERN.search(query):
-        return False
-    return True
-
-
-# =============================================================================
-# Part 2: HyDE — Hypothetical Document Embeddings
+# Part 2: DEMO HELPERS
 # =============================================================================
 
-HYDE_PROMPT = (
-    'Generate a hypothetical paragraph answer to this question: "{query}"\n\n'
-    "Write 3-4 dense sentences using technical vocabulary as if it were a "
-    "paragraph excerpted from an academic research paper on the topic. Do not "
-    "introduce yourself or add disclaimers — output the paragraph only."
-)
-
-
-def hyde_query(
-    store: JarvisMemoryStore,
-    collection: str,
-    query: str,
-    k: int = 5,
-) -> Tuple[str, Dict[str, Any]]:
-    """Expand `query` via HyDE, then retrieve top-k from `collection`.
-    Returns the hypothetical doc + the ChromaDB result dict."""
-    hypothetical = call_llm(HYDE_PROMPT.format(query=query))
-    result = store.query_collection(
-        collection_name=collection,
-        query_text=hypothetical,
-        n_results=k,
-    )
-    return hypothetical, result
-
-
-# =============================================================================
-# Part 3: MULTI-QUERY + RRF
-# =============================================================================
-
-MULTI_QUERY_PROMPT = (
-    'Generate three diverse paraphrasings or related sub-questions for this '
-    'query: "{query}"\n\n'
-    "Each on its own line. No numbering, no preamble. Output only the three "
-    "lines."
-)
-
-RRF_K_CONSTANT = 60  # standard RRF constant; lower = more weight on rank-1
-
-
-@dataclass
-class FusedHit:
-    chunk_id: str
-    document: str
-    metadata: Dict[str, Any]
-    rrf_score: float
-    appeared_in: int  # how many queries returned this chunk
-
-
-def multi_query_search(
-    store: JarvisMemoryStore,
-    collection: str,
-    query: str,
-    k: int = 5,
-    n_paraphrasings: int = 3,
-) -> Tuple[List[str], List[FusedHit]]:
-    """Generate paraphrasings, retrieve top-k for each, fuse via RRF, return
-    top-k by fused score."""
-    raw = call_llm(MULTI_QUERY_PROMPT.format(query=query))
-    paraphrasings = [
-        line.strip().lstrip("0123456789.- )")
-        for line in raw.split("\n")
-        if line.strip()
-    ][:n_paraphrasings]
-
-    queries: List[str] = [query] + paraphrasings  # always include original
-
-    rrf: Dict[str, float] = {}
-    docs: Dict[str, str] = {}
-    metas: Dict[str, Dict[str, Any]] = {}
-    appearances: Dict[str, int] = {}
-
-    for q in queries:
-        out = store.query_collection(
-            collection_name=collection,
-            query_text=q,
-            n_results=k,
-        )
-        ids = out["ids"][0]
-        for rank, doc_id in enumerate(ids):
-            rrf[doc_id] = rrf.get(doc_id, 0.0) + 1.0 / (RRF_K_CONSTANT + rank)
-            docs[doc_id] = out["documents"][0][rank]
-            metas[doc_id] = out["metadatas"][0][rank]
-            appearances[doc_id] = appearances.get(doc_id, 0) + 1
-
-    top_ids = sorted(rrf, key=lambda i: rrf[i], reverse=True)[:k]
-    fused = [
-        FusedHit(
-            chunk_id=i,
-            document=docs[i],
-            metadata=metas[i],
-            rrf_score=rrf[i],
-            appeared_in=appearances[i],
-        )
-        for i in top_ids
-    ]
-    return queries, fused
-
-
-# =============================================================================
-# Part 4: DEMO — baseline vs HyDE vs Multi-Query
-# =============================================================================
-
-def _print_chroma_hits(label: str, result: Dict[str, Any]) -> None:
+def _print_chroma_hits(label: str, result):
     print(f"\n[{label}]")
     docs = result["documents"][0]
     metas = result["metadatas"][0]
@@ -287,6 +162,10 @@ def _print_chroma_hits(label: str, result: Dict[str, Any]) -> None:
         page = m.get("page", "?")
         print(f"  {i}. dist={dist:.3f}  page={page}  | {d[:130]}...")
 
+
+# =============================================================================
+# Part 3: DEMO — baseline vs HyDE vs Multi-Query, then gate showcase
+# =============================================================================
 
 def main() -> None:
     QUERY = "agentic RAG"
@@ -314,17 +193,16 @@ def main() -> None:
         )
         _print_chroma_hits("BASELINE — direct top-k on raw query", baseline)
 
-        # 2. HyDE
-        hypothetical, hyde_result = hyde_query(store, COLLECTION, QUERY, K)
+        # 2. HyDE — production primitive, lesson supplies the LLM call
+        hypothetical, hyde_result = hyde_query(store, COLLECTION, QUERY, call_llm, K)
         print("\n[HyDE — hypothetical answer used as the embedding source]")
         print(f"  Hypothetical doc ({len(hypothetical)} chars):")
-        # Wrap to ~75 cols
         for i in range(0, len(hypothetical), 75):
             print(f"    {hypothetical[i:i+75]}")
         _print_chroma_hits("HyDE retrieval", hyde_result)
 
-        # 3. Multi-Query + RRF
-        queries, fused = multi_query_search(store, COLLECTION, QUERY, K)
+        # 3. Multi-Query + RRF — production primitive
+        queries, fused = multi_query_search(store, COLLECTION, QUERY, call_llm, K)
         print("\n[MULTI-QUERY + RRF]")
         print("  Generated queries:")
         for q in queries:
@@ -335,7 +213,15 @@ def main() -> None:
             print(f"  {i}. rrf={hit.rrf_score:.4f}  appeared_in={hit.appeared_in}/{len(queries)}  page={page}")
             print(f"     {hit.document[:130]}...")
 
-    # 4. Adaptive gate demonstration — when to expand, when not to
+        # 4. Orchestrator — the production entry point Stage 3+ agents will use
+        print("\n[ORCHESTRATOR — expand_then_query() = gate + dispatch]")
+        out = expand_then_query(store, COLLECTION, QUERY, call_llm, k=K, strategy="auto")
+        print(f"  expand_then_query('agentic RAG', strategy='auto')")
+        print(f"    expanded = {out['expanded']}")
+        print(f"    strategy = {out['strategy']}")
+        print(f"    (acronym 'RAG' triggers the gate; without force=True, returns baseline)")
+
+    # 5. Adaptive gate demonstration — when to expand, when not to
     print("\n[ADAPTIVE GATE] should_expand() decisions on representative queries:")
     sample_queries = [
         ("what is dropout regularization?", "expected EXPAND — short, no identifiers/acronyms"),
@@ -357,7 +243,7 @@ def main() -> None:
         print(f"  [{decision}]  {short_q!r}")
         print(f"            {why}")
 
-    # Edge case — heuristic limits worth knowing about
+    # Edge case worth flagging
     print("\n  Edge case worth flagging:")
     print(f"    [{('EXPAND' if should_expand('agentic RAG') else 'skip  ')}]  'agentic RAG'")
     print("            HyDE actually helps a lot here (we saw distance drop from")
@@ -366,18 +252,18 @@ def main() -> None:
     print("            gate could (a) whitelist common conceptual acronyms,")
     print("            (b) use a small classifier, or (c) measure recall@k")
     print("            empirically with-vs-without expansion and learn the cutoff.")
+    print("            For now, callers can override via expand_then_query(force=True).")
 
     print("\n" + "=" * 78)
     print("  Takeaways:")
-    print("    - HyDE: 1 extra LLM call. Converts question-vec to answer-vec — pulls")
-    print("            in chunks discussing the concept rather than the phrase.")
+    print("    - HyDE: 1 extra LLM call. Question-vec -> answer-vec.")
+    print("            Distance dropped 0.85 -> 0.40 on 'agentic RAG'.")
     print("    - Multi-Query+RRF: N+1 retrievals + 1 LLM call. Wider net via")
-    print("            paraphrasings; RRF score promotes chunks appearing in")
-    print("            multiple queries' top-k (consensus = relevance signal).")
-    print("    - ADAPTIVE GATE (should_expand): skip for long detailed prompts")
-    print("            (>30 words), queries with identifiers, or acronyms.")
-    print("            Production callers map: /learn, /research, /dev, direct CLI")
-    print("            = off; agent-emitted sub-queries (Stage 3+) = on.")
+    print("            paraphrasings; RRF score promotes consensus chunks.")
+    print("    - Adaptive gate: skip expansion for long detailed prompts,")
+    print("            identifiers, acronyms. Calibrated to user's natural style.")
+    print("    - Production: jarvis_core.memory.expansion is the canonical")
+    print("            implementation; this lesson consumes those primitives.")
     print("=" * 78)
 
 
