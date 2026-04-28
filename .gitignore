@@ -53,6 +53,18 @@ npm-debug.log*
 Thumbs.db
 desktop.ini
 
+# -- Local-only operational docs (machine-specific, not part of the project) -
+# CLAUDE.md is a Claude Code @import proxy at repo root — only the work-laptop
+# runtime needs it. Antigravity on the personal laptop reads .agent/rules/
+# directly. Substantive rules live there and ARE tracked.
+CLAUDE.md
+# SYNC.md described the abandoned HDD-bare-repo plan — superseded by GitHub.
+SYNC.md
+# RUNBOOK.md was the daily-commands handbook around HDD sync — superseded.
+# (TODO: extract still-useful JARVIS-specific commands into a slim project
+# README before deleting locally; keep on disk for now.)
+RUNBOOK.md
+
 # -- Local secrets / env -----------------------------------------------------
 .env
 .env.local
