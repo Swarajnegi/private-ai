@@ -67,6 +67,14 @@ RUNBOOK.md
 # copies from clobbering each other on pulls.
 .agent/
 
+# -- Legacy / regenerable data files ----------------------------------------
+# knowledge.md is the raw source distilled into Data_Engineering_Lessons.md.
+# Personal laptop has its own pre-existing copy from the Antigravity-era setup.
+jarvis_data/knowledge.md
+# model_catalog.json is regenerable via `python3 scripts/sync_openrouter.py`.
+# Snapshot goes stale anyway as OpenRouter's catalog evolves.
+jarvis_data/model_catalog.json
+
 # -- Local secrets / env -----------------------------------------------------
 .env
 .env.local
