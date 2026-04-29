@@ -19,7 +19,7 @@ jarvis_data/extracted_images/
 **/*_chroma_db/
 
 # -- Third-party clones (re-clone fresh on each laptop) -----------------------
-OpenClaude/
+# OpenClaude/ (Tracking explicitly for personal-laptop sync)
 OpenJarvis/
 Open-Claude-Cowork/
 
