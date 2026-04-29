@@ -63,22 +63,22 @@
 
 ---
 
-## Sub-Phase 2.4: Retrieval Strategies ⬅️ YOU ARE HERE
+## Sub-Phase 2.4: Retrieval Strategies ✅ COMPLETE
 
 **Goal:** Get the right context for any query.
 
 | Lesson | Topic | JARVIS Use Case | Command |
 |--------|-------|-----------------|---------|
-| 2.4.1 | Top-k Retrieval | Basic semantic search | **COMPLETE** |
-| 2.4.2 | MMR (Maximal Marginal Relevance) | Diverse results, not just similar | **COMPLETE** |
-| 2.4.3 | Query Expansion | Improve recall with rephrasing | `@[/learn] Explain query expansion techniques.` |
-| 2.4.4 | Contextual Compression | Reduce noise in retrieved chunks | `@[/learn] Explain contextual compression for RAG.` |
+| 2.4.1 | Top-k Retrieval | Basic semantic search | **COMPLETE** — `store.query_collection` |
+| 2.4.2 | MMR (Maximal Marginal Relevance) | Diverse results, not just similar | **COMPLETE** — `store.mmr_query_collection` + `compute_mmr_reranking` |
+| 2.4.3 | Query Expansion | Improve recall with rephrasing | **COMPLETE** — `jarvis_core/memory/expansion.py` (HyDE + Multi-Query + RRF + `should_expand` gate) |
+| 2.4.4 | Contextual Compression | Reduce noise in retrieved chunks | **COMPLETE** — `jarvis_core/memory/compression.py` (embeddings_filter + llm_filter + `should_compress` gate; LLM Extractor deferred until 2.5.6 RAGAS) |
 
 **Practical Exercise:** Compare top-k vs MMR on a real query against your knowledge base.
 
 ---
 
-## Sub-Phase 2.5: Hybrid Search, Reranking & Evaluation ⬜
+## Sub-Phase 2.5: Hybrid Search, Reranking & Evaluation ⬅️ YOU ARE HERE
 
 **Goal:** Combine multiple retrieval methods, measure quality, iterate.
 
@@ -122,8 +122,8 @@ Build a complete memory system that:
 | 2.1 Embeddings & Similarity | ✅ Complete | 4/4 |
 | 2.2 Vector Databases | ✅ Complete | 4/4 |
 | 2.3 Document Ingestion | ✅ Complete | 4/4 |
-| 2.4 Retrieval Strategies | 🔄 In Progress | 2/4 |
-| 2.5 Hybrid Search, Reranking & Evaluation | ⬜ Not Started | 0/7 |
+| 2.4 Retrieval Strategies | ✅ Complete | 4/4 |
+| 2.5 Hybrid Search, Reranking & Evaluation | 🔄 In Progress | 0/7 |
 
 ---
 
