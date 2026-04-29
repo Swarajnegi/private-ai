@@ -8,7 +8,7 @@
 
 ## 📍 Current Position
 
-**Stage 2, Sub-phase 2.2: Vector Databases (ChromaDB)** -- Starting
+**Stage 2, Sub-phase 2.5: Hybrid Search, Reranking & Evaluation** — Starting (2.1–2.4 ✅ complete)
 
 ---
 
@@ -67,10 +67,10 @@
 | # | Sub-Phase | Status |
 |---|-----------|--------|
 | 2.1 | Embeddings & Similarity | ✅ Complete |
-| 2.2 | Vector Databases (ChromaDB) | ⬜ |
-| 2.3 | Document Ingestion | ⬜ |
-| 2.4 | Retrieval Strategies | ⬜ |
-| 2.5 | Hybrid Search & Reranking | ⬜ |
+| 2.2 | Vector Databases (ChromaDB) | ✅ Complete |
+| 2.3 | Document Ingestion | ✅ Complete |
+| 2.4 | Retrieval Strategies | ✅ Complete |
+| 2.5 | Hybrid Search & Reranking | 🔄 In Progress |
 
 ---
 
@@ -147,6 +147,6 @@
 
 ## Next Action
 
-**Start:** Stage 2, Sub-phase 2.4, Lesson 3  
+**Start:** Stage 2, Sub-phase 2.5, Lesson 1 (BM25)  
 **File:** [stage_2_memory/ROADMAP.md](stage_2_memory/ROADMAP.md)  
-**Command:** `@[/learn] Explain query expansion techniques.`
+**Command:** `@[/learn] Explain BM25 and when to use it.`
