@@ -52,7 +52,13 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
-from jarvis_core.config import DATA_ROOT, DEFAULT_CHUNK_CHAR_LIMIT, DEFAULT_CHUNK_OVERLAP
+from jarvis_core.config import (
+    DATA_ROOT,
+    DEFAULT_CHUNK_CHAR_LIMIT,
+    DEFAULT_CHUNK_OVERLAP,
+    DEFAULT_EMBEDDING_DIM,
+    DEFAULT_EMBEDDING_MODEL,
+)
 from jarvis_core.memory.chunking import RecursiveWordChunker
 from jarvis_core.memory.image_extractor import extract_images
 from jarvis_core.memory.pdf_parser import parse_pdf
@@ -293,6 +299,12 @@ class IngestionPipeline:
                 "specialist":  specialist,            # e.g. 'The Scientist'
                 "page_count":  document.total_pages,
                 "chunk_index": i,
+                # Forward-compat for Stage 4-5 specialist-embedding migration
+                # (Decision 2026-05-01: embedding-model metadata on every chunk).
+                # Lets selective re-embed find chunks whose model differs from
+                # the current one, instead of full corpus re-ingestion.
+                "embedding_model_id":  DEFAULT_EMBEDDING_MODEL,  # e.g. 'all-MiniLM-L6-v2'
+                "embedding_model_dim": DEFAULT_EMBEDDING_DIM,    # e.g. 384
             }
             for i in range(len(chunks))
         ]

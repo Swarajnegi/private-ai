@@ -193,6 +193,13 @@ Independently of `sequence_by`: both concepts apply together. `sequence_by` (ord
 If the Python source function uses `cdc_keys` internally (for SQL `PARTITION BY` deduplication) and that diverges from the `keys=` parameter passed to `create_auto_cdc_from_snapshot_flow`, you get silent data corruption: dedup uses one column, CDC uses another. Align them at the template/config level — never let them drift.
 (Source: `knowledge.md` L694–L701, `LHP_Reference.md` L5386–L5388)
 
+### Auto-Coalesce Applies to AUTO CDC, NOT AUTO CDC FROM SNAPSHOT
+The Jan 2026 "SCD2 auto-coalesce duplicate records with the same natural key" feature applies to **`create_auto_cdc_flow` only**. It does NOT cover `create_auto_cdc_from_snapshot_flow` despite the release note's generic phrasing.
+
+**Why**: auto-coalesce works by deterministically picking a winner among `(key, sequence_by)` ties. AUTO CDC has a `sequence_by` parameter to provide this ordering. AUTO CDC FROM SNAPSHOT has no `sequence_by` — it uses an external snapshot version returned by the `source_function` for ordering *between* snapshots, but offers nothing for resolving duplicates *within* a single snapshot. The API contract assumes each snapshot has unique keys; in-snapshot duplicates remain undefined behavior.
+
+**How to apply**: if your snapshot source can have in-snapshot duplicate keys (BYOD CSV exports, Oracle EPM dumps, third-party file feeds, anything that doesn't deduplicate at source), keep the manual `ROW_NUMBER() OVER (PARTITION BY keys ORDER BY tie_breaker DESC)` dedup inside the `source_function` or in an upstream `@dp.view` that the CDC flow consumes. The 2026 release does not eliminate this need.
+
 ### Snapshot CDC Is Incompatible With Continuous Mode
 `create_auto_cdc_from_snapshot_flow` only works in triggered mode. The source function does batch operations (`.collect()`, `spark.sql` with MIN/MAX), which can't run in a streaming loop. The function's `(DataFrame, version)` return shape is also incompatible with continuous context. For near-real-time bronze with snapshot CDC, trigger more frequently (e.g., every 15 min via cron) — don't try to make it continuous.
 
@@ -448,6 +455,18 @@ DLT's `create_auto_cdc_flow` doesn't enforce a streaming source at declaration t
 
 Note: distinct from `create_auto_cdc_from_snapshot_flow`, which requires a `source_function` Python callable returning `(DataFrame, version)` tuples. The two CDC modes are not interchangeable.
 (Source: `LHP_Reference.md` L5714–L5731)
+
+### Streaming Target Requires Pure-Append Upstream — SCD2 Source Breaks the Reader
+A DLT `streaming_table` reads its upstream with append-only semantics. If the upstream is SCD2 (closes historical rows by updating `__END_AT`), the streaming reader treats those in-place updates as illegal source mutations and fails with `Detected a data update in the source table` — surfaced in the UI as "changes detected in Delta source". Any UPDATE / DELETE / MERGE on the source kills a streaming reader, by design.
+
+Decision rule for target type:
+- **Upstream is pure-append** (CloudFiles ingest, append-only event log, append-only STG, `@dp.append_flow` writers with no SCD2 closure) → target can be a `streaming_table`.
+- **Upstream is SCD2 or otherwise mutable** (any BRZ SCD2, any CDC-written table where `__END_AT` updates, any MERGE target) → target must be a **materialized view**. MVs recompute from a snapshot of the source — they don't care if rows mutate.
+
+Practical implication for facts: if **any** link in the upstream chain is SCD2, the fact must be an MV. Only facts whose entire upstream chain is append-only qualify as streaming. The mistake is easy to make — you build the fact as streaming because "facts are append-heavy", forgetting that the SCD2 dimension or SCD2 BRZ feeding it violates the reader's contract.
+
+Escape hatches exist (`ignoreChanges` / `ignoreDeletes` reader options) but trade correctness for staying-streaming — they suppress the error at the cost of duplicates or missed deletes. Default to MV instead of patching with these flags.
+(Source: personal experience, 2026-04-30 — fact built as streaming on SCD2 upstream)
 
 ---
 
@@ -741,7 +760,99 @@ A short list to internalize. Each is distilled from a concrete incident document
 13. **Two-job pattern beats forcing mixed workloads into one.** Notebooks for file ops, DLT for streaming CDC. Independent compute, independent failure domains.
 14. **Layer responsibility separation.** Each layer has ONE job. Mixing responsibilities destroys debuggability.
 15. **Developer isolation needs full-stack namespacing.** Missing the suffix in ONE reference breaks everything. Check every layer.
+16. **Streaming target ↔ pure-append upstream. SCD2 source ↔ MV target.** Any UPDATE/DELETE/MERGE on the source kills a streaming reader. If the chain has any SCD2 link, the target must be a materialized view, not a streaming table.
 (Source: `knowledge.md` L633–L650, `LHP_Reference.md` L4849–L5022)
+
+---
+
+## Learning Journey & Workspace Progress
+
+> Snapshot of work completed beyond the original BUPA project. This section is a progress log — a record of what's been built, where to find it, and how it maps to the lessons above. Update as the journey continues.
+
+### Timeline of major milestones
+
+| When | What |
+|---|---|
+| Pre-session | First production project complete: BUPA / Apollo Gen2 (Databricks DLT + LHP framework, medallion architecture, Dynamics 365 + PeopleSoft + LRC API sources). All the original lessons in this digest came from that work. |
+| Session start | Distilled the BUPA project knowledge files (`knowledge.md`, `LHP_Reference.md`) into this transferable digest — 13 thematic sections + meta-lessons. |
+| Session — research | Catalogued every meaningful Lakeflow Spark Declarative Pipelines (SDP) feature released **November 2025 → April 2026**. Mapped each against the original BUPA lessons (which are now obsolete vs. still hold). |
+| Session — notebook | Built `notebooks/sdp_2026_features.py` — a hands-on, runnable reference for all 18 new SDP/Lakeflow features with sample data and verification queries. |
+| Session — deployment | Set up Databricks Asset Bundle (`databricks.yml`) targeting two workspaces. Established `dbdemos.myschema` as the canonical demo schema. |
+| Session — consolidation pass 1 | Audited 35 legacy learning notebooks across 8 folders. Consolidated to 19 (16 fewer files, zero content lost). Modernized every deprecated API. Added setup data + concept markdown to every notebook. |
+| Session — consolidation pass 2 | Topic-merged Databricks Features (3→1) and Databricks Prof. (2→1). Deleted Spark Read-Write (covered in PySpark §11). User-side: deleted Workflow folder, renamed PySpark → PySpark_Python_for_DE. **Final count: 12 notebooks across 7 folders.** |
+
+### Workspace notebooks (deployed at `/Workspace/Users/swaraj.negi@celebaltech.com/Learning/`)
+
+**Final state — 12 notebooks:**
+
+| Folder | Notebook | What it demonstrates | Maps to digest section(s) |
+|---|---|---|---|
+| **DLT Learning** | `DLT_SQL_Pipeline` | Bronze → Silver → Gold in pure SQL with `AUTO CDC INTO` for SCD2 | §1 Architecture, §3 CDC, §6 DLT |
+| | `DLT_PySpark_Pipeline` | Same pipeline in `pyspark.pipelines` (Python decorators) | §1, §3, §6 |
+| **Optimization** | `Optimizations_SQL` | OPTIMIZE / ZORDER / Liquid Clustering / MERGE with pruning / CDF | §6 Delta, §7 Performance |
+| | `Optimizations` | Spark-level: AQE knobs, repartition+partitionBy, broadcast, cluster sizing Q&A | §5 Spark gotchas, §7 Performance |
+| **PySpark_Python_for_DE** | `PySpark_Comprehensive` | DataFrame API tour: filter/join/window/UDF/nested/dates/IO | §5 Spark gotchas, §6 Delta IO |
+| | `Python_for_DE` | Python language patterns: strings/comprehensions/dataclasses/error handling | (general DE) |
+| **Ingestion** | `Ingestion Learning` | PySpark ingestion: spark.read, COPY INTO, Auto Loader, JDBC writes | §6 Autoloader |
+| | `Ingestion Serverless` | SQL ingestion: read_files, CTAS, COPY INTO, streaming-table Auto Loader | §6 Autoloader |
+| **Practice** | `Practice_Python` | 12 PySpark drills: top-N, percent-of-total, lag, pivot, dedup, anti-join, self-join | §5 |
+| | `Practice_SQL` | Matching SQL drills + recursive CTE + time travel | §6 |
+| **Databricks Features** | `Databricks_Features` | **Comprehensive single-notebook reference** covering all 10 DBX features: `_metadata`, `read_files`, serial columns, `_rescued_data`, JSON parsing (`from_json`/`parse_json`/`schema_of_json`), `explode`, Change Data Feed + `table_changes`, hash-based MERGE for dedup-aware upserts, full DQE toolkit (CHECK constraints, `@dp.expect_*`, UC-stored expectations) | §2 Schema, §4 DQ, §6 Delta |
+| **Databricks Prof.** | `Databricks_Advanced` | **Comprehensive single-notebook reference** covering: 3 SCD2 implementations (manual MERGE → foreachBatch + MERGE → AUTO CDC) + soft-delete pattern, `EXCEPT` + version diffs, stream-stream joins + watermarking, row filters + column masks (UC privacy), `information_schema` discovery, Delta file metadata inspection, programmatic `DeltaTable.merge()` upsert | §3 CDC, §6 Delta, §9 Deployment |
+
+### Removed (deliberately)
+
+| Removed | Reason |
+|---|---|
+| `Workflow/Book 1`, `Book 2`, `Book 3` | Deleted — minimal value as standalone learning artifacts; chained-job pattern is documented in this digest §10 if needed |
+| `Spark Read-Write` (standalone) | Folded into `PySpark_Comprehensive` §11 — eliminated redundancy |
+| `Databricks Features/CDF`, `DBX Features`, `Data Validation` | Merged into `Databricks_Features` (one comprehensive notebook covering all DBX-specific features) |
+| `Databricks Prof./SCD 2`, `DBX Professional` | Merged into `Databricks_Advanced` (one comprehensive notebook covering all advanced patterns) |
+
+Plus the standalone:
+
+| Path | Purpose |
+|---|---|
+| `notebooks/sdp_2026_features.py` (deployed at `Learning/Consolidated Learnings/notebooks/`) | Full hands-on tour of every Nov-2025 → Apr-2026 SDP/Lakeflow release: API rename, ARM compute, AUTO CDC SCD1/2, auto-coalesce, multi-flow CDC, datetime rebase, AUTO CDC FROM SNAPSHOT, type widening, queued execution, `cascade=false`, cluster reuse, pipeline hooks, UC-stored expectations, SQL in foreachBatch, audit log, `COUNT(*)` myth-buster, cheatsheet. |
+
+### Disciplines established this session
+
+These are operational disciplines now baked into every notebook in the workspace. Treat them as *additional meta-lessons* on top of the §13 list:
+
+1. **One canonical demo schema (`dbdemos.myschema`)** — every learning notebook uses the same target schema and the same `/Volumes/dbdemos/myschema/demo_volume` for files. Eliminates "wait, which schema does this expect?" friction.
+2. **Setup section at the top of every notebook** — generates sample data via SQL `VALUES` or Python, so the notebook is self-contained. No external file dependencies that decay over time.
+3. **Concept-explainer markdown above every code block** — answer "what does this teach? when would you reach for it in real work?" in 2-3 sentences before the code. Makes the notebook a learning artifact, not just a script.
+4. **Modern API only in tutorial code** — `pyspark.pipelines` (not `dlt`), `AUTO CDC` (not `APPLY CHANGES`), `STREAMING TABLE` (not `INCREMENTAL LIVE TABLE`), `read_files()` (not `csv.\`<path>\``). Old syntax shown only as historical context.
+5. **Decision matrices for multi-approach topics** — when a topic has multiple valid approaches (manual MERGE vs AUTO CDC; ZORDER vs Liquid Clustering; CDF vs version diffs), include a comparison table so the right call is obvious.
+6. **Consolidation over diversification** — through two passes, 35 → 12 notebooks. Pass 1 merged trivially-related files (DLT Bronze/Silver/Gold layers, scattered optimization snippets, language-paired practice files). Pass 2 went further: topic-merging within a folder when the topics were "what makes Databricks different" (CDF + read_files + DQE → one comprehensive `Databricks_Features` notebook; SCD2 + advanced patterns → one `Databricks_Advanced` notebook). New rule of thumb: **"if a folder has multiple notebooks each demonstrating a different feature of the same product surface, merge them into one comprehensive runnable notebook."** Easier to navigate, easier to remember "where did I learn that?", and forces the writer to draw connections across features.
+
+7. **Delete what doesn't teach** — `Workflow/Book 1/2/3` (chained job tasks) and `Spark Read-Write` (redundant with PySpark §11) were deleted entirely. A notebook that's hard to justify as a learning artifact is dead weight. Better to remove and restore from `learning_mirror/` if needed than to keep clutter that distracts from real learning material.
+
+### Status of the original digest entries (post-2026-research)
+
+The §3 CDC and §7 Performance sections of this digest were authored against the BUPA-era platform. Several lessons are now **partially or fully obsolete** because the 2026 platform releases fixed the underlying gaps. A status entry has been added to:
+
+- §3 CDC: "Auto-Coalesce Applies to AUTO CDC, NOT AUTO CDC FROM SNAPSHOT" (added during the auto-coalesce/BYOD correction)
+- §7 Performance: "Cross-Job Pipeline Overlap" — now solved by **queued execution mode** (Jan 2026)
+- §9 Deployment: "DLT Pipeline ACLs" — partially solved by **MANAGE permissions auto-propagation** (Jan 2026)
+
+The architectural and discipline lessons (§1 Architecture, §2 Schema discipline, §4 Testing philosophy, §13 Meta-Lessons) are timeless and remain unchanged.
+
+### Outstanding artifacts on local disk
+
+| Path | Purpose | Keep? |
+|---|---|---|
+| `notebooks/sdp_2026_features.py` | The Nov-2025 → Apr-2026 SDP feature tour | Yes — primary reference for the modern platform |
+| `learning_mirror/**` | Full local backup of every workspace notebook (pre and post consolidation) | Yes — safety net for any rollback |
+| `databricks.yml` + `.databrickscfg` profile | Bundle deployment config for both workspaces | Yes — used for ongoing iteration |
+| `.gitignore` | Excludes secrets, state, venv | Yes |
+
+### Suggested next learning steps
+
+1. **Run the SDP 2026 features notebook end-to-end** — pick one section per session, run it, inspect the output. The `Setup` cell creates everything you need.
+2. **Pair the Practice notebooks with timed self-tests** — read each drill's problem statement, time-box yourself for 5 min, then check against the worked solution.
+3. **Re-read §3 CDC + §13 Meta-Lessons quarterly** — the BUPA SCD2-on-SCD2 trap (Meta #12) is the kind of lesson worth refreshing on. New projects expose new variants.
+4. **Track new SDP releases** — Lakeflow Spark Declarative Pipelines release notes update monthly. The §3/§7 obsolescence pattern will continue; revisit and update this section every 3-6 months.
 
 ---
 
