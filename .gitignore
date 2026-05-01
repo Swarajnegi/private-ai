@@ -65,7 +65,15 @@ RUNBOOK.md
 # workflows (/learn, /memory, /research, etc. + always-on rules); work laptop
 # has its own scratchpad version. Keeping it machine-local prevents the two
 # copies from clobbering each other on pulls.
-.agent/
+#
+# EXCEPTION: .agent/rules/JARVIS_ENDGAME.md is canonical project doc
+# (architecture blueprint, not runtime config) — tracked so both machines
+# share one source of truth. Wildcard + negation pattern below is required
+# because gitignore can't re-include a file under a fully-excluded directory.
+.agent/*
+!.agent/rules/
+.agent/rules/*
+!.agent/rules/JARVIS_ENDGAME.md
 # .claude/ is Claude Code's per-project settings dir (work-laptop-only;
 # personal laptop runs Antigravity, not Claude Code). Machine-local.
 .claude/
