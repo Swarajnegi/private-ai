@@ -69,6 +69,12 @@ KB_PATH: Path = DATA_ROOT / "knowledge_base.jsonl"
 # Hardware: CPU-only, no GPU required (~90MB RAM).
 DEFAULT_EMBEDDING_MODEL: str = "all-MiniLM-L6-v2"
 
+# Embedding output dimensionality. Written into chunk metadata at ingestion time
+# so Stage 4-5 specialist-embedding migration can selectively re-embed chunks
+# whose model differs from the current one. Update this constant in lockstep
+# with DEFAULT_EMBEDDING_MODEL — they describe the same model from two angles.
+DEFAULT_EMBEDDING_DIM: int = 384
+
 # The maximum safe character count to pass to DEFAULT_EMBEDDING_MODEL.
 # The model hard-limits at 256 tokens (~1,000 chars). We buffer to ~900
 # to prevent edge-case truncation on high-entropy text (code, JSON).

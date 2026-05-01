@@ -91,8 +91,9 @@
 | 2.5.5 | Evaluation Metrics | recall@k, MRR, NDCG | `@[/learn] Explain recall@k, MRR, and NDCG.` |
 | 2.5.6 | RAGAS Framework | Automated RAG quality scoring | `@[/learn] Explain RAGAS: faithfulness, relevance, context recall, correctness.` |
 | 2.5.7 | LLM-as-Judge & Tracing | Grade outputs + debug with Langfuse | `@[/learn] Explain LLM-as-Judge evaluation and observability tracing.` |
+| 2.5.8 | KB Compaction & Expiry | Hybrid expiry + semantic dedup pruning before Stage 3 (Decision 2026-05-01) | `/dev scripts/kb_compact.py: --dedupe (cosine > 0.95), --expire (past expiry date), --dry-run (default), --force, atomic write.` |
 
-**Practical Exercise:** Build a hybrid retriever, measure with RAGAS, prove it outperforms pure semantic.
+**Practical Exercise:** Build a hybrid retriever, measure with RAGAS, prove it outperforms pure semantic. Then compact the KB before Stage 3 begins.
 
 ---
 
@@ -123,7 +124,7 @@ Build a complete memory system that:
 | 2.2 Vector Databases | ✅ Complete | 4/4 |
 | 2.3 Document Ingestion | ✅ Complete | 4/4 |
 | 2.4 Retrieval Strategies | ✅ Complete | 4/4 |
-| 2.5 Hybrid Search, Reranking & Evaluation | 🔄 In Progress | 1/7 |
+| 2.5 Hybrid Search, Reranking & Evaluation | 🔄 In Progress | 1/8 |
 
 ---
 
