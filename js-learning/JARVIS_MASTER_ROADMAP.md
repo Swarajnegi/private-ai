@@ -8,7 +8,7 @@
 
 ## 📍 Current Position
 
-**Stage 2, Sub-phase 2.5: Hybrid Search, Reranking & Evaluation** — Starting (2.1–2.4 ✅ complete)
+**Stage 2, Sub-phase 2.5: Hybrid Search, Reranking & Evaluation** — In Progress (2.5.1 ✅; 2.5.2–2.5.7 pending)
 
 ---
 
@@ -147,6 +147,6 @@
 
 ## Next Action
 
-**Start:** Stage 2, Sub-phase 2.5, Lesson 1 (BM25)  
+**Start:** Stage 2, Sub-phase 2.5, Lesson 2 (Hybrid Search)  
 **File:** [stage_2_memory/ROADMAP.md](stage_2_memory/ROADMAP.md)  
-**Command:** `@[/learn] Explain BM25 and when to use it.`
+**Command:** `/dev Implement hybrid search for JARVIS memory.`

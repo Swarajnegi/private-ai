@@ -84,7 +84,7 @@
 
 | Lesson | Topic | JARVIS Use Case | Command |
 |--------|-------|-----------------|---------|
-| 2.5.1 | BM25 (Keyword Search) | When exact matches matter | `@[/learn] Explain BM25 and when to use it.` |
+| 2.5.1 | BM25 (Keyword Search) | When exact matches matter | **COMPLETE** — `jarvis_core/memory/bm25.py` (Unicode-aware tokenizer, query-token dedup, k1/b validation, stable top-k; rank_bm25 0.2.2 backend) |
 | 2.5.2 | Hybrid Search | Combine semantic + keyword | `/dev Implement hybrid search for JARVIS memory.` |
 | 2.5.3 | Reranking Models | Score results with a cross-encoder | `@[/learn] Explain cross-encoder reranking.` |
 | 2.5.4 | ColBERT / Late Interaction | Token-level precision retrieval | `@[/learn] Explain ColBERT late interaction and ragatouille.` |
@@ -123,7 +123,7 @@ Build a complete memory system that:
 | 2.2 Vector Databases | ✅ Complete | 4/4 |
 | 2.3 Document Ingestion | ✅ Complete | 4/4 |
 | 2.4 Retrieval Strategies | ✅ Complete | 4/4 |
-| 2.5 Hybrid Search, Reranking & Evaluation | 🔄 In Progress | 0/7 |
+| 2.5 Hybrid Search, Reranking & Evaluation | 🔄 In Progress | 1/7 |
 
 ---
 

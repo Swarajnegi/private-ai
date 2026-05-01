@@ -66,6 +66,9 @@ RUNBOOK.md
 # has its own scratchpad version. Keeping it machine-local prevents the two
 # copies from clobbering each other on pulls.
 .agent/
+# .claude/ is Claude Code's per-project settings dir (work-laptop-only;
+# personal laptop runs Antigravity, not Claude Code). Machine-local.
+.claude/
 
 # -- Legacy / regenerable data files ----------------------------------------
 # knowledge.md is the raw source distilled into Data_Engineering_Lessons.md.

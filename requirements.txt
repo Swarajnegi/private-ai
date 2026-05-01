@@ -1,0 +1,52 @@
+# =============================================================================
+# JARVIS — Python dependencies (production + learning)
+#
+# Covers everything jarvis_core/, scripts/, and js-learning/ import.
+# Pinned to versions verified working on work-laptop (Linux/WSL Ubuntu 22.04,
+# Python 3.10.12) on 2026-04-30. Cross-laptop tested: same pins should
+# resolve cleanly on personal-laptop (Windows + WSL Ubuntu).
+#
+# Setup on a fresh machine:
+#     python3 -m venv .venv
+#     # If `python3 -m venv` errors with "ensurepip not available", install:
+#     #   sudo apt install python3.10-venv     (Ubuntu/Debian)
+#     # Or use virtualenv as a no-sudo fallback:
+#     #   pip3 install --user virtualenv && python3 -m virtualenv .venv
+#     source .venv/bin/activate
+#     pip install -r requirements.txt
+#
+# Then verify:
+#     python -c "from jarvis_core.memory.store import JarvisMemoryStore; print('OK')"
+#
+# Why CPU-only torch:
+#     JARVIS architecture (per .agent/rules/JARVIS_ENDGAME.md) runs embeddings
+#     + ChromaDB on the laptop CPU and offloads LLMs to cloud APIs. CUDA torch
+#     would 4x the download (~750 MB vs ~190 MB) for zero runtime benefit on
+#     this hardware profile. If you later add a GPU, swap the torch line to
+#     `torch==<version>` and drop the --extra-index-url.
+# =============================================================================
+
+# CPU-only PyTorch — fetched from PyTorch's wheel index, not PyPI.
+--extra-index-url https://download.pytorch.org/whl/cpu
+
+# -- Tensors / embeddings ----------------------------------------------------
+torch==2.11.0+cpu
+sentence-transformers==5.4.1
+numpy==2.2.6
+
+# -- Vector store ------------------------------------------------------------
+chromadb==1.5.8
+
+# -- Document ingestion ------------------------------------------------------
+PyMuPDF==1.27.2.3            # `import fitz` — PDF parsing + image extraction
+aiofiles==25.1.0             # async file I/O for the ingestion pipeline
+
+# -- Code parsing (jarvis_core/memory/code_parser.py) ------------------------
+tree-sitter==0.25.2
+tree-sitter-python==0.25.0
+
+# -- Retrieval (Stage 2.5.1+) ------------------------------------------------
+rank_bm25==0.2.2             # lexical retrieval — composes with semantic in 2.5.2 hybrid
+
+# -- HTTP client (lessons calling OpenRouter) --------------------------------
+httpx==0.28.1
