@@ -1,6 +1,6 @@
 # 🚀 PROJECT JARVIS: THE MASTER BLUEPRINT (ENDGAME ARCHITECTURE)
 
-> **Last Updated:** 2026-05-01
+> **Last Updated:** 2026-05-03
 > **Referenced by:** `.agent/rules/js-workspace-rule.md` (co-located in rules — auto-loaded every conversation)
 > **Knowledge Base:** `jarvis_data/knowledge_base.jsonl` (entries tagged `specialist_roster`, `embedding_clusters`)
 
@@ -45,39 +45,109 @@ JARVIS operates on a **cloud-first, prepaid infrastructure**. Earlier drafts of 
 
 The trade is paid compute in exchange for zero hardware setup overhead. Acceptable for a single-developer R&D project where workload is bursty (heavy during fine-tuning weeks; near-zero between).
 
+### The Brain Base Model (Phase 4+)
+
+**Default:** Kimi K2.6 (1T total / 32B active MoE, MIT license, INT4 native, 384 experts, native agent-swarm pattern). Hosted on RunPod, ~Rs 1.5L/month at heavy use (6 hr/day × 4×H100 INT4 ≈ Rs 1,200/hr × 120 hrs).
+
+**Why Kimi K2.6 over alternatives:**
+- vs. DeepSeek V4-Pro (1.6T/49B-active): smaller, fits 4×H100 INT4 instead of needing 8×H100. Same MIT license. ~30% cheaper inference.
+- vs. self-hosted Llama 4 (400B/17B-active): loses to Kimi K2.6 on SWE-Bench Pro and agentic tasks by 8-15 points.
+- vs. frontier APIs (Opus 4.7 / GPT-5.5): frontier APIs cost ~Rs 11L/month at the same usage AND log queries to third parties. Frontier is the **user-invoked escape valve only**, never the default route.
+
+**Frontier escape valve:** Opus 4.7 / GPT-5.5 / Gemini 3.1 Pro are tools the user explicitly hands off to (like calling Wolfram Alpha) for one-off hard problems. Implementation: explicit `/escape-valve` command, never automatic fallback. Budget controlled per session.
+
 ---
 
-## 3. THE "MODEL OF MODELS" ROSTER (The 12 Specialists)
+## 3. THE "MODEL OF MODELS" ROSTER (1 MoE Base + 12 QLoRA Adapters)
 
-JARVIS breaks down complex tasks and routes them to the optimal neural network. The Orchestrator decides which ONE specialist to load per query — they never all run simultaneously.
+**Architecture:** all 12 specialists ship as **QLoRA adapters (~150-500 MB each)** on top of the **shared Kimi K2.6 base**. The Orchestrator loads ONE adapter at a time onto the always-resident base; adapter swap is ~2-5 seconds vs. 10-20s for separate dense model loads. This is the 2026-correct recipe per DeepSeek V4 / Kimi K2.6 / GLM-5.1 distillation patterns and On-Policy Distillation research (arxiv 2602.12125): merged-adapter pattern beats separate dense fine-tunes at ~80% lower training cost.
 
-| # | Codename | Domain | LLM (Cloud Phase 1-3) | LLM (Local Phase 4+) | Embedding Model |
-|---|----------|--------|-----------------------|----------------------|-----------------|
-| 1 | **The Orchestrator** | Intent routing, planning, delegation | DeepSeek-V4 / Gemini 2.5 Flash | Llama-3.3 70B (quantized) | N/A (prompt-based reasoning) |
-| 2 | **The Engineer** | Software architecture, pipelines, algorithms | DeepSeek-V4 / Qwen2.5-Coder-32B | DeepSeek-R2-Lite or Qwen2.5-Coder-32B-Q4 | CodeBERT / StarEncoder |
-| 3 | **The Scientist** | Physics, optics, ArXiv papers, LaTeX math | DeepSeek-V4 / Gemini 2.5 Pro | SPECTER2-finetuned | SPECTER2 |
-| 4 | **The Doctor** | Medical research, biology, pharmacology | DeepSeek-V4 / Claude 3.5 Sonnet | BioMistral / Med42 | PubMedBERT |
-| 5 | **The Operator** | Robotics, hardware control, simulation | Gemini 2.5 Pro (vision) | OpenVLA (Vision-Language-Action) | CLIP / SigLIP |
-| 6 | **The Electrician** | Circuit design, EM theory, signal processing, PCB/antenna | DeepSeek-V4 | Fine-tuned on IEEE corpus | SciBERT / SPECTER2 |
-| 7 | **The Mechanic** | CAD, FEA, thermal/structural analysis, materials science | DeepSeek-V4 | Fine-tuned on engineering handbooks | SPECTER2 / MatSciBERT |
-| 8 | **The Chemist** | Material properties, reactions, nanotechnology, metallurgy | DeepSeek-V4 | Fine-tuned on PubChem + materials DBs | MatSciBERT |
-| 9 | **The Strategist** | Patent analysis, IP landscape, competitive research | Gemini 2.5 Pro (128K+) | Base LLM + long-context | Legal-BERT / MiniLM |
-| 10 | **The Analyst** | Financial modeling, market analysis, business intelligence | DeepSeek-V4 / Gemini 2.5 Flash | Base LLM | FinBERT |
-| 11 | **The Guardian** | Cybersecurity, vulnerability analysis, threat modeling | DeepSeek-V4 / Qwen2.5-Coder-32B | CodeLlama / SecureFalcon | CodeBERT (shared) |
-| 12 | **The Interface** | Voice input, vision processing, multimodal I/O | Gemini 2.5 Pro (native multimodal) | Whisper V3 (STT) + Qwen-VL (vision) | CLIP (images), MiniLM (transcripts) |
+**The moat is personalization, not parameter count.** Each adapter's value comes from being trained on the user's private corpus — code, KB entries, trade journal, research notes, error logs — not from beating Opus 4.7 zero-shot on MMLU. See KB Decision tagged `specialists, personalization, moat`.
 
-### Embedding Model Clusters (6 unique models serving 12 specialists)
+| # | Codename | Domain | Adapter Seed (Public Specialist to Distill From) | Personalization Corpus (User's Private Data) |
+|---|----------|--------|------------------------------------------------|----------------------------------------------|
+| 1 | **The Orchestrator** | Intent routing, planning, delegation | Kimi K2.6 base + ModernBERT-Large router classifier (separate, CPU-side) | Past routing decisions + user's escape-valve invocations + chat-history attribution |
+| 2 | **The Engineer** | Software architecture, pipelines, algorithms (code + DE) | Qwen3-Coder-Next 80B/3B-active distilled in | `jarvis_core/` source, KB entries, chat-history with Claude/Antigravity, DE corpus, past error logs |
+| 3 | **The Scientist** | Physics, optics, ArXiv papers, LaTeX math | DeepSeekMath-V2 distilled in for math reasoning | User's hologram-project notes, optics/photonics papers read, /research outputs |
+| 4 | **The Doctor** | Medical research, biology, pharmacology | MedGemma 1.5 distilled in (~91 MedQA) | Trusted medical literature + (optionally) user's own health history |
+| 5 | **The Operator** | Robotics, hardware control, simulation | OpenVLA + Holo3-35B-A3B distilled in for agentic computer-use | User's CAD files, ROS configs, past simulation outputs |
+| 6 | **The Electrician** | Circuit design, EM theory, signal processing, PCB/antenna | Kimi K2.6 base + LoRA on IEEE corpus | User's circuit designs, simulation logs, datasheets read |
+| 7 | **The Mechanic** | CAD, FEA, thermal/structural analysis, materials science | Kimi K2.6 base + LoRA on engineering handbooks + MatSciBERT-distilled signals | User's CAD library, material specs, FEA results, hologram structural notes |
+| 8 | **The Chemist** | Material properties, reactions, nanotechnology, metallurgy | Kimi K2.6 base + LoRA on PubChem + materials DBs | User's metamaterials research, photonics-relevant chemistry notes |
+| 9 | **The Strategist** | Patent analysis, IP landscape, competitive research | SaulLM-141B distilled in for legal reasoning | User's IP filings, prior-art searches, competitive notes |
+| 10 | **The Analyst** | Financial modeling, market analysis, BI (the Financier) | Kimi K2.6 base + Qwen 3-235B reasoning + LoRA on Indian markets | Groww trade history, NSE bulk-deals, trade rationale journal, risk profile |
+| 11 | **The Guardian** | Cybersecurity, vulnerability analysis, threat modeling | Qwen3-Coder-Next + LoRA on security advisories | User's audit logs, past vuln findings, threat model docs |
+| 12 | **The Interface** | Voice input, vision processing, multimodal I/O | Whisper Large-v3 (ASR), Kokoro-82M (TTS), Qwen2.5-VL-7B (vision) — separate models, NOT adapters on Kimi | User's voice recordings (consented), screen/CAD captures |
+
+### What changed from the pre-2026-05-03 framing
+
+| Before | After (Decision 2026-05-03) |
+|---|---|
+| 12 separate dense fine-tunes (~Rs 17-40L training cost; 12 × 70B model loads) | 1 MoE base (Kimi K2.6) + 12 QLoRA adapters (~Rs 1-2L total training; one base + adapter swap) |
+| Brain = Llama-3.3 70B quantized | Brain = Kimi K2.6 (1T/32B-active MoE) |
+| "Phase 1-3 cloud APIs as default route, Phase 4 self-host" | Frontier APIs are escape-valve-only; Kimi K2.6 self-hosted on RunPod is the default Brain from Phase 4 onwards |
+| Specialist value = beating public benchmarks | Specialist value = personalized on user's private corpus + agentic infrastructure |
+
+### Embedding Model Clusters (Memory Layer — orthogonal to specialists)
+
+The embedding stack stays on the **local laptop** (CPU, ~Rs 0/month). Specialists query the same shared embedding space; the LoRA adapters do NOT change embeddings. Stage 2.5 cutover: MiniLM-L6-v2 → EmbeddingGemma-300M (better instruction-retrieval, multilingual, sub-22 ms latency, drop-in replacement).
 
 ```
-Cluster A: MiniLM 384-dim     → General text, conversation, Strategist, Analyst
-Cluster B: SPECTER2 768-dim   → Scientist, Electrician, Mechanic (papers)
-Cluster C: CodeBERT 768-dim   → Engineer, Guardian (code)
-Cluster D: PubMedBERT 768-dim → Doctor, Chemist (biomedical)
-Cluster E: CLIP/SigLIP 512-dim → Operator, Interface (vision)
-Cluster F: MatSciBERT 768-dim → Mechanic, Chemist (materials)
+Cluster A: EmbeddingGemma 300M (768d)   → General text, conversation, Strategist, Analyst, default
+Cluster B: SPECTER2 (768d)              → Scientist, Electrician, Mechanic (papers — still SOTA for science)
+Cluster C: CodeRankEmbed / Voyage-Code-3 → Engineer, Guardian (code embeddings)
+Cluster D: PubMedBERT (768d)            → Doctor, Chemist (biomedical)
+Cluster E: SigLIP-2 (vision)            → Operator, Interface
+Cluster F: MatSciBERT (768d)            → Mechanic, Chemist (materials)
 
-Total VRAM for ALL embedding models: ~2GB (fit permanently on any machine)
+Total VRAM for ALL embedding models: ~2GB (fit permanently on any machine, CPU-only, Rs 0)
+
+Reranker (Stage 2.5.3): mxbai-rerank-large-v2 (1.5B Apache-2.0, ~150ms CPU for 20 chunks)
 ```
+
+---
+
+## 3.5. AGENTIC SPECIALIST INFRASTRUCTURE (Stage 6+)
+
+Specialists are not just models. The valuable ones (Analyst/Financier, Operator, Scientist for hologram R&D) are **always-on agentic systems** layered on top of the model. The model is one piece; the cron + ingestion + trigger + cold-wake pipeline is the bigger engineering project.
+
+### Pattern (worked example: The Analyst / Financier watching markets)
+
+```
+[Continuous data ingestion — runs on local laptop, Rs 0/month]
+  ├── Cron pulls NSE bulk-deals (daily after market close)
+  ├── Webhook listens to Groww portfolio updates
+  ├── RSS / NewsAPI / Twitter scraper for sentiment + catalysts
+  └── Market data feeds (yfinance / kite-connect for India)
+       ↓ embeds + structured-DB indexes locally
+[Local ChromaDB + structured DB (DuckDB or SQLite for tabular)]
+       ↓ trigger conditions
+[Trigger evaluator (CPU, runs every N minutes)]
+  ├── Price-spike thresholds (user-defined per holding)
+  ├── Bulk-deal volume anomalies (e.g., MTAR-class breakouts)
+  ├── Sentiment shift on user's watchlist
+  └── Predicted-event catalysts (earnings, Fed announcements, etc.)
+       ↓ on trigger
+[Cold-wake RunPod endpoint: Kimi K2.6 base + Analyst LoRA]
+  ├── Loads in 30-60 seconds
+  ├── Reasons over: portfolio + flagged signal + user's risk profile + trade journal
+  └── Generates: alert + recommendation + entry/stop logic
+       ↓
+[Notification to user — Telegram / email / OS notification]
+
+Cost: ~Rs 25-80 per wakeup × ~10 wakeups/day = Rs 7,500-25,000/month
+vs. equivalent Opus 4.7 API: ~Rs 24,000-72,000/month AND portfolio data leaks to logs
+```
+
+### Pattern (worked example: Hologram R&D session)
+
+Same cold-wake + agent infrastructure, different specialists active in parallel. Kimi K2.6's native agent-swarm support (384 experts → can spawn parallel inference threads) means **Scientist + Engineer + Mathematician adapters reason concurrently** during heavy R&D. The Orchestrator spawns sub-tasks; each adapter swaps in for its sub-domain (physics, code, math); results aggregate via the Aggregator.
+
+### What this is NOT
+
+- **Not a chatbot session.** Specialists are wakeup-on-event, not always-running.
+- **Not a single-model wrapper.** The infrastructure layer (cron, triggers, ingestion, notifier) is most of the engineering.
+- **Not built before Stage 6.** The model + adapter training comes first (Stage 5); the agentic infrastructure layered on top is Stage 6+.
 
 ---
 
@@ -149,7 +219,7 @@ JARVIS does not just "run cron jobs." It executes intelligent loops while the us
 | **5 (Specialists)** | 2-3 months | Fine-tuning (LoRA), domain-specific models |
 | **6 (Integration)** | 1-2 months | Voice, vision, unified API, JARVIS MVP |
 
-**Current Position:** Stage 2, Sub-phase 2.4 (Retrieval Strategies) — Sub-phases 2.1, 2.2, 2.3 complete.
+**Current Position:** Stage 2, Sub-phase 2.5 (Hybrid Search & Reranking) — 2.5.1-2.5.6 complete; 2.5.7 (LLM-as-Judge) and 2.5.8 (KB Compaction & Expiry) pending.
 
 ---
 
