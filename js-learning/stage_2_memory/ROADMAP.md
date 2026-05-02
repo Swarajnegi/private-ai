@@ -85,11 +85,11 @@
 | Lesson | Topic | JARVIS Use Case | Command |
 |--------|-------|-----------------|---------|
 | 2.5.1 | BM25 (Keyword Search) | When exact matches matter | **COMPLETE** — `jarvis_core/memory/bm25.py` (Unicode-aware tokenizer, query-token dedup, k1/b validation, stable top-k; rank_bm25 0.2.2 backend) |
-| 2.5.2 | Hybrid Search | Combine semantic + keyword | `/dev Implement hybrid search for JARVIS memory.` |
-| 2.5.3 | Reranking Models | Score results with a cross-encoder | `@[/learn] Explain cross-encoder reranking.` |
-| 2.5.4 | ColBERT / Late Interaction | Token-level precision retrieval | `@[/learn] Explain ColBERT late interaction and ragatouille.` |
-| 2.5.5 | Evaluation Metrics | recall@k, MRR, NDCG | `@[/learn] Explain recall@k, MRR, and NDCG.` |
-| 2.5.6 | RAGAS Framework | Automated RAG quality scoring | `@[/learn] Explain RAGAS: faithfulness, relevance, context recall, correctness.` |
+| 2.5.2 | Hybrid Search | Combine semantic + keyword | **COMPLETE** — `jarvis_core/memory/hybrid.py` |
+| 2.5.3 | Reranking Models | Score results with a cross-encoder | **COMPLETE** — `jarvis_core/memory/rerank.py` |
+| 2.5.4 | ColBERT / Late Interaction | Token-level precision retrieval | **COMPLETE** — Learned Concept, Skipped Implementation (Storage Tradeoff) |
+| 2.5.5 | Evaluation Metrics | recall@k, MRR, NDCG | **COMPLETE** — Documentation in KB (Evaluation Physics) |
+| 2.5.6 | RAGAS Framework | Automated RAG quality scoring | **COMPLETE** — Documentation in KB (RAGAS Metrics) |
 | 2.5.7 | LLM-as-Judge & Tracing | Grade outputs + debug with Langfuse | `@[/learn] Explain LLM-as-Judge evaluation and observability tracing.` |
 | 2.5.8 | KB Compaction & Expiry | Hybrid expiry + semantic dedup pruning before Stage 3 (Decision 2026-05-01) | `/dev scripts/kb_compact.py: --dedupe (cosine > 0.95), --expire (past expiry date), --dry-run (default), --force, atomic write.` |
 
@@ -124,7 +124,7 @@ Build a complete memory system that:
 | 2.2 Vector Databases | ✅ Complete | 4/4 |
 | 2.3 Document Ingestion | ✅ Complete | 4/4 |
 | 2.4 Retrieval Strategies | ✅ Complete | 4/4 |
-| 2.5 Hybrid Search, Reranking & Evaluation | 🔄 In Progress | 1/8 |
+| 2.5 Hybrid Search, Reranking & Evaluation | 🔄 In Progress | 6/8 |
 
 ---
 
