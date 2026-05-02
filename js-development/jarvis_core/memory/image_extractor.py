@@ -41,6 +41,7 @@ STEP 6: Yield ExtractedImage with bytes, bbox, extension, page number
 =============================================================================
 """
 
+import hashlib
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Generator, Optional, Tuple
@@ -152,14 +153,15 @@ class PdfImageExtractor:
         Yield one real, deduplicated image at a time from the PDF.
 
         EXECUTION FLOW:
-        1. Maintain a set of seen XREF IDs (empty at start).
+        1. Maintain a set of seen XREF IDs and seen image hashes (empty at start).
         2. For each page, call get_images(full=True).
         3. For each image descriptor, read the XREF from index 0.
         4. Skip if XREF is already in seen set (duplicate across pages).
         5. Extract raw bytes via doc.extract_image(xref).
         6. Skip if byte count < self._min_bytes (decoration noise).
-        7. Pull bounding box via page.get_image_rects(xref).
-        8. Add XREF to seen set. Yield ExtractedImage.
+        7. Calculate MD5 hash of the image bytes and skip if already seen.
+        8. Pull bounding box via page.get_image_rects(xref).
+        9. Add XREF and hash to seen sets. Yield ExtractedImage.
 
         Returns:
             Generator of ExtractedImage. One unique real image per yield.
@@ -168,9 +170,10 @@ class PdfImageExtractor:
             raise RuntimeError("Use 'with PdfImageExtractor(path) as ext:'")
 
         # ─────────────────────────────────────────────────────────────────────
-        # FIX 1: XREF deduplication — prevents saving logos 15 times
+        # FIX 1: XREF & Hash deduplication — prevents saving logos 15 times
         # ─────────────────────────────────────────────────────────────────────
         seen_xrefs: set[int] = set()
+        seen_hashes: set[str] = set()
 
         for page_idx in range(len(self._doc)):
             page = self._doc[page_idx]
@@ -184,10 +187,11 @@ class PdfImageExtractor:
                 xref: int = img_info[0]
 
                 # ─────────────────────────────────────────────────────────
-                # FIX 1: Skip if we've already extracted this exact image
+                # FIX 1a: Skip if we've already seen this XREF
                 # ─────────────────────────────────────────────────────────
                 if xref in seen_xrefs:
                     continue
+                seen_xrefs.add(xref)
 
                 # Extract raw bytes from the internal XREF object
                 base_image = self._doc.extract_image(xref)
@@ -203,6 +207,14 @@ class PdfImageExtractor:
                     continue
 
                 # ─────────────────────────────────────────────────────────
+                # FIX 1b: Hash deduplication — catches identical images with diff XREFs
+                # ─────────────────────────────────────────────────────────
+                img_hash = hashlib.md5(raw_bytes).hexdigest()
+                if img_hash in seen_hashes:
+                    continue
+                seen_hashes.add(img_hash)
+
+                # ─────────────────────────────────────────────────────────
                 # FIX 3: Bounding box — record WHERE on the page this is
                 # ─────────────────────────────────────────────────────────
                 bbox: Optional[Tuple[float, float, float, float]] = None
@@ -210,9 +222,6 @@ class PdfImageExtractor:
                 if rects:
                     r = rects[0]
                     bbox = (r.x0, r.y0, r.x1, r.y1)
-
-                # Mark as seen AFTER all checks pass
-                seen_xrefs.add(xref)
 
                 yield ExtractedImage(
                     page_number=page_idx,
