@@ -96,8 +96,8 @@
 ### Stage 4.A — Orchestration (Pass A)
 | # | Sub-Phase | Status |
 |---|-----------|--------|
-| 4.1 | Local Model Loading (RunPod prepaid; no local GPU) | ⬜ |
-| 4.2 | Intent Classification & Routing | ⬜ |
+| 4.1 | Brain Base Model: Kimi K2.6 on RunPod (1T/32B-active MoE, MIT, INT4 native) — frontier APIs as escape valve only | ⬜ |
+| 4.2 | Intent Classification & Routing (ModernBERT-Large CPU classifier, NOT small-LLM router) | ⬜ |
 
 **Pass A → Pass B Gate:** Router achieves ≥80% routing accuracy on a 50-query labeled test set (`tests/router_eval.jsonl`). Failure modes (always-default, always-largest) score ~20%. Cannot advance to 4.3 without a documented Router quality measurement.
 
@@ -111,17 +111,19 @@
 
 ---
 
-## Stage 5: Domain Specialists — The Experts (Engineer-first MVP per Decision 2026-05-01)
+## Stage 5: Domain Specialists — The Experts (Engineer-first MVP per Decision 2026-05-01; recipe revised 2026-05-03 to QLoRA-on-Kimi-K2.6)
 
 **Goal:** Ship ONE specialist end-to-end before scaling to 12. First (and currently only locked-in) specialist: **The Engineer**, sub-domains = `code_systems` + `data_engineering` (frontend / backend deferred until stack is locked-in). Training corpus: jarvis_core/ (code), Data_Engineering_Lessons.md (DE).
 
+**Recipe (Decision 2026-05-03):** All specialists ship as **QLoRA adapters on the shared Kimi K2.6 base** (1T/32B-active MoE), NOT separate dense fine-tunes. ~80% lower training cost; one base + adapter swap instead of 12 dense loads. Adapter seed = distillation from public domain specialist (e.g., Qwen3-Coder-Next for Engineer, MedGemma 1.5 for Doctor). Personalization corpus = user's private data (jarvis_core/, KB, chat history, error logs).
+
 | # | Sub-Phase | Status | Note |
 |---|-----------|--------|------|
-| 5.1 | Fine-Tuning Basics (LoRA on RunPod) | ⬜ | RunPod prepaid only; no local GPU |
-| 5.2 | The Engineer Specialist (Code+Systems + DE) | ⬜ | MVP — sub-domain isolation discipline applied |
-| 5.3 | Engineer Evaluation (RAGAS + recall@k on engineer-domain test set) | ⬜ | Gate: must outperform GPT-4 baseline on user's DE corpus |
-| 5.4 | Specialist Templating (only after Engineer ships) | ⬜ | Replicate to Scientist / Doctor / etc. only after MVP validated |
-| 5.5 | Roster Expansion (Idea [42] full 12-specialist plan) | ⬜ | Spec preserved; build only on demand |
+| 5.1 | Fine-Tuning Basics (QLoRA on RunPod, Kimi K2.6 base) | ⬜ | RunPod prepaid only; no local GPU |
+| 5.2 | The Engineer QLoRA Adapter (Code+Systems + DE on user's private corpus) | ⬜ | MVP — sub-domain isolation discipline applied; adapter seed = Qwen3-Coder-Next 80B/3B-active distilled |
+| 5.3 | Engineer Evaluation (RAGAS + recall@k on engineer-domain test set) | ⬜ | Gate: match Kimi K2.6 base on public benchmarks AND outperform on user's private-corpus tasks (code style, KB recall, error-pattern recognition). NOT "beat GPT-5.5" — that's the wrong frame per Decision 2026-05-03. |
+| 5.4 | Specialist Templating (only after Engineer ships) | ⬜ | Replicate adapter recipe to Doctor / Scientist / Analyst only after Engineer MVP validated |
+| 5.5 | Roster Expansion (Idea [42] full 12-specialist plan) | ⬜ | Spec preserved; build only on demand. Always 1 base + N adapters, never N dense. |
 
 ---
 
