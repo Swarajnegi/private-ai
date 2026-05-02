@@ -65,15 +65,7 @@ RUNBOOK.md
 # workflows (/learn, /memory, /research, etc. + always-on rules); work laptop
 # has its own scratchpad version. Keeping it machine-local prevents the two
 # copies from clobbering each other on pulls.
-#
-# EXCEPTION: .agent/workflows/next.md is tracked to synchronize
-# roadmap progress enforcement across both machines. Wildcard + negation
-# pattern below is required because gitignore can't re-include a file
-# under a fully-excluded directory.
-.agent/*
-!.agent/workflows/
-.agent/workflows/*
-!.agent/workflows/next.md
+.agent/
 # .claude/ is Claude Code's per-project settings dir (work-laptop-only;
 # personal laptop runs Antigravity, not Claude Code). Machine-local.
 .claude/
