@@ -1,3 +1,0 @@
-I want you to scour the internet and make a highly detailed and comprehensive list of what models will be used for what. From the specialists (transformer models and LLMs) to the applications like RAGAS and the brain where you suggest we use 70B and 8B models. But They're NOTHIING compared to the trillion parmaeter models. If we're gonna use these small models the my final JARVIS or any of the 12 specialists will never even match up not to mention exceed the state of the art g"generalist" models like opus 4.7 or gpt 5.5 etc.
-
-So make that list, we will discuss the price and training costs later.

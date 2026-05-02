@@ -60,12 +60,8 @@ CLAUDE.md
 # GitHub-based sync; kept locally on work laptop for reference.
 SYNC.md
 RUNBOOK.md
-# .agent/ is the per-runtime workflow + rules infrastructure. Each machine
-# customizes its own copy: personal laptop has the canonical Antigravity-era
-# workflows (/learn, /memory, /research, etc. + always-on rules); work laptop
-# has its own scratchpad version. Keeping it machine-local prevents the two
-# copies from clobbering each other on pulls.
-.agent/
+# .agent/ is the per-runtime workflow + rules infrastructure.
+# It is now tracked to synchronize rules and workflows across machines.
 # .claude/ is Claude Code's per-project settings dir (work-laptop-only;
 # personal laptop runs Antigravity, not Claude Code). Machine-local.
 .claude/
