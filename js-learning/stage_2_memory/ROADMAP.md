@@ -90,8 +90,8 @@
 | 2.5.4 | ColBERT / Late Interaction | Token-level precision retrieval | **COMPLETE** — Learned Concept, Skipped Implementation (Storage Tradeoff) |
 | 2.5.5 | Evaluation Metrics | recall@k, MRR, NDCG | **COMPLETE** — Documentation in KB (Evaluation Physics) |
 | 2.5.6 | RAGAS Framework | Automated RAG quality scoring | **COMPLETE** — Documentation in KB (RAGAS Metrics) |
-| 2.5.7 | LLM-as-Judge & Tracing | Grade outputs + debug with Langfuse | `@[/learn] Explain LLM-as-Judge evaluation and observability tracing.` |
-| 2.5.8 | KB Compaction & Expiry | Hybrid expiry + semantic dedup pruning before Stage 3 (Decision 2026-05-01) | `/dev scripts/kb_compact.py: --dedupe (cosine > 0.95), --expire (past expiry date), --dry-run (default), --force, atomic write.` |
+| 2.5.7 | LLM-as-Judge & Tracing | Grade outputs + debug with Langfuse | **COMPLETE** — KB Procedurals: judge mechanics (3 modes + 4 biases + DI pattern) + Langfuse architecture (self-host stack + JARVIS instrumentation plan) |
+| 2.5.8 | KB Compaction & Expiry | Hybrid expiry + semantic dedup pruning before Stage 3 (Decision 2026-05-01) | **COMPLETE** — `scripts/kb_compact.py` (DI'd embedder, expiry pruning, type-isolated semantic dedup with cosine + tag-Jaccard structural rule, quality-aware merge with provenance preservation, atomic write via tmp+fsync+os.replace, .bak backup, compaction_log.jsonl audit, 6/6 smoke tests pass). Dry-run default; `--force` writes. |
 
 **Practical Exercise:** Build a hybrid retriever, measure with RAGAS, prove it outperforms pure semantic. Then compact the KB before Stage 3 begins.
 
@@ -124,7 +124,7 @@ Build a complete memory system that:
 | 2.2 Vector Databases | ✅ Complete | 4/4 |
 | 2.3 Document Ingestion | ✅ Complete | 4/4 |
 | 2.4 Retrieval Strategies | ✅ Complete | 4/4 |
-| 2.5 Hybrid Search, Reranking & Evaluation | 🔄 In Progress | 6/8 |
+| 2.5 Hybrid Search, Reranking & Evaluation | 🔄 In Progress | 8/8 (Final Boss compaction pending — execute kb_compact.py --force before Stage 3) |
 
 ---
 

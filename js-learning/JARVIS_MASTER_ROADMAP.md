@@ -8,7 +8,7 @@
 
 ## 📍 Current Position
 
-**Stage 2, Sub-phase 2.5: Hybrid Search, Reranking & Evaluation** — In Progress (2.5.1-2.5.6 ✅; 2.5.7–2.5.8 pending)
+**Stage 2, Sub-phase 2.5: Hybrid Search, Reranking & Evaluation** — All 8 lessons COMPLETE (2.5.8 kb_compact.py shipped; Final Boss execution = kb_compact.py --force before Stage 3 entry)
 
 ---
 

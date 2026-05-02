@@ -73,6 +73,11 @@ jarvis_data/knowledge.md
 # model_catalog.json is regenerable via `python3 scripts/sync_openrouter.py`.
 # Snapshot goes stale anyway as OpenRouter's catalog evolves.
 jarvis_data/model_catalog.json
+# compaction_log.jsonl is the machine-local audit trail of kb_compact.py runs.
+# Useful for forensics on the local machine; not needed across machines.
+jarvis_data/compaction_log.jsonl
+# kb_compact.py creates a .bak before any --force write. Machine-local.
+jarvis_data/knowledge_base.jsonl.bak
 
 # -- Local secrets / env -----------------------------------------------------
 .env
