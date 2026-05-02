@@ -196,6 +196,9 @@ class PdfImageExtractor:
 
                 raw_bytes: bytes = base_image["image"]
 
+                # Mark as seen before size check so we don't process small noisy images multiple times
+                seen_xrefs.add(xref)
+
                 # ─────────────────────────────────────────────────────────
                 # FIX 2: Size filter — discard decoration noise (<5KB)
                 # ─────────────────────────────────────────────────────────
@@ -210,9 +213,6 @@ class PdfImageExtractor:
                 if rects:
                     r = rects[0]
                     bbox = (r.x0, r.y0, r.x1, r.y1)
-
-                # Mark as seen AFTER all checks pass
-                seen_xrefs.add(xref)
 
                 yield ExtractedImage(
                     page_number=page_idx,
