@@ -68,14 +68,12 @@ ARCHITECTURE
 
 import asyncio
 import hashlib
-import os
 import random
 import time
 import tracemalloc
-from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, AsyncIterator, Generator, Iterator, Optional
+from typing import AsyncIterator, Generator
 
 import aiofiles
 import fitz  # PyMuPDF
