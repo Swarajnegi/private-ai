@@ -124,7 +124,7 @@ Build a complete memory system that:
 | 2.2 Vector Databases | ✅ Complete | 4/4 |
 | 2.3 Document Ingestion | ✅ Complete | 4/4 |
 | 2.4 Retrieval Strategies | ✅ Complete | 4/4 |
-| 2.5 Hybrid Search, Reranking & Evaluation | 🔄 In Progress | 8/8 (Final Boss compaction pending — execute kb_compact.py --force before Stage 3) |
+| 2.5 Hybrid Search, Reranking & Evaluation | ✅ Complete | 8/8 (Final Boss kb_compact.py --force executed 2026-05-03; KB 222 → 219) |
 
 ---
 

@@ -8,7 +8,7 @@
 
 ## 📍 Current Position
 
-**Stage 2, Sub-phase 2.5: Hybrid Search, Reranking & Evaluation** — All 8 lessons COMPLETE (2.5.8 kb_compact.py shipped; Final Boss execution = kb_compact.py --force before Stage 3 entry)
+**Stage 3 — Agent Framework: OpenClaude MCP bridge** ⬅️ next entry. Stage 2 (Memory Layer) closed 2026-05-03 — all 8 sub-phases shipped, Final Boss kb_compact.py --force executed (KB 222 → 219). Single Stage 3 deliverable per Decision 2026-05-01: `jarvis_core/agent/mcp_bridge.py` exposing store / expansion / compression / bm25 / hybrid as MCP tools.
 
 ---
 
@@ -19,15 +19,15 @@
 - **Output:** Async, memory-safe pipelines (Phases 1-3 done, 4-5 deferred)
 - **Roadmap:** [stage_1_python/ROADMAP.md](stage_1_python/ROADMAP.md)
 
-### Stage 2: Memory Layer — The Soul ⬅️ CURRENT
-- **Duration:** 1-2 months
-- **Output:** RAG + ChromaDB retrieval
+### Stage 2: Memory Layer — The Soul ✅ COMPLETE
+- **Duration:** ~9 weeks (Mar–May 2026; 1.13× expected, depth-first justified)
+- **Output:** Production RAG + ChromaDB + hybrid (semantic+BM25) + cross-encoder rerank + KB compactor
 - **Roadmap:** [stage_2_memory/ROADMAP.md](stage_2_memory/ROADMAP.md)
 
-### Stage 3: Agent Framework — The Mind
+### Stage 3: Agent Framework — The Mind ⬅️ CURRENT
 - **Duration:** 1-2 months
-- **Output:** Tool-calling, planning agents
-- **Roadmap:** [stage_3_agents/ROADMAP.md](stage_3_agents/ROADMAP.md)
+- **Output:** OpenClaude MCP bridge (`jarvis_core/agent/mcp_bridge.py`) — exposes Memory primitives as tools; OpenClaude handles ReAct/planning/tool-calling
+- **Roadmap:** [stage_3_agents/ROADMAP.md](stage_3_agents/ROADMAP.md) + [STAGE_3_OPENCLAUDE_STRATEGY.md](../STAGE_3_OPENCLAUDE_STRATEGY.md)
 
 ### Stage 4: Multi-Model Orchestration — The Brain
 - **Duration:** 2-3 months
@@ -147,16 +147,16 @@
 | Stage | Name | Status |
 |-------|------|--------|
 | 1 | Systems Python | ✅ Sufficient |
-| 2 | Memory Layer | 🔄 Starting |
-| 3 | Agent Framework | ⬜ 0% |
-| 4 | Orchestration | ⬜ 0% |
-| 5 | Specialists | ⬜ 0% |
+| 2 | Memory Layer | ✅ Complete (8/8 sub-phases; Final Boss executed 2026-05-03) |
+| 3 | Agent Framework (OpenClaude MCP bridge) | 🔄 Starting |
+| 4 | Orchestration (Kimi K2.6 brain + 12 QLoRA adapters) | ⬜ 0% |
+| 5 | Specialists (Engineer-first MVP) | ⬜ 0% |
 | 6 | Integration | ⬜ 0% |
 
 ---
 
 ## Next Action
 
-**Start:** Stage 2, Sub-phase 2.5, Lesson 2 (Hybrid Search)  
-**File:** [stage_2_memory/ROADMAP.md](stage_2_memory/ROADMAP.md)  
-**Command:** `/dev Implement hybrid search for JARVIS memory.`
+**Start:** Stage 3, OpenClaude MCP bridge (single deliverable per Decision 2026-05-01)
+**File:** [STAGE_3_OPENCLAUDE_STRATEGY.md](../STAGE_3_OPENCLAUDE_STRATEGY.md) + new module `js-development/jarvis_core/agent/mcp_bridge.py`
+**Command:** `@[/learn] Explain Model Context Protocol (MCP) — server architecture, tool registration, JSON-RPC transport.` then `@[/dev] Build jarvis_core/agent/mcp_bridge.py exposing store / expansion / compression / bm25 / hybrid / rerank as MCP tools.`
