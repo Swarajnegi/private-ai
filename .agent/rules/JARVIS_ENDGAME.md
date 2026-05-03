@@ -1,6 +1,6 @@
 # 🚀 PROJECT JARVIS: THE MASTER BLUEPRINT (ENDGAME ARCHITECTURE)
 
-> **Last Updated:** 2026-05-03
+> **Last Updated:** 2026-05-03 (costs verified against RunPod public pricing page)
 > **Referenced by:** `.agent/rules/js-workspace-rule.md` (co-located in rules — auto-loaded every conversation)
 > **Knowledge Base:** `jarvis_data/knowledge_base.jsonl` (entries tagged `specialist_roster`, `embedding_clusters`)
 
@@ -29,11 +29,32 @@ JARVIS operates on a **cloud-first, prepaid infrastructure**. Earlier drafts of 
 
 ### The Foundry (The Cloud) — RunPod, Prepaid Credits Only
 - **Phase 1-3 (current):** OpenRouter API for cheap/free LLMs (~₹400-2,000/month)
-- **Phase 4:** RunPod Serverless GPU endpoints for routing + first specialist inference (~₹2,500-6,500/month)
-- **Phase 5:** RunPod Dedicated GPU during fine-tuning + specialist work hours (~₹12,000-30,000/month)
+- **Phase 4:** RunPod Cloud Pods for training + inference (~₹910-1,820/month at 10-20 sessions)
+- **Phase 5:** Same pods, heavier usage during fine-tuning weeks (~₹3,000-6,000/month)
 - **Billing model:** prepaid credits ONLY. No post-paid billing, no auto-recharge by credit card. Out-of-credits = jobs fail closed (correct behavior; better than silent overage).
 - **Top-up cadence:** manual, on-demand. Set a low-balance email alert at ~20% of last top-up.
 - **Privacy:** only the final prompt (query + 5 retrieved chunks) leaves the local machine. The knowledge base, raw research papers, and embeddings stay local.
+
+### RunPod GPU Selection (Verified Pricing, May 2026)
+
+Cost minimization strategy: use the cheapest GPU that fits the job. Time is not a constraint.
+
+| GPU | VRAM | Community Cloud $/hr | ₹/hr | Role in JARVIS |
+|---|---|---|---|---|
+| **RTX A5000** | 24 GB | **$0.27** | **₹23** | ⭐ Default for 7/12 adapter training jobs + Interface fine-tune |
+| **A40** | 48 GB | **$0.44** | **₹37** | ⭐ For 5 adapters that distill from large teachers (Engineer, Scientist, Operator, Strategist, Analyst) |
+| RTX 3090 | 24 GB | $0.46 | ₹39 | Viable A5000 alternative if A5000 unavailable |
+| A6000 | 48 GB | $0.49 | ₹41 | Viable A40 alternative |
+| RTX 4090 | 24 GB | $0.69 | ₹58 | Faster training at 2.5× A5000 cost — only if time becomes urgent |
+| A100 PCIe | 80 GB | $1.39 | ₹117 | Inference fallback (fits full Kimi K2.6 INT4 on one card) |
+
+**Inference-viable configurations for Kimi K2.6 (1T params, INT4 ≈ 200-400 GB):**
+
+| Config | Cost | Latency | Notes |
+|---|---|---|---|
+| 4× RTX A5000 (model parallel) | ₹91/hr | Normal | 96GB total VRAM, cheapest viable multi-GPU |
+| 1× A100 80GB | ₹117/hr | Normal | Tight fit with KV cache, single-card simplicity |
+| 1× A40 + CPU offload | ₹37/hr | 3-5× slower | Cheapest option if latency is acceptable |
 
 ### Why no local GPU
 | Considered | Verdict | Reason |
@@ -47,7 +68,7 @@ The trade is paid compute in exchange for zero hardware setup overhead. Acceptab
 
 ### The Brain Base Model (Phase 4+)
 
-**Default:** Kimi K2.6 (1T total / 32B active MoE, MIT license, INT4 native, 384 experts, native agent-swarm pattern). Hosted on RunPod, ~Rs 1.5L/month at heavy use (6 hr/day × 4×H100 INT4 ≈ Rs 1,200/hr × 120 hrs).
+**Default:** Kimi K2.6 (1T total / 32B active MoE, MIT license, INT4 native, 384 experts, native agent-swarm pattern). Hosted on RunPod Cloud Pods. Cold-wake only — no always-on GPU. Cost at 4× A5000: ₹91/hr; at 15 sessions/month averaging 1 hr: **~₹1,365/month**.
 
 **Why Kimi K2.6 over alternatives:**
 - vs. DeepSeek V4-Pro (1.6T/49B-active): smaller, fits 4×H100 INT4 instead of needing 8×H100. Same MIT license. ~30% cheaper inference.
@@ -79,14 +100,6 @@ The trade is paid compute in exchange for zero hardware setup overhead. Acceptab
 | 11 | **The Guardian** | Cybersecurity, vulnerability analysis, threat modeling | Qwen3-Coder-Next + LoRA on security advisories | User's audit logs, past vuln findings, threat model docs |
 | 12 | **The Interface** | Voice input, vision processing, multimodal I/O | Whisper Large-v3 (ASR), Kokoro-82M (TTS), Qwen2.5-VL-7B (vision) — separate models, NOT adapters on Kimi | User's voice recordings (consented), screen/CAD captures |
 
-### What changed from the pre-2026-05-03 framing
-
-| Before | After (Decision 2026-05-03) |
-|---|---|
-| 12 separate dense fine-tunes (~Rs 17-40L training cost; 12 × 70B model loads) | 1 MoE base (Kimi K2.6) + 12 QLoRA adapters (~Rs 1-2L total training; one base + adapter swap) |
-| Brain = Llama-3.3 70B quantized | Brain = Kimi K2.6 (1T/32B-active MoE) |
-| "Phase 1-3 cloud APIs as default route, Phase 4 self-host" | Frontier APIs are escape-valve-only; Kimi K2.6 self-hosted on RunPod is the default Brain from Phase 4 onwards |
-| Specialist value = beating public benchmarks | Specialist value = personalized on user's private corpus + agentic infrastructure |
 
 ### Embedding Model Clusters (Memory Layer — orthogonal to specialists)
 
@@ -128,14 +141,14 @@ Specialists are not just models. The valuable ones (Analyst/Financier, Operator,
   ├── Sentiment shift on user's watchlist
   └── Predicted-event catalysts (earnings, Fed announcements, etc.)
        ↓ on trigger
-[Cold-wake RunPod endpoint: Kimi K2.6 base + Analyst LoRA]
-  ├── Loads in 30-60 seconds
+[Cold-wake RunPod Pod: Kimi K2.6 base + Analyst LoRA on 4× A5000]
+  ├── Loads in 60-90 seconds
   ├── Reasons over: portfolio + flagged signal + user's risk profile + trade journal
   └── Generates: alert + recommendation + entry/stop logic
        ↓
 [Notification to user — Telegram / email / OS notification]
 
-Cost: ~Rs 25-80 per wakeup × ~10 wakeups/day = Rs 7,500-25,000/month
+Cost: ~Rs 15-30 per wakeup (10-20 min × ₹91/hr) × ~10 wakeups/day = Rs 4,500-9,000/month
 vs. equivalent Opus 4.7 API: ~Rs 24,000-72,000/month AND portfolio data leaks to logs
 ```
 
@@ -148,6 +161,64 @@ Same cold-wake + agent infrastructure, different specialists active in parallel.
 - **Not a chatbot session.** Specialists are wakeup-on-event, not always-running.
 - **Not a single-model wrapper.** The infrastructure layer (cron, triggers, ingestion, notifier) is most of the engineering.
 - **Not built before Stage 6.** The model + adapter training comes first (Stage 5); the agentic infrastructure layered on top is Stage 6+.
+
+---
+
+## 3.6. TRAINING & USAGE COST SCHEDULE (Verified May 2026)
+
+**Source:** RunPod public pricing page. All costs in INR ($1 = ₹84).
+**Constraint:** No deadline. Minimize capital. Cold-wake only (no idle GPUs).
+
+### Per-Specialist Training Costs (One-Time)
+
+| # | Specialist | GPU | Rank | Epochs | GPU-Hours | Training Cost (₹) |
+|---|---|---|---|---|---|---|
+| 0 | Base (Kimi K2.6) | — | — | — | — | ₹200 (deploy only) |
+| 1 | Orchestrator | A5000 ($0.27) | 16 | 3 | 8-15 | ₹180 – ₹340 |
+| 2 | Engineer | A40 ($0.44) | 32 | 5 | 40-80 | ₹1,480 – ₹2,960 |
+| 3 | Scientist | A40 ($0.44) | 32 | 5 | 50-100 | ₹1,850 – ₹3,700 |
+| 4 | Doctor | A5000 ($0.27) | 16 | 3 | 20-35 | ₹450 – ₹790 |
+| 5 | Operator | A40 ($0.44) | 32 | 5 | 60-120 | ₹2,220 – ₹4,440 |
+| 6 | Electrician | A5000 ($0.27) | 16 | 4 | 20-35 | ₹450 – ₹790 |
+| 7 | Mechanic | A5000 ($0.27) | 16 | 4 | 20-30 | ₹450 – ₹680 |
+| 8 | Chemist | A5000 ($0.27) | 16 | 4 | 20-35 | ₹450 – ₹790 |
+| 9 | Strategist | A40 ($0.44) | 16 | 4 | 35-60 | ₹1,300 – ₹2,220 |
+| 10 | Analyst | A40 ($0.44) | 32 | 5 | 40-70 | ₹1,480 – ₹2,590 |
+| 11 | Guardian | A5000 ($0.27) | 16 | 4 | 20-35 | ₹450 – ₹790 |
+| 12 | Interface | A5000 ($0.27) | 8-16 | 3 | 12-20 | ₹270 – ₹450 |
+| | **TOTAL** | | | | **345-635 hrs** | **₹11,230 – ₹20,540** |
+
+### Training Sequence (ROI-Ordered, Spread Across Build Phases)
+
+| Priority | Specialist | When | Cumulative Spend |
+|---|---|---|---|
+| 1 | Orchestrator | Stage 3 start | ₹340 |
+| 2 | Engineer | Stage 3 | ₹3,300 |
+| 3 | Analyst | Stage 4 | ₹5,890 |
+| 4 | Scientist | Stage 4 | ₹9,590 |
+| 5 | Guardian | Stage 4 | ₹10,380 |
+| 6 | Operator | Stage 5 | ₹14,820 |
+| 7 | Strategist | Stage 5 | ₹17,040 |
+| 8-12 | Rest | Stage 5-6 | ₹20,540 |
+
+**Stage 3 entry ticket (Orchestrator + Engineer): ₹3,300 total.**
+
+### Monthly Usage Cost (Cold-Wake Sessions)
+
+| Inference Config | ₹/hr | 10 sessions/mo (1hr avg) | 20 sessions/mo |
+|---|---|---|---|
+| 4× A5000 (model parallel) | ₹91 | ₹910 | ₹1,820 |
+| 1× A100 80GB | ₹117 | ₹1,170 | ₹2,340 |
+| 1× A40 + CPU offload (slow) | ₹37 | ₹370 | ₹740 |
+
+### Year 1 Total Cost Projection
+
+| Scenario | Training | Usage (12 mo) | Storage | Total |
+|---|---|---|---|---|
+| Conservative (8 sessions/mo, A40 offload) | ₹15,000 | ₹3,600 | ₹3,000 | **₹21,600** (~$257) |
+| Moderate (15 sessions/mo, 4× A5000) | ₹15,000 | ₹16,380 | ₹3,000 | **₹34,380** (~$410) |
+| Heavy (25 sessions/mo, 4× A5000) | ₹20,000 | ₹27,300 | ₹3,000 | **₹50,300** (~$599) |
+
 
 ---
 
