@@ -70,7 +70,7 @@
 | 2.2 | Vector Databases (ChromaDB) | ✅ Complete |
 | 2.3 | Document Ingestion | ✅ Complete |
 | 2.4 | Retrieval Strategies | ✅ Complete |
-| 2.5 | Hybrid Search & Reranking | 🔄 In Progress |
+| 2.5 | Hybrid Search & Reranking | ✅ Complete |
 
 ---
 
@@ -80,7 +80,7 @@
 
 | # | Sub-Phase | Status | Note |
 |---|-----------|--------|------|
-| 3.0 | **MCP Bridge** (the actual deliverable) | ⬜ | Wraps store / expansion / compression / bm25 / hybrid as MCP tools |
+| 3.0 | **MCP Bridge** (the actual deliverable) | 🔄 Starting | Wraps store / expansion / compression / bm25 / hybrid as MCP tools |
 | 3.1 | Function Calling | (design note) | OpenClaude provides |
 | 3.2 | Tool Design & Registration | (design note) | OpenClaude provides |
 | 3.3 | Planning & Decomposition | (design note) | OpenClaude provides |

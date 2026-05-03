@@ -78,7 +78,7 @@
 
 ---
 
-## Sub-Phase 2.5: Hybrid Search, Reranking & Evaluation ⬅️ YOU ARE HERE
+## Sub-Phase 2.5: Hybrid Search, Reranking & Evaluation ✅ COMPLETE
 
 **Goal:** Combine multiple retrieval methods, measure quality, iterate.
 
