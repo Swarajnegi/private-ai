@@ -18,6 +18,20 @@
 
 ---
 
+## Sub-Phase 3.0: MCP Bridge 🔄 YOU ARE HERE
+
+**Goal:** Build the Model Context Protocol (MCP) bridge to expose JARVIS memory as tools for OpenClaude.
+
+| Lesson | Topic | JARVIS Use Case | Command |
+|--------|-------|-----------------|---------|
+| 3.0.1 | MCP Server Fundamentals | Understand MCP server-client architecture | `@[/learn] Explain Model Context Protocol (MCP) — server architecture, tool registration, JSON-RPC transport.` |
+| 3.0.2 | Exposing Memory Primitives | Turn search/expansion/compression into tools | `/dev Build jarvis_core/agent/mcp_bridge.py exposing store / expansion / compression / bm25 / hybrid / rerank as MCP tools.` |
+| 3.0.3 | Integration with OpenClaude | Test the bridge with Claude Desktop / Antigravity | `/dev Configure and test JARVIS MCP bridge with Claude.` |
+
+**Practical Exercise:** Successfully retrieve a fact from your private knowledge base using Claude via the JARVIS MCP bridge.
+
+---
+
 ## Sub-Phase 3.1: Function Calling & Structured Output ⬜
 
 **Goal:** Understand how LLMs invoke structured functions — and guarantee valid output.
