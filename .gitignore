@@ -54,8 +54,10 @@ Thumbs.db
 desktop.ini
 
 # -- Machine-local operational infrastructure (not part of the synced project)
-# CLAUDE.md is a Claude Code @import proxy at repo root — work-laptop-only.
-CLAUDE.md
+# /CLAUDE.md (root only) is a Claude Code @import proxy — work-laptop-only.
+# Note the leading `/`: without it, this pattern would also gitignore .agent/rules/CLAUDE.md
+# which IS supposed to be synced (canonical operating context per the file itself).
+/CLAUDE.md
 # SYNC.md / RUNBOOK.md were the HDD-era operational docs — superseded by
 # GitHub-based sync; kept locally on work laptop for reference.
 SYNC.md

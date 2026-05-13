@@ -1,5 +1,21 @@
 # Stage 3 Strategy: Delegate Agent Runtime to OpenClaude, Keep Cognitive Layer in JARVIS
 
+> ## ⛔ SUPERSEDED 2026-05-13
+>
+> **This strategy was reversed by Decision 2026-05-13** (`tags: ["stage-3", "openclaude-reversal", "build-from-scratch", "supersedes-2026-05-01", "DIRECTIVE"]`). JARVIS now owns its agent runtime — built from scratch in `jarvis_core/agent/` per the original 5 sub-phases (3.1–3.5) in [stage_3_agents/ROADMAP.md](../js-learning/stage_3_agents/ROADMAP.md), preceded by a 3.0 Entry Sprint (Registry + Cost + Tool ABC, porting OpenJarvis STEAL targets).
+>
+> **Why reversed:** (1) OpenClaude IS Claude Code hosted by Anthropic — every query routes externally, contradicting "private AI" identity in [JARVIS_ENDGAME.md](.agent/rules/JARVIS_ENDGAME.md) Section 1. (2) Per-token API forever breaks the fixed-training-cost + variable-compute economic model. (3) 12-specialist routing + QLoRA adapter swap + cold-wake patterns aren't first-class concepts in OpenClaude — wrappers would defeat the time-savings the delegation was reasoned on. (4) Stages 3.1–3.5 are the canonical learning arc; this was a 2–3 week detour.
+>
+> **What replaces it:** Build timeline 10–14 weeks (vs. the original 2–3 week shortcut), compressed via OpenJarvis STEAL targets (Apache 2.0): STEAL #1 RegistryBase → 3.2 foundation; STEAL #2 PRICING dict → 3.2 concurrent; STEAL #5 TraceStep+EventBus → 3.4 trace path; STEAL #6 EvalRecord framework → 3.4 + 3.5 gates.
+>
+> **What this file is now:** historical context for why the detour was considered and why it was rejected. **Do not implement anything below this banner.** The MCP bridge concept survives only as optional Stage 5+ work — *publishing* JARVIS Memory to external tools (Claude Desktop, Antigravity), not as the agent runtime.
+>
+> *See KB entries: Decision 177 (2026-05-01 delegation, superseded), Decision 222 (2026-05-03 reinforcement, superseded), Decision 2026-05-13 (the reversal).*
+
+---
+
+> **[ORIGINAL HEADER, PRE-REVERSAL]**
+>
 > **Status:** Strategic decision document, awaiting integration kickoff.
 > **Authored:** 2026-04-27.
 > **Affects:** Stage 3 (Agent Framework) and the foundational pieces of Stage 4 (Multi-Model Orchestration) per [JARVIS_MASTER_ROADMAP.md](../../js-learning/JARVIS_MASTER_ROADMAP.md).
