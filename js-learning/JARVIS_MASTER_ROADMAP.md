@@ -97,7 +97,7 @@
 | # | Sub-Phase | Status |
 |---|-----------|--------|
 | 4.1 | Brain Base Model: Kimi K2.6 on RunPod (1T/32B-active MoE, MIT, INT4 native) — frontier APIs as escape valve only | ⬜ |
-| 4.2 | Intent Classification & Routing (ModernBERT-Large CPU classifier, NOT small-LLM router) | ⬜ |
+| 4.2 | Intent Classification & Routing (ModernBERT-Large CPU classifier, NOT small-LLM router) + **STEAL #7** OpenClaude SmartRouter (`python/smart_router.py` — already Python; 3 strategies latency/cost/balanced) | ⬜ |
 
 **Pass A → Pass B Gate:** Router achieves ≥80% routing accuracy on a 50-query labeled test set (`tests/router_eval.jsonl`). Failure modes (always-default, always-largest) score ~20%. Cannot advance to 4.3 without a documented Router quality measurement.
 
