@@ -8,7 +8,7 @@
 
 ## 📍 Current Position
 
-**Stage 3 — Agent Framework: OpenClaude MCP bridge** ⬅️ next entry. Stage 2 (Memory Layer) closed 2026-05-03 — all 8 sub-phases shipped, Final Boss kb_compact.py --force executed (KB 222 → 219). Single Stage 3 deliverable per Decision 2026-05-01: `jarvis_core/agent/mcp_bridge.py` exposing store / expansion / compression / bm25 / hybrid as MCP tools.
+**Stage 3 — Agent Framework: build `jarvis_core/agent/` from scratch** ⬅️ next entry. Stage 2 (Memory Layer) closed 2026-05-03 — all 8 sub-phases shipped, Final Boss kb_compact.py --force executed (KB 222 → 219). **Per Decision 2026-05-13 (reverses 2026-05-01 OpenClaude delegation):** JARVIS owns its agent runtime. Build the original 5 sub-phases (3.1 Function Calling, 3.2 Tool Registry, 3.3 Planning, 3.4 ReAct, 3.5 MemGPT) preceded by a 3.0 Entry Sprint (Registry + Cost + Tool ABC from OpenJarvis STEAL targets, Apache 2.0). Metacognitive review's NOW-phase items (Cognitive_State_Update schema, TextTelemetry, MIRROR-lite prompt, CoT loop detector, heartbeat loop, sleep-time consolidation) absorb into 3.1/3.4/3.5.
 
 ---
 
@@ -25,9 +25,9 @@
 - **Roadmap:** [stage_2_memory/ROADMAP.md](stage_2_memory/ROADMAP.md)
 
 ### Stage 3: Agent Framework — The Mind ⬅️ CURRENT
-- **Duration:** 1-2 months
-- **Output:** OpenClaude MCP bridge (`jarvis_core/agent/mcp_bridge.py`) — exposes Memory primitives as tools; OpenClaude handles ReAct/planning/tool-calling
-- **Roadmap:** [stage_3_agents/ROADMAP.md](stage_3_agents/ROADMAP.md) + [STAGE_3_OPENCLAUDE_STRATEGY.md](../STAGE_3_OPENCLAUDE_STRATEGY.md)
+- **Duration:** 10–14 weeks (2.5–3.5 months; net +8–12 weeks vs. the OpenClaude shortcut, compressed via OpenJarvis STEAL targets)
+- **Output:** `jarvis_core/agent/` — Tool ABC + Registry + Cost accounting + ReAct loop + Planner + MemGPT-style memory paging — JARVIS owns the runtime
+- **Roadmap:** [stage_3_agents/ROADMAP.md](stage_3_agents/ROADMAP.md) — see also [STAGE_3_OPENCLAUDE_STRATEGY.md](../STAGE_3_OPENCLAUDE_STRATEGY.md) (SUPERSEDED 2026-05-13, kept for historical context)
 
 ### Stage 4: Multi-Model Orchestration — The Brain
 - **Duration:** 2-3 months
@@ -74,18 +74,18 @@
 
 ---
 
-## Stage 3: Agent Framework — The Mind (DELEGATED to OpenClaude)
+## Stage 3: Agent Framework — The Mind (BUILD FROM SCRATCH per Decision 2026-05-13)
 
-**Goal:** Expose the JARVIS Memory layer as MCP tools that OpenClaude can invoke. The 5 traditional sub-phases below are **internal design notes**, not code-to-write — OpenClaude already ships function-calling, planning, ReAct, and memory-augmented agent patterns. Per Decision 2026-05-01 (split-brain resolved): Stage 3 single deliverable is `jarvis_core/agent/mcp_bridge.py`. See [STAGE_3_OPENCLAUDE_STRATEGY.md](../STAGE_3_OPENCLAUDE_STRATEGY.md).
+**Goal:** Build `jarvis_core/agent/` from scratch. JARVIS owns its agent runtime — no external dependency on Anthropic-hosted runtimes. Reverses 2026-05-01 OpenClaude delegation (Decisions 177 + 222): privacy, fixed-training-cost economic model, customization for 12-specialist routing, and the canonical learning arc all argue against outsourcing. Compressed via OpenJarvis STEAL targets (Apache 2.0 source-copy) for foundations.
 
 | # | Sub-Phase | Status | Note |
 |---|-----------|--------|------|
-| 3.0 | **MCP Bridge** (the actual deliverable) | 🔄 Starting | Wraps store / expansion / compression / bm25 / hybrid as MCP tools |
-| 3.1 | Function Calling | (design note) | OpenClaude provides |
-| 3.2 | Tool Design & Registration | (design note) | OpenClaude provides |
-| 3.3 | Planning & Decomposition | (design note) | OpenClaude provides |
-| 3.4 | ReAct Pattern | (design note) | OpenClaude provides |
-| 3.5 | Memory-Augmented Agents | (design note) | OpenClaude + our MCP bridge |
+| 3.0 | **Entry Sprint** — `agent/registry.py` (STEAL #1 RegistryBase) + `agent/cost.py` (STEAL #2 PRICING dict) + `agent/tool.py` (Tool ABC) | 🔄 Starting | Foundations land *before* lesson 3.1. ~2-3 days. |
+| 3.1 | Function Calling & Structured Output (+ `Cognitive_State_Update` Pydantic schema, `TextTelemetry` dataclass) | ⬜ | outlines + Pydantic schemas; metacognitive schemas absorbed here |
+| 3.2 | Tool Design & Registration | ⬜ | Builds on 3.0 registry; adds Tool composition + lifecycle |
+| 3.3 | Planning & Decomposition | ⬜ | Plan dataclass, PlanExecutor, replanning |
+| 3.4 | ReAct Pattern (+ MIRROR-lite system prompt, CoT loop detector regex) | ⬜ | Includes STEAL #5 TraceStep+EventBus trace path; metacognitive reflection absorbed here |
+| 3.5 | Memory-Augmented Agents/MemGPT (+ heartbeat loop, sleep-time consolidation) | ⬜ | Requires `kb_compact.py` exclusion rule for `heartbeat-emitted` tag landed *first* |
 
 ---
 
@@ -148,7 +148,7 @@
 |-------|------|--------|
 | 1 | Systems Python | ✅ Sufficient |
 | 2 | Memory Layer | ✅ Complete (8/8 sub-phases; Final Boss executed 2026-05-03) |
-| 3 | Agent Framework (OpenClaude MCP bridge) | 🔄 Starting |
+| 3 | Agent Framework (`jarvis_core/agent/` from scratch — Decision 2026-05-13) | 🔄 Starting |
 | 4 | Orchestration (Kimi K2.6 brain + 12 QLoRA adapters) | ⬜ 0% |
 | 5 | Specialists (Engineer-first MVP) | ⬜ 0% |
 | 6 | Integration | ⬜ 0% |
@@ -157,6 +157,8 @@
 
 ## Next Action
 
-**Start:** Stage 3, OpenClaude MCP bridge (single deliverable per Decision 2026-05-01)
-**File:** [STAGE_3_OPENCLAUDE_STRATEGY.md](../STAGE_3_OPENCLAUDE_STRATEGY.md) + new module `js-development/jarvis_core/agent/mcp_bridge.py`
-**Command:** `@[/learn] Explain Model Context Protocol (MCP) — server architecture, tool registration, JSON-RPC transport.` then `@[/dev] Build jarvis_core/agent/mcp_bridge.py exposing store / expansion / compression / bm25 / hybrid / rerank as MCP tools.`
+**Start:** Stage 3.0 Entry Sprint — port OpenJarvis STEAL targets to `jarvis_core/agent/` (RegistryBase + PRICING + Tool ABC).
+**Files:** `js-development/jarvis_core/agent/registry.py`, `cost.py`, `tool.py` (new).
+**References:** [stage_3_agents/ROADMAP.md](stage_3_agents/ROADMAP.md), OpenJarvis source at `OpenJarvis/src/openjarvis/core/registry.py:19-172` (STEAL #1) and `engine/cloud.py:22-48,165-176` (STEAL #2). License: Apache 2.0, source-copy permitted.
+**Pre-3.5 dependency:** `scripts/kb_compact.py` patched to exclude entries with tag `heartbeat-emitted` from structural-rule displacement (sleep-time consolidation requirement).
+**Command:** `@[/dev] Build jarvis_core/agent/registry.py porting OpenJarvis RegistryBase[T] pattern. Build jarvis_core/agent/cost.py porting the PRICING dict + RunPod GPU-hour rates from JARVIS_ENDGAME Section 2. Build jarvis_core/agent/tool.py defining the Tool ABC.`

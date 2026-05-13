@@ -447,6 +447,16 @@ def build_default_embedder() -> Embedder:
 # Part 9: ORCHESTRATION
 # =============================================================================
 
+HEARTBEAT_EXEMPT_TAG = "heartbeat-emitted"
+"""
+Stage 3.5 sleep-time consolidation writes transient state observations carrying this tag
+(e.g., 5 consecutive heartbeats observing 'user in Flow state'). They LOOK like
+near-duplicates by design and would be displaced by structural-rule dedup; a separate
+stream-compactor (Stage 3.5 work) handles them per session. See KB Decision 2026-05-13
+metacognitive-integration.
+"""
+
+
 def compact(
     entries: Sequence[KBEntry],
     embedder: Optional[Embedder],
@@ -456,7 +466,11 @@ def compact(
     cosine_threshold: float,
     tag_overlap_threshold: float,
 ) -> Tuple[CompactionReport, Tuple[KBEntry, ...]]:
-    """Apply (optional) expiry + (optional) dedup; return (report, surviving_entries)."""
+    """Apply (optional) expiry + (optional) dedup; return (report, surviving_entries).
+
+    Policy: entries tagged `HEARTBEAT_EXEMPT_TAG` bypass dedup entirely and pass through
+    unchanged. dedup() itself stays a pure algorithm; the exemption lives one level up.
+    """
     total_before = len(entries)
     expired: Tuple[CompactionVerdict, ...] = ()
     if do_expire:
@@ -466,11 +480,14 @@ def compact(
     if do_dedupe:
         if embedder is None:
             raise ValueError("dedupe=True requires an embedder")
-        entries, deduped = dedupe(
-            entries, embedder,
+        excluded = tuple(e for e in entries if HEARTBEAT_EXEMPT_TAG in e.tags)
+        candidates = tuple(e for e in entries if HEARTBEAT_EXEMPT_TAG not in e.tags)
+        candidates, deduped = dedupe(
+            candidates, embedder,
             cosine_threshold=cosine_threshold,
             tag_overlap_threshold=tag_overlap_threshold,
         )
+        entries = tuple(sorted(excluded + candidates, key=lambda e: e.line_no))
 
     report = CompactionReport(
         total_before=total_before,
@@ -620,6 +637,47 @@ if __name__ == "__main__":
         winner = next(k for k in kept if k.line_no == 2)
         assert set(winner.tags) == {"brain", "stage4", "kimi"}, f"tag merge wrong: {winner.tags}"
         print(f"  [OK] Smoke 6: dedup kept {kept_lines}, dropped L1, merged tags into winner")
+
+        # Smoke 7: heartbeat-emitted entries bypass dedup (Stage 3.5 prerequisite)
+        def stub_embedder_hb(texts: Sequence[str]) -> np.ndarray:
+            # All three entries are near-identical in embedding space
+            return np.array([
+                [1.0, 0.0, 0.0],
+                [0.999, 0.0, 0.0],
+                [0.998, 0.0, 0.0],
+            ], dtype=np.float32)[: len(texts)]
+
+        h1 = KBEntry(1, "2026-01-01", "Cognitive_Pattern", ("user-state",),
+                     "User in Flow state.", "Permanent",
+                     {"timestamp": "2026-01-01", "type": "Cognitive_Pattern",
+                      "tags": ["user-state"], "content": "User in Flow state.", "expiry": "Permanent"})
+        h2 = KBEntry(2, "2026-01-02", "Cognitive_Pattern", ("user-state",),
+                     "User in Flow state again.", "Permanent",
+                     {"timestamp": "2026-01-02", "type": "Cognitive_Pattern",
+                      "tags": ["user-state"], "content": "User in Flow state again.", "expiry": "Permanent"})
+        h3 = KBEntry(3, "2026-01-03", "Cognitive_Pattern", ("user-state", "heartbeat-emitted"),
+                     "User in Flow state, heartbeat tick.", "Permanent",
+                     {"timestamp": "2026-01-03", "type": "Cognitive_Pattern",
+                      "tags": ["user-state", "heartbeat-emitted"],
+                      "content": "User in Flow state, heartbeat tick.", "expiry": "Permanent"})
+        report, kept = compact(
+            [h1, h2, h3], stub_embedder_hb,
+            do_expire=False, do_dedupe=True,
+            cosine_threshold=0.95, tag_overlap_threshold=0.3,
+        )
+        kept_lines = {e.line_no for e in kept}
+        assert 3 in kept_lines, f"heartbeat-emitted entry L3 must survive dedup; got {kept_lines}"
+        assert len(kept_lines) == 2, (
+            f"expected 2 kept (one of L1/L2 deduped + L3 exempt); got {len(kept_lines)}: {kept_lines}"
+        )
+        assert len(report.deduped) == 1, (
+            f"expected 1 dedup verdict for L1/L2 collision; got {len(report.deduped)}"
+        )
+        # Verify the deduped verdict came from a candidate, not the exempt entry
+        assert report.deduped[0].line_no in {1, 2}, (
+            f"dedup verdict should target L1 or L2, not L3 (exempt); got L{report.deduped[0].line_no}"
+        )
+        print(f"  [OK] Smoke 7: heartbeat-emitted bypass — kept {kept_lines}, L3 survived dedup")
 
         print("=" * 60)
         print("  All smoke tests passed.")
