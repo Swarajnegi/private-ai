@@ -29,8 +29,8 @@
 | Lesson | Topic | Source / Reference | Command |
 |--------|-------|--------------------|---------|
 | 3.0.1 | `jarvis_core/agent/registry.py` (STEAL #1) | `OpenJarvis/src/openjarvis/core/registry.py:19-172` — `RegistryBase[T]` decorator pattern with per-subclass isolation | `/dev Port OpenJarvis RegistryBase[T] generic registry to jarvis_core/agent/registry.py. Same shape will host Tool / Engine / Agent / Channel registries.` |
-| 3.0.2 | `jarvis_core/agent/cost.py` (STEAL #2) | `OpenJarvis/src/openjarvis/engine/cloud.py:22-48,165-176` — PRICING dict pattern + RunPod GPU-hour rates from `JARVIS_ENDGAME.md` Section 2 | `/dev Build jarvis_core/agent/cost.py with PRICING dict (RunPod A5000 ₹23/hr, A40 ₹37/hr, A100 ₹117/hr; OpenRouter per-token rates) and estimate_cost() pure function.` |
-| 3.0.3 | `jarvis_core/agent/tool.py` | Tool ABC: `name`, `description`, `input_schema` (Pydantic), `invoke()` async method | `/dev Build jarvis_core/agent/tool.py defining the Tool ABC. Pydantic input schemas. Async invoke().` |
+| 3.0.2 | `jarvis_core/agent/cost.py` (STEAL #2 + **STEAL #11**) | OpenJarvis `engine/cloud.py:22-48,165-176` PRICING dict + OpenClaude `src/utils/modelCost.ts` MODEL_COSTS (cache-tier model, web-search fees) + `src/cost-tracker.ts` per-session accumulator + RunPod GPU-hour rates from `JARVIS_ENDGAME.md` Section 2 | `/dev Build jarvis_core/agent/cost.py merging OpenJarvis PRICING dict structure + OpenClaude cache tiers (input/output/cache_read/cache_write/tool_call) + per-session totalCostUSD tracker. RunPod GPU-hour as separate provider class.` |
+| 3.0.3 | `jarvis_core/agent/tool.py` (Tool ABC, prep for **STEAL #8**) | Tool ABC: `name`, `description`, `input_schema` (Pydantic), `invoke()` async, **`is_concurrency_safe()` predicate** (preset now for STEAL #8 in 3.4) | `/dev Build jarvis_core/agent/tool.py defining the Tool ABC. Pydantic input schemas. Async invoke(). Include is_concurrency_safe() default False predicate so STEAL #8 partitioning lands without retrofit.` |
 
 **Practical Exercise:** Register a `calculator(expr: str) -> float` tool via the new registry and call it through cost-accounting wrappers. Smoke test in `__main__` block.
 
@@ -100,8 +100,11 @@
 | 3.4.4 | Loop Termination | Know when to stop | `@[/learn] Explain stopping conditions in agents.` |
 | **3.4.5** | **MIRROR-lite system prompt** (metacognitive integration) | Single-pass structured reflection — instruct the model to evaluate Goals / Reasoning / Memory in one pass before responding. Zero extra inference cost. | `/dev Add MIRROR_LITE_PROMPT_TEMPLATE to jarvis_core/agent/react.py and inject it into the system prompt of every ReAct iteration.` |
 | **3.4.6** | **CoT loop detector** (metacognitive integration) | Regex over `<think>` tag content for transition tokens (wait, alternatively, re-evaluate, actually, no,). Frequency > 2 per token-class = reasoning instability flag. | `/dev Implement MetaR1Monitor.from_cot_trace() in jarvis_core/agent/observer.py per metacognitive review Section 4 part C.` |
+| **3.4.7** | **Tool concurrency partitioning (STEAL #8)** | Between LLM tool-call emission and dispatch: partition the tool-calls into `is_concurrency_safe=True` (batch via `asyncio.gather`) vs. stateful (serial). ~50% latency reduction on multi-tool turns. | `/dev Port OpenClaude src/services/tools/toolOrchestration.ts runTools partition logic to jarvis_core/agent/react.py dispatch step.` |
+| **3.4.8** | **Hook-driven permission engine (STEAL #9)** | Declarative `allow/ask/deny` rules with wildcard/regex, loaded from settings JSON. Async classifiers per tool. Plan-mode equivalent gate. CRITICAL safety layer before Bash/Write/Edit. | `/dev Port OpenClaude src/hooks/toolPermission/PermissionContext.ts + src/utils/permissions/PermissionRule.ts to jarvis_core/agent/permissions.py. Schema + matcher + interactive CLI prompt.` |
+| **3.4.9** | **Bash AST safe-command classifier (STEAL #10)** | Parse bash AST (via `bashlex`), auto-approve safe ops (grep/cat/ls/head/tail/wc/find) BEFORE permission UX. Block command substitution in array subscript position (per OpenClaude fix `4a98a4a`). | `/dev Port OpenClaude src/tools/BashTool/bashPermissions.ts as a BashClassifier hook inside the STEAL #9 PermissionContext. Use Python bashlex library.` |
 
-**Practical Exercise:** ReAct agent answers a multi-hop question with tool use; trace records all reasoning and the loop detector flags any circular pattern.
+**Practical Exercise:** ReAct agent answers a multi-hop question with tool use; trace records all reasoning, the loop detector flags any circular pattern, concurrency partitioning batches 3 read-only tool-calls in parallel, and the permission engine auto-approves `grep -n foo bar` while prompting for `rm -rf /tmp/`.
 
 ---
 
@@ -121,8 +124,9 @@
 | **3.5.6** | **Async heartbeat event loop** (metacognitive integration) | `request_heartbeat=true` flag on tool calls triggers async consolidation — event-driven, NOT clock-driven (per metacognitive review Section 2.2 hardware reality check) | `/dev Implement heartbeat scheduler in jarvis_core/agent/heartbeat.py with request_heartbeat flag on tool-call interface.` |
 | **3.5.7** | **Sleep-time consolidation agent** (metacognitive integration) | Heartbeat-triggered task: read recent context, extract Cognitive_State_Update, write tagged `heartbeat-emitted` to KB | `/dev Implement consolidation agent in jarvis_core/agent/consolidator.py. Writes use Cognitive_State_Update schema from 3.1.6. ALL entries carry tag heartbeat-emitted.` |
 | 3.5.8 | Agent Evaluation (STEAL #6) | Port OpenJarvis EvalRecord → EvalResult → RunSummary framework | `/dev Port OpenJarvis evals/core/{types,runner,scorer}.py to jarvis_core/agent/evals/ for p50/p95/p99 latency + cost reporting.` |
+| **3.5.9** | **/compact-style working-memory compressor (STEAL #12)** | Async coroutine that, when context > N tokens, calls LLM with structured summarization prompt over the truncation window; emits `SystemCompactBoundaryMessage` dataclass replacing truncated history. TWIN PROCESS with heartbeat-emitted consolidation: /compact writes to short-term working memory, heartbeat writes long-term insights to KB. | `/dev Port OpenClaude src/services/compact/compact.ts pattern. Replace fork with async coroutine. Reuse jarvis_core/memory/compression.py LLM-filter as the summarization primitive.` |
 
-**Practical Exercise:** Agent self-manages memory: heartbeat triggers consolidation between user turns, promotes important facts, evicts stale entries, remembers user preferences — all without manual `/memory` commands. `kb_compact.py` runs without displacing legitimate transient state observations.
+**Practical Exercise:** Agent self-manages memory: heartbeat triggers consolidation between user turns, promotes important facts, evicts stale entries, remembers user preferences — all without manual `/memory` commands. `kb_compact.py` runs without displacing legitimate transient state observations. `/compact`-style working-memory compressor kicks in when context exceeds threshold, replacing old turns with a single summary boundary message.
 
 > **Key Paper:** `2310.08560v2.pdf` (MemGPT) — already in your Research Papers folder. The agent treats memory like an OS virtual memory system: Hot = current context, Warm = pinned in ChromaDB, Cold = archived on disk.
 
@@ -147,12 +151,12 @@ Build a complete agent that:
 
 | Sub-Phase | Status | Lessons Complete |
 |-----------|--------|------------------|
-| 3.0 Entry Sprint (Registry + Cost + Tool ABC) | 🔄 Starting | 0/3 |
+| 3.0 Entry Sprint (Registry + Cost-with-STEAL-#11 + Tool ABC-with-#8-prep) | 🔄 Starting | 0/3 |
 | 3.1 Function Calling + Cognitive_State_Update + TextTelemetry | ⬜ Not Started | 0/7 |
 | 3.2 Tool Design & Registration | ⬜ Not Started | 0/4 |
 | 3.3 Planning & Decomposition | ⬜ Not Started | 0/4 |
-| 3.4 ReAct + MIRROR-lite + CoT detector | ⬜ Not Started | 0/6 |
-| 3.5 Memory-Augmented Agents + Heartbeat Consolidation | ⬜ Not Started | 0/8 |
+| 3.4 ReAct + MIRROR-lite + CoT detector + STEAL #8/#9/#10 | ⬜ Not Started | 0/9 |
+| 3.5 Memory-Augmented Agents + Heartbeat Consolidation + /compact (STEAL #12) | ⬜ Not Started | 0/9 |
 
 ---
 
