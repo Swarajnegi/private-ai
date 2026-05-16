@@ -346,7 +346,7 @@ async def demo_mistakes() -> None:
         data = await fetch()  # SyntaxError! Can't await in def
         yield data
     
-    # [OK] FIX: Use async def
+    # [OK] FIXED: Used async def
     
     async def good_generator():
         data = await fetch()  # Works in async def
