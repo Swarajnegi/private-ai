@@ -202,7 +202,7 @@ class PdfImageExtractor:
                 # ─────────────────────────────────────────────────────────
                 # FIX 2: Size filter — discard decoration noise (<5KB)
                 # ─────────────────────────────────────────────────────────
-                if len(raw_bytes) < self._min_bytes:
+                if len(raw_bytes) < 5120:
                     continue
 
                 # ─────────────────────────────────────────────────────────
