@@ -412,8 +412,6 @@ if __name__ == "__main__":
     print("\n" + "=" * 72)
     print("Smoke 3: gotcha - Unicode chars survive tokenization")
     print("=" * 72)
-    # Test the tokenizer directly (avoiding rank_bm25's IDF=0 corner case
-    # for terms appearing in df=1 of N=2 corpus).
     toks = default_tokenize("Müller proposed agentic café résumé naïve")
     expected = {"müller", "proposed", "agentic", "café", "résumé", "naïve"}
     print(f"  default_tokenize(...) -> {toks}")
