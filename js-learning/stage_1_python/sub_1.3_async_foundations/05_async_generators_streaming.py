@@ -371,13 +371,15 @@ async def demo_mistakes() -> None:
     
     # ---------------------------------------------------------
     
-    # [X] MISTAKE 4: Forgetting cleanup in async generators
+    # [OK] MISTAKE 4 (Fixed): Forgetting cleanup in async generators
     
     async def leaky_stream():
         conn = await connect_db()
-        async for row in conn.fetch_all():
-            yield row
-        # If consumer breaks early, conn is never closed!
+        try:
+            async for row in conn.fetch_all():
+                yield row
+        finally:
+            await conn.close()  # Ensures cleanup
     
     # [OK] FIX: Use try/finally
     
