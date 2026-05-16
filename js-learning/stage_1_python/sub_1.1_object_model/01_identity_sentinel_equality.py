@@ -12,7 +12,7 @@ NOTE: This script does NOT require ChromaDB installed.
 """
 
 from dataclasses import dataclass
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Tuple
 
 
 # =============================================================================
@@ -141,10 +141,10 @@ def demo_id_for_debugging() -> None:
     print("=" * 60)
     
     # Simulating a cache that stores embeddings.
-    embedding_cache: Dict[str, List[float]] = {}
+    embedding_cache: Dict[str, Tuple[float, ...]] = {}
     
     # Create an embedding vector.
-    embedding_v1 = [0.1, 0.2, 0.3]
+    embedding_v1 = (0.1, 0.2, 0.3)
     embedding_cache["doc_001"] = embedding_v1
     
     print(f"  Stored embedding at id: {id(embedding_v1):#x}")
@@ -156,16 +156,12 @@ def demo_id_for_debugging() -> None:
     print(f"  Same object? {retrieved is embedding_v1}")
     print()
     
-    # DANGER: Mutation affects the cached object!
-    retrieved.append(0.4)  # MUTATES the shared object
+    # SAFELY CREATE A NEW OBJECT: Mutation no longer affects the cached object!
+    new_embedding = retrieved + (0.4,)  # Creates a new tuple
     
-    print(f"  After mutation: embedding_v1 = {embedding_v1}")
-    print("    ^ The cache was silently corrupted!")
-    print()
-    
-    # FIX: Use immutable types (tuple) or copy on retrieval.
-    print("  FIX: Use tuple for immutable embeddings:")
-    print("       embedding = tuple([0.1, 0.2, 0.3])")
+    print(f"  After modification: embedding_v1 = {embedding_v1}")
+    print(f"  New embedding      = {new_embedding}")
+    print("    ^ The cache remains uncorrupted!")
     print()
 
 
