@@ -209,10 +209,11 @@ class PdfImageExtractor:
                 # FIX 3: Bounding box — record WHERE on the page this is
                 # ─────────────────────────────────────────────────────────
                 bbox: Optional[Tuple[float, float, float, float]] = None
-                rects = page.get_image_rects(xref)
-                if rects:
-                    r = rects[0]
+                try:
+                    r = page.get_image_bbox(img_info[7])
                     bbox = (r.x0, r.y0, r.x1, r.y1)
+                except Exception:
+                    pass
 
                 yield ExtractedImage(
                     page_number=page_idx,
