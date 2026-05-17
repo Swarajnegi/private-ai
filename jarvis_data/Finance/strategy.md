@@ -20,6 +20,7 @@
 | Group health insurance | Yes; parents covered under Celebal group plan |
 | Current liquid savings | ~₹0 (zero) |
 | Monthly investment capacity | ₹27,500 (50% savings rate) |
+| EPF contribution | ₹3,600/mo (₹43,200/yr, 8.25% guaranteed) |
 
 **Key implication:** Family balance sheet is strong (father earns ~6x user's salary). This is the implicit guarantor that allows aggressive equity tilt + uninterrupted long-horizon compounding. User won't be forced to liquidate equity in a personal crisis because father's earning capacity is the real emergency fund.
 
@@ -43,16 +44,16 @@
 |---|---|---|
 | Reliance Industries | 26 shares, ~₹36K | Event play — exit on Jio IPO catalyst |
 
-### US equity (just initiated)
+### US equity
 
 | Holding | Amount | Status |
 |---|---|---|
-| NVIDIA via INDmoney | $211 (~₹17.5K) lump | Buying 2026-05-13 evening + 2026-05-14, two tranches |
+| NVIDIA via INDmoney | 0.456 units, $102.58 invested, avg $225 | First tranche deployed |
 | NVIDIA via INDmoney (going forward) | ₹12.5K/mo | Starting June 2026 |
 
 ### Portfolio characterization (honest)
 
-**This is a 100% aggressive equity portfolio, fully growth-tilted, geographically split ~70/30 India/US.** It is *not* "moderately secure" — every position is high-beta. In a 2008-style global crisis every position drops 40-60% simultaneously. The strategy works *because* of the family backstop, not despite the lack of defensive allocation.
+**Aggressive equity-dominant portfolio, growth-tilted, split ~60/30/10 India/US/Debt(EPF).** EPF (₹3,600/mo at 8.25% guaranteed) is the only non-equity allocation. In a 2008-style crisis every equity position drops 40-60% simultaneously. Strategy works because of family backstop + forced EPF debt cushion.
 
 ---
 
@@ -74,7 +75,7 @@ For every ₹1L round-tripped via INDmoney into US stocks:
 
 ---
 
-## 4. Why QQQM via INDmoney Over India-Domiciled FoFs (2026 Reality)
+## 4. Why Direct US Route via INDmoney Over India-Domiciled FoFs (2026 Reality)
 
 In theory the cleanest route to US index exposure is an India-domiciled FoF (Motilal Oswal Nasdaq 100 FoF, Mirae NYSE FANG+ ETF, ICICI Pru Nasdaq 100): zero LRS, zero TCS, zero Schedule FA. In practice that route has a structural problem in 2026:
 
@@ -91,53 +92,58 @@ In theory the cleanest route to US index exposure is an India-domiciled FoF (Mot
 
 **Verdict:** INDmoney direct US route is now *more reliable for execution* than India-domiciled FoFs despite higher friction. Forex + Schedule FA is a known cost; FoF route has hidden tail-risk in subscription rejection + premium volatility.
 
-**Picks:** QQQM (0.15% TER, Nasdaq 100), VOO (0.03% TER, S&P 500), VTI (0.03% TER, total US market). XLK (0.08% TER, pure tech sector) has no India-domiciled wrapper — only buyable via INDmoney; not necessarily worth it given QQQM already covers similar ground with less concentration.
+**Primary pick:** SPYG (0.04% TER, S&P 500 Growth Index — growth half of S&P 500, ~230 holdings, heavy NVDA/AAPL/MSFT/AMZN). Lower cost than QQQM (0.15%) with broader diversification than Nasdaq 100.
 
 ---
 
-## 5. Strategy v2.0 — Phased Architecture
+## 5. Strategy v2.1 — Phased Architecture
 
 ### Phase 0 — Foundation (paid from September 2026 ₹87,500 incentive)
 
+By September, the monthly ₹5K/mo liquid fund SIP (started May 2026) will have accumulated ~₹20K. September incentive tops this up:
+
 | Allocation | Amount | Purpose |
 |---|---|---|
-| Liquid fund (Quant Liquid / Aditya Birla Liquid) | ₹50,000 | Personal cash buffer. ~6.5% yield, 1-day accessible. Avoids friction of asking father over ₹10-30K surprises. |
-| Individual health insurance (₹5–10L cover) | ₹7-8K/yr premium | Lock in cover NOW while 23 and healthy. Purpose isn't ₹5L today — it's protecting against future-uncoverable diagnoses. Most leveraged ₹8K on this list. |
-| PPF account opening | ₹500 (minimum) | Start the 15-year clock. Matures at 38. Scale contributions when salary grows. |
-| STP into VOO or QQQM via INDmoney | ~₹29,000 | Spread over 4-6 months. Bonus US allocation kicker. |
+| Liquid fund top-up | ₹38,000 | Bring total liquid buffer to ~₹50K (₹12K from monthly SIPs + ₹38K top-up). 6.5% yield, 1-day accessible. |
+| STP into SPYG via INDmoney | ₹49,500 | Spread over 4-6 months. US growth allocation kicker. |
 
-**Repeat the same template with March 2027 incentive:** half to scaling foundation (top-up liquid fund + next year's health premium + increased PPF), half to US STP.
+**Repeat with March 2027 incentive:** half to top-up liquid fund, half to SPYG STP.
 
-### Phase 1 — Current monthly cadence (₹27.5K/mo)
+> **Why not park cash and wait for a crash?** SIP IS the crash-buying mechanism. When NVIDIA drops 30%, the ₹5K/mo SIP automatically buys more units at a lower price — mechanically, without prediction or willpower. Cash sitting in a savings account at 3.5% while waiting for a crash costs ₹12-18K/yr in opportunity cost and almost never gets deployed (fear peaks exactly when valuations are lowest). Rupee-cost averaging is the systematic version of "buy the dip."
 
-- ₹5K/mo Nippon India Power & Infra (with 24-month sunset trigger, see §6)
-- ₹5K/mo Quant Small Cap
-- ₹5K/mo Invesco Mid Cap
-- ₹12.5K/mo NVIDIA via INDmoney
+### Phase 1 — Revised monthly cadence (₹27.5K/mo + ₹3.6K EPF)
 
-### Phase 2 — Post-appraisal or job switch (~₹40K/mo target)
+| Bucket | ₹/mo | Vehicle | Note |
+|---|---|---|---|
+| Nippon India Power & Infra | ₹5K | SIP (Groww) | Sunset trigger active — see §6 |
+| Quant Small Cap | ₹5K | SIP (Groww) | Continue |
+| Invesco Mid Cap | ₹5K | SIP (Groww) | Continue |
+| NVIDIA direct | ₹5K | INDmoney | Dollar-cost averaging every month |
+| UTI Nifty Next 50 | ₹4.5K | Index fund (Groww) | Large-cap India anchor — started May 2026 |
+| Liquid fund | ₹3K | Quant/Aditya Birla Liquid | Emergency buffer, 6.5% yield. By Sept: ~₹12K accumulated |
+| EPF | ₹3.6K | Employer-matched | 8.25% guaranteed — forced debt allocation |
+| **Total** | **₹27.5K + ₹3.6K** | | |
 
-- ₹5K → Parag Parikh Flexi Cap (replaces Nippon P&I when sunset trigger fires) OR Nifty 50 ETF
-- ₹5K Quant Small Cap (continue)
-- ₹5K Invesco Mid Cap (continue)
-- ₹3K Nifty 50 ETF (start India anchor)
-- ₹7.5K QQQM via INDmoney (US tech-tilted growth)
-- ₹7.5K NVIDIA via INDmoney (single-stock kicker, half the US slice)
-- ₹3K VOO via INDmoney (US anchor)
-- ₹4K SGB / Gold ETF (start crisis hedge)
+### Phase 2 — Post-appraisal or job switch (~₹40K/mo target, excl. EPF)
 
-### Phase 3 — Post-Jio-IPO RIL exit
+| Bucket | ₹/mo | Vehicle |
+|---|---|---|
+| India emerging large-cap | ₹8K | UTI Nifty Next 50 Index Fund (replaces Nippon P&I + adds India anchor) |
+| India small-cap | ₹5K | Quant Small Cap (continue) |
+| India mid-cap | ₹5K | Invesco Mid Cap (continue) |
+| US growth | ₹10K | SPYG via INDmoney (S&P 500 Growth, 0.04% TER) |
+| US single-stock | ₹8K | NVIDIA via INDmoney (reduced from ₹12.5K; SPYG covers broad tech) |
+| Crisis hedge | ₹4K | SGB / Gold ETF |
+| **Total** | **₹40K** | **India 45% / US 45% / Gold 10%** |
 
-Exit triggers (any one):
-- Jio listing day pop ≥ 1.5x grey-market price
-- 3 months post-Jio listing regardless
-- 2027 year-end if Jio IPO hasn't materialized (catalyst dead, opportunity cost real)
+### Phase 3 — RIL Decision Point
 
-**Don't average up pre-IPO.** Holding for a specific event, not a long-term position.
+Three scenarios (evaluate in order):
+1. **Jio IPO windfall exit:** If Jio lists and RIL pops significantly (≥30% from current), book profits → STP into SPYG via INDmoney over 6 months
+2. **Analyst target exit:** If RIL hits ₹1,900-2,000 within ~1 year (analyst consensus range), partial or full exit
+3. **Long-term hold:** If neither trigger fires, hold as long-term AI/digital infra play — Reliance is building India's AI backbone (Jio AI Cloud, data centers, NVIDIA partnership)
 
-Use ₹36-50K proceeds:
-- STP over 6 months into VOO via INDmoney
-- Or top up liquid fund + emergency health premium first if those drifted
+**Don't average up.** Current 26 shares is the position. Evaluate, don't accumulate.
 
 ### Phase 4 — Job switch / 1.5x salary (~₹70K+/mo)
 
@@ -161,15 +167,15 @@ Use ₹36-50K proceeds:
 Use a hard rule, not intuition:
 - **Stop fresh SIP** when trailing 1-year return < 12% (signals cycle has cooled)
 - **OR stop fresh SIP** 24 months from today (2028-05-13) regardless — sector cycle exhaustion average
-- **Redirect the ₹5K/mo to Parag Parikh Flexi Cap first**, then STP slowly to Nifty 50 ETF later
+- **Redirect the ₹5K/mo to UTI Nifty Next 50 Index Fund**
 - **Don't redeem existing units** — let them ride. Only stop fresh contributions.
 
-### Reliance / Jio IPO exit
+### Reliance decision triggers
 
-- Exit on listing day if Jio IPO lists ≥ 1.5x grey-market price
-- Exit within 3 months of listing regardless
-- Exit at 2027 year-end if Jio IPO hasn't happened
-- **Don't average up.** Holding for catalyst, not long-term position.
+1. **Jio IPO windfall:** RIL pops ≥30% from current on listing → book profits
+2. **Analyst target:** RIL hits ₹1,900-2,000 within ~1 year → partial/full exit
+3. **Long-term hold:** Neither fires → hold as India AI infrastructure play
+- **Don't average up.** 26 shares is the position.
 
 ### Anchor split when added
 
@@ -188,19 +194,17 @@ Use a hard rule, not intuition:
 
 ## 7. Forward NVDA Exposure Simulation
 
-Once VOO + QQQM are added in Phase 2, effective NVDA exposure (assuming $400/mo total US allocation, $100 direct NVDA + $150 QQQM + $150 VOO):
+Phase 2 US allocation: ₹10K SPYG + ₹8K NVIDIA = ₹18K/mo (~$215/mo at ₹84/$):
 
-| Vehicle | Allocation | NVDA inside | Effective NVDA |
+| Vehicle | ~$/mo | NVDA inside | Effective NVDA |
 |---|---|---|---|
-| NVDA direct | $100 | 100% | $100 |
-| QQQM | $150 | ~10% | $15 |
-| VOO | $150 | ~7% | $10.50 |
-| **Total NVDA exposure** | $400 | — | **$125.50 (31% of US allocation)** |
+| NVDA direct | ~$95 | 100% | $95 |
+| SPYG | ~$120 | ~12% | ~$14 |
+| **Total NVDA exposure** | **~$215** | — | **~$109 (51% of US allocation)** |
 
-**Implication:** "Diversifying" via QQQM and VOO does NOT dilute NVDA bet to the degree it might seem. 31% NVDA exposure is high but not crazy. If a hard cap of ~20% is desired:
-- Drop direct NVDA to ₹3-4K/mo, or
-- Swap VOO for VTI (NVDA weight drops to ~4% inside VTI), or
-- Add a non-tech US sector (XLF financials, XLV healthcare) as offset
+**Implication:** SPYG concentrates NVDA exposure more than VOO+QQQM did (was 31%, now 51%). This is a deliberate high-conviction AI bet. If concentration becomes uncomfortable:
+- Reduce direct NVDA to ₹5K/mo (drops to ~40%), or
+- Add VOO or VTI alongside SPYG to dilute growth tilt
 
 ---
 
@@ -226,7 +230,6 @@ Once VOO + QQQM are added in Phase 2, effective NVDA exposure (assuming $400/mo 
 - **NPS:** Only useful if on old tax regime. Default is new regime in 2026 — most deductions don't apply. Check payslip.
 - **Real estate:** Premature. Wait until salary 2x+ current and Phase 2 architecture is running.
 - **Direct US stocks beyond NVDA:** Premature. Single-stock concentration in NVDA is already the calculated bet. Add a second direct stock only after salary doubles AND existing positions are profitable AND a specific thesis exists.
-- **XLK over QQQM:** No India-domiciled wrapper for XLK. Adds friction without commensurate benefit at current scale. QQQM covers the same ground with more diversification.
 - **Crypto, options, derivatives:** Not aligned with long-horizon compounding strategy. Skip.
 
 ---
@@ -291,4 +294,7 @@ This document is structured personal analysis based on publicly available 2026 i
 
 | Date | Change |
 |---|---|
-| 2026-05-13 | Initial document created. Strategy v2.0 finalized. Foundation plan tied to September incentive. RIL exit triggers concretized. Nippon P&I sunset trigger set. |
+| 2026-05-16 | **v2.3:** Phase 1 finalised — UTI Nifty Next 50 raised to ₹4.5K/mo (started May 2026), Liquid fund reduced to ₹3K/mo (accumulates ~₹12K by Sept), NVIDIA stays ₹5K/mo. September incentive rebalanced: ₹38K liquid top-up (to reach ₹50K total) + ₹49.5K SPYG STP. |
+| 2026-05-15 | **v2.2:** Phase 1 revised — ₹12.5K NVIDIA SIP split into ₹5K NVIDIA + ₹5K liquid fund + ₹2.5K UTI Nifty Next 50. September incentive rebalanced: ₹30K liquid top-up + ₹57.5K SPYG STP. |
+| 2026-05-14 | **v2.1:** Added EPF ₹3,600/mo. Removed health insurance + PPF from Phase 0. Replaced VOO/QQQM with SPYG. Phase 2 restructured: UTI Nifty Next 50 + SPYG. RIL exit revised to 3-scenario model. |
+| 2026-05-13 | Initial document created. Strategy v2.0 finalized. |

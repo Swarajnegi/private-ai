@@ -8,7 +8,7 @@
 
 ## 📍 Current Position
 
-**Stage 3 — Agent Framework: build `jarvis_core/agent/` from scratch** ⬅️ next entry. Stage 2 (Memory Layer) closed 2026-05-03 — all 8 sub-phases shipped, Final Boss kb_compact.py --force executed (KB 222 → 219). **Per Decision 2026-05-13 (reverses 2026-05-01 OpenClaude delegation):** JARVIS owns its agent runtime. Build the original 5 sub-phases (3.1 Function Calling, 3.2 Tool Registry, 3.3 Planning, 3.4 ReAct, 3.5 MemGPT) preceded by a 3.0 Entry Sprint (Registry + Cost + Tool ABC from OpenJarvis STEAL targets, Apache 2.0). Metacognitive review's NOW-phase items (Cognitive_State_Update schema, TextTelemetry, MIRROR-lite prompt, CoT loop detector, heartbeat loop, sleep-time consolidation) absorb into 3.1/3.4/3.5.
+**Stage 3 -- Agent Framework: `jarvis_core/agent/` from scratch** in progress. Stage 2 (Memory Layer) closed 2026-05-03. **Sub-Phase 3.0 Entry Sprint COMPLETE** (2026-05-16): RegistryBase[T] + CostTracker + Tool ABC shipped to `jarvis_core/agent/`. NOW: Sub-Phase 3.1 Function Calling & Structured Output.
 
 ---
 
@@ -80,7 +80,7 @@
 
 | # | Sub-Phase | Status | Note |
 |---|-----------|--------|------|
-| 3.0 | **Entry Sprint** — `agent/registry.py` (STEAL #1 RegistryBase) + `agent/cost.py` (STEAL #2 PRICING dict) + `agent/tool.py` (Tool ABC) | 🔄 Starting | Foundations land *before* lesson 3.1. ~2-3 days. |
+| 3.0 | **Entry Sprint** -- `agent/registry.py` (STEAL #1 RegistryBase) + `agent/cost.py` (STEAL #2 PRICING dict + STEAL #11 cache tiers) + `agent/tool.py` (Tool ABC) | [OK] Complete (2026-05-16) | Foundations landed. 3/3 lessons. |
 | 3.1 | Function Calling & Structured Output (+ `Cognitive_State_Update` Pydantic schema, `TextTelemetry` dataclass) | ⬜ | outlines + Pydantic schemas; metacognitive schemas absorbed here |
 | 3.2 | Tool Design & Registration | ⬜ | Builds on 3.0 registry; adds Tool composition + lifecycle |
 | 3.3 | Planning & Decomposition | ⬜ | Plan dataclass, PlanExecutor, replanning |
@@ -157,8 +157,7 @@
 
 ## Next Action
 
-**Start:** Stage 3.0 Entry Sprint — port OpenJarvis STEAL targets to `jarvis_core/agent/` (RegistryBase + PRICING + Tool ABC).
-**Files:** `js-development/jarvis_core/agent/registry.py`, `cost.py`, `tool.py` (new).
-**References:** [stage_3_agents/ROADMAP.md](stage_3_agents/ROADMAP.md), OpenJarvis source at `OpenJarvis/src/openjarvis/core/registry.py:19-172` (STEAL #1) and `engine/cloud.py:22-48,165-176` (STEAL #2). License: Apache 2.0, source-copy permitted.
-**Pre-3.5 dependency:** `scripts/kb_compact.py` patched to exclude entries with tag `heartbeat-emitted` from structural-rule displacement (sleep-time consolidation requirement).
-**Command:** `@[/dev] Build jarvis_core/agent/registry.py porting OpenJarvis RegistryBase[T] pattern. Build jarvis_core/agent/cost.py porting the PRICING dict + RunPod GPU-hour rates from JARVIS_ENDGAME Section 2. Build jarvis_core/agent/tool.py defining the Tool ABC.`
+**Start:** Stage 3.1 -- Function Calling & Structured Output.
+**First Lesson:** 3.1.1 -- Function Calling Basics (`@[/learn] Explain function calling in LLMs.`)
+**Files:** `js-development/jarvis_core/agent/` (3.0 foundations already landed).
+**References:** [stage_3_agents/ROADMAP.md](stage_3_agents/ROADMAP.md)
