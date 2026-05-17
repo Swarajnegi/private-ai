@@ -75,6 +75,7 @@ injection: the caller passes an `llm_call: Callable[[str], str]`. This
 module never instantiates an LLM client itself. Stage 3+ agents wire the
 LLM call when they integrate.
 """
+
 from __future__ import annotations
 
 import re
@@ -121,6 +122,7 @@ DEFAULT_K: int = 5
 # Part 2: ADAPTIVE GATE
 # =============================================================================
 
+
 def should_expand(query: str) -> bool:
     """
     Predicate: is this query the right shape for HyDE / Multi-Query?
@@ -163,7 +165,7 @@ HYDE_PROMPT_TEMPLATE: str = (
 
 
 def hyde_query(
-    store: Any,           # JarvisMemoryStore — typed Any to avoid circular import
+    store: Any,  # JarvisMemoryStore — typed Any to avoid circular import
     collection: str,
     query: str,
     llm_call: LLMCall,
@@ -198,7 +200,7 @@ def hyde_query(
 # =============================================================================
 
 MULTI_QUERY_PROMPT_TEMPLATE: str = (
-    'Generate three diverse paraphrasings or related sub-questions for this '
+    "Generate three diverse paraphrasings or related sub-questions for this "
     'query: "{query}"\n\n'
     "Each on its own line. No numbering, no preamble. Output only the lines."
 )
@@ -221,6 +223,7 @@ class FusedHit:
         appeared_in : Count of paraphrasings (incl. original) where this
                       chunk appeared in top-k; high count = robust relevance
     """
+
     chunk_id: str
     document: str
     metadata: Dict[str, Any]
@@ -269,18 +272,32 @@ def multi_query_search(
     metas: Dict[str, Dict[str, Any]] = {}
     appearances: Dict[str, int] = {}
 
-    for q in queries:
-        out = store.query_collection(
+    if hasattr(store, "batch_query_collection"):
+        batch_out = store.batch_query_collection(
             collection_name=collection,
-            query_text=q,
+            query_texts=queries,
             n_results=k,
         )
-        ids = out["ids"][0]
-        for rank, doc_id in enumerate(ids):
-            rrf[doc_id] = rrf.get(doc_id, 0.0) + 1.0 / (RRF_K_CONSTANT + rank)
-            docs[doc_id] = out["documents"][0][rank]
-            metas[doc_id] = out["metadatas"][0][rank]
-            appearances[doc_id] = appearances.get(doc_id, 0) + 1
+        for i, q in enumerate(queries):
+            ids = batch_out["ids"][i]
+            for rank, doc_id in enumerate(ids):
+                rrf[doc_id] = rrf.get(doc_id, 0.0) + 1.0 / (RRF_K_CONSTANT + rank)
+                docs[doc_id] = batch_out["documents"][i][rank]
+                metas[doc_id] = batch_out["metadatas"][i][rank]
+                appearances[doc_id] = appearances.get(doc_id, 0) + 1
+    else:
+        for q in queries:
+            out = store.query_collection(
+                collection_name=collection,
+                query_text=q,
+                n_results=k,
+            )
+            ids = out["ids"][0]
+            for rank, doc_id in enumerate(ids):
+                rrf[doc_id] = rrf.get(doc_id, 0.0) + 1.0 / (RRF_K_CONSTANT + rank)
+                docs[doc_id] = out["documents"][0][rank]
+                metas[doc_id] = out["metadatas"][0][rank]
+                appearances[doc_id] = appearances.get(doc_id, 0) + 1
 
     top_ids = sorted(rrf, key=lambda i: rrf[i], reverse=True)[:k]
     fused = [
@@ -364,7 +381,9 @@ def expand_then_query(
         }
 
     if strategy == "auto":
-        strategy = "hyde" if len(query.split()) <= _AUTO_HYDE_WORD_CUTOFF else "multi_query"
+        strategy = (
+            "hyde" if len(query.split()) <= _AUTO_HYDE_WORD_CUTOFF else "multi_query"
+        )
 
     if strategy == "hyde":
         hypothetical, result = hyde_query(store, collection, query, llm_call, k)
@@ -413,8 +432,8 @@ if __name__ == "__main__":
         ("what is dropout regularization", True),
         ("how does cross-attention work", True),
         ("ChromaDB.query_collection error", False),  # identifier
-        ("AWQ quantization tradeoffs", False),       # acronym
-        ("explain MMR algorithm", False),            # acronym
+        ("AWQ quantization tradeoffs", False),  # acronym
+        ("explain MMR algorithm", False),  # acronym
         (
             "I'm building a multi-stage retrieval pipeline that combines "
             "BM25 with semantic search and want to understand exactly how "
@@ -427,7 +446,9 @@ if __name__ == "__main__":
         actual = should_expand(q)
         ok = "ok  " if actual == expected else "FAIL"
         snippet = q if len(q) <= 60 else q[:57] + "..."
-        print(f"  [{ok}] should_expand({snippet!r:65s}) = {actual} (expected {expected})")
+        print(
+            f"  [{ok}] should_expand({snippet!r:65s}) = {actual} (expected {expected})"
+        )
 
     # ------------------------------------------------------------------
     # 2. expand_then_query() with stub LLM + stub store
@@ -445,8 +466,12 @@ if __name__ == "__main__":
         def query_collection(self, collection_name, query_text, n_results):
             return {
                 "ids": [[f"chunk_{i}" for i in range(n_results)]],
-                "documents": [[f"doc {i} for {query_text!r}" for i in range(n_results)]],
-                "metadatas": [[{"page": i, "source": "stub.pdf"} for i in range(n_results)]],
+                "documents": [
+                    [f"doc {i} for {query_text!r}" for i in range(n_results)]
+                ],
+                "metadatas": [
+                    [{"page": i, "source": "stub.pdf"} for i in range(n_results)]
+                ],
                 "distances": [[0.1 + i * 0.05 for i in range(n_results)]],
             }
 
@@ -454,21 +479,33 @@ if __name__ == "__main__":
 
     out = expand_then_query(store, "test", "what is dropout", stub_llm, k=3)
     assert out["expanded"] is True, "short conceptual query should expand"
-    print(f"  short conceptual query -> expanded={out['expanded']} strategy={out['strategy']}")
+    print(
+        f"  short conceptual query -> expanded={out['expanded']} strategy={out['strategy']}"
+    )
 
     long_q = " ".join(["word"] * 50)
     out = expand_then_query(store, "test", long_q, stub_llm, k=3)
     assert out["expanded"] is False, "long detailed prompt should skip"
-    print(f"  long detailed prompt   -> expanded={out['expanded']} strategy={out['strategy']}")
+    print(
+        f"  long detailed prompt   -> expanded={out['expanded']} strategy={out['strategy']}"
+    )
 
-    out = expand_then_query(store, "test", long_q, stub_llm, k=3, strategy="hyde", force=True)
+    out = expand_then_query(
+        store, "test", long_q, stub_llm, k=3, strategy="hyde", force=True
+    )
     assert out["expanded"] is True and out["strategy"] == "hyde"
-    print(f"  long + force=True      -> expanded={out['expanded']} strategy={out['strategy']}")
+    print(
+        f"  long + force=True      -> expanded={out['expanded']} strategy={out['strategy']}"
+    )
 
-    out = expand_then_query(store, "test", "what is attention", stub_llm, k=3, strategy="multi_query")
+    out = expand_then_query(
+        store, "test", "what is attention", stub_llm, k=3, strategy="multi_query"
+    )
     assert out["expanded"] is True and out["strategy"] == "multi_query"
     assert len(out["fused_hits"]) <= 3
-    print(f"  multi_query explicit   -> queries={len(out['queries_used'])} hits={len(out['fused_hits'])}")
+    print(
+        f"  multi_query explicit   -> queries={len(out['queries_used'])} hits={len(out['fused_hits'])}"
+    )
 
     # ------------------------------------------------------------------
     # 3. Strategy validation

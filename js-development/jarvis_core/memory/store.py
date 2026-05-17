@@ -74,10 +74,10 @@ from jarvis_core.config import (
     validate_paths,
 )
 
-
 # =============================================================================
 # Part 1: MMR PURE FUNCTION (stateless, testable in isolation)
 # =============================================================================
+
 
 def compute_mmr_reranking(
     query_vec: List[float],
@@ -184,8 +184,7 @@ def compute_mmr_reranking(
             # Apply the MMR formula:
             #   MMR = lambda * relevance_to_query - (1-lambda) * max_similarity_to_selected
             mmr_scores = (
-                lambda_val * q_sims[remaining_indices]
-                - (1.0 - lambda_val) * redundancy
+                lambda_val * q_sims[remaining_indices] - (1.0 - lambda_val) * redundancy
             )
             best_local_idx = int(np.argmax(mmr_scores))
             pick = remaining_indices[best_local_idx]
@@ -205,6 +204,7 @@ def compute_mmr_reranking(
 # =============================================================================
 # Part 2: THE PRODUCTION MEMORY STORE
 # =============================================================================
+
 
 class JarvisMemoryStore:
     """
@@ -255,8 +255,8 @@ class JarvisMemoryStore:
         self._backup_dir: Path = (backup_dir or BACKUP_ROOT).resolve()
         self._backup_dir.mkdir(parents=True, exist_ok=True)
         self._embedding_model_name: str = embedding_model
-        self._client: Any = None    # Assigned in __enter__
-        self._encoder: Any = None   # Assigned in __enter__
+        self._client: Any = None  # Assigned in __enter__
+        self._encoder: Any = None  # Assigned in __enter__
         self._closed: bool = True
 
     # -------------------------------------------------------------------------
@@ -283,8 +283,11 @@ class JarvisMemoryStore:
         self._client = chromadb.PersistentClient(path=str(self._db_path))
 
         import torch
+
         device = "cuda" if torch.cuda.is_available() else "cpu"
-        print(f"[MemoryStore] Loading encoder: {self._embedding_model_name} on {device.upper()}")
+        print(
+            f"[MemoryStore] Loading encoder: {self._embedding_model_name} on {device.upper()}"
+        )
         self._encoder = SentenceTransformer(self._embedding_model_name, device=device)
 
         self._closed = False
@@ -460,6 +463,44 @@ class JarvisMemoryStore:
             kwargs["where"] = where
         return collection.query(**kwargs)
 
+    def batch_query_collection(
+        self,
+        collection_name: str,
+        query_texts: List[str],
+        n_results: int = 5,
+        where: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """
+        Semantically query a collection with multiple texts in a single batch.
+
+        EXECUTION FLOW:
+        1. Get the target collection by name (raises if missing).
+        2. Explicitly encode all query texts to float vectors in one go.
+        3. Run ChromaDB vector similarity search.
+        4. Return the ranked results dictionary (list of lists).
+
+        Args:
+            collection_name: Name of the ChromaDB namespace to search.
+            query_texts:     A list of natural language search queries.
+            n_results:       Number of top results to return per query.
+            where:           Optional ChromaDB metadata filter dict.
+
+        Returns:
+            ChromaDB results dict with keys: ids, documents, distances, metadatas.
+            Each key contains a list of lists, where the outer list corresponds
+            to the queries in `query_texts`.
+        """
+        self._assert_open()
+        collection = self._client.get_collection(name=collection_name)
+        query_vecs = self._encoder.encode(query_texts).tolist()
+        kwargs: Dict[str, Any] = {
+            "query_embeddings": query_vecs,
+            "n_results": n_results,
+        }
+        if where:
+            kwargs["where"] = where
+        return collection.query(**kwargs)
+
     def mmr_query_collection(
         self,
         collection_name: str,
@@ -536,7 +577,9 @@ class JarvisMemoryStore:
         # n_results candidates, MMR would have nothing to diversify.
         query_kwargs: Dict[str, Any] = {
             "query_embeddings": [query_vec],
-            "n_results": min(fetch_k, collection.count()),  # Guard: can't fetch more than exists
+            "n_results": min(
+                fetch_k, collection.count()
+            ),  # Guard: can't fetch more than exists
             "include": ["documents", "metadatas", "distances", "embeddings"],
         }
         if where:
@@ -670,6 +713,7 @@ class JarvisMemoryStore:
 
         # Reconnect ChromaDB client to the restored database
         import chromadb
+
         self._client = chromadb.PersistentClient(path=str(self._db_path))
         self._closed = False
 
@@ -694,7 +738,9 @@ class JarvisMemoryStore:
         sqlite_path = self._db_path / "chroma.sqlite3"
 
         if not sqlite_path.exists():
-            print(f"[MemoryStore] Audit FAILED: chroma.sqlite3 not found at {sqlite_path}")
+            print(
+                f"[MemoryStore] Audit FAILED: chroma.sqlite3 not found at {sqlite_path}"
+            )
             return {"status": "MISSING"}
 
         conn = sqlite3.connect(str(sqlite_path))
@@ -704,9 +750,7 @@ class JarvisMemoryStore:
         conn.close()
 
         collections = self._client.list_collections()
-        collection_info = [
-            {"name": c.name, "count": c.count()} for c in collections
-        ]
+        collection_info = [{"name": c.name, "count": c.count()} for c in collections]
 
         result: Dict[str, Any] = {
             "status": "HEALTHY" if integrity == "ok" else f"CORRUPT: {integrity}",
@@ -815,7 +859,9 @@ if __name__ == "__main__":
         for i, doc in enumerate(mmr_results["documents"][0]):
             dist = mmr_results["distances"][0][i]
             print(f"  ({i+1}) [dist={dist:.4f}] {doc[:75]}...")
-        print(f"\n  Latency: {mmr_ms:.1f}ms  (includes {mmr_ms - topk_ms:.1f}ms MMR overhead)")
+        print(
+            f"\n  Latency: {mmr_ms:.1f}ms  (includes {mmr_ms - topk_ms:.1f}ms MMR overhead)"
+        )
 
         # -- Interpretation -------------------------------------------------
         print("\n" + "=" * 65)
