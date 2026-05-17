@@ -22,15 +22,15 @@
 
 ---
 
-## Sub-Phase 3.0: Entry Sprint — Foundations 🔄 YOU ARE HERE
+## Sub-Phase 3.0: Entry Sprint -- Foundations [OK] COMPLETE
 
 **Goal:** Land the three foundation files that everything else builds on. These are direct ports from OpenJarvis (Apache 2.0 reference implementation, see KB Decisions L231–L236 for STEAL #1–#6).
 
 | Lesson | Topic | Source / Reference | Command |
 |--------|-------|--------------------|---------|
-| 3.0.1 | `jarvis_core/agent/registry.py` (STEAL #1) | `OpenJarvis/src/openjarvis/core/registry.py:19-172` — `RegistryBase[T]` decorator pattern with per-subclass isolation | `/dev Port OpenJarvis RegistryBase[T] generic registry to jarvis_core/agent/registry.py. Same shape will host Tool / Engine / Agent / Channel registries.` |
-| 3.0.2 | `jarvis_core/agent/cost.py` (STEAL #2 + **STEAL #11**) | OpenJarvis `engine/cloud.py:22-48,165-176` PRICING dict + OpenClaude `src/utils/modelCost.ts` MODEL_COSTS (cache-tier model, web-search fees) + `src/cost-tracker.ts` per-session accumulator + RunPod GPU-hour rates from `JARVIS_ENDGAME.md` Section 2 | `/dev Build jarvis_core/agent/cost.py merging OpenJarvis PRICING dict structure + OpenClaude cache tiers (input/output/cache_read/cache_write/tool_call) + per-session totalCostUSD tracker. RunPod GPU-hour as separate provider class.` |
-| 3.0.3 | `jarvis_core/agent/tool.py` (Tool ABC, prep for **STEAL #8**) | Tool ABC: `name`, `description`, `input_schema` (Pydantic), `invoke()` async, **`is_concurrency_safe()` predicate** (preset now for STEAL #8 in 3.4) | `/dev Build jarvis_core/agent/tool.py defining the Tool ABC. Pydantic input schemas. Async invoke(). Include is_concurrency_safe() default False predicate so STEAL #8 partitioning lands without retrofit.` |
+| 3.0.1 | `jarvis_core/agent/registry.py` (STEAL #1) | `OpenJarvis/src/openjarvis/core/registry.py:19-172` -- `RegistryBase[T]` decorator pattern with per-subclass isolation | **COMPLETE** -- RegistryBase[T] with per-subclass isolation, decorator registration, get/list/count API. Smoke tests pass. |
+| 3.0.2 | `jarvis_core/agent/cost.py` (STEAL #2 + **STEAL #11**) | OpenJarvis `engine/cloud.py:22-48,165-176` PRICING dict + OpenClaude `src/utils/modelCost.ts` MODEL_COSTS (cache-tier model, web-search fees) + `src/cost-tracker.ts` per-session accumulator + RunPod GPU-hour rates from `JARVIS_ENDGAME.md` Section 2 | **COMPLETE** -- ModelPricing frozen dataclass, PRICING dict (10 models, cache tiers), RUNPOD_GPU_RATES (6 GPUs), CostTracker per-session accumulator with budget gating. Smoke tests pass. |
+| 3.0.3 | `jarvis_core/agent/tool.py` (Tool ABC, prep for **STEAL #8**) | Tool ABC: `name`, `description`, `input_schema` (Pydantic), `invoke()` async, **`is_concurrency_safe()` predicate** (preset now for STEAL #8 in 3.4) | **COMPLETE** -- Tool ABC with Pydantic ToolInput, ToolResult frozen dataclass, async invoke(), is_concurrency_safe predicate, schema_for_llm(), safe_invoke() dispatcher wrapper. Smoke tests pass. |
 
 **Practical Exercise:** Register a `calculator(expr: str) -> float` tool via the new registry and call it through cost-accounting wrappers. Smoke test in `__main__` block.
 
@@ -38,7 +38,7 @@
 
 ---
 
-## Sub-Phase 3.1: Function Calling & Structured Output ⬜
+## Sub-Phase 3.1: Function Calling & Structured Output <-- YOU ARE HERE
 
 **Goal:** Understand how LLMs invoke structured functions — and guarantee valid output. Land the metacognitive schemas while constrained-generation is on the table.
 
@@ -151,7 +151,7 @@ Build a complete agent that:
 
 | Sub-Phase | Status | Lessons Complete |
 |-----------|--------|------------------|
-| 3.0 Entry Sprint (Registry + Cost-with-STEAL-#11 + Tool ABC-with-#8-prep) | 🔄 Starting | 0/3 |
+| 3.0 Entry Sprint (Registry + Cost-with-STEAL-#11 + Tool ABC-with-#8-prep) | [OK] Complete | 3/3 |
 | 3.1 Function Calling + Cognitive_State_Update + TextTelemetry | ⬜ Not Started | 0/7 |
 | 3.2 Tool Design & Registration | ⬜ Not Started | 0/4 |
 | 3.3 Planning & Decomposition | ⬜ Not Started | 0/4 |
