@@ -8,7 +8,7 @@
 
 ## 📍 Current Position
 
-**Stage 3 -- Agent Framework: `jarvis_core/agent/` from scratch** in progress. Stage 2 (Memory Layer) closed 2026-05-03. **Sub-Phase 3.0 Entry Sprint COMPLETE** (2026-05-16): RegistryBase[T] + CostTracker + Tool ABC shipped to `jarvis_core/agent/`. NOW: Sub-Phase 3.1 Function Calling & Structured Output.
+**Stage 3 -- Agent Framework: `jarvis_core/agent/` from scratch** in progress. Stage 2 (Memory Layer) closed 2026-05-03. **Sub-Phase 3.0 Entry Sprint COMPLETE** (2026-05-16): RegistryBase[T] + CostTracker + Tool ABC. **Sub-Phase 3.1 Function Calling & Structured Output COMPLETE** (2026-05-18, all 7 lessons verified by /next audit; parser.py + errors.py + state.py + telemetry.py + exercise_3_1.py shipped). **NOW: Sub-Phase 3.2 Tool Design & Registration** — build 10+ composable tools wrapping `jarvis_core/memory/` primitives + calculator + web search + code exec + file I/O + shell on the 3.0 registry.
 
 ---
 

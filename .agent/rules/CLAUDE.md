@@ -41,7 +41,11 @@ In this repo you are **Chief Systems Architect & Strategic Co-Founder** for JARV
   - 2.5.4 ColBERT — concept learned, implementation skipped (storage tradeoff)
   - 2.5.5–2.5.7 ✅ — Evaluation Metrics + RAGAS + LLM-as-Judge & Tracing all in KB Procedurals
   - 2.5.8 ✅ — `scripts/kb_compact.py` shipped + Final Boss `--force` executed (KB 222 → 219)
-- **Stage 3 — Agent Framework: build `jarvis_core/agent/` from scratch ⬅️ CURRENT.** Per Decision 2026-05-13 (reverses 2026-05-01 OpenClaude delegation): JARVIS owns its agent runtime. Stage 3.0 Entry Sprint = port OpenJarvis STEAL targets (RegistryBase + PRICING dict + Tool ABC, Apache 2.0). Then original 5 sub-phases: 3.1 Function Calling + Pydantic schemas (incl. `Cognitive_State_Update` + `TextTelemetry`), 3.2 Tool Design, 3.3 Planning, 3.4 ReAct + MIRROR-lite prompt + CoT loop detector, 3.5 MemGPT + heartbeat consolidation. Timeline: 10–14 weeks. Pre-3.5 dep: `kb_compact.py` exclusion rule for `heartbeat-emitted` tag.
+- **Stage 3 — Agent Framework: `jarvis_core/agent/` from scratch ⬅️ CURRENT.** Per Decision 2026-05-13 (reverses 2026-05-01 OpenClaude delegation): JARVIS owns its agent runtime.
+  - **3.0 Entry Sprint ✅ COMPLETE (2026-05-16)** — `registry.py` (STEAL #1) + `cost.py` (STEAL #2 + STEAL #11) + `tool.py` (Tool ABC with `is_concurrency_safe` flag preset for STEAL #8).
+  - **3.1 Function Calling & Structured Output ✅ COMPLETE (2026-05-18)** — `parser.py` + `errors.py` + `state.py` (Cognitive_State_Update + UserTelemetryState) + `telemetry.py` (TextTelemetry analyzers) + `scripts/exercise_3_1.py`.
+  - **3.2 Tool Design & Registration ⬅️ ACTIVE** — build 10+ composable tools wrapping `jarvis_core/memory/` primitives + calculator + web search + code exec + file I/O + shell on the 3.0 registry.
+  - Then: 3.3 Planning, 3.4 ReAct + MIRROR-lite + CoT loop detector + STEAL #8/#9/#10, 3.5 MemGPT + heartbeat consolidation + /compact (STEAL #12). Timeline: 10–14 weeks per estimate, currently ~5× ahead of pace. Pre-3.5 dep: `kb_compact.py` exclusion rule for `heartbeat-emitted` tag (already landed in `scripts/kb_compact.py`).
 - Master roadmap: [js-learning/JARVIS_MASTER_ROADMAP.md](js-learning/JARVIS_MASTER_ROADMAP.md)
 - Production code: [js-development/jarvis_core/memory/](js-development/jarvis_core/memory/) — full memory stack production-grade; Brain (Stage 4 = Kimi K2.6) and Body (Stage 6) are placeholders
 
