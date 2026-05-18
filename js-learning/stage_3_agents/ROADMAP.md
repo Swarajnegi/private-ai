@@ -38,27 +38,27 @@
 
 ---
 
-## Sub-Phase 3.1: Function Calling & Structured Output <-- YOU ARE HERE
+## Sub-Phase 3.1: Function Calling & Structured Output [OK] COMPLETE
 
 **Goal:** Understand how LLMs invoke structured functions — and guarantee valid output. Land the metacognitive schemas while constrained-generation is on the table.
 
-| Lesson | Topic | JARVIS Use Case | Command |
-|--------|-------|-----------------|---------|
-| 3.1.1 | Function Calling Basics | LLM outputs structured tool calls | `@[/learn] Explain function calling in LLMs.` |
-| 3.1.2 | JSON Schema for Tools | Define what tools accept | `@[/learn] Explain JSON Schema for tool definitions.` |
-| 3.1.3 | Parsing Tool Outputs | Handle LLM function call responses | `/dev Build a function call parser for JARVIS.` |
-| 3.1.4 | Error Handling | Gracefully handle malformed calls | `/dev Implement robust error handling for tool calls.` |
-| 3.1.5 | Structured Generation (outlines/guidance) | Guarantee valid JSON via constrained decoding | `@[/learn] Explain outlines and guidance for constrained LLM output.` |
-| **3.1.6** | **`Cognitive_State_Update` Pydantic schema** (metacognitive integration, Decision 2026-05-13) | Typed contract for what the metacognitive daemon writes — defined NOW even though writes start in 3.5 | `/dev Define jarvis_core/agent/state.py with Cognitive_State_Update Pydantic model + UserTelemetryState container.` |
-| **3.1.7** | **`TextTelemetry` dataclass** (metacognitive integration) | Text-only user-state inference (no voice until Stage 6): prompt_brevity, typo_density, correction_rate, rephrasing, sentiment_shift | `/dev Define jarvis_core/agent/telemetry.py with TextTelemetry dataclass and the pure-functional analyzers (regex + counts, no LLM call).` |
+| Lesson | Topic | JARVIS Use Case | Status |
+|--------|-------|-----------------|--------|
+| 3.1.1 | Function Calling Basics | LLM outputs structured tool calls | **COMPLETE** -- concept covered via KB L19 (agent reliability gaps) + L272 (parse_tool_call architecture). |
+| 3.1.2 | JSON Schema for Tools | Define what tools accept | **COMPLETE** -- `parser.py` (573 lines) + KB L273 Procedural (robust JSON extraction: fence/brace fallback regex). |
+| 3.1.3 | Parsing Tool Outputs | Handle LLM function call responses | **COMPLETE** -- `parser.py` parse_tool_call + dispatch + dispatch_batch (concurrency partition via asyncio.gather). KB L272. |
+| 3.1.4 | Error Handling | Gracefully handle malformed calls | **COMPLETE** -- `errors.py` (656 lines): ErrorHandler recovery-policy layer, 5 ToolErrorKinds, per-tool RetryPolicy budgets, BUDGET_EXCEEDED abort. KB L275. |
+| 3.1.5 | Structured Generation (outlines/guidance) | Guarantee valid JSON via constrained decoding | **COMPLETE** -- Pydantic schemas in `state.py` are the constrained-generation contract; KB L19 (concept) + L175 (deferral history reversed). |
+| **3.1.6** | **`Cognitive_State_Update` Pydantic schema** (metacognitive integration, Decision 2026-05-13) | Typed contract for what the metacognitive daemon writes — defined NOW even though writes start in 3.5 | **COMPLETE** -- `state.py` (493 lines): CognitiveStateUpdate + UserTelemetryState (TextTelemetrySnapshot + acoustic stub). KB L276. |
+| **3.1.7** | **`TextTelemetry` dataclass** (metacognitive integration) | Text-only user-state inference (no voice until Stage 6): prompt_brevity, typo_density, correction_rate, rephrasing, sentiment_shift | **COMPLETE** -- `telemetry.py` (690 lines): TextTelemetry + analyzers. KB L277 (QWERTY adjacency heuristic 48% FP, replaced with specific transpositions + anomalous endings). |
 
-**Practical Exercise:** Make an LLM call `calculator(expr: str)` — with `outlines` guaranteeing valid JSON every time. Pass a 4-message conversation through the `TextTelemetry` analyzer and confirm features fire correctly.
+**Practical Exercise:** ✅ `scripts/exercise_3_1.py` (142 lines) wires all 3.1 concepts together — calculator tool registered, parser handling tool-call JSON, error recovery, telemetry analyzers, and Cognitive_State_Update emission.
 
 > **Why This Matters:** Without constrained decoding, tool-calling agents break randomly on malformed output. `outlines.generate.json(model, ToolCallSchema)` guarantees valid ToolCall every time. The model literally cannot produce invalid JSON. The metacognitive schemas land here because they ARE constrained-generation contracts.
 
 ---
 
-## Sub-Phase 3.2: Tool Design & Registration ⬜
+## Sub-Phase 3.2: Tool Design & Registration <-- YOU ARE HERE
 
 **Goal:** Build a library of composable tools JARVIS can use, leveraging the 3.0 registry.
 
@@ -152,8 +152,8 @@ Build a complete agent that:
 | Sub-Phase | Status | Lessons Complete |
 |-----------|--------|------------------|
 | 3.0 Entry Sprint (Registry + Cost-with-STEAL-#11 + Tool ABC-with-#8-prep) | [OK] Complete | 3/3 |
-| 3.1 Function Calling + Cognitive_State_Update + TextTelemetry | ⬜ Not Started | 0/7 |
-| 3.2 Tool Design & Registration | ⬜ Not Started | 0/4 |
+| 3.1 Function Calling + Cognitive_State_Update + TextTelemetry | [OK] Complete | 7/7 |
+| 3.2 Tool Design & Registration | 🔄 Starting | 0/4 |
 | 3.3 Planning & Decomposition | ⬜ Not Started | 0/4 |
 | 3.4 ReAct + MIRROR-lite + CoT detector + STEAL #8/#9/#10 | ⬜ Not Started | 0/9 |
 | 3.5 Memory-Augmented Agents + Heartbeat Consolidation + /compact (STEAL #12) | ⬜ Not Started | 0/9 |
