@@ -92,7 +92,7 @@ In theory the cleanest route to US index exposure is an India-domiciled FoF (Mot
 
 **Verdict:** INDmoney direct US route is now *more reliable for execution* than India-domiciled FoFs despite higher friction. Forex + Schedule FA is a known cost; FoF route has hidden tail-risk in subscription rejection + premium volatility.
 
-**Primary pick:** SPYG (0.04% TER, S&P 500 Growth Index — growth half of S&P 500, ~230 holdings, heavy NVDA/AAPL/MSFT/AMZN). Lower cost than QQQM (0.15%) with broader diversification than Nasdaq 100.
+**Primary pick:** XLK (0.08% TER, S&P 500 Technology sector — pure tech concentration, ~70 holdings, NVDA/AAPL/MSFT/AVGO dominant). Outperformed SPYG (~10% YTD) and QQQM (~11% YTD) significantly in 2026 (~22% YTD). Deployed as lump-sum STP from incentive windfalls, not monthly SIP — monthly slot is reserved for single-stock AVGO conviction. Note: AVGO is a top-5 holding in XLK — deliberate overlap accepted because AVGO has the strongest risk-adjusted return profile of any non-megacap AI stock (unanimous 4/4 institutional conviction across all research sources, positive 5-year bear case).
 
 ---
 
@@ -100,16 +100,16 @@ In theory the cleanest route to US index exposure is an India-domiciled FoF (Mot
 
 ### Phase 0 — Foundation (paid from September 2026 ₹87,500 incentive)
 
-By September, the monthly ₹5K/mo liquid fund SIP (started May 2026) will have accumulated ~₹20K. September incentive tops this up:
+By September, the monthly ₹3K/mo liquid fund SIP (started May 2026) will have accumulated ~₹12K. September incentive tops this up:
 
 | Allocation | Amount | Purpose |
 |---|---|---|
 | Liquid fund top-up | ₹38,000 | Bring total liquid buffer to ~₹50K (₹12K from monthly SIPs + ₹38K top-up). 6.5% yield, 1-day accessible. |
-| STP into SPYG via INDmoney | ₹49,500 | Spread over 4-6 months. US growth allocation kicker. |
+| STP into XLK via INDmoney | ₹49,500 | Spread over 4-6 months. Pure US tech ETF kicker (0.08% TER, S&P 500 Technology sector). |
 
-**Repeat with March 2027 incentive:** half to top-up liquid fund, half to SPYG STP.
+**Repeat with March 2027 incentive:** half to top-up liquid fund, half to XLK STP.
 
-> **Why not park cash and wait for a crash?** SIP IS the crash-buying mechanism. When NVIDIA drops 30%, the ₹5K/mo SIP automatically buys more units at a lower price — mechanically, without prediction or willpower. Cash sitting in a savings account at 3.5% while waiting for a crash costs ₹12-18K/yr in opportunity cost and almost never gets deployed (fear peaks exactly when valuations are lowest). Rupee-cost averaging is the systematic version of "buy the dip."
+> **Why not park cash and wait for a crash?** SIP IS the crash-buying mechanism. The ₹5K/mo AVGO SIP automatically buys more units at a lower price when the stock drops — mechanically, without prediction or willpower. Cash sitting in a savings account at 3.5% while waiting for a crash costs ₹12-18K/yr in opportunity cost and almost never gets deployed (fear peaks exactly when valuations are lowest). Rupee-cost averaging is the systematic version of "buy the dip."
 
 ### Phase 1 — Revised monthly cadence (₹27.5K/mo + ₹3.6K EPF)
 
@@ -118,11 +118,13 @@ By September, the monthly ₹5K/mo liquid fund SIP (started May 2026) will have 
 | Nippon India Power & Infra | ₹5K | SIP (Groww) | Sunset trigger active — see §6 |
 | Quant Small Cap | ₹5K | SIP (Groww) | Continue |
 | Invesco Mid Cap | ₹5K | SIP (Groww) | Continue |
-| NVIDIA direct | ₹5K | INDmoney | Dollar-cost averaging every month |
 | UTI Nifty Next 50 | ₹4.5K | Index fund (Groww) | Large-cap India anchor — started May 2026 |
+| **AVGO (Broadcom)** | **₹5K** | **INDmoney** | **AI infrastructure backbone — custom ASICs + networking + VMware software. Unanimous 4/4 institutional conviction. DCA monthly.** |
 | Liquid fund | ₹3K | Quant/Aditya Birla Liquid | Emergency buffer, 6.5% yield. By Sept: ~₹12K accumulated |
 | EPF | ₹3.6K | Employer-matched | 8.25% guaranteed — forced debt allocation |
 | **Total** | **₹27.5K + ₹3.6K** | | |
+
+**NVIDIA status:** No fresh monthly SIP. Existing units held. AVGO is the active US single-stock DCA position. NVIDIA + AVGO exposure also continues passively via XLK (deployed from incentives). Deliberate double-concentration in AVGO (direct + XLK) accepted — AVGO is the only stock with a positive bear-case floor at 5 years.
 
 ### Phase 2 — Post-appraisal or job switch (~₹40K/mo target, excl. EPF)
 
@@ -131,15 +133,15 @@ By September, the monthly ₹5K/mo liquid fund SIP (started May 2026) will have 
 | India emerging large-cap | ₹8K | UTI Nifty Next 50 Index Fund (replaces Nippon P&I + adds India anchor) |
 | India small-cap | ₹5K | Quant Small Cap (continue) |
 | India mid-cap | ₹5K | Invesco Mid Cap (continue) |
-| US growth | ₹10K | SPYG via INDmoney (S&P 500 Growth, 0.04% TER) |
-| US single-stock | ₹8K | NVIDIA via INDmoney (reduced from ₹12.5K; SPYG covers broad tech) |
+| US tech ETF | ₹10K | XLK via INDmoney (S&P 500 Tech, 0.08% TER) |
+| US single-stock | ₹8K | AVGO via INDmoney (continue DCA; reassess allocation vs adding a second stock like MRVL or ANET based on performance by Phase 2 entry) |
 | Crisis hedge | ₹4K | SGB / Gold ETF |
 | **Total** | **₹40K** | **India 45% / US 45% / Gold 10%** |
 
 ### Phase 3 — RIL Decision Point
 
 Three scenarios (evaluate in order):
-1. **Jio IPO windfall exit:** If Jio lists and RIL pops significantly (≥30% from current), book profits → STP into SPYG via INDmoney over 6 months
+1. **Jio IPO windfall exit:** If Jio lists and RIL pops significantly (≥30% from current), book profits → STP into XLK via INDmoney over 6 months
 2. **Analyst target exit:** If RIL hits ₹1,900-2,000 within ~1 year (analyst consensus range), partial or full exit
 3. **Long-term hold:** If neither trigger fires, hold as long-term AI/digital infra play — Reliance is building India's AI backbone (Jio AI Cloud, data centers, NVIDIA partnership)
 
@@ -192,19 +194,27 @@ Use a hard rule, not intuition:
 
 ---
 
-## 7. Forward NVDA Exposure Simulation
+## 7. Forward AVGO Exposure Simulation
 
-Phase 2 US allocation: ₹10K SPYG + ₹8K NVIDIA = ₹18K/mo (~$215/mo at ₹84/$):
+Phase 1 US allocation: ₹5K AVGO direct (~$60/mo at ₹84/$). XLK deployed from incentives (AVGO is ~15% of XLK):
 
-| Vehicle | ~$/mo | NVDA inside | Effective NVDA |
+| Vehicle | ~$/mo | AVGO inside | Effective AVGO |
 |---|---|---|---|
-| NVDA direct | ~$95 | 100% | $95 |
-| SPYG | ~$120 | ~12% | ~$14 |
-| **Total NVDA exposure** | **~$215** | — | **~$109 (51% of US allocation)** |
+| AVGO direct | ~$60 | 100% | $60 |
+| XLK (from incentive STP) | ~$590 lump/6mo | ~15% | ~$89/6mo |
+| **Total AVGO exposure** | | — | **~$60/mo + ~$15/mo amortized = ~$75/mo effective** |
 
-**Implication:** SPYG concentrates NVDA exposure more than VOO+QQQM did (was 31%, now 51%). This is a deliberate high-conviction AI bet. If concentration becomes uncomfortable:
-- Reduce direct NVDA to ₹5K/mo (drops to ~40%), or
-- Add VOO or VTI alongside SPYG to dilute growth tilt
+**Phase 2 US allocation:** ₹10K XLK + ₹8K AVGO = ₹18K/mo (~$215/mo at ₹84/$):
+
+| Vehicle | ~$/mo | AVGO inside | Effective AVGO |
+|---|---|---|---|
+| AVGO direct | ~$95 | 100% | $95 |
+| XLK | ~$120 | ~15% | ~$18 |
+| **Total AVGO exposure** | **~$215** | — | **~$113 (53% of US allocation)** |
+
+**Implication:** Deliberate high-conviction AI infrastructure bet. AVGO appears in both direct DCA and inside XLK. This is intentional double-concentration — AVGO is the only stock with a positive 5-year bear case (+32%), VMware software revenue floor, and unanimous 4/4 institutional consensus. If concentration becomes uncomfortable:
+- Reduce direct AVGO to ₹5K/mo and redirect ₹3K to MRVL or ANET (adds AI networking diversification)
+- Or add VTI alongside XLK to dilute tech tilt
 
 ---
 
@@ -229,7 +239,7 @@ Phase 2 US allocation: ₹10K SPYG + ₹8K NVIDIA = ₹18K/mo (~$215/mo at ₹84
 - **Term insurance:** Not needed today. Parents are independent. Revisit at marriage or if family situation changes.
 - **NPS:** Only useful if on old tax regime. Default is new regime in 2026 — most deductions don't apply. Check payslip.
 - **Real estate:** Premature. Wait until salary 2x+ current and Phase 2 architecture is running.
-- **Direct US stocks beyond NVDA:** Premature. Single-stock concentration in NVDA is already the calculated bet. Add a second direct stock only after salary doubles AND existing positions are profitable AND a specific thesis exists.
+- **Direct US stocks beyond AVGO:** One US single-stock conviction is the current limit. AVGO is the active bet (custom AI ASICs, networking, VMware software). Adding a second direct stock (e.g. MRVL, ANET, ALAB) requires salary to double AND AVGO position to be meaningfully profitable AND a clear non-overlapping thesis. Top candidates for second slot: MRVL (optical DSPs, $177), ANET (AI networking, $142), ALAB (PCIe retimers, $233).
 - **Crypto, options, derivatives:** Not aligned with long-horizon compounding strategy. Skip.
 
 ---
@@ -294,6 +304,8 @@ This document is structured personal analysis based on publicly available 2026 i
 
 | Date | Change |
 |---|---|
+| 2026-05-17 | **v2.5:** MRVL replaced by AVGO (Broadcom, ₹5K/mo) as active US single-stock DCA. Decision driven by cross-validated analysis across 4 independent AI sources (Antigravity, Claude Sonnet, Gemini Deep Research, ChatGPT): AVGO was the only stock achieving unanimous 4/4 consensus, has the deepest moat (VMware software floor + custom ASICs), and is the only candidate with a positive 5-year bear-case return (+32%). Deliberate overlap with XLK accepted. XLK deployed via incentive STP unchanged. |
+| 2026-05-17 | **v2.4:** NVIDIA monthly SIP stopped. MRVL (Marvell Technology, ₹5K/mo) was the active US single-stock DCA. SPYG replaced by XLK. *Superseded by v2.5 same day.* |
 | 2026-05-16 | **v2.3:** Phase 1 finalised — UTI Nifty Next 50 raised to ₹4.5K/mo (started May 2026), Liquid fund reduced to ₹3K/mo (accumulates ~₹12K by Sept), NVIDIA stays ₹5K/mo. September incentive rebalanced: ₹38K liquid top-up (to reach ₹50K total) + ₹49.5K SPYG STP. |
 | 2026-05-15 | **v2.2:** Phase 1 revised — ₹12.5K NVIDIA SIP split into ₹5K NVIDIA + ₹5K liquid fund + ₹2.5K UTI Nifty Next 50. September incentive rebalanced: ₹30K liquid top-up + ₹57.5K SPYG STP. |
 | 2026-05-14 | **v2.1:** Added EPF ₹3,600/mo. Removed health insurance + PPF from Phase 0. Replaced VOO/QQQM with SPYG. Phase 2 restructured: UTI Nifty Next 50 + SPYG. RIL exit revised to 3-scenario model. |

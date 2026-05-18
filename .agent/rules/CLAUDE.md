@@ -70,7 +70,7 @@ The 8 protocols in [.agent/workflows/](.agent/workflows/) are operational docume
 - Before append: `python3 scripts/search_memory.py "<one-line summary>"` to dedupe. Similarity > 0.85 → update existing, don't duplicate.
 - Format: single-line JSONL, ISO 8601 timestamp with `+05:30` timezone, 3–5 tags, content compressed to one high-leverage insight.
 - `/memory` and `/learn` workflows have a MANDATORY cognitive-pattern scan. When signals fire (`gap_signal`, `zero_gap_signal`, `refusal_pattern`, `forward_simulation`), append `Cognitive_Pattern` entries directly. When none fire, state explicitly: `🧠 Cognitive scan: no new patterns detected this turn.`
-- **Personal-domain context:** For any finance, investment, or portfolio question, check [Finance/strategy.md](Finance/strategy.md) first — it is the canonical capital allocation plan (phased architecture, SIP cadence, triggers, exit rules). KB entries tagged `finance-strategy` or `portfolio-snapshot` carry supporting context.
+- **Personal-domain context:** For any finance, investment, or portfolio question, check [jarvis_data/Finance/strategy.md](jarvis_data/Finance/strategy.md) first — it is the canonical capital allocation plan (phased architecture, SIP cadence, triggers, exit rules). KB entries tagged `finance-strategy` or `portfolio-snapshot` carry supporting context.
 
 ---
 
@@ -179,7 +179,7 @@ No fluff. Depth over brevity. Be direct. When the user is wrong, say so with rea
 | Path config | [js-development/jarvis_core/config.py](js-development/jarvis_core/config.py) |
 | CLI tools | [scripts/](scripts/) |
 | Workflow protocols | [.agent/workflows/](.agent/workflows/) |
-| Finance strategy (canonical) | [Finance/strategy.md](Finance/strategy.md) |
+| Finance strategy (canonical) | [jarvis_data/Finance/strategy.md](jarvis_data/Finance/strategy.md) |
 
 ---
 

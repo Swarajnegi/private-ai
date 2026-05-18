@@ -1,0 +1,740 @@
+Strategic Equity Allocation for H2 2026: 
+Synthesizing Q1 13F Institutional Fund 
+Flows and Sector Indexing 
+The Macroeconomic Inflection Point of May 2026 
+The global financial markets in the second quarter of 2026 have arrived at a profound structural 
+inflection point, characterized by a rapid evolution in the deployment of institutional capital. For 
+the preceding twenty-four months, the equity markets were entirely dominated by the initial 
+phase of the artificial intelligence supercycle, a phase defined by the aggressive accumulation 
+of mega-cap technology hardware designers, most notably Nvidia. However, as the 
+infrastructure layer of this technological paradigm matures, the velocity of capital is shifting. 
+Institutional investors are rotating their focus down the value chain, seeking out the secondary 
+and tertiary beneficiaries of the AI buildout. These include specialized cloud infrastructure 
+providers, high-bandwidth memory fabricators, electrical grid modernization conglomerates, and 
+power generation utilities that provide the necessary physical constraints for digital expansion. 
+For a retail or institutional portfolio already anchored by a substantial foundational position in the 
+Indian equity market—specifically the Nifty Next 50 index, which provides robust, diversified 
+exposure to one of the world's fastest-growing emerging economies—the strategy for United 
+States equity allocation must be highly surgical. Furthermore, an existing, highly concentrated 
+investment of approximately 45,000 Indian Rupees in Nvidia establishes a formidable mega-cap 
+technology core. While Nvidia, Apple, Google, and Amazon offer systemic stability and 
+long-term compounding, their multi-trillion-dollar market capitalizations inherently preclude the 
+explosive, multi-bagger returns characteristic of earlier-stage hyper-growth equities. The 
+objective, therefore, is to construct a complementary United States portfolio architecture 
+consisting of a concentrated technology index vehicle and a curated selection of explosive, 
+non-mega-cap equities derived directly from the most recent institutional fund flows. 
+The release of the Securities and Exchange Commission (SEC) Form 13F filings for the quarter 
+ending March 31, 2026, which were universally disclosed by mid-May 2026, provides a 
+transparent, empirical roadmap for this capital deployment.1 By tracking the exact allocations of 
+the world's most successful hedge funds and asset managers, investors can identify the precise 
+equities where the "smart money" is positioning for the next wave of explosive growth. This 
+report provides a comprehensive analysis of the optimal ETF structure, decodes the Q1 2026 
+13F filings, identifies the ten highest-conviction U.S. stock picks, and isolates a singular equity 
+positioned for asymmetric, "all-in" capital allocation. 
+Structural Portfolio Architecture: Indexing the 
+Technology Beta 
+When constructing a portfolio around a massive core holding of a single mega-cap 
+semiconductor designer, the selection of the surrounding index vehicle is a critical determinant 
+of long-term risk-adjusted returns. The objective is to secure broad, systemic exposure to the 
+technology sector's structural tailwinds while minimizing tracking error against the primary 
+drivers of modern economic growth. The decision matrix strictly evaluates the Invesco QQQ 
+Trust (tracking the NASDAQ-100 Index) against the Technology Select Sector SPDR Fund 
+(XLK), intentionally disregarding broader growth vehicles like the SPDR Portfolio S&P 500 
+Growth ETF (SPYG) to maintain targeted sector purity. 
+Analyzing the Invesco QQQ Trust (NASDAQ-100) 
+The NASDAQ-100 index, tracked by the Invesco QQQ Trust, provides capitalization-weighted 
+exposure to the 100 largest non-financial companies listed on the NASDAQ exchange. While 
+historically synonymous with technology and innovation, its index methodology is fundamentally 
+sector-agnostic within the non-financial realm. Consequently, an investment in QQQ introduces 
+substantial, often unintended, exposure to the consumer discretionary, consumer staples, and 
+healthcare sectors. The portfolio includes massive allocations to companies such as Costco, 
+PepsiCo, and Starbucks, which operate under entirely different macroeconomic sensitivities 
+than semiconductor or software entities.3 
+Despite this sector dilution, the historical performance of the QQQ is formidable. Financial 
+disclosures indicate a five-year cumulative return of 103.80%, translating a $10,000 initial 
+investment into $20,380.3 This outperformance is largely driven by the aggressive capital 
+reinvestment strategies of its constituent companies. Entities within the QQQ ETF allocate 
+approximately 10.70% of their total sales to research and development (R&D), significantly 
+outpacing the 8.60% R&D reinvestment rate of the broader S&P 500 Index and the 9.10% rate 
+of the Russell 1000 Growth Index.3 This persistent reinvestment establishes deep technological 
+moats and fuels continuous innovation cycles. However, for an investor already diversified 
+geographically across various sectors via the Nifty Next 50, the inclusion of U.S. consumer 
+staples and healthcare through the QQQ introduces redundant diversification, diluting the 
+targeted technology beta. 
+The Superiority of the Technology Select Sector SPDR Fund (XLK) 
+Conversely, the Technology Select Sector SPDR Fund (XLK) is a pure-play sector 
+exchange-traded fund that exclusively holds technology companies curated from within the S&P 
+500. As of May 2026, XLK comprises a highly focused portfolio of exactly 73 specialized 
+holdings, strictly confined to hardware, software, semiconductors, and information technology 
+services.4 This eliminates the consumer discretionary and consumer staples drag inherent in the 
+NASDAQ-100. 
+ETF Characteristic (May 2026) 
+Technology Select Sector SPDR Fund (XLK) 
+Number of Holdings 
+73 
+Trailing Price/Earnings (P/E) 
+40.03 
+Forward Price/Earnings (FY1) 
+28.73 
+Price/Cash Flow 
+31.65 
+Est. 3-5 Year EPS Growth 
+33.60% 
+Return Since Inception (1998) 
+10.39% (After Taxes on Distributions) 
+Source: State Street Global Advisors & Index Data 4 
+The fundamental metrics of XLK underscore a portfolio optimized for aggressive future earnings 
+expansion. The estimated three-to-five-year Earnings Per Share (EPS) growth for the 
+underlying constituents is modeled at a robust 33.60%, justifying the forward P/E multiple of 
+28.73.4 The ETF operates with immense liquidity, trading an average volume of 4.2 million 
+shares daily against a market capitalization of $88.1 billion, ensuring tight bid-ask spreads and 
+efficient execution.6 XLK has demonstrated a powerful long-term compounding mechanism, 
+delivering an annualized return since its inception in December 1998 of 10.39% after taxes on 
+distributions.4 
+For an investor possessing a localized Indian market anchor and a heavy concentration in 
+Nvidia, XLK represents the mathematically and structurally superior index vehicle. It provides a 
+surgical, highly concentrated exposure to the U.S. technology sector without the dilutive effects 
+of non-technology components, establishing a pristine foundation upon which individual, 
+high-beta stock selections can be layered.4 
+Institutional Fund Flow Analysis: Decoding Q1 2026 
+13F Filings 
+To identify explosive equities that have yet to breach the trillion-dollar market capitalization 
+threshold, one must track the deployment of institutional capital. The SEC Form 13F filings, 
+which mandate that institutional investment managers with over $100 million in qualifying assets 
+disclose their U.S. equity holdings quarterly, provide an empirical map of this capital rotation.1 
+The filings released by May 15, 2026, detailing positions held as of March 31, 2026, reveal a 
+systemic transition.1 The largest asset gatherers, such as BlackRock, maintain vast, systemic 
+exposure, having delivered a three-year performance of 97.62% (25.49% annualized).8 
+However, the alpha-driven hedge funds are actively liquidating legacy positions to finance 
+aggressive accumulations in infrastructure, specialized cloud, and biopharmaceuticals. 
+Institutional Fund 
+Manager 
+Fund Name 
+Q1 2026 AUM (13F) 
+3-Year Performance 
+(Ann.) 
+Jim Simons 
+(Legacy) 
+Renaissance 
+Technologies 
+N/A 
+135.58% (33.06%) 
+Philippe Laffont 
+Coatue Management 
+$39.96 Billion 
+140.83% (34.04%) 
+Chase Coleman 
+Tiger Global 
+Management 
+$22.84 Billion 
+N/A 
+Bill Ackman 
+Pershing Square 
+$13.71 Billion 
+N/A 
+David Tepper 
+Appaloosa 
+Management 
+$5.93 Billion 
+N/A 
+Brad Gerstner 
+Altimeter Capital 
+$5.69 Billion 
+77.11% (20.99%) 
+Stanley 
+Druckenmiller 
+Duquesne Family 
+Office 
+$3.37 Billion 
+N/A 
+Source: Institutional 13F Disclosures and Performance Tracking 8 
+Appaloosa Management's Infrastructure Thesis 
+David Tepper’s Appaloosa Management, overseeing approximately $5.93 billion in 13F 
+securities across 31 holdings, executed a masterclass in cyclical anticipation during the first 
+quarter.11 Recognizing the physical bottlenecks impending upon the technology sector, Tepper 
+drastically reduced exposure to legacy technology and consumer travel. Appaloosa completely 
+liquidated its 14.15 million share position in American Airlines (AAL), alongside complete exits 
+from United Airlines (UAL) and Mohawk Industries (MHK).16 Furthermore, the fund aggressively 
+trimmed its stake in Microsoft (MSFT) from 500,000 to just 90,000 shares, while reducing 
+allocations in Meta Platforms (META) and Alibaba (BABA).18 
+The capital liberated from these liquidations was forcefully deployed into memory fabrication 
+and energy infrastructure. Appaloosa increased its stake in Micron Technology (MU) to 1.66 
+million shares and initiated a massive new position in SanDisk (SNDK), acquiring 281,250 
+shares.18 Most revealingly, Tepper increased Appaloosa's holding in Vistra Corp (VST)—a major 
+power generation utility—by an astounding 114%, elevating the energy provider to 3.9% of the 
+total portfolio.19 Tepper is explicitly betting that the physical constraints of the artificial 
+intelligence boom, namely memory chips and electricity, will command ultimate pricing power 
+over the coming years.18 
+Pershing Square's Surgical Reallocation 
+Bill Ackman's Pershing Square Capital Management, managing a highly concentrated $13.7 
+billion portfolio across just 11 holdings, executed a surgical reallocation within the mega-cap 
+ecosystem.14 The fund completely exited its Alphabet Class C (GOOG) holdings, which had 
+stood at over 6.1 million shares in the prior quarter, and significantly reduced its Alphabet Class 
+A (GOOGL) exposure.21 The proceeds were immediately utilized to establish a massive, 
+brand-new 5.65 million share position in Microsoft (MSFT), valued at approximately $2.09 billion 
+at the end of Q1 2026.21 
+Ackman publicly articulated the rationale for this massive capital rotation, stating that Microsoft's 
+valuation had become "highly compelling" following a recent share price decline.21 Pershing 
+Square believes the market is mispricing the durability of Azure's cloud growth, the formidable 
+lock-in effect of Microsoft's M365 enterprise software suite against competitors like Anthropic, 
+and the immense, unrealized value of Microsoft's 27% stake in OpenAI.21 Pershing Square also 
+maintained a heavy 2.66 million share stake in Meta Platforms (META) while fully exiting its 
+long-held position in Hilton Worldwide Holdings (HLT).21 
+Coatue Management and Tiger Global's Semiconductor Expansion 
+Coatue Management, under the direction of Philippe Laffont, oversees a sprawling $39.96 billion 
+13F portfolio heavily tilted toward structural technology trends.12 In Q1 2026, Coatue 
+aggressively targeted semiconductor equipment manufacturers, recognizing that fabrication 
+capacity is a critical global bottleneck. The fund initiated a massive new $685.6 million position 
+in Applied Materials (AMAT) and added significantly to its holdings in ASML.27 Concurrently, 
+Coatue established a massive 7.73% portfolio weight in GE Vernova (GEV), indicating a deep 
+understanding that power generation infrastructure is an absolute prerequisite for sustaining 
+semiconductor manufacturing and data center operations.26 
+Similarly, Chase Coleman’s Tiger Global Management, managing $22.84 billion, adjusted its 
+portfolio to reflect the evolving semiconductor landscape.13 The fund established a new $179 
+million position in Intel (INTC), acquiring 1.63 million shares, signaling a strategic bet on 
+domestic U.S. fabrication capabilities.31 Tiger Global also aggressively increased its holdings in 
+Broadcom (AVGO) and Nvidia (NVDA), elevating its NVDA stake to over 12 million shares.31 
+The fund augmented its Taiwan Semiconductor (TSMC) stake by 49.4% to 5.57 million shares, 
+solidifying its hardware dominance.32 
+Divergent Strategies: Duquesne, Scion, and Point72 
+Stanley Druckenmiller’s Duquesne Family Office, managing $3.37 billion, demonstrated a 
+high-conviction rotation away from consensus technology trades.9 Druckenmiller reduced his 
+position in Taiwan Semiconductor Manufacturing by 8.8%, realizing immense gains after the 
+stock appreciated 111.8% from his average purchase price.33 The capital was funneled into his 
+highest-conviction idea: Natera Inc (NTRA). Druckenmiller increased his share count in the 
+medical diagnostics company by 22%, making it his largest holding at nearly 20% of his entire 
+equity portfolio, valued at $571 million.9 
+Michael Burry's Scion Asset Management adopted a contrarian, value-oriented stance. 
+Interpreting current market dynamics as indicative of a potential valuation bubble in high-flying 
+hardware equities, Burry rotated heavily into enterprise software.34 Scion executed major buy 
+orders for Adobe (ADBE), Autodesk (ADSK), and Veeva Systems (VEEV).35 This strategy is 
+rooted in a thesis of "credit-driven selling exhaustion," positing that forced liquidations have 
+suppressed high-quality Software-as-a-Service (SaaS) valuations far below their fundamental 
+intrinsic worth.35 
+Meanwhile, Steve Cohen’s Point72 Asset Management utilized its massive $78 billion base to 
+acquire entities with unassailable pricing power and recurring revenue.36 Point72 built a 
+brand-new $336.2 million position in TransDigm Group (TDG), capitalizing on the aerospace 
+manufacturer's near 7% trailing dividend yield and absolute monopoly over aftermarket aircraft 
+parts.37 Cohen also expanded his position in the data center real estate investment trust Equinix 
+(EQIX) by 467%, viewing data center real estate as a critical infrastructure bottleneck.37 
+The High-Conviction Decile: 10 Optimal Equity 
+Selections for 2026 
+Synthesizing the institutional fund flows, macroeconomic shifts, and the explicit requirement for 
+non-mega-cap companies possessing explosive growth trajectories, the following ten equities 
+represent the optimal portfolio constituents. These selections bypass the saturated 
+multi-trillion-dollar market capitalization entities to focus on the specialized providers of critical 
+infrastructure, hardware, and biotechnology that elite hedge funds acquired aggressively in the 
+first quarter of 2026. 
+1. Broadcom Inc. (AVGO) 
+While approaching the upper echelons of market capitalization, Broadcom operates 
+fundamentally differently from consumer-facing technology giants. It functions as the absolute 
+backbone of artificial intelligence networking, transitioning from a traditional semiconductor firm 
+into the dominant provider of custom AI accelerators and high-speed switching fabrics for 
+hyperscale data centers. 
+Financial disclosures for the first quarter of fiscal 2026 report net revenue of $19.31 billion, 
+representing a remarkable 29.47% year-over-year increase.39 The underlying driver of this 
+expansion is AI-specific semiconductor revenue, which surged 106% year-over-year to $8.4 
+billion.40 Broadcom's profitability metrics are staggering; the company generated $8.26 billion in 
+operating cash flow, resulting in $8.01 billion in free cash flow, equating to an exceptional 41% 
+free cash flow margin.39 Management guidance for the second quarter of 2026 anticipates $22.0 
+billion in revenue, indicating a 47% year-over-year acceleration, driven by an expected $10.7 
+billion in AI-specific revenue.39 
+The company reported GAAP diluted EPS of $1.50 and non-GAAP diluted EPS of $2.05 for the 
+quarter.39 Broadcom trades at a trailing P/E ratio ranging between 62.34 and 82.88, a premium 
+valuation that the market justifies through the company's lock on supply chains extending into 
+2028 and a projected line of sight to exceed $100 billion in AI chip revenue for fiscal 2027.41 
+Broadcom represents the premier "picks and shovels" play for data center networking 
+infrastructure, heavily sponsored by Tiger Global, Duquesne, and Coatue Management.26 
+2. Micron Technology, Inc. (MU) 
+Micron Technology presents one of the most asymmetric risk-reward profiles in the entire 
+technology sector, a dynamic heavily endorsed by David Tepper's Appaloosa Management, 
+which drastically increased its stake in the quarter.18 The structural thesis for Micron rests 
+entirely on High Bandwidth Memory (HBM). As graphical processing units become exponentially 
+faster, the physical limitation on AI computation is memory throughput. 
+In its fiscal second quarter of 2026, Micron completely shattered Wall Street expectations. The 
+company reported $23.86 billion in total revenue, an astonishing acceleration from just $8.05 
+billion in the same period the prior year.45 Non-GAAP net income reached $14.02 billion, 
+delivering an EPS of $12.20, which eclipsed consensus analyst estimates of $8.60 by nearly 
+42%.45 The company generated $11.90 billion in operating cash flow during the quarter.45 
+Crucially, corporate management confirmed that HBM supply is entirely sold out and committed 
+through the end of calendar year 2026.47 Because HBM production consumes significantly more 
+wafer capacity than traditional DRAM, this dynamic creates severe supply constraints and 
+massive pricing power across the entire memory ecosystem.47 Despite the stock gaining over 
+129% year-to-date, analysts note that Micron's forward P/E ratio has rapidly compressed to 
+below 9x, as earnings are expanding at a significantly faster velocity than the equity price.20 It 
+represents the ultimate value-growth hybrid in the semiconductor space. 
+3. CoreWeave, Inc. (CRWV) 
+Having recently executed its public listing on the Nasdaq in March 2025, CoreWeave is 
+aggressively disrupting the traditional cloud oligopoly.50 The company offers highly specialized, 
+GPU-accelerated cloud infrastructure natively designed from the ground up for artificial 
+intelligence workloads. CoreWeave positions itself strictly between the foundational AI models 
+and the bare metal silicon, optimizing inference and training speeds to degrees unattainable by 
+legacy hyperscalers.51 
+In the first quarter of 2026, CoreWeave reported revenue of $2.08 billion, representing an 
+explosive 112% year-over-year growth rate that surpassed market estimates.52 Although the 
+company reported a net loss of $740 million (or $1.40 per share) as a direct result of massive 
+capital expenditure requirements to secure GPUs and power infrastructure, its operational 
+metrics demonstrate profound underlying profitability.51 Adjusted EBITDA reached $1.16 billion, 
+representing a highly profitable 56% operating margin at the unit economics level.51 
+The most explosive metric within CoreWeave's financial disclosure is the revenue backlog, 
+which surged 50% sequentially to an astonishing $99.4 billion.51 This metric represents 
+committed customer contracts, providing unprecedented revenue visibility. Backed by Altimeter 
+Capital's pre-IPO and continuing post-IPO sponsorship, CoreWeave is rapidly expanding its 
+footprint, having surpassed 1 GW of active power with a definitive pathway to exceed 8 GW by 
+2030.51 
+4. Vistra Corp. (VST) 
+The artificial intelligence revolution is ultimately constrained by physics, specifically the 
+generation and transmission of electricity. Vistra Corp has emerged as the apex beneficiary of 
+this macro dynamic, prompting elite funds like Appaloosa to increase holdings by 114% in Q1 
+2026.19 Operating a massive, diversified fleet of nuclear, natural gas, and renewable generation 
+assets, Vistra provides the continuous, uninterrupted base-load power required by 
+gigawatt-scale data centers. 
+Vistra's first-quarter 2026 financial results established unprecedented corporate records. Total 
+sales reached $5.64 billion, up approximately 43% year-over-year, while operating income 
+swung from a loss in the prior year to a massive $1.5 billion profit.55 Operating margins 
+expanded dramatically to 27%, an improvement from negative 3% in Q1 2025.55 Adjusted 
+EBITDA hit $1.49 billion, a record for any calendar first quarter in the company's history.55 
+Management formally forecasts that electrical load growth within the ERCOT (Texas) market will 
+compound at 5% to 6% annually through 2030, driven almost entirely by data center colocation 
+agreements and industrial electrification.57 Concurrently, Vistra is executing a highly aggressive 
+capital return program, having repurchased 169 million shares at an average cost of $37, 
+drastically reducing the outstanding float and engineering higher per-share intrinsic value for 
+remaining shareholders.55 
+5. GE Vernova (GEV) 
+Recently spun off as an independent entity, GE Vernova captures the entirety of the global 
+electrical grid's modernization and expansion supercycle. Coatue Management has 
+aggressively accumulated the equity, making GEV its second-largest holding at 7.73% of the 
+portfolio, recognizing that upgrading global transmission infrastructure is an absolute 
+prerequisite for the survival of the digital economy.26 
+The financial geometry of GE Vernova is highly compelling and demonstrates massive 
+operational leverage. For the first quarter of 2026, GAAP revenues reached $9.3 billion (a 16% 
+year-over-year increase), while total orders skyrocketed to $18.3 billion, representing a 71% 
+organic increase.58 This parabolic order velocity pushed the total equipment and services 
+backlog to an astronomical $163 billion.59 Net income reached $4.7 billion, generating a net 
+income margin of 50.9%, though this was heavily influenced by $4.5 billion in pre-tax M&A net 
+gains related to the acquisition of the remaining stake in Prolec GE.59 
+GE Vernova Q1 
+2026 Segment 
+Financials 
+Orders ($B) 
+Revenue ($B) 
+Segment 
+EBITDA 
+EBITDA Margin 
+Power Segment $10.0 
+$5.0 
+$811 Million 
+16.3% 
+Electrification 
+Segment 
+$7.1 
+$3.0 
+$528 Million 
+17.8% 
+Wind Segment 
+$1.2 
+$1.4 
+$(382) Million 
+(26.7%) 
+Source: GE Vernova Q1 2026 Earnings Disclosures 59 
+The Power segment alone signed 21 GW of new gas equipment contracts and slot reservations 
+during the quarter, ensuring deeply visible, long-cycle revenue streams that make GEV an 
+exceptional industrial-technology hybrid equity.59 
+6. TransDigm Group (TDG) 
+For investors seeking non-megacap companies possessing absolute pricing monopolies, 
+TransDigm Group is unparalleled. The company manufactures highly engineered, proprietary 
+aerospace components. Due to severe regulatory burdens and extreme switching costs, 
+TransDigm operates effectively as a sole-source supplier for the vast majority of its aftermarket 
+parts, allowing it to generate software-like profit margins within a heavy industrial sector. 
+Steve Cohen’s Point72 Asset Management recognized this unique dynamic, establishing a 
+massive new $336.2 million position in Q1 2026.38 Fundamental results heavily justify this 
+allocation: Q1 FY2026 revenue rose 13.9% year-over-year to $2.28 billion, with defense 
+revenue accelerating at a 7% rate.61 The company subsequently raised its full-year 2026 
+revenue guidance to a midpoint of $9.94 billion and adjusted EPS guidance to $38.38.61 With an 
+"EBITDA As Defined" margin routinely exceeding 52% and a corporate history of declaring 
+massive special dividends funded by aggressive debt optimization, TransDigm offers an 
+explosive compounding capability entirely uncorrelated to the volatile semiconductor cycle.62 
+7. Natera, Inc. (NTRA) 
+Natera represents the crown jewel of Stanley Druckenmiller's Duquesne Family Office portfolio, 
+comprising roughly 20% of his entire 13F asset base following a massive 22% position increase 
+in Q1 2026.10 The company specializes in advanced cell-free DNA testing, dominating the 
+non-invasive prenatal testing (NIPT) and personalized oncology monitoring markets. 
+In the first quarter of 2026, Natera generated total revenues of $696.6 million, representing a 
+38.8% year-over-year increase that easily surpassed consensus estimates of $617.2 million.65 
+Total diagnostic test volumes processed exceeded 1 million for the quarter (an 18.5% increase), 
+driven heavily by a 54.4% volume surge in highly lucrative oncology tests.66 The company 
+achieved positive cash inflow of $11.8 million for the quarter and raised its 2026 annual revenue 
+guidance by $120 million to a new range of $2.74 billion to $2.82 billion.66 While Natera currently 
+reports a GAAP net loss (EPS of -$0.60) as it heavily scales its clinical trial footprint and 
+international expansion, the sheer volume growth and high gross margins (64.7%) indicate a 
+definitive pathway to profound, long-term profitability, structurally validating Druckenmiller's 
+aggressive portfolio concentration.66 
+8. Eaton Corporation plc (ETN) 
+Eaton Corporation is a global intelligent power management company that serves as the critical 
+intermediary between raw electricity generation and end-user consumption. Like GE Vernova 
+and Vistra, Eaton operates as an indispensable component of the data center supply chain, 
+manufacturing the uninterruptible power supplies (UPS), specialized switchgear, and thermal 
+management systems that keep global server farms operational. 
+First-quarter 2026 financial disclosures reported record adjusted earnings per share of $2.81, up 
+from a GAAP EPS of $2.22, on 17% total revenue growth.69 The defining metric for Eaton in this 
+quarter was an astounding 240% increase in data center orders, definitively validating the 
+macroeconomic thesis that precision power management is currently the tightest bottleneck in 
+the global technology infrastructure rollout.71 Management subsequently raised its full-year 2026 
+organic growth guidance to 10%, anticipating full-year adjusted EPS between $13.05 and 
+$13.50.70 Supported heavily by Coatue Management and broader institutional capital, Eaton is 
+an explosive yet highly durable industrial equity.29 
+9. Lam Research Corporation (LRCX) 
+Lam Research provides the foundational equipment required to fabricate the very 
+semiconductors driving the AI revolution. As a major provider of wafer fabrication equipment, 
+specifically specializing in complex etching technology, Lam Research benefits directly from the 
+capital expenditures of companies like TSMC and Intel. Coatue Management significantly 
+increased its position in Lam Research during the quarter, elevating it to 7.39% of its total 
+portfolio.29 
+For the quarter ended March 29, 2026, Lam Research reported total revenue of $5.84 billion, 
+representing a 9% sequential increase.72 The company operates with tremendous efficiency, 
+posting a non-GAAP gross margin of 49.9%, a non-GAAP operating margin of 35.0%, and 
+non-GAAP diluted EPS of $1.47.72 Over the past five years, Lam Research has compounded 
+sales at a 10.3% annual growth rate and boasts a staggering five-year average return on 
+invested capital (ROIC) of 64.2%, placing it among the absolute best capital allocators in the 
+entire semiconductor sector.73 Trading at a forward P/E ratio of approximately 39.7x following an 
+86.6% stock surge over the preceding six months, the market is pricing in sustained, long-term 
+equipment demand from global foundry expansions.73 
+10. Nu Holdings Ltd. (NU) 
+To introduce explosive geographic and sector diversification away from pure United States 
+hardware technology, Nu Holdings represents a massive opportunity in Latin American financial 
+technology. Operating as Nubank, the company is systematically dismantling the legacy banking 
+oligopolies in Brazil, Mexico, and Colombia through aggressive digitalization and artificial 
+intelligence integration. 
+In the first quarter of 2026, Nu Holdings reported record revenue of $5.32 billion, representing a 
+massive expansion from the $3.37 billion generated a year prior.74 Net income skyrocketed to 
+$871 million, reflecting a 41% year-over-year increase.74 The company generated an EPS of 
+$0.18, slightly missing the $0.19 consensus, which triggered a brief post-earnings selloff, 
+creating a highly attractive entry valuation.75 The underlying metrics remain pristine: net interest 
+income surged 61% year-over-year to $3.25 billion, the efficiency ratio improved to a stellar 
+17.6%, and the credit book expanded by 40% year-over-year to $37.2 billion.74 With a PEG ratio 
+of just 0.54, Nu Holdings provides explosive, highly profitable growth outside the traditional U.S. 
+mega-cap sphere.74 
+The "All-In" Allocation: Selecting the Singular 
+Explosive Catalyst 
+The portfolio architecture defined above features deep geographic diversity through the Indian 
+Nifty Next 50, an impregnable mega-cap anchor in Nvidia, and a highly concentrated technology 
+index in XLK. The final mandate requires the selection of a single, highly explosive 
+non-megacap equity from the curated decile to receive aggressive, concentrated capital—an 
+"all-in" allocation. The objective is to capture the explosive, asymmetric upside akin to the 
+historical movements witnessed in early-stage semiconductor entities during late 2024 and 
+2025. 
+When rigorously filtering the decile of high-conviction equities for maximum explosive potential, 
+balancing unassailable structural moats with rapid revenue acceleration, the ultimate selection 
+distills down to CoreWeave (CRWV). 
+The Structural Case for CoreWeave (CRWV) 
+While Vistra (VST) and Micron (MU) present exceptional cases based on absolute valuation 
+compression and infrastructure necessity, CoreWeave provides the purest, most undiluted 
+exposure to the exact frontier of artificial intelligence scaling. It represents the exact profile of 
+the hyper-growth opportunities that existed in the hardware space prior to their maturity into 
+mega-caps. 
+1.​ Unprecedented Backlog Dynamics: CoreWeave’s transition from a niche GPU operator 
+to a primary cloud provider specifically engineered for AI workloads has generated a 
+revenue backlog of $99.4 billion as of Q1 2026.51 This is not merely a pipeline of projected 
+or theoretical revenue; these are contractually committed customer obligations.51 This 
+metric provides an almost unparalleled degree of revenue visibility for a company of its 
+size, entirely de-risking the demand side of the macroeconomic equation.51 
+2.​ Market Capitalization and Scale Asymmetry: Operating at a market capitalization of 
+roughly $58.59 billion, CoreWeave occupies the optimal "Goldilocks" zone.79 It is large 
+enough to secure massive debt financing and execute gigawatt-scale infrastructure 
+deployments, yet small enough to offer true multi-bagger upside potential, directly fulfilling 
+the strategic requirement to avoid saturated trillion-dollar mega-caps.51 
+3.​ Pristine Margin Profile: Despite reporting a GAAP net loss due to the aggressive, 
+front-loaded capital expenditures required to physically build data centers and acquire 
+GPUs, CoreWeave’s operational unit economics are incredibly lucrative. The company’s 
+Adjusted EBITDA margin sits at an incredible 56%, generating $1.16 billion in Adjusted 
+EBITDA on $2.08 billion in revenue during the quarter.51 As the physical data centers are 
+completed and rapid depreciation schedules normalize, this underlying unit profitability will 
+flow directly and forcefully to the bottom line.51 
+4.​ Institutional Validation and Strategic Positioning: Heavy sponsorship by specialized, 
+aggressive technology growth funds like Altimeter Capital definitively validates the 
+execution capability of the management team.15 More importantly, CoreWeave's strategic 
+positioning isolates it from software risk. By acting as the intermediary infrastructure layer 
+between the foundational AI models and bare-metal silicon, CoreWeave ensures that 
+regardless of which software company ultimately wins the artificial intelligence platform 
+war, CoreWeave will perpetually collect the infrastructure rent.51 
+Strategic Synthesis and Capital Deployment 
+The financial ecosystem in the latter half of 2026 is defined by a rapid, systemic transition of 
+institutional capital away from the most heavily capitalized entities and toward the infrastructure, 
+power generation, and specialized hardware components that physically enable the artificial 
+intelligence revolution. An exhaustive analysis of Q1 2026 13F institutional disclosures confirms 
+that sophisticated, alpha-generating asset managers—ranging from David Tepper and Stanley 
+Druckenmiller to Philippe Laffont—are aggressively rotating into these exact structural 
+bottlenecks. 
+For the portfolio architecture required, anchoring the United States technology exposure with 
+the Technology Select Sector SPDR Fund (XLK) provides a superior, purified beta compared to 
+the broader, consumer-diluted NASDAQ-100. By complementing this index and an existing 
+Indian-market Nvidia position with the ten highly-vetted equities outlined above—encompassing 
+memory constraints (Micron), power generation monopolies (Vistra, GE Vernova), aerospace 
+pricing power (TransDigm), and clinical diagnostics (Natera)—the portfolio achieves profound 
+structural resilience and hyper-growth exposure. Finally, deploying the most aggressive capital 
+tranche into CoreWeave isolates the purest, most explosive vein of the artificial intelligence 
+supercycle, optimizing the probability of asymmetric, transformative portfolio expansion over the 
+coming horizons. 
+Works cited 
+1.​ List of Section 13F Securities - SEC.gov, accessed on May 17, 2026, 
+https://www.sec.gov/files/investment/13flist2026q1.pdf 
+2.​ Latest 13F Filings - WhaleWisdom, accessed on May 17, 2026, 
+https://whalewisdom.com/filing/latest_filings 
+3.​ Invesco QQQ ETF Performance, accessed on May 17, 2026, 
+https://www.invesco.com/qqq-etf/en/performance.html 
+4.​ XLK: State Street® Technology Select Sector SPDR® ETF, accessed on May 17, 
+2026, 
+https://www.ssga.com/us/en/intermediary/etfs/state-street-technology-select-secto
+r-spdr-etf-xlk 
+5.​ State Street® Technology Select Sector SPDR® ETF XLK Portfolio - Morningstar, 
+accessed on May 17, 2026, https://www.morningstar.com/etfs/xmex/xlk/portfolio 
+6.​ State Street Technology Select Sector SPDR ETF ( XLK) - Price History - Digrin, 
+accessed on May 17, 2026, https://www.digrin.com/stocks/detail/XLK/price 
+7.​ 13F Filings - Fintel.io, accessed on May 17, 2026, https://fintel.io/latest-13f-filings 
+8.​ HedgeFollow: Follow Hedge Funds & Insiders using 13F filings, accessed on May 
+17, 2026, https://hedgefollow.com/ 
+9.​ DUQUESNE FAMILY OFFICE LLC Top 13F Holdings - WhaleWisdom, accessed 
+on May 17, 2026, https://whalewisdom.com/filer/duquesne-family-office-llc 
+10.​Duquesne Family Office Portfolio | Stanley Druckenmiller 13F Holdings & Trades, 
+accessed on May 17, 2026, 
+https://hedgefollow.com/funds/Duquesne+Family+Office 
+11.​Appaloosa Portfolio | David Tepper 13F Holdings & Trades - HedgeFollow, 
+accessed on May 17, 2026, https://hedgefollow.com/funds/Appaloosa 
+12.​Coatue Management Llc Portfolio Holdings - Fintel, accessed on May 17, 2026, 
+https://fintel.io/i/coatue-management-llc 
+13.​TIGER GLOBAL MANAGEMENT LLC Top 13F Holdings - WhaleWisdom, 
+accessed on May 17, 2026, 
+https://whalewisdom.com/filer/tiger-global-management-llc 
+14.​Bill Ackman Portfolio (2026 Q1) - Pershing Square Capital Management Holdings 
+13F, accessed on May 17, 2026, 
+https://valuesider.com/guru/bill-ackman-pershing-square-capital-management/port
+folio 
+15.​ALTIMETER CAPITAL MANAGEMENT, LP Top 13F Holdings - WhaleWisdom, 
+accessed on May 17, 2026, 
+https://whalewisdom.com/filer/altimeter-capital-management-llc 
+16.​David Tepper Portfolio (2026 Q1) - Appaloosa Management Holdings 13F - 
+Valuesider, accessed on May 17, 2026, 
+https://valuesider.com/guru/david-tepper-appaloosa-management/portfolio 
+17.​APPALOOSA LP Top 13F Holdings - WhaleWisdom, accessed on May 17, 2026, 
+https://whalewisdom.com/filer/appaloosa-management-lp 
+18.​Appaloosa trims stake in Microsoft, piles up on Micron and exits American Airlines 
+in Q1 moves | Seeking Alpha, accessed on May 17, 2026, 
+https://seekingalpha.com/news/4594068-appaloosa-trims-stake-in-microsoft-piles-
+up-on-micron-and-exits-american-airlines-in-q1-moves 
+19.​David Tepper Portfolio - Appaloosa LP Holdings - Stockcircle, accessed on May 
+17, 2026, https://stockcircle.com/portfolio/david-tepper 
+20.​SanDisk Soars 411% This Year Yet Wall Street Forecasts 9x PE. Why Are 
+Memory Stocks Getting Cheaper as They Rise? When Will the Memory Cycle 
+Peak?, accessed on May 17, 2026, 
+https://www.tradingkey.com/analysis/stocks/us-stocks/261902736-sandisk-micron-
+memory-stock-us-ai-chip-tradingkey 
+21.​Bill Ackman’s Pershing Square discloses new stake in Microsoft in Q1 
+(MSFT:NASDAQ), accessed on May 17, 2026, 
+https://seekingalpha.com/news/4594141-bill-ackmans-pershing-square-discloses-
+new-stake-in-microsoft-in-q1 
+22.​Bill Ackman Adds Microsoft Stake While Slashing Alphabet Position in Latest 
+Pershing Square 13F, accessed on May 17, 2026, 
+https://www.quiverquant.com/news/Bill%2BAckman%2BAdds%2BMicrosoft%2BSt
+ake%2BWhile%2BSlashing%2BAlphabet%2BPosition%2Bin%2BLatest%2BPersh
+ing%2BSquare%2B13F 
+23.​Gates' foundation dumps Microsoft as Bill Ackman loads up, accessed on May 17, 
+2026, 
+https://moneywise.com/news/investing/bill-gates-foundation-microsoft-stock-bill-ac
+kman-pershing-square-capital 
+24.​Bill Ackman moves into Microsoft, with the size to be disclosed today, accessed on 
+May 17, 2026, 
+https://thenextweb.com/news/ackman-pershing-square-microsoft-stake-capex 
+25.​Ackman, Loeb take different routes on tech bets in early 2026, accessed on May 
+17, 2026, 
+https://www.globalbankingandfinance.com/ackman-loeb-take-different-routes-tech-
+bets-early-2026/ 
+26.​Coatue Management Llc 13F - SensaMarket, accessed on May 17, 2026, 
+https://www.sensamarket.com/institutional-investor/manager/0001135730-coatue-
+management-llc 
+27.​Coatue adds ASML, exits Chagee, boosts NuBank stake, among Q1 trades 
+(CHA:NASDAQ), accessed on May 17, 2026, 
+https://seekingalpha.com/news/4594102-coatue-adds-asml-exits-chagee-boosts-n
+ubank-stake-among-q1-trades 
+28.​4,612 Shares in Applied Materials, Inc. $AMAT Acquired by Abacus Wealth 
+Partners LLC, accessed on May 17, 2026, 
+https://www.marketbeat.com/instant-alerts/filing-4612-shares-in-applied-materials-i
+nc-amat-acquired-by-abacus-wealth-partners-llc-2026-05-17/ 
+29.​COATUE MANAGEMENT LLC Top 13F Holdings - WhaleWisdom, accessed on 
+May 17, 2026, https://whalewisdom.com/filer/coatue-management-llc 
+30.​Chase Coleman III Portfolio (2026 Q1) - Tiger Global Management Holdings 13F - 
+Valuesider, accessed on May 17, 2026, 
+https://www2.valuesider.com/guru/chase-coleman-tiger-global-management/portfo
+lio 
+31.​Tiger Global takes new position in Intel; adds to Broadcom, Nvidia among Q1 
+moves (MSFT:NASDAQ), accessed on May 17, 2026, 
+https://seekingalpha.com/news/4594044-tiger-global-takes-new-position-in-intel-a
+dds-to-broadcom-nvidia-among-q1-moves 
+32.​Tiger Global Management Holdings - Portfolio - Stockcircle, accessed on May 17, 
+2026, https://stockcircle.com/portfolio/tiger-global 
+33.​$3B Stanley Druckenmiller Portfolio / Duquesne Family Office LLC - Stockcircle, 
+accessed on May 17, 2026, https://stockcircle.com/portfolio/stanley-druckenmiller 
+34.​Michael Burry Thinks The AI Boom Is Another Dot Com Bubble And Investors Are 
+Sleepwalking To Disaster - Stocks Down Under, accessed on May 17, 2026, 
+https://stocksdownunder.com/michael-burry-ai-boom-another-dot-com-bubble/ 
+35.​Michael Burry Scion Firm Eyeing 3 Beaten-Down Software Giants for a Rebound - 
+Tokenist, accessed on May 17, 2026, 
+https://tokenist.com/michael-burry-scion-asset-management-adobe-autodesk-veev
+a-rebound/ 
+36.​Steven A. Cohen - Point72 Asset Management - 2026 13F Holdings, 
+Performance, and AUM, accessed on May 17, 2026, 
+https://www.insidermonkey.com/hedge-fund/point72+asset+management/750/ 
+37.​Steve Cohen's Point72 Is Aggressively Buying These 3 Stocks. Here's Why 
+They're Worth a Closer Look - 24/7 Wall St., accessed on May 17, 2026, 
+https://247wallst.com/investing/2026/04/21/steve-cohens-point72-is-aggressively-
+buying-these-3-stocks-heres-why-theyre-worth-a-closer-look/ 
+38.​Steve Cohen's Point72 scoops up $336M in blue-chip dividend stock - TheStreet, 
+accessed on May 17, 2026, 
+https://www.thestreet.com/investing/steve-cohens-point72-scoops-up-336-million-i
+n-blue-chip-transdigm-tdg-dividend-stock 
+39.​Broadcom Inc. Announces First Quarter Fiscal Year 2026 Financial Results and 
+Quarterly Dividend, accessed on May 17, 2026, 
+https://investors.broadcom.com/news-releases/news-release-details/broadcom-inc
+-announces-first-quarter-fiscal-year-2026-financial 
+40.​Broadcom vs Microsoft. Both Are Winning the AI Race. Only One Is Priced Like It, 
+accessed on May 17, 2026, 
+https://247wallst.com/investing/2026/05/15/broadcom-vs-microsoft-both-are-winni
+ng-the-ai-race-only-one-is-priced-like-it/ 
+41.​AVGO 2026 Q1 Earnings Call - Broadcom Inc. Stock Price: Quote, Forecast, 
+Splits & News (AVGO), accessed on May 17, 2026, 
+https://www.perplexity.ai/finance/AVGO/earnings 
+42.​Broadcom Inc. Announces First Quarter Fiscal Year 2026 Financial Results and 
+Quarterly Dividend - PR Newswire, accessed on May 17, 2026, 
+https://www.prnewswire.com/news-releases/broadcom-inc-announces-first-quarter
+-fiscal-year-2026-financial-results-and-quarterly-dividend-302704490.html 
+43.​Broadcom PE Ratio 2012-2026 | AVGO - Macrotrends, accessed on May 17, 
+2026, https://www.macrotrends.net/stocks/charts/AVGO/broadcom/pe-ratio 
+44.​Stanley Druckenmiller's Duquesne initiates stake in AVGO, dumps GOOGL 
+among Q1 moves - Seeking Alpha, accessed on May 17, 2026, 
+https://seekingalpha.com/news/4594092-stanley-druckenmillers-duquesne-initiate
+s-stake-in-avgo-dumps-googl-among-q1-moves 
+45.​Micron Technology, Inc. Reports Results for the Second Quarter of Fiscal 2026, 
+accessed on May 17, 2026, 
+https://investors.micron.com/news-releases/news-release-details/micron-technolo
+gy-inc-reports-results-second-quarter-fiscal-2026 
+46.​Micron Technology (MU) Earnings: Latest Report, Earnings Call & Financials, 
+accessed on May 17, 2026, https://public.com/stocks/mu/earnings 
+47.​Micron Technology Q1 FY 2026 Sets Records; Strong Q2 Outlook - The Futurum 
+Group, accessed on May 17, 2026, 
+https://futurumgroup.com/insights/micron-technology-q1-fy-2026-sets-records-stro
+ng-q2-outlook/ 
+48.​MU Stock | Micron Technology, Inc Q2 2026 Earnings Call - YouTube, accessed 
+on May 17, 2026, https://www.youtube.com/watch?v=gFUVUBh36no 
+49.​Agentic AI Craze Drives Significant Increase in CPU Demand, But Morgan Stanley 
+Pours Cold Water: Don’t Follow the Trend to Buy Intel, AMD., accessed on May 
+17, 2026, 
+https://www.tradingkey.com/analysis/stocks/us-stocks/261902902-agentic-ai-claud
+e-anthropic-cpu-gpu-openclaw-nvidia-amd-sndk-tradingkey 
+50.​CoreWeave - Investor Relations, accessed on May 17, 2026, 
+https://investors.coreweave.com/overview/default.aspx 
+51.​Financials - Quarterly Results - CoreWeave, accessed on May 17, 2026, 
+https://investors.coreweave.com/financials/quarterly-results/default.aspx 
+52.​CoreWeave Inc Stock Price Today | NASDAQ: CRWV Live - Investing.com, 
+accessed on May 17, 2026, https://www.investing.com/equities/coreweave 
+53.​Move Over Nvidia, Taiwan Semiconductor, and Micron. Brad Gerstner's Altimeter 
+Capital Just Gave Investors 2,999,536 Reasons to Check Out the Hottest Artificial 
+Intelligence (AI) IPO Stock of 2025 | The Motley Fool, accessed on May 17, 2026, 
+https://www.fool.com/investing/2025/06/05/after-selling-nvidia-taiwan-semiconduct
+or-and-micr/ 
+54.​CoreWeave Reports Strong First Quarter 2026 Results, accessed on May 17, 
+2026, 
+https://investors.coreweave.com/news/news-details/2026/CoreWeave-Reports-Str
+ong-First-Quarter-2026-Results/ 
+55.​Can Vistra Stock Reach $190? The Q1 Report Makes the Bull Case ..., accessed 
+on May 17, 2026, 
+https://www.tikr.com/blog/can-vistra-stock-reach-190-the-q1-report-makes-the-bull-
+case-more-credible 
+56.​Why Vistra (VST) Is Down 8.2% After Record Q1 Results And Investment-Grade 
+Upgrades – And What's Next, accessed on May 17, 2026, 
+https://simplywall.st/stocks/us/utilities/nyse-vst/vistra/news/why-vistra-vst-is-down-
+82-after-record-q1-results-and-invest 
+57.​VST Q1-2026 Earnings Call - Alpha Spread, accessed on May 17, 2026, 
+https://www.alphaspread.com/security/nyse/vst/investor-relations/earnings-call/q1-
+2026 
+58.​GE Vernova reports first quarter 2026 financial results and raises 2026 guidance, 
+accessed on May 17, 2026, 
+https://www.gevernova.com/news/press-releases/ge-vernova-reports-first-quarter-
+2026-financial 
+59.​GE Vernova reports first quarter 2026 financial results and raises ..., accessed on 
+May 17, 2026, 
+https://www.gevernova.com/sites/default/files/gev_webcast_pressrelease_042220
+26.pdf 
+60.​GE Vernova Releases First Quarter 2026 Financial Results, accessed on May 17, 
+2026, 
+https://www.gevernova.com/news/articles/ge-vernova-releases-first-quarter-2026-f
+inancial-results 
+61.​TransDigm Q1 FY2026: Revenue Up 14%, Guidance Raised After Strong Quarter, 
+accessed on May 17, 2026, 
+https://www.tikr.com/blog/transdigm-q1-fy2026-revenue-up-14-guidance-raised-aft
+er-strong-quarter 
+62.​TDG Q1-2026 Earnings Call - Alpha Spread, accessed on May 17, 2026, 
+https://www.alphaspread.com/de/security/nyse/tdg/investor-relations/earnings-call/
+q1-2026 
+63.​FY 2026 Q1 Earnings Call - Inverstor Relations | TransDigm Group Inc., accessed 
+on May 17, 2026, 
+https://transdigmgroupinc.gcs-web.com/static-files/1894fdd7-e962-4f11-8123-e761
+db8d25ce 
+64.​TransDigm Group (TDG) Investor Relations, Earnings Summary & Outlook - 
+Quartr, accessed on May 17, 2026, 
+https://quartr.com/companies/transdigm-group-incorporated_4692 
+65.​Financials - Quarterly Results - Natera, Inc. | Investor Relations, accessed on May 
+17, 2026, https://investor.natera.com/financials/quarterly-results/default.aspx 
+66.​Natera Reports First Quarter 2026 Financial Results - Business Wire, accessed 
+on May 17, 2026, 
+https://www.businesswire.com/news/home/20260507101707/en/Natera-Reports-Fi
+rst-Quarter-2026-Financial-Results 
+67.​Earnings call transcript: Natera Inc. sees mixed Q1 2026 results; stock drops - 
+Investing.com, accessed on May 17, 2026, 
+https://www.investing.com/news/transcripts/earnings-call-transcript-natera-inc-see
+s-mixed-q1-2026-results-stock-drops-93CH-4677404 
+68.​Why Natera (NTRA) Is Down 5.9% After Raising 2026 Guidance But Posting a 
+Wider Q1 Loss, accessed on May 17, 2026, 
+https://simplywall.st/stocks/us/pharmaceuticals-biotech/nasdaq-ntra/natera/news/
+why-natera-ntra-is-down-59-after-raising-2026-guidance-but-p 
+69.​Eaton Reports Record First Quarter 2026 Results, with Accelerating Growth in 
+Sales, Orders and Backlog, and Raises 2026 Organic Growth Guidance to 10% 
+from 8% at the Midpoint, accessed on May 17, 2026, 
+https://www.eaton.com/us/en-us/company/news-insights/news-releases/2026/eato
+n-reports-record-first-quarter-2026-results.html 
+70.​Eaton Reports Record First Quarter 2026 Results, with Accelerating Growth in 
+Sales, Orders and Backlog, and Raises 2026 Organic Growth Guidance to 10% 
+from 8% at the Midpoint, accessed on May 17, 2026, 
+https://www.eaton.com/content/dam/eaton/company/investor-relations/quarterly-ea
+rnings/filings/2026/q1/q1-2026-earnings-complete.pdf 
+71.​First Quarter 2026 Earnings Release - Eaton, accessed on May 17, 2026, 
+https://www.eaton.com/content/dam/eaton/company/investor-relations/quarterly-ea
+rnings/filings/2026/q1/q1-2026-analyst-presentation.pdf 
+72.​Lam Research Corporation Reports Financial Results for the Quarter Ended 
+March 29, 2026, accessed on May 17, 2026, 
+https://www.prnewswire.com/news-releases/lam-research-corporation-reports-fina
+ncial-results-for-the-quarter-ended-march-29-2026-302750629.html 
+73.​Lam Research (LRCX) Stock Analysis: 86.6% Rally, Valuation & Growth Outlook - 
+News and Statistics, accessed on May 17, 2026, 
+https://www.indexbox.io/blog/lam-research-stock-surges-866-in-six-months-valuati
+on-at-397x-forward-pe/ 
+74.​Earnings call transcript: Nu Holdings misses Q1 2026 EPS, stock steady - 
+Investing.com, accessed on May 17, 2026, 
+https://www.investing.com/news/transcripts/earnings-call-transcript-nu-holdings-mi
+sses-q1-2026-eps-stock-steady-93CH-4690902 
+75.​Nu Holdings stock slides after Q1 results growth disappoints - Seeking Alpha, 
+accessed on May 17, 2026, 
+https://seekingalpha.com/news/4593261-nu-holdings-stock-slides-after-q1-results-
+growth-disappoints 
+76.​Strong Q1 2026 for Nu Holdings (NYSE: NU) with net income 871.4M, accessed 
+on May 17, 2026, 
+https://www.stocktitan.net/sec-filings/NU/6-k-nu-holdings-ltd-current-report-foreign-
+issuer-757356f6147c.html 
+77.​accessed on May 17, 2026, 
+https://public.com/stocks/nu/earnings#:~:text=Nu%20Holdings%20(NU)%20Latest
+%20Earnings&text=Nu%20Holdings%20(NU)%20reported%20its,the%20same%2
+0quarter%20last%20year. 
+78.​Live: Nu Holdings Reports Q1 Earnings. Could Tonight Be the Start of a Rally?, 
+accessed on May 17, 2026, 
+https://247wallst.com/investing/2026/05/14/live-nu-holdings-reports-q1-earnings-c
+ould-tonight-be-the-start-of-a-rally/ 
+79.​CoreWeave: CRWV Stock Price Quote & News - Robinhood, accessed on May 
+17, 2026, https://robinhood.com/us/en/stocks/CRWV/ 
