@@ -42,7 +42,7 @@
 
 | Holding | Amount | Status |
 |---|---|---|
-| Reliance Industries | 26 shares, ~₹36K | Event play — exit on Jio IPO catalyst |
+| Reliance Industries | 26 shares, ~₹34.6K (P&L -₹1,239) | **v2.7: Exiting May-Aug 2026 via market sells; proceeds STP into QQQM.** Indirect RIL exposure continues via 3 of 4 SIPs. |
 
 ### US equity
 
@@ -92,22 +92,24 @@ In theory the cleanest route to US index exposure is an India-domiciled FoF (Mot
 
 **Verdict:** INDmoney direct US route is now *more reliable for execution* than India-domiciled FoFs despite higher friction. Forex + Schedule FA is a known cost; FoF route has hidden tail-risk in subscription rejection + premium volatility.
 
-**Primary pick:** XLK (0.08% TER, S&P 500 Technology sector — pure tech concentration, ~70 holdings, NVDA/AAPL/MSFT/AVGO dominant). Outperformed SPYG (~10% YTD) and QQQM (~11% YTD) significantly in 2026 (~22% YTD). Deployed as lump-sum STP from incentive windfalls, not monthly SIP — monthly slot is reserved for single-stock AVGO conviction. Note: AVGO is a top-5 holding in XLK — deliberate overlap accepted because AVGO has the strongest risk-adjusted return profile of any non-megacap AI stock (unanimous 4/4 institutional conviction across all research sources, positive 5-year bear case).
+**Primary pick:** QQQM (0.15% TER, Nasdaq 100 — 101 holdings, ~60% tech weight, top-10 = ~50%). Selected for higher trailing 5-yr returns (~18%/yr vs VUG ~15.5%/yr) driven by mega-cap tech leadership and AI capex cycle. Deployed as lump-sum STP from incentive windfalls + RIL exit proceeds, not monthly SIP — monthly slot reserved for single-stock AVGO conviction. AVGO is ~5% of QQQM — overlap with direct AVGO position accepted as deliberate AI-infra conviction. **Known gap accepted:** QQQM's Nasdaq-only filter structurally excludes NYSE-listed AI second-derivative names (ANET, ORCL, LLY). Plan: plug via direct single-stock positions in Phase 2 once monthly capacity scales — ANET (AI networking), ORCL (cloud AI), as ₹2-3K/mo each. Considered alternatives: VUG (rejected for this user — broader cap base and lower TER but trailing returns lagged ~2.5%/yr over 5 years; gap-plug strategy via direct stocks preferred over diluted ETF coverage); XLK (rejected — too tech-concentrated at 86% semis+software+hardware; redundant with AVGO direct).
 
 ---
 
-## 5. Strategy v2.1 — Phased Architecture
+## 5. Strategy v2.7 — Phased Architecture
 
-### Phase 0 — Foundation (paid from September 2026 ₹87,500 incentive)
+### Phase 0 — Foundation (RIL exit + September 2026 ₹87,500 incentive)
 
-By September, the monthly ₹3K/mo liquid fund SIP (started May 2026) will have accumulated ~₹12K. September incentive tops this up:
+**RIL early exit seeds QQQM (May-Aug 2026):** Sell 26 RIL shares at small loss (~₹1,239), STP ~₹34.6K proceeds into QQQM over 4 months at ~₹8-9K/month. Rationale: Jio IPO catalyst has been "imminent" since 2023 with no committed date; SIPs (3 of 4 hold RIL — Nippon P&I top holding, Invesco Mid Cap 9%, Quant Small Cap 8.4%) maintain indirect RIL exposure automatically. Direct position was redundant concentration.
+
+**September 2026 incentive (₹87,500) split:** By September, monthly ₹3K/mo liquid fund SIP (started May 2026) has accumulated ~₹12K. Split:
 
 | Allocation | Amount | Purpose |
 |---|---|---|
 | Liquid fund top-up | ₹38,000 | Bring total liquid buffer to ~₹50K (₹12K from monthly SIPs + ₹38K top-up). 6.5% yield, 1-day accessible. |
-| STP into XLK via INDmoney | ₹49,500 | Spread over 4-6 months. Pure US tech ETF kicker (0.08% TER, S&P 500 Technology sector). |
+| STP into QQQM via INDmoney | ₹49,500 | Spread over 4-6 months. Nasdaq 100 — concentrated US tech-mega-cap exposure (0.15% TER, 101 holdings, ~60% tech weight). Higher trailing 5-yr returns than broader-growth alternatives. |
 
-**Repeat with March 2027 incentive:** half to top-up liquid fund, half to XLK STP.
+**Repeat with March 2027 incentive:** half to top-up liquid fund, half to QQQM STP.
 
 > **Why not park cash and wait for a crash?** SIP IS the crash-buying mechanism. The ₹5K/mo AVGO SIP automatically buys more units at a lower price when the stock drops — mechanically, without prediction or willpower. Cash sitting in a savings account at 3.5% while waiting for a crash costs ₹12-18K/yr in opportunity cost and almost never gets deployed (fear peaks exactly when valuations are lowest). Rupee-cost averaging is the systematic version of "buy the dip."
 
@@ -124,7 +126,7 @@ By September, the monthly ₹3K/mo liquid fund SIP (started May 2026) will have 
 | EPF | ₹3.6K | Employer-matched | 8.25% guaranteed — forced debt allocation |
 | **Total** | **₹27.5K + ₹3.6K** | | |
 
-**NVIDIA status:** No fresh monthly SIP. Existing units held. AVGO is the active US single-stock DCA position. NVIDIA + AVGO exposure also continues passively via XLK (deployed from incentives). Deliberate double-concentration in AVGO (direct + XLK) accepted — AVGO is the only stock with a positive bear-case floor at 5 years.
+**NVIDIA status:** No fresh monthly SIP. Existing units held. AVGO is the active US single-stock DCA position. NVIDIA + AVGO exposure also continues passively via QQQM (deployed from incentives + RIL exit proceeds — NVDA is ~10% of QQQM, AVGO is ~5%). Deliberate double-concentration in AVGO (direct + ~5% inside QQQM) accepted — AVGO is the only stock with a positive bear-case floor at 5 years.
 
 ### Phase 2 — Post-appraisal or job switch (~₹40K/mo target, excl. EPF)
 
@@ -133,19 +135,21 @@ By September, the monthly ₹3K/mo liquid fund SIP (started May 2026) will have 
 | India emerging large-cap | ₹8K | UTI Nifty Next 50 Index Fund (replaces Nippon P&I + adds India anchor) |
 | India small-cap | ₹5K | Quant Small Cap (continue) |
 | India mid-cap | ₹5K | Invesco Mid Cap (continue) |
-| US tech ETF | ₹10K | XLK via INDmoney (S&P 500 Tech, 0.08% TER) |
-| US single-stock | ₹8K | AVGO via INDmoney (continue DCA; reassess allocation vs adding a second stock like MRVL or ANET based on performance by Phase 2 entry) |
+| US tech ETF | ₹10K | QQQM via INDmoney (Nasdaq 100, 0.15% TER, ~60% tech weight, concentrated mega-cap exposure) |
+| US single-stock | ₹8K | AVGO via INDmoney (continue DCA; consider adding ANET (NYSE, AI networking — not in QQQM) or ORCL (NYSE, cloud AI — not in QQQM) as ₹2-3K/mo each to plug NYSE-listed AI gaps) |
 | Crisis hedge | ₹4K | SGB / Gold ETF |
 | **Total** | **₹40K** | **India 45% / US 45% / Gold 10%** |
 
-### Phase 3 — RIL Decision Point
+### Phase 3 — RIL Decision Point (RESOLVED in v2.6/v2.7 via early exit)
 
-Three scenarios (evaluate in order):
-1. **Jio IPO windfall exit:** If Jio lists and RIL pops significantly (≥30% from current), book profits → STP into XLK via INDmoney over 6 months
-2. **Analyst target exit:** If RIL hits ₹1,900-2,000 within ~1 year (analyst consensus range), partial or full exit
-3. **Long-term hold:** If neither trigger fires, hold as long-term AI/digital infra play — Reliance is building India's AI backbone (Jio AI Cloud, data centers, NVIDIA partnership)
+**v2.7 decision (carries over from v2.6 with ETF target update):** Exit 26 RIL shares now (May 2026) at small loss (-₹1,239), STP proceeds into QQQM over 4 months. Catalyst (Jio IPO) is indefinitely delayed and the position became drift dressed up as patience. Indirect RIL exposure continues automatically via SIPs (Nippon P&I top holding, Invesco Mid Cap 9%, Quant Small Cap 8.4%).
 
-**Don't average up.** Current 26 shares is the position. Evaluate, don't accumulate.
+**Historical scenarios that informed the decision (kept for context):**
+1. **Jio IPO windfall exit:** Pre-v2.6, plan was to hold until Jio listing pop ≥30%. Catalyst slipped past acceptable timing.
+2. **Analyst target exit:** RIL has not approached ₹1,900-2,000 range; no signal.
+3. **Long-term hold:** Reconsidered — "hold as AI infra play" was mission creep from the original Jio thesis. Indirect SIP exposure already provides the long-term India-AI bet without the direct concentration.
+
+**Reassessment trigger (post-exit):** If Jio IPO is officially announced with a committed date AND RIL has not yet rallied >15% on the news, re-enter with up to ₹50K direct position. Otherwise, stay clear of direct RIL.
 
 ### Phase 4 — Job switch / 1.5x salary (~₹70K+/mo)
 
@@ -172,12 +176,11 @@ Use a hard rule, not intuition:
 - **Redirect the ₹5K/mo to UTI Nifty Next 50 Index Fund**
 - **Don't redeem existing units** — let them ride. Only stop fresh contributions.
 
-### Reliance decision triggers
+### Reliance decision triggers (resolved by v2.6/v2.7 exit)
 
-1. **Jio IPO windfall:** RIL pops ≥30% from current on listing → book profits
-2. **Analyst target:** RIL hits ₹1,900-2,000 within ~1 year → partial/full exit
-3. **Long-term hold:** Neither fires → hold as India AI infrastructure play
-- **Don't average up.** 26 shares is the position.
+- **v2.7 action:** Exit all 26 shares May-Aug 2026 via market sells, STP proceeds into QQQM.
+- **Re-entry trigger:** Only if Jio IPO is officially announced with committed listing date AND RIL has not pre-rallied >15%. Then optionally take up to ₹50K position. Otherwise, stay clear of direct RIL.
+- **Indirect RIL exposure continues** automatically via SIPs (Nippon P&I, Invesco Mid Cap, Quant Small Cap).
 
 ### Anchor split when added
 
@@ -194,27 +197,25 @@ Use a hard rule, not intuition:
 
 ---
 
-## 7. Forward AVGO Exposure Simulation
+## 7. Forward AVGO Exposure Simulation (post-QQQM-swap)
 
-Phase 1 US allocation: ₹5K AVGO direct (~$60/mo at ₹84/$). XLK deployed from incentives (AVGO is ~15% of XLK):
+Phase 1 US allocation: ₹5K AVGO direct (~$60/mo at ₹84/$). QQQM deployed from RIL exit (May-Aug) + September incentive (AVGO is ~5% of QQQM, NVDA ~10%):
 
 | Vehicle | ~$/mo | AVGO inside | Effective AVGO |
 |---|---|---|---|
 | AVGO direct | ~$60 | 100% | $60 |
-| XLK (from incentive STP) | ~$590 lump/6mo | ~15% | ~$89/6mo |
-| **Total AVGO exposure** | | — | **~$60/mo + ~$15/mo amortized = ~$75/mo effective** |
+| QQQM (RIL exit + Sept STP) | ~$1,000 over 4-8mo | ~5% | ~$50/period |
+| **Total AVGO exposure** | | — | **~$60/mo direct + ~$6-12/mo amortized via QQQM** |
 
-**Phase 2 US allocation:** ₹10K XLK + ₹8K AVGO = ₹18K/mo (~$215/mo at ₹84/$):
+**Phase 2 US allocation:** ₹10K QQQM + ₹8K AVGO = ₹18K/mo (~$215/mo at ₹84/$):
 
 | Vehicle | ~$/mo | AVGO inside | Effective AVGO |
 |---|---|---|---|
 | AVGO direct | ~$95 | 100% | $95 |
-| XLK | ~$120 | ~15% | ~$18 |
-| **Total AVGO exposure** | **~$215** | — | **~$113 (53% of US allocation)** |
+| QQQM | ~$120 | ~5% | ~$6 |
+| **Total AVGO exposure** | **~$215** | — | **~$101 (47% of US allocation)** |
 
-**Implication:** Deliberate high-conviction AI infrastructure bet. AVGO appears in both direct DCA and inside XLK. This is intentional double-concentration — AVGO is the only stock with a positive 5-year bear case (+32%), VMware software revenue floor, and unanimous 4/4 institutional consensus. If concentration becomes uncomfortable:
-- Reduce direct AVGO to ₹5K/mo and redirect ₹3K to MRVL or ANET (adds AI networking diversification)
-- Or add VTI alongside XLK to dilute tech tilt
+**Implication:** AVGO concentration ~47% of US allocation — deliberate high-conviction AI infra bet. The remaining ~53% of US allocation is concentrated in QQQM's top-10 holdings (~50% of QQQM is in 10 mega-caps), so the *effective* concentration in mega-cap tech is high overall. QQQM is more concentrated at the top than broader-growth alternatives — accepted as a deliberate trailing-returns bet on continued mega-cap tech leadership. **NYSE gap to plug in Phase 2 via direct positions:** ANET (AI networking, ~₹2-3K/mo), ORCL (cloud AI, ~₹2-3K/mo). Optionally CEG (Nasdaq-listed, already in QQQM at ~1% — direct position would only be needed if user wants meaningful overweighting of the energy-AI thesis).
 
 ---
 
@@ -239,7 +240,8 @@ Phase 1 US allocation: ₹5K AVGO direct (~$60/mo at ₹84/$). XLK deployed from
 - **Term insurance:** Not needed today. Parents are independent. Revisit at marriage or if family situation changes.
 - **NPS:** Only useful if on old tax regime. Default is new regime in 2026 — most deductions don't apply. Check payslip.
 - **Real estate:** Premature. Wait until salary 2x+ current and Phase 2 architecture is running.
-- **Direct US stocks beyond AVGO:** One US single-stock conviction is the current limit. AVGO is the active bet (custom AI ASICs, networking, VMware software). Adding a second direct stock (e.g. MRVL, ANET, ALAB) requires salary to double AND AVGO position to be meaningfully profitable AND a clear non-overlapping thesis. Top candidates for second slot: MRVL (optical DSPs, $177), ANET (AI networking, $142), ALAB (PCIe retimers, $233).
+- **Direct US stocks beyond AVGO:** One US single-stock conviction is the current limit. AVGO is the active bet (custom AI ASICs, networking, VMware software). Adding a second direct stock requires salary to double AND AVGO position to be meaningfully profitable AND a clear non-overlapping thesis. Top candidates for second slot (in priority order, given QQQM's NYSE-listed-name structural exclusions): **ANET (AI networking, NYSE)** — not in QQQM, growing AI data-center share; **ORCL (cloud AI, NYSE)** — not in QQQM, enterprise AI workload growth; **MRVL (optical DSPs, Nasdaq, already in QQQM at small weight)** — fiber/AI infra play; **ALAB (PCIe retimers, Nasdaq, $233)** — niche AI compute connectivity; **CEG (energy-AI, Nasdaq, already in QQQM at ~1%)** — direct only if user wants overweight on energy-AI thesis.
+- **Direct RIL post-exit:** Stay clear unless Jio IPO is officially announced with committed listing date AND RIL has not pre-rallied >15% on the news. Then optionally take up to ₹50K position. Indirect SIP exposure (3 of 4 funds hold RIL) provides ongoing India-AI bet without direct concentration.
 - **Crypto, options, derivatives:** Not aligned with long-horizon compounding strategy. Skip.
 
 ---
@@ -286,8 +288,16 @@ This document is structured personal analysis based on publicly available 2026 i
 - Nasdaq-100 constituents — Wikipedia, SlickCharts
 - QQQ vs XLK ETF Comparison — ETF Database
 - XLK Holdings — StockAnalysis, State Street SSGA
+- VUG Holdings & Sector Breakdown — Stock Analysis, ETF Channel
+- VUG ETF Profile — Vanguard
+- VUG vs QQQM ETF Comparison — etf.com, PortfoliosLab, Dividend Vision
+- VOOG vs VUG comparison — Motley Fool May 2026
 - Nifty 500 vs S&P 500 10-yr study — Business Standard
 - Right way to compare India & US Market Returns — Weekend Investing
+
+### AVGO / single-stock research
+- May 15 2026 13F filings, major hedge funds (Berkshire, Tiger Global, Coatue, Citadel, others) — cross-validated by ChatGPT Deep Research, Gemini Deep Research, Claude Sonnet, Antigravity
+- AVGO Broadcom AI infrastructure moat — research compiled jarvis_data/Finance/ChatGPT_deep_research.md + gemini_research_extracted.txt
 
 ### Sector outlook
 - India's CapEx cycle: infrastructure, capital goods, power — Ventura
@@ -304,7 +314,9 @@ This document is structured personal analysis based on publicly available 2026 i
 
 | Date | Change |
 |---|---|
-| 2026-05-17 | **v2.5:** MRVL replaced by AVGO (Broadcom, ₹5K/mo) as active US single-stock DCA. Decision driven by cross-validated analysis across 4 independent AI sources (Antigravity, Claude Sonnet, Gemini Deep Research, ChatGPT): AVGO was the only stock achieving unanimous 4/4 consensus, has the deepest moat (VMware software floor + custom ASICs), and is the only candidate with a positive 5-year bear-case return (+32%). Deliberate overlap with XLK accepted. XLK deployed via incentive STP unchanged. |
+| 2026-05-18 | **v2.7:** **VUG replaced by QQQM** as primary US ETF. Rationale: higher trailing 5-yr returns (~18%/yr QQQM vs ~15.5%/yr VUG) driven by Nasdaq mega-cap tech concentration. Trade-off accepted: QQQM's Nasdaq-only filter structurally excludes NYSE-listed AI second-derivative names (ANET, ORCL, LLY) that VUG would have captured at index weight. Mitigation plan: add direct single-stock positions in Phase 2 — **ANET** (AI networking, NYSE) and **ORCL** (cloud AI, NYSE) as ₹2-3K/mo each once monthly capacity scales post-raise. v2.6 RIL exit decision unchanged — proceeds now STP into QQQM instead of VUG, same ₹8-9K/month cadence May-Aug 2026. AVGO concentration ~47% of US allocation unchanged (AVGO weight is ~5% inside both QQQM and VUG). |
+| 2026-05-18 | **v2.6:** (a) **XLK replaced by VUG** as primary US ETF — broader cap base (~150-200 holdings vs XLK's 70), lower TER (0.03% vs 0.08%), captures NYSE-listed AI second-derivative names (ANET, LLY, ORCL) that QQQM/XLK structurally exclude. Tradeoff: loses CEG (energy-AI, Nasdaq-listed → in QQQM, not VUG); will plug via direct CEG position in Phase 2 if needed. (b) **RIL early exit:** Sell 26 RIL shares at small loss (-₹1,239), STP ~₹34.6K proceeds into VUG over 4 months (May-Aug 2026). Rationale: Jio IPO catalyst indefinitely delayed; 3 of 4 SIPs already hold RIL (Nippon P&I top holding); direct position was redundant concentration that became drift dressed as patience. Re-entry only if Jio IPO is officially announced with committed date. (c) AVGO concentration drops from ~53% (XLK) to ~47% (VUG) of US allocation — slightly less concentrated; AVGO inside VUG is only ~5% weight vs ~15% inside XLK. *Superseded by v2.7 same day.* |
+| 2026-05-17 | **v2.5:** MRVL replaced by AVGO (Broadcom, ₹5K/mo) as active US single-stock DCA. Decision driven by cross-validated analysis across 4 independent AI sources (Antigravity, Claude Sonnet, Gemini Deep Research, ChatGPT) using May 15 2026 13F filings of major hedge funds: AVGO was the only stock achieving unanimous 4/4 consensus, has the deepest moat (VMware software floor + custom ASICs), and is the only candidate with a positive 5-year bear-case return (+32%). Deliberate overlap with XLK accepted. |
 | 2026-05-17 | **v2.4:** NVIDIA monthly SIP stopped. MRVL (Marvell Technology, ₹5K/mo) was the active US single-stock DCA. SPYG replaced by XLK. *Superseded by v2.5 same day.* |
 | 2026-05-16 | **v2.3:** Phase 1 finalised — UTI Nifty Next 50 raised to ₹4.5K/mo (started May 2026), Liquid fund reduced to ₹3K/mo (accumulates ~₹12K by Sept), NVIDIA stays ₹5K/mo. September incentive rebalanced: ₹38K liquid top-up (to reach ₹50K total) + ₹49.5K SPYG STP. |
 | 2026-05-15 | **v2.2:** Phase 1 revised — ₹12.5K NVIDIA SIP split into ₹5K NVIDIA + ₹5K liquid fund + ₹2.5K UTI Nifty Next 50. September incentive rebalanced: ₹30K liquid top-up + ₹57.5K SPYG STP. |
