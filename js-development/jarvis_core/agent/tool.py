@@ -181,6 +181,11 @@ class Tool(RegistryBase["Tool"]):
     description: ClassVar[str] = ""
     input_schema: ClassVar[Type[ToolInput]] = ToolInput
 
+    # STEAL #9 hook (Stage 3.4 permission engine). Tools that mutate state,
+    # touch the network, or execute arbitrary code MUST set this True so the
+    # permission engine gates them before invocation. Default False = safe.
+    requires_permission: ClassVar[bool] = False
+
     @abstractmethod
     async def invoke(self, tool_input: ToolInput) -> ToolResult:
         """
@@ -386,6 +391,29 @@ if __name__ == "__main__":
         print(f"  EchoTool.is_concurrency_safe       = {echo.is_concurrency_safe}")
         assert calc.is_concurrency_safe is True
         assert echo.is_concurrency_safe is False
+
+        # -- Permission flag (STEAL #9 hook prep) --------------------------
+
+        print(f"  CalculatorTool.requires_permission = {CalculatorTool.requires_permission}")
+        print(f"  EchoTool.requires_permission       = {EchoTool.requires_permission}")
+        assert CalculatorTool.requires_permission is False
+        assert EchoTool.requires_permission is False
+
+        # Subclass that opts in
+        class UnsafeShellInput(ToolInput):
+            command: str
+
+        @Tool.register("_smoketest_shell")
+        class UnsafeShellTool(Tool):
+            name = "_smoketest_shell"
+            description = "Smoke-test tool: opts into requires_permission."
+            input_schema = UnsafeShellInput
+            requires_permission = True
+            async def invoke(self, tool_input: UnsafeShellInput) -> ToolResult:
+                return ToolResult(output="never reached in smoke test")
+
+        assert UnsafeShellTool.requires_permission is True
+        print(f"  UnsafeShellTool.requires_permission = {UnsafeShellTool.requires_permission}")
 
         # -- Observation formatting ----------------------------------------
 
