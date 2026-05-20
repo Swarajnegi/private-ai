@@ -28,7 +28,7 @@
 
 ---
 
-## 2. Current Portfolio (as of 2026-05-13)
+## 2. Current Portfolio (as of 2026-05-18)
 
 ### Indian SIPs (₹15K/mo, 12% annual step-up)
 
@@ -38,22 +38,38 @@
 | Quant Small Cap | ₹5K/mo | Small-cap aggressive | Risk-on India |
 | Invesco Mid Cap | ₹5K/mo | Mid-cap growth | Risk-on India |
 
-### Direct stocks
+**Indian MF cumulative balance:** ~₹43,424 (current market value across the 3 SIPs as of 2026-05-18)
 
-| Holding | Amount | Status |
+### Direct stocks (India)
+
+| Holding | Status |
+|---|---|
+| Reliance Industries | **EXITED 2026-05-18.** Sold 26 shares, realized loss -₹1,239. Proceeds (~₹34.6K → ~$354 after forex) redirected to QQQM via INDmoney. Indirect RIL exposure continues via 3 of 4 SIPs. |
+
+### US equity (via INDmoney)
+
+| Holding | Invested | Source / Status |
 |---|---|---|
-| Reliance Industries | 26 shares, ~₹34.6K (P&L -₹1,239) | **v2.7: Exiting May-Aug 2026 via market sells; proceeds STP into QQQM.** Indirect RIL exposure continues via 3 of 4 SIPs. |
+| QQQM | $354.15 | Deployed 2026-05-18 from RIL exit proceeds (executed as near-lump rather than 4-month STP — deviates from v2.7 plan; user choice) |
+| NVIDIA | $470.37 | Pre-existing position + recent top-up. ~$295 (₹25K) came from sister, gifted specifically for an NVIDIA bet on 1-2 year horizon. Held in user's INDmoney account — ownership/economic claim is informal trust, not legally separated. |
+| **Total US** | **$824.52** | ≈ ₹69,200 at ₹84/$ |
 
-### US equity
+### EPF (forced debt allocation)
 
-| Holding | Amount | Status |
+| | Amount | Note |
 |---|---|---|
-| NVIDIA via INDmoney | 0.456 units, $102.58 invested, avg $225 | First tranche deployed |
-| NVIDIA via INDmoney (going forward) | ₹12.5K/mo | Starting June 2026 |
+| Monthly contribution | ₹3,600/mo | Employer-matched, 8.25% guaranteed |
+| Cumulative balance | TBD — check passbook | Off-book in this doc |
+
+### AVGO (planned, not yet initiated)
+
+Strategy v2.7 designates AVGO as the active monthly US single-stock DCA position (₹5K/mo). As of 2026-05-18, no AVGO purchase has been made — active US money has gone into NVIDIA top-ups and QQQM instead. Doc captures stated intent; execution has diverged.
 
 ### Portfolio characterization (honest)
 
-**Aggressive equity-dominant portfolio, growth-tilted, split ~60/30/10 India/US/Debt(EPF).** EPF (₹3,600/mo at 8.25% guaranteed) is the only non-equity allocation. In a 2008-style crisis every equity position drops 40-60% simultaneously. Strategy works because of family backstop + forced EPF debt cushion.
+**Aggressive equity-dominant portfolio, growth-tilted, split ~38/62 India MF / US equity by deployed capital today (₹43,424 vs ~₹69,200), with EPF as the only non-equity sleeve.** US allocation skew is intentional in spirit but heavier than v2.7 plan — NVIDIA alone is now $470 (~57% of US bucket) vs the planned passive-hold posture.
+
+**Open accounting question — sister's ₹25K:** Commingled in user's INDmoney NVIDIA position. Gains accrue legally to user (whoever owns the demat account), not to whose money was invested. Sister's claim is informal trust. If NVIDIA drops 30-50% in the 1-2 year window the user promised her, sister loses ₹7.5-12.5K with no formal recourse, and the family-relationship cost is real. **Not a strategy issue today** — flagged here so future decisions (Schedule FA filing, exit timing, eventual return-of-capital to sister) account for it.
 
 ---
 
