@@ -28,17 +28,18 @@
 
 ---
 
-## 2. Current Portfolio (as of 2026-05-18)
+## 2. Current Portfolio (as of 2026-05-21)
 
-### Indian SIPs (₹15K/mo, 12% annual step-up)
+### Indian SIPs (₹19.5K/mo, 12% annual step-up)
 
 | Fund | Amount | Style | Cycle exposure |
 |---|---|---|---|
 | Nippon India Power & Infra | ₹5K/mo | Sectoral / thematic | Infra capex cycle (rate-sensitive) |
 | Quant Small Cap | ₹5K/mo | Small-cap aggressive | Risk-on India |
 | Invesco Mid Cap | ₹5K/mo | Mid-cap growth | Risk-on India |
+| UTI Nifty Next 50 | ₹4.5K/mo | Index fund | Large-cap index anchor |
 
-**Indian MF cumulative balance:** ~₹43,424 (current market value across the 3 SIPs as of 2026-05-18)
+**Indian MF cumulative balance:** ~₹47,924 (current market value across the 4 SIPs as of 2026-05-21; includes first ₹4.5K UTI SIP execution)
 
 ### Direct stocks (India)
 
@@ -52,7 +53,7 @@
 |---|---|---|
 | QQQM | $354.15 | Deployed 2026-05-18 from RIL exit proceeds (executed as near-lump rather than 4-month STP — deviates from v2.7 plan; user choice) |
 | NVIDIA | $470.37 | Pre-existing position + recent top-up. ~$295 (₹25K) came from sister, gifted specifically for an NVIDIA bet on 1-2 year horizon. Held in user's INDmoney account — ownership/economic claim is informal trust, not legally separated. |
-| **Total US** | **$824.52** | ≈ ₹69,200 at ₹84/$ |
+| **Total US** | **$824.52** | ≈ ₹79,600 at ₹96.50/$ |
 
 ### EPF (forced debt allocation)
 
@@ -215,21 +216,21 @@ Use a hard rule, not intuition:
 
 ## 7. Forward AVGO Exposure Simulation (post-QQQM-swap)
 
-Phase 1 US allocation: ₹5K AVGO direct (~$60/mo at ₹84/$). QQQM deployed from RIL exit (May-Aug) + September incentive (AVGO is ~5% of QQQM, NVDA ~10%):
+Phase 1 US allocation: ₹5K AVGO direct (~$52/mo at ₹96.50/$). QQQM deployed from RIL exit (May-Aug) + September incentive (AVGO is ~5% of QQQM, NVDA ~10%):
 
 | Vehicle | ~$/mo | AVGO inside | Effective AVGO |
 |---|---|---|---|
-| AVGO direct | ~$60 | 100% | $60 |
-| QQQM (RIL exit + Sept STP) | ~$1,000 over 4-8mo | ~5% | ~$50/period |
-| **Total AVGO exposure** | | — | **~$60/mo direct + ~$6-12/mo amortized via QQQM** |
+| AVGO direct | ~$52 | 100% | $52 |
+| QQQM (RIL exit + Sept STP) | ~$871 over 4-8mo | ~5% | ~$44/period |
+| **Total AVGO exposure** | | — | **~$52/mo direct + ~$5-10/mo amortized via QQQM** |
 
-**Phase 2 US allocation:** ₹10K QQQM + ₹8K AVGO = ₹18K/mo (~$215/mo at ₹84/$):
+**Phase 2 US allocation:** ₹10K QQQM + ₹8K AVGO = ₹18K/mo (~$187/mo at ₹96.50/$):
 
 | Vehicle | ~$/mo | AVGO inside | Effective AVGO |
 |---|---|---|---|
-| AVGO direct | ~$95 | 100% | $95 |
-| QQQM | ~$120 | ~5% | ~$6 |
-| **Total AVGO exposure** | **~$215** | — | **~$101 (47% of US allocation)** |
+| AVGO direct | ~$83 | 100% | $83 |
+| QQQM | ~$104 | ~5% | ~$5 |
+| **Total AVGO exposure** | **~$187** | — | **~$88 (47% of US allocation)** |
 
 **Implication:** AVGO concentration ~47% of US allocation — deliberate high-conviction AI infra bet. The remaining ~53% of US allocation is concentrated in QQQM's top-10 holdings (~50% of QQQM is in 10 mega-caps), so the *effective* concentration in mega-cap tech is high overall. QQQM is more concentrated at the top than broader-growth alternatives — accepted as a deliberate trailing-returns bet on continued mega-cap tech leadership. **NYSE gap to plug in Phase 2 via direct positions:** ANET (AI networking, ~₹2-3K/mo), ORCL (cloud AI, ~₹2-3K/mo). Optionally CEG (Nasdaq-listed, already in QQQM at ~1% — direct position would only be needed if user wants meaningful overweighting of the energy-AI thesis).
 

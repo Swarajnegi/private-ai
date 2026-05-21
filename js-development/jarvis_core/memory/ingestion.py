@@ -350,7 +350,7 @@ if __name__ == "__main__":
     print("=" * 60)
 
     pipeline = IngestionPipeline(collection_name="research_papers")
-    target = str(JARVIS_ROOT / "research papers" / "RAGs" / "2407.19813v3.pdf")
+    target = str(JARVIS_ROOT / "research_papers" / "RAGs" / "2407.19813v3.pdf")
 
     print(f"\n  Target     : {Path(target).name}")
     print(f"  Collection : research_papers")

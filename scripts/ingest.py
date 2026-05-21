@@ -7,8 +7,8 @@ Run with (activate venv first):
     python scripts/ingest.py <path_to_pdf> [--category ai] [--collection research_papers]
 
 Examples:
-    python scripts/ingest.py "research papers/RAGs/2407.19813v3.pdf"
-    python scripts/ingest.py "research papers/RAGs/2407.19813v3.pdf" --category biology
+    python scripts/ingest.py "research_papers/RAGs/2407.19813v3.pdf"
+    python scripts/ingest.py "research_papers/RAGs/2407.19813v3.pdf" --category biology
     python scripts/ingest.py "/absolute/path/to/paper.pdf" --category physics --collection research_papers
 
 =============================================================================

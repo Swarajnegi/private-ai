@@ -147,7 +147,7 @@ if __name__ == "__main__":
         tool = FileReadTool()
 
         # 1. Read a normal file
-        with tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False, encoding="utf-8") as f:
+        with tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False, encoding="utf-8", newline="") as f:
             f.write("Hello JARVIS\nLine 2\n")
             tmp_path = f.name
         try:

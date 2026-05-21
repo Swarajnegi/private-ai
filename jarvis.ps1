@@ -13,7 +13,7 @@ $env:OPENAI_API_KEY = "sk-or-v1-3e8bc0bfbb9d9af29353f73d756824ee1116a969c56d3fd2
 Write-Host "[JARVIS] Profile: OpenRouter (Cloud) | Model: deepseek-v4-pro" -ForegroundColor Green
 
 # 2. EXECUTION LOGIC
-$env:OPENCLAUDE_DIR = "E:\J.A.R.V.I.S\AI Model Reops\OpenClaude"
+$env:OPENCLAUDE_DIR = "E:\J.A.R.V.I.S\ai_model_repos\OpenClaude"
 $env:JARVIS_WORKSPACE = "E:\J.A.R.V.I.S"
 
 # Change to OpenClaude dir so internal build scripts work

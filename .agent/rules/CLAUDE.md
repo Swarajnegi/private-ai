@@ -1,14 +1,8 @@
----
-trigger: always_on
----
-
 # CLAUDE.md — JARVIS Operating Context
 
 > **Loaded automatically:**
 > - Claude Code (work laptop, Linux): via the project-root `/CLAUDE.md` which `@imports` this file plus [JARVIS_ENDGAME.md](JARVIS_ENDGAME.md) and [js-workspace-rule.md](js-workspace-rule.md).
-> - Antigravity (personal laptop, Windows): via the `trigger: always_on` frontmatter above — same loader pattern as [js-workspace-rule.md](js-workspace-rule.md).
->
-> Both runtimes see the same operating contract.
+> - Antigravity (personal laptop, Windows): Does NOT load this file (frontmatter trigger omitted as it is work-laptop specific).
 
 ---
 
@@ -174,7 +168,7 @@ No fluff. Depth over brevity. Be direct. When the user is wrong, say so with rea
 |---|---|
 | Endgame architecture | [.agent/rules/JARVIS_ENDGAME.md](.agent/rules/JARVIS_ENDGAME.md) |
 | Antigravity always-on protocol | [.agent/rules/js-workspace-rule.md](.agent/rules/js-workspace-rule.md) |
-| OpenClaude integration plan (SUPERSEDED 2026-05-13) | [STAGE_3_OPENCLAUDE_STRATEGY.md](STAGE_3_OPENCLAUDE_STRATEGY.md) — kept for historical context |
+| OpenClaude integration plan (SUPERSEDED 2026-05-13) | [archive/STAGE_3_OPENCLAUDE_STRATEGY.md](archive/STAGE_3_OPENCLAUDE_STRATEGY.md) — kept for historical context |
 | GitHub remote | https://github.com/Swarajnegi/private-ai |
 | Master roadmap | [js-learning/JARVIS_MASTER_ROADMAP.md](js-learning/JARVIS_MASTER_ROADMAP.md) |
 | Knowledge base | [jarvis_data/knowledge_base.jsonl](jarvis_data/knowledge_base.jsonl) |

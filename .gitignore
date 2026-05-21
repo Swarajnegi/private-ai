@@ -26,7 +26,7 @@ Open-Claude-Cowork/
 # -- Large static reference --------------------------------------------------
 # Research papers are ~50 MB and almost never change.
 # Bulk-copy them once via the HDD's jarvis-bulk/ folder, not via git.
-research papers/
+research_papers/
 
 # -- Python ------------------------------------------------------------------
 __pycache__/
@@ -96,5 +96,5 @@ build/
 
 # -- Untracked local items ---------------------------------------------------
 jarvis_data/openclaude_jarvis_patches.patch
-Q&A/
-ollama models/
+jarvis_data/Q&A/
+ollama_models/
