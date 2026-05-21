@@ -47,14 +47,15 @@ class KnowledgeEntry:
     
     @classmethod
     def from_jsonl_line(cls, line: str) -> 'KnowledgeEntry':
-        """Parse JSONL line into entry"""
+        """Parse JSONL line into entry. `expiry` defaults to 'Permanent'
+        per /memory.md when missing (some older entries omit the field)."""
         data = json.loads(line)
         return cls(
             timestamp=data['timestamp'],
             type=data['type'],
-            tags=data['tags'],
+            tags=data.get('tags', []),
             content=data['content'],
-            expiry=data['expiry'],
+            expiry=data.get('expiry', 'Permanent'),
         )
 
 @dataclass
