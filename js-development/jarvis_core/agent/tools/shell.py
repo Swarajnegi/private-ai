@@ -133,10 +133,14 @@ class ShellRunTool(Tool):
                 timeout=tool_input.timeout_seconds,
             )
         except asyncio.TimeoutError:
-            # Kill the entire process group, not just the shell process.
+            # Kill the entire process group on Unix, or the process itself on Windows.
             try:
-                os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
-            except (ProcessLookupError, PermissionError):
+                import sys
+                if sys.platform != "win32" and hasattr(os, "killpg") and hasattr(os, "getpgid"):
+                    os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+                else:
+                    proc.kill()
+            except (ProcessLookupError, PermissionError, AttributeError):
                 proc.kill()  # Fallback if pgid lookup fails
             # Drain remaining output so the asyncio subprocess transport
             # closes cleanly (avoids 3.10 __del__ noise on interpreter exit).
@@ -176,31 +180,34 @@ if __name__ == "__main__":
         print(f"  [OK] 'echo hello jarvis' works")
 
         # 2. Pipeline + glob (shell features)
-        r2 = await safe_invoke(tool, {"command": "echo one; echo two | tr a-z A-Z"})
+        import sys
+        is_win = sys.platform == "win32"
+        cmd2 = "echo one & echo TWO" if is_win else "echo one; echo two | tr a-z A-Z"
+        r2 = await safe_invoke(tool, {"command": cmd2})
         assert r2.is_success and "TWO" in r2.output["stdout"]
-        print(f"  [OK] pipeline 'echo two | tr a-z A-Z' works (shell interpretation)")
+        print(f"  [OK] pipeline/sequential '{cmd2}' works (shell interpretation)")
 
         # 3. Non-zero exit
-        r3 = await safe_invoke(tool, {"command": "false"})
+        cmd3 = "exit 1" if is_win else "false"
+        r3 = await safe_invoke(tool, {"command": cmd3})
         assert r3.is_success and r3.output["exit_code"] != 0
         print(f"  [OK] non-zero exit code propagated (got {r3.output['exit_code']})")
 
         # 4. Stderr capture
-        r4 = await safe_invoke(tool, {"command": "ls /no/such/path/xyz 2>&1 1>/dev/null"})
-        # On most systems the redirection here means the error appears on stdout.
-        # Use a cleaner pure-stderr test:
         r4b = await safe_invoke(tool, {"command": "echo errmsg 1>&2"})
         assert r4b.is_success and "errmsg" in r4b.output["stderr"]
         print(f"  [OK] stderr captured separately")
 
         # 5. Timeout kills runaway
-        r5 = await safe_invoke(tool, {"command": "sleep 60", "timeout_seconds": 1})
+        cmd5 = "ping -n 61 127.0.0.1" if is_win else "sleep 60"
+        r5 = await safe_invoke(tool, {"command": cmd5, "timeout_seconds": 1})
         assert r5.is_error and "timeout" in r5.error.lower()
-        print(f"  [OK] timeout kills 'sleep 60' after 1s: {r5.error}")
+        print(f"  [OK] timeout kills '{cmd5}' after 1s: {r5.error}")
 
         # 6. cwd override
+        cmd6 = "cd" if is_win else "pwd"
         with tempfile.TemporaryDirectory() as tmpdir:
-            r6 = await safe_invoke(tool, {"command": "pwd", "cwd": tmpdir})
+            r6 = await safe_invoke(tool, {"command": cmd6, "cwd": tmpdir})
             assert r6.is_success
             # On macOS /tmp may be symlinked to /private/tmp; compare resolved
             from pathlib import Path

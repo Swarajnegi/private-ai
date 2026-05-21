@@ -53,7 +53,7 @@ sys.path.insert(0, str(DEV_DIR))
 
 from jarvis_core.memory.pdf_parser import parse_pdf
 from jarvis_core.memory.chunking import RecursiveWordChunker
-from jarvis_core.config import DEFAULT_CHUNK_CHAR_LIMIT, DEFAULT_CHUNK_OVERLAP
+from jarvis_core.config import DEFAULT_CHUNK_CHAR_LIMIT, DEFAULT_CHUNK_OVERLAP, JARVIS_ROOT
 
 # =============================================================================
 # MAIN ENTRY POINT
@@ -65,7 +65,7 @@ if __name__ == "__main__":
     print("=" * 60)
 
     # 1. Target a local research paper (Attention Is All You Need)
-    pdf_path = Path("E:/J.A.R.V.I.S/Research Papers/J.A.R.V.I.S specific/1706.03762v7.pdf")
+    pdf_path = JARVIS_ROOT / "research_papers" / "J.A.R.V.I.S specific" / "1706.03762v7.pdf"
     
     if not pdf_path.exists():
         print(f"Error: Could not find {pdf_path}")
