@@ -58,7 +58,17 @@
 
 ---
 
-## Sub-Phase 3.2: Tool Design & Registration <-- YOU ARE HERE
+## Sub-Phase 3.2: Tool Design & Registration <-- YOU ARE HERE (2/4 complete)
+
+**Lessons 3.2.1 [OK] (concept, audited 2026-05-19 via /next) + 3.2.2 [OK] (18 callable tools shipped across Phases A/B/C).**
+**Next:** 3.2.3 Tool Lifecycle hooks + 3.2.4 Tool Composition.
+
+**Phase A (commit 87f82c3, 2026-05-19):** Tool.requires_permission flag + temporal_resolver utility + 6 memory wrappers + calculator.
+**Phase B (commit e865d18, 2026-05-19; refined eaa4a75):** web_search + file_read + code_exec + shell_run.
+**Phase C (this commit, 2026-05-22):** 4 cognitive tools (cognitive_mirror, prior_self_consult, bear_case_devil, writing_voice_check) + 3 finance tools (portfolio_state, trigger_monitor, incentive_planner).
+
+Total 18 callable: 16 concurrency-safe, 2 unsafe + requires_permission (code_exec, shell_run).
+
 
 **Goal:** Build a library of composable tools JARVIS can use, leveraging the 3.0 registry.
 
@@ -153,7 +163,7 @@ Build a complete agent that:
 |-----------|--------|------------------|
 | 3.0 Entry Sprint (Registry + Cost-with-STEAL-#11 + Tool ABC-with-#8-prep) | [OK] Complete | 3/3 |
 | 3.1 Function Calling + Cognitive_State_Update + TextTelemetry | [OK] Complete | 7/7 |
-| 3.2 Tool Design & Registration | 🔄 Starting | 0/4 |
+| 3.2 Tool Design & Registration (Phases A/B/C shipped — 18 callable tools) | 🔄 In Progress | 2/4 |
 | 3.3 Planning & Decomposition | ⬜ Not Started | 0/4 |
 | 3.4 ReAct + MIRROR-lite + CoT detector + STEAL #8/#9/#10 | ⬜ Not Started | 0/9 |
 | 3.5 Memory-Augmented Agents + Heartbeat Consolidation + /compact (STEAL #12) | ⬜ Not Started | 0/9 |

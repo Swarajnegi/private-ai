@@ -18,7 +18,11 @@ Phase B modules (Stage 3.2.2, KB L283):
     - exec:    1 tool  (code_exec;  subprocess + timeout, requires_permission=True)
     - shell:   1 tool  (shell_run;  asyncio.subprocess_shell, requires_permission=True)
 
-Phase C (next):  cognitive, finance          — identity + finance tools
+Phase C modules (Stage 3.2.2 closure, KB L283):
+    - cognitive: 4 tools (cognitive_mirror, prior_self_consult, bear_case_devil, writing_voice_check)
+    - finance:   3 tools (portfolio_state, trigger_monitor, incentive_planner)
+
+Stage 3.2.2 total after Phase C: 18 callable tools (11 base + 7 cognitive/finance).
 
 LAYER: Agent (Tools)
 """
@@ -30,5 +34,7 @@ from jarvis_core.agent.tools import web        # noqa: F401
 from jarvis_core.agent.tools import fs         # noqa: F401
 from jarvis_core.agent.tools import exec as _exec_mod  # noqa: F401  (`exec` is builtin name)
 from jarvis_core.agent.tools import shell      # noqa: F401
+from jarvis_core.agent.tools import cognitive  # noqa: F401
+from jarvis_core.agent.tools import finance    # noqa: F401
 
 __all__: list[str] = []
