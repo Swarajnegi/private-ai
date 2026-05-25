@@ -374,7 +374,7 @@ This document is structured personal analysis based on publicly available 2026 i
 
 ### AVGO / single-stock research
 - May 15 2026 13F filings, major hedge funds (Berkshire, Tiger Global, Coatue, Citadel, others) — cross-validated by ChatGPT Deep Research, Gemini Deep Research, Claude Sonnet, Antigravity
-- AVGO Broadcom AI infrastructure moat — research compiled jarvis_data/Finance/ChatGPT_deep_research.md + gemini_research_extracted.txt
+- AVGO Broadcom AI infrastructure moat — research compiled knowledge/Finance/ChatGPT_deep_research.md + gemini_research_extracted.txt
 
 ### Sector outlook
 - India's CapEx cycle: infrastructure, capital goods, power — Ventura

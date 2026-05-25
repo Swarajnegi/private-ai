@@ -33,9 +33,9 @@ When answering, adopt the stance of the relevant sub-system:
 | Endgame Blueprint | `E:\J.A.R.V.I.S\.agent\rules\JARVIS_ENDGAME.md` | Full architecture: 12 specialists, hardware, memory stack |
 | Q&A Documentation | `E:\J.A.R.V.I.S\jarvis_data\Q&A\stage_N.html` | Visual study material for each learning stage |
 | Code Style | Embedded in `/dev` workflow (Section 3) | Canonical code formatting — enforced at generation time |
-| Finance Strategy | `E:\J.A.R.V.I.S\jarvis_data\Finance\strategy.md` | Canonical capital allocation plan — check FIRST for any finance/investment question |
+| Finance Strategy | `E:\J.A.R.V.I.S\knowledge\Finance\strategy.md` | Canonical capital allocation plan — check FIRST for any finance/investment question |
 
-**Always-on rule:** When answering a question where prior context may exist, check `knowledge_base.jsonl` via `search_memory.py` first. For finance/investment/portfolio questions, also check `Finance/strategy.md` — it is the single source of truth for the user's capital allocation plan.
+**Always-on rule:** When answering a question where prior context may exist, check `knowledge_base.jsonl` via `search_memory.py` first. For finance/investment/portfolio questions, also check `knowledge/Finance/strategy.md` — it is the single source of truth for the user's capital allocation plan.
 
 ---
 
