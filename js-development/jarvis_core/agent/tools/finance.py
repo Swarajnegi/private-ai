@@ -14,7 +14,7 @@ LAYER: Agent (Tools)
 THE BIG PICTURE
 =============================================================================
 
-Stage 3.2 contract: these three tools READ from `jarvis_data/Finance/strategy.md`
+Stage 3.2 contract: these three tools READ from `knowledge/Finance/strategy.md`
 (the canonical capital-allocation document) and return structured slices of it.
 
 Stage 5+ extension: each tool will be EXTENDED with live broker integration
@@ -81,7 +81,7 @@ from jarvis_core.agent.tool import Tool, ToolInput, ToolResult
 from jarvis_core.config import JARVIS_ROOT
 
 
-DEFAULT_STRATEGY_PATH: Path = JARVIS_ROOT / "jarvis_data" / "Finance" / "strategy.md"
+DEFAULT_STRATEGY_PATH: Path = JARVIS_ROOT / "knowledge" / "Finance" / "strategy.md"
 
 # Section header regexes — case-insensitive, accept ##/###, partial matches.
 _SECTION_RE_ALLOCATION = re.compile(
