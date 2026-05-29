@@ -60,6 +60,7 @@ from __future__ import annotations
 
 import asyncio
 import sys
+from typing import Set
 
 from pydantic import Field
 
@@ -100,9 +101,33 @@ class CodeExecTool(Tool):
     input_schema = CodeExecInput
     requires_permission = True  # STEAL #9 will gate at 3.4
 
+    def __init__(self) -> None:
+        # Per-instance live subprocess registry for teardown hygiene
+        # (Stage 3.2.3). Mutated only from inside invoke() / teardown().
+        self._active_procs: Set[asyncio.subprocess.Process] = set()
+
     @property
     def is_concurrency_safe(self) -> bool:
         return False  # Mutates state, filesystem, processes
+
+    async def teardown(self) -> None:
+        """Lifecycle hook (Stage 3.2.3): kill any subprocesses still alive
+        at dispatcher shutdown. Without this, an interrupted code_exec call
+        leaves an orphaned `python -c ...` running until the OS reaps it.
+        """
+        for proc in list(self._active_procs):
+            if proc.returncode is None:
+                try:
+                    proc.kill()
+                except (ProcessLookupError, OSError):
+                    pass
+                # Drain pipes so the asyncio transport closes cleanly.
+                try:
+                    await asyncio.wait_for(proc.communicate(), timeout=2.0)
+                except (asyncio.TimeoutError, Exception):
+                    pass
+            self._active_procs.discard(proc)
+        return None
 
     async def invoke(self, tool_input: CodeExecInput) -> ToolResult:
         try:
@@ -114,26 +139,30 @@ class CodeExecTool(Tool):
         except OSError as e:
             return ToolResult(error=f"Failed to spawn subprocess: {e}")
 
+        self._active_procs.add(proc)
         try:
-            stdout_bytes, stderr_bytes = await asyncio.wait_for(
-                proc.communicate(),
-                timeout=tool_input.timeout_seconds,
-            )
-        except asyncio.TimeoutError:
-            proc.kill()
-            # Drain pipes via communicate() so the subprocess transport
-            # closes cleanly (avoids asyncio 3.10 __del__ noise on exit).
             try:
-                await asyncio.wait_for(proc.communicate(), timeout=2.0)
-            except (asyncio.TimeoutError, Exception):
-                pass
-            return ToolResult(error=f"code_exec timeout after {tool_input.timeout_seconds}s; process killed")
+                stdout_bytes, stderr_bytes = await asyncio.wait_for(
+                    proc.communicate(),
+                    timeout=tool_input.timeout_seconds,
+                )
+            except asyncio.TimeoutError:
+                proc.kill()
+                # Drain pipes via communicate() so the subprocess transport
+                # closes cleanly (avoids asyncio 3.10 __del__ noise on exit).
+                try:
+                    await asyncio.wait_for(proc.communicate(), timeout=2.0)
+                except (asyncio.TimeoutError, Exception):
+                    pass
+                return ToolResult(error=f"code_exec timeout after {tool_input.timeout_seconds}s; process killed")
 
-        return ToolResult(output={
-            "stdout": stdout_bytes.decode("utf-8", errors="replace"),
-            "stderr": stderr_bytes.decode("utf-8", errors="replace"),
-            "exit_code": proc.returncode if proc.returncode is not None else -1,
-        })
+            return ToolResult(output={
+                "stdout": stdout_bytes.decode("utf-8", errors="replace"),
+                "stderr": stderr_bytes.decode("utf-8", errors="replace"),
+                "exit_code": proc.returncode if proc.returncode is not None else -1,
+            })
+        finally:
+            self._active_procs.discard(proc)
 
 
 # =============================================================================
@@ -195,8 +224,17 @@ if __name__ == "__main__":
         assert "code" in schema["input_schema"]["properties"]
         print(f"  [OK] registered + schema valid")
 
+        # 9. Active-proc set drained after successful invoke (Stage 3.2.3)
+        assert len(tool._active_procs) == 0
+        print(f"  [OK] _active_procs drained after invoke (len=0)")
+
+        # 10. teardown() is idempotent + cleans residual state
+        await tool.teardown()
+        assert len(tool._active_procs) == 0
+        print(f"  [OK] teardown() idempotent on empty registry")
+
         print("=" * 60)
-        print("  All 8 smoke tests passed.")
+        print("  All 10 smoke tests passed.")
         print("=" * 60)
 
     asyncio.run(run())

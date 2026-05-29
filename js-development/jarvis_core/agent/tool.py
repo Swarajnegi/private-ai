@@ -73,6 +73,16 @@ STEP 6: Dispatcher invokes:
 
 Prep for STEAL #8 (Stage 3.4): is_concurrency_safe property is included
 now so the tool-dispatch partitioning logic in ReAct lands without retrofit.
+
+Prep for STEAL #5 (Stage 3.4 trace/EventBus): four lifecycle hooks land here
+in Stage 3.2.3 so the EventBus.publish() calls can be added later by touching
+only the hook bodies, not tool.py again.
+    setup()           -- called once before first invoke (warm caches, indices)
+    teardown()        -- called once at shutdown (close handles, kill subprocesses)
+    on_invoke_start() -- fires before each invoke (per-call tracing/metrics start)
+    on_invoke_end()   -- fires after each invoke (per-call tracing/metrics end)
+All four are no-op defaults. safe_invoke() wraps invoke() with the start/end
+hooks; hook failures are swallowed so a misbehaving hook never breaks invocation.
 """
 
 from __future__ import annotations
@@ -199,6 +209,54 @@ class Tool(RegistryBase["Tool"]):
         """
         ...
 
+    # ---- Lifecycle hooks (Stage 3.2.3) -----------------------------------
+    # All four default to no-op. Override only where there's real value
+    # (proactive index warm-up, subprocess hygiene, tracing).
+    # safe_invoke() wraps invoke() with on_invoke_start + on_invoke_end and
+    # swallows hook exceptions so a buggy hook can never break invocation.
+
+    async def setup(self) -> None:
+        """Lifecycle hook: called ONCE by the dispatcher before the first
+        invoke. Override to proactively warm caches, build indices, or
+        open external connections. Default: no-op.
+
+        STEAL #5 hook (Stage 3.4): EventBus.publish('tool.setup', ...) lands
+        here when trace.py is wired; tool.py does not need to change again.
+        """
+        return None
+
+    async def teardown(self) -> None:
+        """Lifecycle hook: called ONCE by the dispatcher at shutdown.
+        Override to close handles, kill orphaned subprocesses, flush state.
+        Default: no-op.
+
+        STEAL #5 hook (Stage 3.4): EventBus.publish('tool.teardown', ...).
+        """
+        return None
+
+    async def on_invoke_start(self, tool_input: ToolInput) -> None:
+        """Lifecycle hook: fires BEFORE every invoke (after input validation).
+        Override for per-call tracing, latency-timer start, or metrics emit.
+        Default: no-op.
+
+        STEAL #5 hook (Stage 3.4): EventBus.publish('tool.invoke.start', ...).
+
+        Exceptions raised here are swallowed by safe_invoke -- a buggy hook
+        must never break the underlying tool call.
+        """
+        return None
+
+    async def on_invoke_end(self, result: ToolResult) -> None:
+        """Lifecycle hook: fires AFTER every invoke (success OR error).
+        Override for per-call tracing close, latency-timer end, metrics
+        flush, cleanup. Default: no-op.
+
+        STEAL #5 hook (Stage 3.4): EventBus.publish('tool.invoke.end', ...).
+
+        Exceptions raised here are swallowed by safe_invoke.
+        """
+        return None
+
     @property
     def is_concurrency_safe(self) -> bool:
         """
@@ -260,8 +318,10 @@ async def safe_invoke(tool: Tool, raw_input: Dict[str, Any]) -> ToolResult:
 
     This is the dispatcher-facing entry point. It:
     1. Validates raw_input against the tool's Pydantic schema
-    2. Calls tool.invoke() with the validated input
-    3. Catches any exception and wraps it in a ToolResult
+    2. Fires on_invoke_start hook (failures swallowed)
+    3. Calls tool.invoke() with the validated input
+    4. Fires on_invoke_end hook (failures swallowed)
+    5. Catches any exception and wraps it in a ToolResult
 
     Args:
         tool:      An instantiated Tool subclass.
@@ -277,12 +337,27 @@ async def safe_invoke(tool: Tool, raw_input: Dict[str, Any]) -> ToolResult:
             error=f"Input validation failed for '{tool.name}': {e}"
         )
 
+    # Lifecycle hook: on_invoke_start. Hook failures must NEVER propagate;
+    # they are deliberately swallowed so a buggy hook can't break invocation.
     try:
-        return await tool.invoke(validated)
+        await tool.on_invoke_start(validated)
+    except Exception:
+        pass
+
+    try:
+        result = await tool.invoke(validated)
     except Exception as e:
-        return ToolResult(
+        result = ToolResult(
             error=f"Tool '{tool.name}' raised: {type(e).__name__}: {e}"
         )
+
+    # Lifecycle hook: on_invoke_end (fires for BOTH success and error paths).
+    try:
+        await tool.on_invoke_end(result)
+    except Exception:
+        pass
+
+    return result
 
 
 # =============================================================================
@@ -419,6 +494,82 @@ if __name__ == "__main__":
 
         print(f"\n  Success observation: '{result.to_observation()}'")
         print(f"  Error observation:   '{result_err.to_observation()}'")
+
+        # -- Lifecycle hooks (Stage 3.2.3) ---------------------------------
+
+        # Tracer tool: records firing order of every hook + invoke.
+        events: List[str] = []
+
+        class TracerInput(ToolInput):
+            value: int
+
+        @Tool.register("_smoketest_tracer")
+        class TracerTool(Tool):
+            name = "_smoketest_tracer"
+            description = "Lifecycle tracer for smoke test."
+            input_schema = TracerInput
+
+            async def setup(self) -> None:
+                events.append("setup")
+
+            async def teardown(self) -> None:
+                events.append("teardown")
+
+            async def on_invoke_start(self, tool_input: TracerInput) -> None:
+                events.append(f"start(v={tool_input.value})")
+
+            async def on_invoke_end(self, result: ToolResult) -> None:
+                events.append(f"end(ok={result.is_success})")
+
+            async def invoke(self, tool_input: TracerInput) -> ToolResult:
+                events.append(f"invoke(v={tool_input.value})")
+                return ToolResult(output=tool_input.value * 2)
+
+        tracer = TracerTool()
+        # Dispatcher contract: setup() once, N invocations, teardown() once.
+        await tracer.setup()
+        r_t1 = await safe_invoke(tracer, {"value": 7})
+        r_t2 = await safe_invoke(tracer, {"value": 9})
+        await tracer.teardown()
+
+        assert r_t1.output == 14
+        assert r_t2.output == 18
+        expected = [
+            "setup",
+            "start(v=7)", "invoke(v=7)", "end(ok=True)",
+            "start(v=9)", "invoke(v=9)", "end(ok=True)",
+            "teardown",
+        ]
+        assert events == expected, f"hook order mismatch: {events} != {expected}"
+        print(f"\n  Lifecycle hook firing order verified: setup -> (start->invoke->end)x2 -> teardown")
+
+        # Hook failures must NEVER break invocation (deliberately swallowed)
+        class _BadHookInput(ToolInput):
+            x: int
+
+        @Tool.register("_smoketest_bad_hook")
+        class BadHookTool(Tool):
+            name = "_smoketest_bad_hook"
+            description = "Hook that raises -- invocation must still succeed."
+            input_schema = _BadHookInput
+
+            async def on_invoke_start(self, tool_input: _BadHookInput) -> None:
+                raise RuntimeError("hook is on fire")
+
+            async def on_invoke_end(self, result: ToolResult) -> None:
+                raise RuntimeError("also on fire")
+
+            async def invoke(self, tool_input: _BadHookInput) -> ToolResult:
+                return ToolResult(output=tool_input.x + 1)
+
+        bad = BadHookTool()
+        r_bad = await safe_invoke(bad, {"x": 41})
+        assert r_bad.is_success and r_bad.output == 42, f"buggy hook broke invocation: {r_bad}"
+        print(f"  Buggy lifecycle hook swallowed -- invoke still succeeded ({r_bad.output})")
+
+        # Default no-op hooks: existing tools (e.g., CalculatorTool above)
+        # gain hook calls for free via safe_invoke; no override required.
+        # Already covered by the result, result_err checks at top of test.
 
         print("\n" + "=" * 60)
         print("  All smoke tests passed.")

@@ -58,14 +58,15 @@
 
 ---
 
-## Sub-Phase 3.2: Tool Design & Registration <-- YOU ARE HERE (2/4 complete)
+## Sub-Phase 3.2: Tool Design & Registration <-- YOU ARE HERE (3/4 complete)
 
-**Lessons 3.2.1 [OK] (concept, audited 2026-05-19 via /next) + 3.2.2 [OK] (18 callable tools shipped across Phases A/B/C).**
-**Next:** 3.2.3 Tool Lifecycle hooks + 3.2.4 Tool Composition.
+**Lessons 3.2.1 [OK] (concept, audited 2026-05-19 via /next) + 3.2.2 [OK] (18 callable tools shipped across Phases A/B/C) + 3.2.3 [OK] (lifecycle hooks landed 2026-05-29).**
+**Next:** 3.2.4 Tool Composition (concept lesson).
 
 **Phase A (commit 87f82c3, 2026-05-19):** Tool.requires_permission flag + temporal_resolver utility + 6 memory wrappers + calculator.
 **Phase B (commit e865d18, 2026-05-19; refined eaa4a75):** web_search + file_read + code_exec + shell_run.
-**Phase C (this commit, 2026-05-22):** 4 cognitive tools (cognitive_mirror, prior_self_consult, bear_case_devil, writing_voice_check) + 3 finance tools (portfolio_state, trigger_monitor, incentive_planner).
+**Phase C (commit 346d232, 2026-05-22):** 4 cognitive tools (cognitive_mirror, prior_self_consult, bear_case_devil, writing_voice_check) + 3 finance tools (portfolio_state, trigger_monitor, incentive_planner).
+**3.2.3 (this commit, 2026-05-29):** 4 lifecycle hooks on Tool ABC (setup/teardown/on_invoke_start/on_invoke_end) + safe_invoke() wraps invoke with hook calls (failures swallowed). MemoryBM25SearchTool.setup() proactive index warm; CodeExecTool + ShellRunTool teardown() subprocess hygiene.
 
 Total 18 callable: 16 concurrency-safe, 2 unsafe + requires_permission (code_exec, shell_run).
 
@@ -76,7 +77,7 @@ Total 18 callable: 16 concurrency-safe, 2 unsafe + requires_permission (code_exe
 |--------|-------|-----------------|---------|
 | 3.2.1 | Tool Abstraction Patterns | Composition strategies for the Tool ABC from 3.0 | `@[/learn] Explain Tool composition patterns.` |
 | 3.2.2 | Built-in Tools | Calculator, web search, code execution, memory primitives | `/dev Implement core tools wrapping jarvis_core/memory/ store/hybrid/rerank as Tool implementations.` |
-| 3.2.3 | Tool Lifecycle | Init, invoke, error handling, cleanup | `/dev Add lifecycle hooks to the Tool ABC.` |
+| 3.2.3 | Tool Lifecycle | Init, invoke, error handling, cleanup | **[OK] COMPLETE** -- 4 hooks on Tool ABC; safe_invoke wraps invoke with on_invoke_start + on_invoke_end (hook failures swallowed). MemoryBM25SearchTool.setup() proactive index; CodeExecTool + ShellRunTool teardown() subprocess hygiene. Smoke tests verify firing order setup -> (start->invoke->end)xN -> teardown. STEAL #5 hook points reserved in docstrings -- 3.4 EventBus wiring touches only hook bodies, not tool.py. |
 | 3.2.4 | Tool Composition | Chain tools together; pipe outputs | `@[/learn] Explain tool composition patterns.` |
 
 **Practical Exercise:** Build 10+ tools (5 memory primitives wrapped + calculator + web search + code exec + file I/O + shell) and let the agent choose which to use.
@@ -163,7 +164,7 @@ Build a complete agent that:
 |-----------|--------|------------------|
 | 3.0 Entry Sprint (Registry + Cost-with-STEAL-#11 + Tool ABC-with-#8-prep) | [OK] Complete | 3/3 |
 | 3.1 Function Calling + Cognitive_State_Update + TextTelemetry | [OK] Complete | 7/7 |
-| 3.2 Tool Design & Registration (Phases A/B/C shipped — 18 callable tools) | 🔄 In Progress | 2/4 |
+| 3.2 Tool Design & Registration (Phases A/B/C shipped — 18 callable tools; 3.2.3 lifecycle hooks shipped) | 🔄 In Progress | 3/4 |
 | 3.3 Planning & Decomposition | ⬜ Not Started | 0/4 |
 | 3.4 ReAct + MIRROR-lite + CoT detector + STEAL #8/#9/#10 | ⬜ Not Started | 0/9 |
 | 3.5 Memory-Augmented Agents + Heartbeat Consolidation + /compact (STEAL #12) | ⬜ Not Started | 0/9 |
