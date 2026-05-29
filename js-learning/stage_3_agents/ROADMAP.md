@@ -84,18 +84,20 @@ Total 18 callable: 16 concurrency-safe, 2 unsafe + requires_permission (code_exe
 
 ---
 
-## Sub-Phase 3.3: Planning & Decomposition ⬜
+## Sub-Phase 3.3: Planning & Decomposition 🔄 (2/4 builds shipped 2026-05-29)
+
+**Build steps 3.3.2 + 3.3.3 shipped this commit.** Per user directive (skip-concept-prefer-build), the two concept lessons (3.3.1 + 3.3.4) are DEFERRED pending build-phase closure of Stage 3.
 
 **Goal:** Teach agents to break complex queries into steps.
 
 | Lesson | Topic | JARVIS Use Case | Command |
 |--------|-------|-----------------|---------|
-| 3.3.1 | Task Decomposition | Break "research X" into sub-tasks | `@[/learn] Explain task decomposition in agents.` |
-| 3.3.2 | Plan Representation | Structure a multi-step plan (Plan dataclass) | `/dev Design a Plan data structure for JARVIS.` |
-| 3.3.3 | Plan Execution | Execute steps in order with state | `/dev Implement a PlanExecutor for JARVIS.` |
-| 3.3.4 | Replanning | Adjust when steps fail | `@[/learn] Explain replanning strategies.` |
+| 3.3.1 | Task Decomposition | Break "research X" into sub-tasks | ⊘ Deferred (concept lesson) |
+| 3.3.2 | Plan Representation | Structure a multi-step plan (Plan dataclass) | **[OK] COMPLETE** -- `plan.py` (350+ LOC): StepStatus + PlanStatus enums, Step dataclass (mutable status/result/attempts), Plan dataclass (DAG with Kahn's-algorithm cycle detection at construction), ready_steps()/topological_order()/is_complete()/has_failed()/update_status() API, replan_from() lineage hook for 3.3.4, to_dict() serialization for 3.4 EventBus, build_plan() convenience helper. 32/32 smoke tests pass (linear chain, diamond DAG, cycle detection, self-cycle, missing deps, retry semantics, incremental add_step, replan_from clone behavior, to_dict, terminal-state property). |
+| 3.3.3 | Plan Execution | Execute steps in order with state | **[OK] COMPLETE** -- `executor.py` (300+ LOC): PlanExecutor partitions ready_steps into concurrency-safe batch (asyncio.gather) vs serial unsafe (STEAL #8 prep), fires Tool lifecycle setup() at start + teardown() in finally, handles retries by bouncing failed steps back to PENDING within max_attempts budget, cascades upstream FAILED to downstream SKIPPED, max_iterations safety cap, optional StepObserver for STEAL #5 EventBus seam, swallows broken observer/hook exceptions. 34/34 smoke tests pass. |
+| 3.3.4 | Replanning | Adjust when steps fail | ⊘ Deferred (concept lesson; structural hook `Plan.replan_from()` already in `plan.py`) |
 
-**Practical Exercise:** Agent correctly decomposes "Find papers on X and summarize top 3."
+**Practical Exercise:** Agent correctly decomposes "Find papers on X and summarize top 3." (deferred to 3.4 ReAct integration where LLM-driven plan construction lands)
 
 ---
 
@@ -165,7 +167,7 @@ Build a complete agent that:
 | 3.0 Entry Sprint (Registry + Cost-with-STEAL-#11 + Tool ABC-with-#8-prep) | [OK] Complete | 3/3 |
 | 3.1 Function Calling + Cognitive_State_Update + TextTelemetry | [OK] Complete | 7/7 |
 | 3.2 Tool Design & Registration (Phases A/B/C shipped — 18 callable tools; 3.2.3 lifecycle hooks shipped) | 🔄 In Progress | 3/4 |
-| 3.3 Planning & Decomposition | ⬜ Not Started | 0/4 |
+| 3.3 Planning & Decomposition (3.3.2 plan.py + 3.3.3 executor.py shipped; concept lessons deferred) | 🔄 In Progress | 2/4 |
 | 3.4 ReAct + MIRROR-lite + CoT detector + STEAL #8/#9/#10 | ⬜ Not Started | 0/9 |
 | 3.5 Memory-Augmented Agents + Heartbeat Consolidation + /compact (STEAL #12) | ⬜ Not Started | 0/9 |
 
