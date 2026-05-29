@@ -67,6 +67,7 @@ from __future__ import annotations
 import asyncio
 import os
 import signal
+from typing import Set
 
 from pydantic import Field
 
@@ -107,9 +108,47 @@ class ShellRunTool(Tool):
     input_schema = ShellRunInput
     requires_permission = True  # STEAL #9 + #10 gate at 3.4
 
+    def __init__(self) -> None:
+        # Per-instance live subprocess registry for teardown hygiene
+        # (Stage 3.2.3). Each entry is the shell process; teardown SIGKILLs
+        # its entire process group (start_new_session=True at spawn).
+        self._active_procs: Set[asyncio.subprocess.Process] = set()
+
     @property
     def is_concurrency_safe(self) -> bool:
         return False  # Mutates everything
+
+    @staticmethod
+    def _kill_proc_group(proc: asyncio.subprocess.Process) -> None:
+        """SIGKILL the shell process group (Unix) or kill the process (Windows)."""
+        try:
+            import sys as _sys
+            if _sys.platform != "win32" and hasattr(os, "killpg") and hasattr(os, "getpgid"):
+                os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+            else:
+                proc.kill()
+        except (ProcessLookupError, PermissionError, AttributeError):
+            try:
+                proc.kill()
+            except (ProcessLookupError, OSError):
+                pass
+
+    async def teardown(self) -> None:
+        """Lifecycle hook (Stage 3.2.3): SIGKILL any shell process trees
+        still alive at dispatcher shutdown. Without this, an interrupted
+        shell_run (e.g., `sleep 60 | grep x`) leaves an orphaned child until
+        the OS reaps it. We use the same process-group SIGKILL pattern as
+        the timeout path so subprocess transports close cleanly.
+        """
+        for proc in list(self._active_procs):
+            if proc.returncode is None:
+                self._kill_proc_group(proc)
+                try:
+                    await asyncio.wait_for(proc.communicate(), timeout=2.0)
+                except (asyncio.TimeoutError, Exception):
+                    pass
+            self._active_procs.discard(proc)
+        return None
 
     async def invoke(self, tool_input: ShellRunInput) -> ToolResult:
         cwd = tool_input.cwd or None  # asyncio uses None to mean "caller's cwd"
@@ -127,34 +166,30 @@ class ShellRunTool(Tool):
         except OSError as e:
             return ToolResult(error=f"Failed to spawn shell: {e}")
 
+        self._active_procs.add(proc)
         try:
-            stdout_bytes, stderr_bytes = await asyncio.wait_for(
-                proc.communicate(),
-                timeout=tool_input.timeout_seconds,
-            )
-        except asyncio.TimeoutError:
-            # Kill the entire process group on Unix, or the process itself on Windows.
             try:
-                import sys
-                if sys.platform != "win32" and hasattr(os, "killpg") and hasattr(os, "getpgid"):
-                    os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
-                else:
-                    proc.kill()
-            except (ProcessLookupError, PermissionError, AttributeError):
-                proc.kill()  # Fallback if pgid lookup fails
-            # Drain remaining output so the asyncio subprocess transport
-            # closes cleanly (avoids 3.10 __del__ noise on interpreter exit).
-            try:
-                await asyncio.wait_for(proc.communicate(), timeout=2.0)
-            except (asyncio.TimeoutError, Exception):
-                pass
-            return ToolResult(error=f"shell_run timeout after {tool_input.timeout_seconds}s; process group killed")
+                stdout_bytes, stderr_bytes = await asyncio.wait_for(
+                    proc.communicate(),
+                    timeout=tool_input.timeout_seconds,
+                )
+            except asyncio.TimeoutError:
+                self._kill_proc_group(proc)
+                # Drain remaining output so the asyncio subprocess transport
+                # closes cleanly (avoids 3.10 __del__ noise on interpreter exit).
+                try:
+                    await asyncio.wait_for(proc.communicate(), timeout=2.0)
+                except (asyncio.TimeoutError, Exception):
+                    pass
+                return ToolResult(error=f"shell_run timeout after {tool_input.timeout_seconds}s; process group killed")
 
-        return ToolResult(output={
-            "stdout": stdout_bytes.decode("utf-8", errors="replace"),
-            "stderr": stderr_bytes.decode("utf-8", errors="replace"),
-            "exit_code": proc.returncode if proc.returncode is not None else -1,
-        })
+            return ToolResult(output={
+                "stdout": stdout_bytes.decode("utf-8", errors="replace"),
+                "stderr": stderr_bytes.decode("utf-8", errors="replace"),
+                "exit_code": proc.returncode if proc.returncode is not None else -1,
+            })
+        finally:
+            self._active_procs.discard(proc)
 
 
 # =============================================================================
@@ -225,8 +260,17 @@ if __name__ == "__main__":
         assert "command" in schema["input_schema"]["properties"]
         print(f"  [OK] registered + schema valid")
 
+        # 9. Active-proc set drained after successful invoke (Stage 3.2.3)
+        assert len(tool._active_procs) == 0
+        print(f"  [OK] _active_procs drained after invoke (len=0)")
+
+        # 10. teardown() is idempotent on empty registry
+        await tool.teardown()
+        assert len(tool._active_procs) == 0
+        print(f"  [OK] teardown() idempotent on empty registry")
+
         print("=" * 60)
-        print("  All 8 smoke tests passed.")
+        print("  All 10 smoke tests passed.")
         print("=" * 60)
 
     asyncio.run(run())

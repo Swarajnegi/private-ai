@@ -264,9 +264,38 @@ class MemoryBM25SearchTool(MemoryToolBase):
     )
     input_schema = MemoryBM25SearchInput
 
+    # Stage 3.2.3 lifecycle hook: collections to proactively warm on setup().
+    # Override per-instance: tool = MemoryBM25SearchTool(store=s); tool.warm_collections = ["default", "code"]
+    warm_collections: List[str] = []
+
     @property
     def is_concurrency_safe(self) -> bool:
         return True
+
+    async def setup(self) -> None:
+        """Proactively build BM25 indices for collections listed in
+        `warm_collections`. Makes the first-call latency visible at startup
+        instead of stalling the first user query.
+
+        Default `warm_collections=[]` => no-op. The dispatcher can opt in by
+        setting `tool.warm_collections = ["default"]` after construction.
+
+        Failures are swallowed and logged to stderr -- a missing or empty
+        collection at setup time must not crash the dispatcher's boot.
+        """
+        if not self.warm_collections or self._store is None:
+            return None
+        import sys as _sys
+        for coll in self.warm_collections:
+            try:
+                self._ensure_bm25_index(coll)
+            except Exception as e:  # noqa: BLE001 -- intentional broad
+                print(
+                    f"[memory_bm25_search] setup(): warm '{coll}' skipped: "
+                    f"{type(e).__name__}: {e}",
+                    file=_sys.stderr,
+                )
+        return None
 
     async def invoke(self, tool_input: MemoryBM25SearchInput) -> ToolResult:
         try:
@@ -661,6 +690,36 @@ if __name__ == "__main__":
         r12 = await safe_invoke(rer, {"query": "test", "candidates": candidates_from_t1, "top_n": 2})
         # Either success or a controlled failure with informative error
         check("T12 rerank consumes prior hits-shape", r12.is_success or "Reranker" in (r12.error or "") or "rerank" in (r12.error or "").lower())
+
+        # -- T13: setup() default (no warm_collections) is no-op -----------
+        bm25_default = MemoryBM25SearchTool(store=mock_store)
+        await bm25_default.setup()  # must not touch any collection
+        check("T13 setup() no-op when warm_collections=[]",
+              "default" not in bm25_default._bm25_cache)
+
+        # -- T14: setup() warms listed collections -------------------------
+        bm25_warm = MemoryBM25SearchTool(store=mock_store)
+        bm25_warm.warm_collections = ["default"]
+        await bm25_warm.setup()
+        check("T14 setup() proactively warms 'default' collection",
+              "default" in bm25_warm._bm25_cache)
+
+        # -- T15: setup() swallows failures (missing/empty collection) -----
+        # Use a store whose collection.get returns empty (build_bm25_index raises ValueError).
+        class _EmptyStore:
+            def __init__(self):
+                self._client = self
+            def get_collection(self, name):
+                class _EmptyColl:
+                    def get(self, **kwargs):
+                        return {"ids": [], "documents": [], "metadatas": []}
+                return _EmptyColl()
+        bm25_bad = MemoryBM25SearchTool(store=_EmptyStore())
+        bm25_bad.warm_collections = ["nonexistent"]
+        # Must NOT raise -- failures are swallowed + logged to stderr.
+        await bm25_bad.setup()
+        check("T15 setup() swallows missing-collection failures",
+              "nonexistent" not in bm25_bad._bm25_cache)
 
         # -- Report --------------------------------------------------------
         total = passed + len(failed)
