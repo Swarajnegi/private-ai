@@ -34,12 +34,14 @@
 
 | Fund | Amount | Style | Cycle exposure |
 |---|---|---|---|
-| Nippon India Power & Infra | ₹5K/mo | Sectoral / thematic | Infra capex cycle (rate-sensitive) |
+| Nippon India Power & Infra | **STOPPED 2026-05-21** (fresh SIP) | Sectoral / thematic | Existing units held; ₹5K/mo redirected to UTI Nifty Next 50 |
 | Quant Small Cap | ₹5K/mo | Small-cap aggressive | Risk-on India |
 | Invesco Mid Cap | ₹5K/mo | Mid-cap growth | Risk-on India |
-| UTI Nifty Next 50 | ₹4.5K/mo | Index fund | Large-cap index anchor |
+| UTI Nifty Next 50 | ₹9.5K/mo | Index fund | Large-cap index anchor (₹4.5K + ₹5K redirected from Nippon) |
 
-**Indian MF cumulative balance:** ~₹47,924 (current market value across the 4 SIPs as of 2026-05-21; includes first ₹4.5K UTI SIP execution)
+**Nippon stop rationale:** Fresh SIP stopped early (before the 24-month §6 trigger) because the power/infra sector is at a cycle peak (names like MTAR +200% YTD). Adding to a thematic fund at the top of its cycle is exactly what §6 was designed to prevent — stopping now is defensible. Existing Nippon units ride; only fresh contributions stopped.
+
+**Indian MF cumulative balance:** ~₹47,924 (current market value across SIPs as of 2026-05-21; includes first ₹4.5K UTI SIP execution + Nippon held units)
 
 ### Direct stocks (India)
 
@@ -120,6 +122,8 @@ In theory the cleanest route to US index exposure is an India-domiciled FoF (Mot
 
 ## 5. Strategy v3.0 — Phased Architecture
 
+> 🔒 **DECISION FREEZE until 2026-08-01.** The September-incentive allocation is FROZEN. The v3.0 satellite plan (AVGO + RKLB + Netweb) stands as the current plan. New ETF/stock ideas go to the **Ideas Parking Lot (§5.5)** — NOT into this live plan. Reason: the Sept allocation was redesigned ~10 times in 8 days for money that doesn't arrive until September; the churn itself became the dominant risk. No redesign of the Sept allocation before August 1, 2026. Until then: execute the monthly cadence, log ideas, don't touch the future plan.
+
 ### Phase 0 — Foundation (September 2026 ₹87,500 incentive)
 
 **RIL exit completed 2026-05-18.** Proceeds (~₹34.6K → $354.15) deployed into QQQM as near-lump on the same day. No further RIL action required. Indirect RIL exposure continues via 3 of 4 SIPs.
@@ -141,10 +145,10 @@ In theory the cleanest route to US index exposure is an India-domiciled FoF (Mot
 
 | Bucket | ₹/mo | Vehicle | Note |
 |---|---|---|---|
-| Nippon India Power & Infra | ₹5K | SIP (Groww) | Sunset trigger active — see §6 |
+| ~~Nippon India Power & Infra~~ | ~~₹5K~~ | — | **STOPPED 2026-05-21** — fresh SIP halted, ₹5K redirected to UTI Nifty Next 50 |
 | Quant Small Cap | ₹5K | SIP (Groww) | Continue |
 | Invesco Mid Cap | ₹5K | SIP (Groww) | Continue |
-| UTI Nifty Next 50 | ₹4.5K | Index fund (Groww) | Large-cap India anchor |
+| UTI Nifty Next 50 | ₹9.5K | Index fund (Groww) | Large-cap India anchor (absorbed Nippon's ₹5K) |
 | **QQQM** | **₹8K** | **INDmoney monthly SIP** | **Nasdaq 100 — broad US tech-mega-cap exposure (0.15% TER). Primary US compounding engine.** |
 | EPF | ₹3.6K | Employer-matched (auto) | 8.25% guaranteed — forced debt allocation |
 | **Total** | **₹27.5K + ₹3.6K** | | |
@@ -205,15 +209,31 @@ Indirect AVGO/NVDA exposure also continues via QQQM (NVDA ~10%, AVGO ~5% of fund
 
 ---
 
+## 5.5 Ideas Parking Lot — review 2026-08-01
+
+**Rule:** Every new ETF/stock idea goes HERE with a one-line thesis. It does NOT enter the live plan (§5). The whole list is reviewed ONCE in August 2026 (one month before the Sept incentive lands), and the final Sept allocation is picked then — with cooling-off perspective, not in the heat of a hot-this-week narrative.
+
+**Why this exists:** The Sept-incentive US allocation was redesigned ~10 times in 8 days (May 13-21): VOO+QQQM → SPYG → XLK+MRVL → XLK+AVGO → VUG → QQQM → AVGO+RKLB+Netweb → DRAM+NASA ETFs. Each had a defensible rationale; the aggregate was decision-churn that became the dominant risk. The parking lot honors the research instinct without letting it destabilize the committed plan.
+
+**The tell:** when a new pick "feels clearly better, I should switch now" — that feeling is the dopamine of research, not investment edge. Log it here, don't act.
+
+| Logged | Idea | One-line thesis | TER / note |
+|---|---|---|---|
+| 2026-05-21 | **DRAM (Roundhill Memory ETF)** | Memory-chip cycle play (Micron, SK Hynix, Samsung) | 0.65% TER (4.3x QQQM), actively managed, commodity-cycle boom/bust, closure risk. Micron already ~1% of QQQM. |
+| 2026-05-21 | **NASA / Roundhill Space & Technology ETF** | Space + aerospace-defense thematic | ~0.6-0.75% TER, actively managed, overlaps with RKLB (already in v3.0 satellite plan), early/speculative, closure risk. |
+
+**August 2026 review question for each parked idea:** Does this add exposure I don't already have via QQQM + the v3.0 satellites (AVGO/RKLB/Netweb)? If no → skip. If yes → does the thematic exposure justify a 0.6%+ TER vs holding the underlying directly? Only then consider for the Sept allocation.
+
+---
+
 ## 6. Concrete Triggers (replaces vague "decide later" language)
 
-### Nippon India Power & Infra exit
+### Nippon India Power & Infra exit — ✅ EXECUTED 2026-05-21
 
-Use a hard rule, not intuition:
-- **Stop fresh SIP** when trailing 1-year return < 12% (signals cycle has cooled)
-- **OR stop fresh SIP** 24 months from today (2028-05-13) regardless — sector cycle exhaustion average
-- **Redirect the ₹5K/mo to UTI Nifty Next 50 Index Fund**
-- **Don't redeem existing units** — let them ride. Only stop fresh contributions.
+- **Fresh SIP STOPPED 2026-05-21** — earlier than the 24-month trigger, but defensible: the power/infra sector is at a cycle peak (names like MTAR +200% YTD), and adding to a thematic fund at the top of its cycle is exactly what this trigger guards against.
+- **₹5K/mo redirected to UTI Nifty Next 50** (₹4.5K → ₹9.5K).
+- **Existing Nippon units retained** — riding, not redeemed.
+- Original trigger logic (kept for context): stop when trailing-1yr <12% OR at 24 months. Stopped on the qualitative "sector at cycle peak" judgment instead.
 
 ### Reliance decision triggers (resolved by v2.6/v2.7 exit)
 
@@ -391,6 +411,7 @@ This document is structured personal analysis based on publicly available 2026 i
 
 | Date | Change |
 |---|---|
+| 2026-05-21 | **Process discipline (NOT a v-bump — deliberately not v3.1):** (a) **Nippon Power & Infra SIP STOPPED** — fresh contributions halted (sector at cycle peak), ₹5K/mo redirected to UTI Nifty Next 50 (now ₹9.5K/mo). Existing units held. (b) **Ideas Parking Lot created (§5.5)** — DRAM (Roundhill Memory ETF) and NASA/Roundhill Space ETF logged there, NOT added to the live plan. (c) **Decision freeze instituted until 2026-08-01** — no redesign of the Sept-incentive allocation before August. Reason: the Sept allocation was redesigned ~10 times in 8 days for money 4 months out; the churn became the dominant risk. v3.0 satellite plan (AVGO+RKLB+Netweb) stands frozen. This entry is a *process* change to stop the loop — no allocation pivot. |
 | 2026-05-18 | **v3.0:** Architectural restructure of monthly cadence and Sept incentive split. (a) **AVGO removed from monthly DCA** — now incentive-funded (₹20K from Sept). (b) **Liquid fund monthly SIP removed** — now incentive-funded (₹30K from Sept). (c) **QQQM added as ₹8K/mo monthly SIP** (previously incentive-STP-only in v2.7). (d) **3-stock satellite portfolio** seeded from Sept incentive: AVGO ₹20K + RKLB (Rocket Lab) ₹15K + Netweb Technologies ₹22.5K. (e) BE (Bloom Energy) explicitly rejected at 119x P/E + 228% YTD entry; MTAR at 170x P/E rejected; AMD rejected as commodity 2nd-source bet; Kaynes considered but rejected in favor of Netweb's NVIDIA-exclusive moat. **Rationale for v3.0 (despite stated v2.7 30-day lock):** post-13F hedge-fund-filing research surfaced new candidates (RKLB pre-Neutron asymmetry, Netweb sovereign AI moat) that were unavailable when v2.7 was locked. The lock was broken consciously after research — recorded here as documented intentional deviation, not undirected drift. Future locks should account for "new information arriving" as a legitimate unlock trigger. AVGO concentration drops from ~47% (v2.7) to ~26% of US allocation (v3.0) due to 3-stock spread. |
 | 2026-05-18 | **v2.7:** **VUG replaced by QQQM** as primary US ETF. Rationale: higher trailing 5-yr returns (~18%/yr QQQM vs ~15.5%/yr VUG) driven by Nasdaq mega-cap tech concentration. Trade-off accepted: QQQM's Nasdaq-only filter structurally excludes NYSE-listed AI second-derivative names (ANET, ORCL, LLY) that VUG would have captured at index weight. Mitigation plan: add direct single-stock positions in Phase 2 — **ANET** (AI networking, NYSE) and **ORCL** (cloud AI, NYSE) as ₹2-3K/mo each once monthly capacity scales post-raise. v2.6 RIL exit decision unchanged — proceeds now STP into QQQM instead of VUG, same ₹8-9K/month cadence May-Aug 2026. AVGO concentration ~47% of US allocation unchanged (AVGO weight is ~5% inside both QQQM and VUG). *Superseded by v3.0 same day.* |
 | 2026-05-18 | **v2.6:** (a) **XLK replaced by VUG** as primary US ETF — broader cap base (~150-200 holdings vs XLK's 70), lower TER (0.03% vs 0.08%), captures NYSE-listed AI second-derivative names (ANET, LLY, ORCL) that QQQM/XLK structurally exclude. Tradeoff: loses CEG (energy-AI, Nasdaq-listed → in QQQM, not VUG); will plug via direct CEG position in Phase 2 if needed. (b) **RIL early exit:** Sell 26 RIL shares at small loss (-₹1,239), STP ~₹34.6K proceeds into VUG over 4 months (May-Aug 2026). Rationale: Jio IPO catalyst indefinitely delayed; 3 of 4 SIPs already hold RIL (Nippon P&I top holding); direct position was redundant concentration that became drift dressed as patience. Re-entry only if Jio IPO is officially announced with committed date. (c) AVGO concentration drops from ~53% (XLK) to ~47% (VUG) of US allocation — slightly less concentrated; AVGO inside VUG is only ~5% weight vs ~15% inside XLK. *Superseded by v2.7 same day.* |
