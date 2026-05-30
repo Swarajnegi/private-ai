@@ -101,23 +101,28 @@ Total 18 callable: 16 concurrency-safe, 2 unsafe + requires_permission (code_exe
 
 ---
 
-## Sub-Phase 3.4: ReAct Pattern + Reflection ⬜
+## Sub-Phase 3.4: ReAct Pattern + Reflection 🔄 (7/9 builds shipped 2026-05-30; concept lessons deferred per L301)
+
+**Build closure 2026-05-30 (commit pending — see KB L302).** Workflow-orchestrated parallel build of 6 foundation modules + adversarial review across 4 lenses surfaced 4 critical + 15 high findings; all applied. react.py orchestrator built solo with 36 baseline smoke tests; Workflow 2 review surfaced 1 critical + 4 high more (MIRROR-Lite + bare-JSON tool-call interaction breaking parse; ASK→ALLOW promotion in ask_handler path; per-observation budget dropping later results; LLM-controlled tool args leaking verbatim to trace persister). All 5 fixed + regression-guarded.
+
+**Total Stage 3.4 build:** ~3,500 LOC across 7 modules, 203 smoke tests, 18-module agent registry passes regression sweep.
 
 **Goal:** Implement the Reason → Act → Observe loop. Absorb metacognitive review's MIRROR-lite + CoT loop detector here (Decision 2026-05-13).
 
-| Lesson | Topic | JARVIS Use Case | Command |
-|--------|-------|-----------------|---------|
-| 3.4.1 | ReAct Overview | The core agent loop | `@[/learn] Explain the ReAct pattern.` |
-| 3.4.2 | Trace Logging (STEAL #5) | Port OpenJarvis TraceStep + StepType + EventBus pattern | `/dev Port OpenJarvis traces/collector.py TraceStep + StepType enum + EventBus to jarvis_core/agent/trace.py for the ReAct loop.` |
-| 3.4.3 | Observation Parsing | Handle tool outputs in the loop | `/dev Build an observation parser for ReAct.` |
-| 3.4.4 | Loop Termination | Know when to stop | `@[/learn] Explain stopping conditions in agents.` |
-| **3.4.5** | **MIRROR-lite system prompt** (metacognitive integration) | Single-pass structured reflection — instruct the model to evaluate Goals / Reasoning / Memory in one pass before responding. Zero extra inference cost. | `/dev Add MIRROR_LITE_PROMPT_TEMPLATE to jarvis_core/agent/react.py and inject it into the system prompt of every ReAct iteration.` |
-| **3.4.6** | **CoT loop detector** (metacognitive integration) | Regex over `<think>` tag content for transition tokens (wait, alternatively, re-evaluate, actually, no,). Frequency > 2 per token-class = reasoning instability flag. | `/dev Implement MetaR1Monitor.from_cot_trace() in jarvis_core/agent/observer.py per metacognitive review Section 4 part C.` |
-| **3.4.7** | **Tool concurrency partitioning (STEAL #8)** | Between LLM tool-call emission and dispatch: partition the tool-calls into `is_concurrency_safe=True` (batch via `asyncio.gather`) vs. stateful (serial). ~50% latency reduction on multi-tool turns. | `/dev Port OpenClaude src/services/tools/toolOrchestration.ts runTools partition logic to jarvis_core/agent/react.py dispatch step.` |
-| **3.4.8** | **Hook-driven permission engine (STEAL #9)** | Declarative `allow/ask/deny` rules with wildcard/regex, loaded from settings JSON. Async classifiers per tool. Plan-mode equivalent gate. CRITICAL safety layer before Bash/Write/Edit. | `/dev Port OpenClaude src/hooks/toolPermission/PermissionContext.ts + src/utils/permissions/PermissionRule.ts to jarvis_core/agent/permissions.py. Schema + matcher + interactive CLI prompt.` |
-| **3.4.9** | **Bash AST safe-command classifier (STEAL #10)** | Parse bash AST (via `bashlex`), auto-approve safe ops (grep/cat/ls/head/tail/wc/find) BEFORE permission UX. Block command substitution in array subscript position (per OpenClaude fix `4a98a4a`). | `/dev Port OpenClaude src/tools/BashTool/bashPermissions.ts as a BashClassifier hook inside the STEAL #9 PermissionContext. Use Python bashlex library.` |
+| Lesson | Topic | JARVIS Use Case | Status |
+|--------|-------|-----------------|--------|
+| 3.4.1 | ReAct Overview | The core agent loop | ⊘ Deferred (concept lesson, per L301) |
+| 3.4.2 | Trace Logging (STEAL #5) | Port OpenJarvis TraceStep + StepType + EventBus pattern | **[OK] COMPLETE** — `trace.py` (442 LOC, 28 smoke tests). EventBus pub/sub with snapshot-during-publish, fault-isolated subscriber callbacks (sync+async), SubscriptionHandle for unsubscribe, MappingProxyType-wrapped payload (immutable post-construction). |
+| 3.4.3 | Observation Parsing | Handle tool outputs in the loop | **[OK] COMPLETE** — `observation.py` (329 LOC, 19 smoke tests). format_observation wraps Step/ToolResult into LLM-readable text; hits-shape compact format; defensive coercion for score=None / non-numeric; newline sanitation in hit content. |
+| 3.4.4 | Loop Termination | Know when to stop | ⊘ Deferred (concept lesson, per L301; termination logic landed in react.py via max_iterations + final_text branch + abort_on_instability) |
+| **3.4.5** | **MIRROR-lite system prompt** | Single-pass structured reflection — Goals/Reasoning/Memory before responding. | **[OK] COMPLETE** — `reflection.py` (331 LOC, 12 smoke tests). MIRROR_LITE_PROMPT_TEMPLATE constant + inject_mirror_lite (idempotent) + extract_mirror_reflection (robust to code fences). Integrated in react.py system prompt injection + per-turn extraction. |
+| **3.4.6** | **CoT loop detector** | Regex over `<think>` tag content; frequency > 2 per token-class = unstable. | **[OK] COMPLETE** — `monitor.py` (411 LOC, 34 smoke tests). MetaR1Monitor.from_cot_trace; patterns precompiled at class-load (no per-call regex compile); longer-phrase-first masking prevents double counting (e.g., "wait but" no longer double-counts "wait"); word-boundary protection. |
+| **3.4.7** | **Tool concurrency partitioning (STEAL #8)** | Partition tool-calls into safe (asyncio.gather) vs stateful (serial). ~50% latency reduction. | **[OK] COMPLETE** — Implemented in BOTH `executor.py` (Stage 3.3.3 plan-driven path) AND `react.py` lines 332-353 (single-turn LLM tool-call dispatch path). Tool.is_concurrency_safe drives the partition; results re-ordered via id(tc) keyed dict to preserve LLM emission order. |
+| **3.4.8** | **Hook-driven permission engine (STEAL #9)** | Declarative allow/ask/deny rules + async classifiers per tool. CRITICAL safety layer. | **[OK] COMPLETE** — `permissions.py` (551 LOC, 30 smoke tests). PermissionRule with regex-validate-at-construction; PermissionContext with first-match-wins rules + async classifier override; 16KB serialized-input cap to defend against ReDoS; json.dumps failure swallow; non-PermissionDecision classifier return validated. **Fail-closed by design**: default=ASK, ask_handler returning non-ALLOW blocks (react.py T17 regression guard). |
+| **3.4.9** | **Bash AST safe-command classifier (STEAL #10)** | Parse bash AST; auto-approve safe ops; block CVE patterns. | **[OK] COMPLETE** — `bash_classifier.py` (471 LOC, 29 smoke tests). Walks bashlex AST recursively (pipelines, substitutions, redirects). Auto-DENY for write redirects on safe commands, find -fprint/-fls/-exec, sed/awk dropped from SAFE_COMMANDS (Turing-complete attack surface via system()/getline/e-cmd), CVE regex tightened for whitespace inside subscript. Registered as classifier for `shell_run` via PermissionContext.register_classifier. |
+| (orchestrator) | **react.py — ReActLoop** | Wires all above into the Reason→Act→Observe loop. | **[OK] COMPLETE** — `react.py` (883 LOC + fixes; 51 smoke tests). MIRROR-Lite stripped before parse (CRITICAL fix), per-observation budget on join, redact-by-default trace events (`arg_keys` only unless trace_arguments=True), sync/async LLM call dispatch, sync/async ask_handler dispatch with fail-closed semantics, broken-observer/hook swallowed, max_iterations safety cap, full ReActResult with messages + tool_calls + reflections + instability report. |
 
-**Practical Exercise:** ReAct agent answers a multi-hop question with tool use; trace records all reasoning, the loop detector flags any circular pattern, concurrency partitioning batches 3 read-only tool-calls in parallel, and the permission engine auto-approves `grep -n foo bar` while prompting for `rm -rf /tmp/`.
+**Practical Exercise:** ReAct agent answers a multi-hop question with tool use; trace records all reasoning, the loop detector flags any circular pattern, concurrency partitioning batches 3 read-only tool-calls in parallel, and the permission engine auto-approves `grep -n foo bar` while prompting for `rm -rf /tmp/`. *(Deferred to Stage 3.5 integration where heartbeat-driven consolidation will exercise the full loop against real KB queries.)*
 
 ---
 
@@ -168,7 +173,7 @@ Build a complete agent that:
 | 3.1 Function Calling + Cognitive_State_Update + TextTelemetry | [OK] Complete | 7/7 |
 | 3.2 Tool Design & Registration (Phases A/B/C shipped — 18 callable tools; 3.2.3 lifecycle hooks shipped) | 🔄 In Progress | 3/4 |
 | 3.3 Planning & Decomposition (3.3.2 plan.py + 3.3.3 executor.py shipped; concept lessons deferred) | 🔄 In Progress | 2/4 |
-| 3.4 ReAct + MIRROR-lite + CoT detector + STEAL #8/#9/#10 | ⬜ Not Started | 0/9 |
+| 3.4 ReAct + MIRROR-lite + CoT detector + STEAL #5/#8/#9/#10 (trace, observation, monitor, reflection, permissions, bash_classifier, react.py) | 🔄 In Progress | 7/9 |
 | 3.5 Memory-Augmented Agents + Heartbeat Consolidation + /compact (STEAL #12) | ⬜ Not Started | 0/9 |
 
 ---
