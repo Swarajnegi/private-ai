@@ -328,6 +328,184 @@ In `df.explain('formatted')` with AQE on, you'll see `AdaptiveSparkPlan` wrappin
 
 ---
 
+### Q1-deep — Full execution lifecycle, chronologically (the "movie")
+
+**Question:** Walk through, in chronological order, exactly what runs and how many times when a real query with narrow + wide transformations and an action executes — including DAGScheduler, per-stage Tungsten codegen, TaskScheduler, executors, and AQE.
+
+**Canonical answer:**
+
+Good catch — that block is the *runtime* half, and I stopped the movie right at the shuffle without showing the machinery that actually dispatches and runs the work. Let me re-run the same movie with those gears installed. Same tiny `sales` file (2 partitions, answer is NYC 300 / LA 600), same script. I'll keep T+0 through T+2 short since you've got them, and expand the moment `.show()` fires.
+
+---
+
+## Recap of the lazy part (T+0 → T+2)
+
+```python
+df  = spark.read.parquet("sales")        # T+0  → sticky note, nothing runs
+us  = df.filter("country = 'US'")        # T+1  → sticky note (narrow)
+agg = us.groupBy("city").sum("amount")   # T+2  → sticky note (WIDE = needs a shuffle)
+```
+
+Three sticky notes on the wall. No file touched yet. Now the trigger.
+
+The `sales` file, split into **2 partitions** (each partition = "a piece of the data that one worker handles"):
+
+```
+PARTITION A (handled by Worker 1)      PARTITION B (handled by Worker 2)
+  NYC,    US, 100                        LA,     US, 300
+  LA,     US, 200                        NYC,    US, 50
+  London, UK, 50                         Berlin, DE, 90
+  NYC,    US, 150                        LA,     US, 100
+  Paris,  FR, 80                         London, UK, 70
+```
+
+---
+
+## ⏱ T+3 — `agg.show()` fires
+
+### Step A — Plan, **once**, on the driver
+
+The **driver** (the boss machine / your `SparkSession`) reads the sticky notes and produces one optimized physical plan: *read → filter US → partial-sum → shuffle → final-sum*. This is the Catalyst pipeline. **One time per action.** Done. Now it hands off to runtime.
+
+### Step B — Cut the plan into Stages at the shuffle (the **DAGScheduler**)
+
+The **DAGScheduler** is the part of the driver that slices the plan wherever a shuffle happens. One shuffle (the `groupBy`) → **2 stages**:
+
+```
+STAGE 1: read → filter US → partial sum     ──shuffle──▶   STAGE 2: final sum → show
+```
+
+Here's the key thing the last answer skipped: **Spark does not run both stages at once.** Stage 2 *cannot* start until Stage 1's shuffle output physically exists. So Spark walks the stages **in order**, and before any stage's data is touched, it does two prep jobs. Watch Stage 1 fully, then the AQE checkpoint, then Stage 2.
+
+---
+
+### STAGE 1 — start to finish
+
+**B1 — Tungsten codegen (compile this stage, once)**
+
+Naively, Spark would walk every row asking "filter? yes. now sum? yes." — millions of tiny function calls, slow. Instead, **Tungsten codegen** writes *one custom Java function* for the whole fused stage (read + filter + partial-sum together) and compiles it to **bytecode** (the low-level instructions the JVM actually runs).
+
+- Happens **once per stage**, on the driver.
+- The compiled function is then *shipped to every executor* and **reused for all that stage's partitions** — it is NOT recompiled per partition or per row.
+
+So: Stage 1 → 1 compiled function.
+
+**B2 — TaskScheduler hands out the work**
+
+The DAGScheduler gives Stage 1 to the **TaskScheduler** (the dispatcher). It creates **one task per partition** — a **task** = "run this stage's compiled function on one partition." 2 partitions → **2 tasks**. It then places each task on an **executor**.
+
+> **Executor** (define): a worker process (a JVM) running on a worker machine, with some CPU cores and memory. It's the thing that actually *executes* tasks. The driver coordinates; executors do the labor.
+
+So: Task-1 → Executor on Worker 1 (Partition A), Task-2 → Executor on Worker 2 (Partition B).
+
+**B3 — Tasks run on the executors (in parallel)**
+
+Each executor runs the compiled Stage-1 function on its partition:
+
+- **Worker 1 / Partition A:** read 5 rows → keep US → `NYC 100, LA 200, NYC 150` → partial sum: **NYC 250, LA 200**
+- **Worker 2 / Partition B:** read 5 rows → keep US → `LA 300, NYC 50, LA 100` → partial sum: **NYC 50, LA 400**
+
+**B4 — Shuffle write**
+
+Each executor writes its partial results to local shuffle files, bucketed by city, ready to be picked up by Stage 2. Stage 1 is now *done*.
+
+---
+
+### ⏱ AQE checkpoint — *after* Stage 1, *before* Stage 2
+
+Now that real data exists on disk, **AQE (Adaptive Query Execution)** wakes up and reads the actual shuffle stats: *"How big is the data? How many groups?"*
+
+In our case it sees: **only 2 cities, a few bytes.** But the original plan said "use 200 reduce partitions for Stage 2" (Spark's default). That would spawn 200 tasks to process 2 rows — absurd. So AQE **amends Stage 2's plan**: coalesce 200 → **1 partition**.
+
+Two things to nail here:
+- AQE **amends the not-yet-run stages' physical plan** — it does *not* re-run Step A (the Catalyst pipeline). The plan is edited in place, not rebuilt.
+- It fires **once per shuffle boundary**. We have 1 shuffle → 1 AQE checkpoint. (A query with 3 shuffles gets 3 such checkpoints, each between two stages.)
+
+---
+
+### STAGE 2 — start to finish
+
+Same prep loop, now on the amended plan:
+
+- **Codegen:** compile Stage 2's operator (final-sum) → 1 compiled function (Stage 2's own).
+- **TaskScheduler:** create tasks = **1 task** now (thanks to AQE's coalesce; would've been 200), placed on one executor.
+- **Run:** that executor reads the shuffle files and finishes the sums:
+  - NYC = 250 + 50 = **300**
+  - LA = 200 + 400 = **600**
+
+### Step F — result to the driver → your screen
+
+```
++----+-----------+
+|city|sum(amount)|
++----+-----------+
+| NYC|        300|
+|  LA|        600|
++----+-----------+
+```
+
+---
+
+## The full chronological skeleton
+
+```
+agg.show()  ── ACTION fires
+  │
+  ├─ Step A: PLAN (Catalyst pipeline)         ── driver, ONCE per action
+  │
+  ├─ Step B: DAGScheduler cuts at shuffle     ── 1 shuffle → 2 stages
+  │
+  ├─ STAGE 1  (runs first)
+  │     ├─ Tungsten codegen     → 1 compiled function for this stage
+  │     ├─ TaskScheduler        → 1 task per partition (2 tasks)
+  │     ├─ tasks run on executors → partial sums
+  │     └─ shuffle write
+  │
+  ├─ ✦ AQE checkpoint  ── after Stage 1's shuffle; amends Stage 2 (200→1 partition).
+  │                       Does NOT re-run Step A.
+  │
+  ├─ STAGE 2  (runs after Stage 1 + AQE)
+  │     ├─ Tungsten codegen     → 1 compiled function for this stage
+  │     ├─ TaskScheduler        → 1 task (after AQE coalesce)
+  │     └─ tasks run on executors → final sums
+  │
+  └─ Step F: result → driver → screen
+```
+
+---
+
+## Updated counting table
+
+| Thing | How many times | Tied to |
+|---|---|---|
+| **Catalyst plan** (Step A) | Once | the **action** |
+| **DAGScheduler split** | Once per job | the action |
+| **Stages** | (number of shuffles) + 1 | each **wide** transformation |
+| **Tungsten codegen** | Once **per stage** (compiled on driver, reused by all that stage's tasks) | each stage |
+| **Tasks** | One **per partition, per stage** | partitions |
+| **Executors** | The worker processes that *run* the tasks | cluster size |
+| **AQE re-optimization** | Once **per shuffle boundary** (amends, never rebuilds) | each shuffle |
+| **Whole job re-run** | Once **per action**, unless `cache()` | each action |
+
+---
+
+## Textbook-name map (everything you just watched)
+
+- **Driver** — coordinator; runs Step A, the DAGScheduler, and the TaskScheduler.
+- **Catalyst pipeline** — Step A planning (*Parser → Analyzed → Optimized → Physical*). Once per action.
+- **DAGScheduler** — cuts the plan into stages at shuffles (Step B).
+- **Tungsten / whole-stage codegen** — compiles each stage's fused operators into one bytecode function (B1). Once per stage.
+- **TaskScheduler** — creates one task per partition and assigns it to an executor (B2).
+- **Executor** — the worker JVM that actually runs tasks (B3).
+- **Shuffle** — the data movement at a wide transformation; the boundary between two stages (B4).
+- **AQE** — re-optimizes the *remaining* stages after a shuffle, using real stats (the checkpoint). Amends, doesn't rebuild.
+
+---
+
+**One-liner, now complete:** *The action triggers one plan (driver/Catalyst); the DAGScheduler cuts it into stages at each shuffle; for each stage in turn, Tungsten compiles it once, the TaskScheduler launches one task per partition onto executors, and after each shuffle AQE amends the remaining stages — then the next action does it all again unless you `cache()`.*
+
+---
+
 ### Q3-deep — Every Spark join algorithm, properly
 
 **Question:** Give a proper explanation of each Spark join algorithm — SortMergeJoin, BroadcastHashJoin, ShuffleHashJoin, BroadcastNestedLoopJoin, CartesianProduct.
@@ -465,7 +643,157 @@ DPP threads the needle — runtime, but does a small read first (the dim filter)
 
 ## Streaming Semantics
 
-*(No entries yet — Q6–Q10 pending.)*
+### Q6 — Watermarks
+
+**Question:** What is a watermark in Structured Streaming? What does setting `withWatermark("event_time", "10 minutes")` actually mean, and what happens to late data that arrives after the watermark threshold?
+
+**Canonical answer:**
+
+A watermark is a **dropping threshold on event time** — not a wait window. It tells Spark: "I don't expect data older than X relative to the latest data I've seen."
+
+**Exact definition:**
+```
+watermark = max(event_time seen so far) − threshold
+```
+`withWatermark("event_time", "10 minutes")` means: at any point in the stream, the watermark = the highest `event_time` Spark has observed minus 10 minutes. Any row with `event_time < watermark` is considered too late and is **silently dropped** from stateful operations.
+
+**Primary use case — windowed aggregations:**
+```python
+df.withWatermark("event_time", "10 minutes") \
+  .groupBy(window("event_time", "1 hour")).count()
+```
+Without a watermark, Spark can never safely evict state for old windows (a record could theoretically arrive from any past timestamp) → unbounded state accumulation → OOM. The watermark tells Spark when a window is finalized: once `watermark > window_end`, no late record can change that window → state is safe to evict.
+
+**Secondary use case — stream-stream joins:**
+Both sides buffer rows in state waiting for a match from the other side. The watermark on each side bounds how long rows are kept waiting. Rows older than the watermark are dropped from both sides' state buffers.
+
+**What a watermark does NOT do:**
+- It does not delay processing waiting for late data to arrive.
+- It does not guarantee all late data is captured — data arriving after the watermark threshold is dropped silently.
+- It does not affect sources or reading — only what happens to late rows once they're read.
+
+**In `explain` / Spark UI:** look for `EventTimeWatermark` in the physical plan. In Spark UI → Structured Streaming tab → watermark timestamp advances as max event time advances.
+
+---
+
+### Q7 — Exactly-once semantics
+
+**Question:** What does "exactly-once" mean in Spark Structured Streaming? What are the three components that must all be in place to achieve it end-to-end?
+
+**Canonical answer:**
+
+**Definition:** Each input record produces exactly one output effect — no duplicates written to the sink, no records silently dropped. Distinct from:
+- **At-most-once**: records may be dropped on failure. Simpler but lossy.
+- **At-least-once**: records are never dropped but may be duplicated on restart. Most common default.
+
+Exactly-once is hard because crashes cause restarts, restarts cause source re-reads from the last checkpoint, and re-reads cause duplicate writes unless the sink is idempotent.
+
+**The three required components:**
+
+**1. Replayable source**
+The source must support re-reading from a specific offset after a failure. Kafka: replay from committed offset. File sources (ADLS, S3): files are immutable, re-read by path. The source must expose a monotonically advancing offset that Spark can checkpoint.
+
+**2. Idempotent sink (or transactional sink)**
+Writing the same data twice must produce the same result as writing once. Delta Lake achieves this via the **transaction log**: each streaming micro-batch is assigned a unique `batchId`. Before writing, Spark checks if `batchId` already exists in the Delta log. If yes → skip (already committed). If no → write atomically. This makes Delta Lake an exactly-once sink regardless of retries.
+
+**3. Write-ahead checkpointing**
+Before processing a batch, Spark commits the **source offset** to the checkpoint directory (DBFS/ADLS). On restart, it reads the checkpoint to know exactly which offsets to process next — avoiding both gaps (at-most-once) and uncontrolled re-reads (unchecked at-least-once).
+
+**Common confusion:** `trigger(once=True)` / `trigger(availableNow=True)` in Auto Loader is a **trigger mode** (process available data and stop), not delivery semantics. You can run with `availableNow=True` and still have at-least-once semantics if your sink isn't idempotent.
+
+**Senior-bar add:** Exactly-once is end-to-end: source → processing → sink. Even if Spark achieves exactly-once processing internally, if the sink is a REST API without idempotency keys, you still have at-least-once at the system level.
+
+---
+
+### Q8 — Stateful vs stateless streaming
+
+**Question:** Give a concrete example of a stateful and a stateless streaming operation. For stateful operations, what does checkpointing protect against — and what does it NOT protect against?
+
+**Canonical answer:**
+
+**Stateless** — each micro-batch processed independently, no memory of prior batches:
+- `filter`, `select`, `withColumn`, `map` — each batch self-contained.
+- Even simple aggregations within a single batch (`count()` on the current batch) are stateless.
+- Schema enforcement, type casting, deduplication within a batch.
+
+**Stateful** — requires memory across micro-batches:
+- **Windowed aggregation:** `groupBy(window("event_ts", "1 hour")).agg(count())` — partial counts must persist across batches until the window closes.
+- **Stream-stream join:** both sides buffer rows in state, waiting for a match from the other side. Rows held until the watermark says they're too old.
+- **`mapGroupsWithState` / `flatMapGroupsWithState`:** arbitrary user-defined state per group (e.g., sessionization, fraud pattern detection).
+- **Deduplication across batches:** `dropDuplicates("event_id")` — Spark stores all seen `event_id` values in state.
+
+**What checkpointing protects against:**
+- **Driver/executor crash and restart.** State (partial window counts, buffered join rows, dedup seen-IDs) is saved to durable storage (DBFS/ADLS) after each batch. On restart, Spark restores both the source offset AND the state, resuming as if nothing happened.
+
+**What checkpointing does NOT protect:**
+- **Corrupt state from logic bugs** — if your stateful function has a bug, restoring from checkpoint restores the corrupt state.
+- **Schema-incompatible query changes** — changing the schema of state (e.g., adding a field to `mapGroupsWithState`) makes the checkpoint unreadable. Requires deleting checkpoint and full restart (state loss).
+- **Data already dropped by watermark** — late data dropped before reaching state cannot be recovered from checkpoint.
+- **Sink failures** — checkpoint protects the Spark offset; if the sink (e.g., a REST API) fails after Spark committed the offset but before the sink confirmed, that record is lost at the sink layer.
+
+---
+
+### Q9 — Trigger modes
+
+**Question:** Name all trigger modes in Structured Streaming. When would you use each in production?
+
+**Canonical answer:**
+
+| Trigger | Syntax | Behavior | When to use |
+|---|---|---|---|
+| **Default (unspecified)** | `.trigger()` omitted | Micro-batch: next batch starts immediately when previous completes. As fast as possible. | Maximum throughput, latency-tolerant pipelines. Kafka→Delta ingest where you want highest event/sec. |
+| **ProcessingTime** | `.trigger(processingTime="30 seconds")` | Wait at least N between batch starts. If a batch takes longer than N, next starts immediately after. | Dashboards or downstream consumers that only need updates on a fixed cadence. Reduces small-file problem. |
+| **Once** | `.trigger(once=True)` | Process ALL available data in one or more micro-batches, then stop. Deprecated in DBR 10.4+. | Replaced by AvailableNow. |
+| **AvailableNow** | `.trigger(availableNow=True)` | Process all data available at trigger time across multiple micro-batches, then stop. Uses checkpoint to track what's been processed. | Scheduled batch-style runs on streaming infrastructure. Best of both: structured streaming semantics + batch economics. Cron-triggered. |
+| **Continuous** | `.trigger(continuous="1 second")` | Fundamentally different execution model. NOT micro-batch. Records processed row-by-row with ~1ms end-to-end latency. Experimental. Limited operator support (no aggregations). | Ultra-low latency requirements where micro-batch latency (~500ms min) is too high. Rarely used in practice. |
+
+**Common mistake:** default trigger is NOT `ProcessingTime("500ms")`. It's "as fast as possible" — no interval at all.
+
+**Production decision tree:**
+- Need < 1s latency → Continuous (if your ops support experimental mode)
+- Need lowest latency micro-batch → Default (unspecified)
+- Downstream only needs updates every 5–30 min → ProcessingTime
+- Want to run streaming job as a scheduled batch → AvailableNow
+- Legacy codebase pre-DBR 10.4 → Once (still works, just deprecated)
+
+---
+
+### Q10 — Streaming + Delta Lake exactly-once
+
+**Question:** How does Delta Lake enable exactly-once writes from a streaming job? What is the role of the transaction log in preventing duplicate writes on driver restart?
+
+**Canonical answer:**
+
+Delta Lake enables exactly-once via **transactional idempotency at the sink**, implemented through the transaction log (`_delta_log/`).
+
+**The mechanism — per-batch commit tracking:**
+
+Every Structured Streaming micro-batch that writes to Delta is assigned a monotonically increasing `batchId` (0, 1, 2, ...). Before writing data, Spark checks the Delta transaction log:
+- If `batchId` already exists in the log → **skip, already committed.** No data written.
+- If `batchId` not in the log → **write atomically.** Data files written to temp paths, then a single JSON commit entry added to `_delta_log/` — atomic on ADLS/S3 via rename semantics.
+
+This is idempotent by construction: replaying batch 42 ten times produces the same result as playing it once.
+
+**What the transaction log contains per commit:**
+- The `batchId` (stored as a `StreamingUpdate` action in the log)
+- Paths of new Parquet files added
+- Any files removed (compaction)
+- Commit timestamp
+
+**Restart scenario:**
+1. Driver crashes mid-batch 42 (data files written but commit not yet added to log).
+2. On restart, Spark reads checkpoint: last committed source offset = end of batch 41.
+3. Spark re-reads source from batch 41's end offset → rebuilds batch 42.
+4. Attempts to write batch 42 → checks Delta log → `batchId=42` not present → writes and commits.
+5. Result: no duplicate, no data loss.
+
+**If crash happened after commit:**
+Spark's source checkpoint also advances after a successful batch. On restart, checkpoint says "batch 42 done" → Spark reads from batch 43's offset. No re-processing of batch 42.
+
+**What this requires from the source:**
+The source must be replayable (Kafka: replay from offset; file sources: files are immutable). If the source isn't replayable (e.g., a socket or a queue that deletes on read), exactly-once is impossible regardless of the sink.
+
+**Senior-bar nuance:** Delta's exactly-once guarantee is for the **write path**. If your streaming query also reads from Delta (e.g., a lookup join), and that Delta table changes between micro-batches, the read is snapshot-isolated per batch — consistent, but not "exactly-once reads." Exactly-once is a write-side property.
 
 ---
 
