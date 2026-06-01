@@ -98,3 +98,5 @@ build/
 jarvis_data/openclaude_jarvis_patches.patch
 jarvis_data/Q&A/
 ollama_models/
+
+.databricks
