@@ -126,23 +126,27 @@ Total 18 callable: 16 concurrency-safe, 2 unsafe + requires_permission (code_exe
 
 ---
 
-## Sub-Phase 3.5: Memory-Augmented Agents (MemGPT) ⬜
+## Sub-Phase 3.5: Memory-Augmented Agents (MemGPT) 🔄 (Wave 1: 3/9 builds shipped 2026-05-30; concept lessons deferred per L301)
+
+**Wave 1 closure 2026-05-30.** Foundation MemGPT-style three-tier MemoryManager landed + ReActLoop wired for auto-retrieval before each query. Workflow 3 (8 reviewers across 4 lenses) stalled in flight; fell back to solo internal review — found 4 high-severity issues (cross-tier id collision in add(), ASCII-only tokenization in HOT retrieval, missing anti-injection guardrail on auto-retrieved memory, two separate system-role messages violating Anthropic Messages API). All 4 fixed with regression-guard smoke tests.
+
+**Total Wave 1:** ~1,000 LOC across 2 files (memory_manager.py NEW + react.py MOD), 122 smoke tests (51 + 71). 19-module agent regression sweep clean.
 
 **Goal:** Agents that self-manage memory — heartbeat consolidation, hot/warm/cold tiers, self-editing.
 
-> **PRE-3.5 DEPENDENCY (BLOCKING):** Patch `scripts/kb_compact.py` to exclude entries tagged `heartbeat-emitted` from structural-rule displacement. Without this, sleep-time consolidation writes get pruned as near-duplicates. See KB Decision 2026-05-13 metacognitive-integration.
+> **PRE-3.5 DEPENDENCY (BLOCKING):** Patch `scripts/kb_compact.py` to exclude entries tagged `heartbeat-emitted` from structural-rule displacement. ✅ **LANDED** Stage 2.5.8 (kb_compact.py:450 `HEARTBEAT_EXEMPT_TAG = "heartbeat-emitted"`).
 
-| Lesson | Topic | JARVIS Use Case | Command |
-|--------|-------|-----------------|---------|
-| 3.5.1 | Working Memory | Short-term context for current task | `@[/learn] Explain working memory in agents.` |
-| 3.5.2 | Long-Term Memory | Persist to Phase 2 vector store | `/dev Connect agent to ChromaDB memory via the Tool wrappers from 3.2.` |
-| 3.5.3 | Memory Retrieval in Loop | RAG inside the agent loop | `/dev Implement memory-augmented ReAct.` |
-| 3.5.4 | MemGPT Architecture | Hot/warm/cold memory hierarchy | `/research Analyze paper 2310.08560 (MemGPT) for JARVIS memory self-management.` |
-| 3.5.5 | Self-Editing Memory | Agent decides what to remember/forget/update | `/dev Implement MemGPT-style memory manager for JARVIS.` |
-| **3.5.6** | **Async heartbeat event loop** (metacognitive integration) | `request_heartbeat=true` flag on tool calls triggers async consolidation — event-driven, NOT clock-driven (per metacognitive review Section 2.2 hardware reality check) | `/dev Implement heartbeat scheduler in jarvis_core/agent/heartbeat.py with request_heartbeat flag on tool-call interface.` |
-| **3.5.7** | **Sleep-time consolidation agent** (metacognitive integration) | Heartbeat-triggered task: read recent context, extract Cognitive_State_Update, write tagged `heartbeat-emitted` to KB | `/dev Implement consolidation agent in jarvis_core/agent/consolidator.py. Writes use Cognitive_State_Update schema from 3.1.6. ALL entries carry tag heartbeat-emitted.` |
-| 3.5.8 | Agent Evaluation (STEAL #6) | Port OpenJarvis EvalRecord → EvalResult → RunSummary framework | `/dev Port OpenJarvis evals/core/{types,runner,scorer}.py to jarvis_core/agent/evals/ for p50/p95/p99 latency + cost reporting.` |
-| **3.5.9** | **/compact-style working-memory compressor (STEAL #12)** | Async coroutine that, when context > N tokens, calls LLM with structured summarization prompt over the truncation window; emits `SystemCompactBoundaryMessage` dataclass replacing truncated history. TWIN PROCESS with heartbeat-emitted consolidation: /compact writes to short-term working memory, heartbeat writes long-term insights to KB. | `/dev Port OpenClaude src/services/compact/compact.ts pattern. Replace fork with async coroutine. Reuse jarvis_core/memory/compression.py LLM-filter as the summarization primitive.` |
+| Lesson | Topic | JARVIS Use Case | Status |
+|--------|-------|-----------------|--------|
+| 3.5.1 | Working Memory | Short-term context for current task | ⊘ Deferred (concept, per L301) |
+| 3.5.2 | Long-Term Memory | Persist to Phase 2 vector store | **[OK] COMPLETE** — `react.py` ctor accepts `memory_manager: Optional[MemoryManager]`; downstream Tool wrappers from 3.2 still callable via the existing `tool_instances` dict. |
+| 3.5.3 | Memory Retrieval in Loop | RAG inside the agent loop | **[OK] COMPLETE** — `react.py` adds `auto_retrieve_top_k: int` ctor arg + pre-loop `_format_memory_context()` hook that folds top-k hits into the single system message (Anthropic-compatible) with anti-injection guardrail. |
+| 3.5.4 | MemGPT Architecture | Hot/warm/cold memory hierarchy | ⊘ Deferred (research lesson, per L301; structural pattern already encoded in `memory_manager.py`) |
+| 3.5.5 | Self-Editing Memory | Agent decides what to remember/forget/update | **[OK] COMPLETE** — `memory_manager.py` (858 LOC, 51 smoke tests). `MemoryManager` with HOT (in-memory OrderedDict LRU, Unicode token-overlap retrieval), WARM/COLD (shared Chroma collection differentiated by `metadata.tier`), self-editing API: add/promote/demote/evict/clear_hot; tier-weighted score merge (+0.2 HOT, -0.1 COLD); cross-tier id collision check on add; metadata sanitization for Chroma. |
+| **3.5.6** | **Async heartbeat event loop** (metacognitive integration) | `request_heartbeat=true` flag on tool calls triggers async consolidation — event-driven, NOT clock-driven (per metacognitive review Section 2.2 hardware reality check) | ⬜ Wave 2 — `/dev Implement heartbeat scheduler in jarvis_core/agent/heartbeat.py with request_heartbeat flag on tool-call interface.` |
+| **3.5.7** | **Sleep-time consolidation agent** (metacognitive integration) | Heartbeat-triggered task: read recent context, extract Cognitive_State_Update, write tagged `heartbeat-emitted` to KB | ⬜ Wave 2 — `/dev Implement consolidation agent in jarvis_core/agent/consolidator.py. Writes use Cognitive_State_Update schema from 3.1.6. ALL entries carry tag heartbeat-emitted.` |
+| 3.5.8 | Agent Evaluation (STEAL #6) | Port OpenJarvis EvalRecord → EvalResult → RunSummary framework | ⬜ Wave 3 — `/dev Port OpenJarvis evals/core/{types,runner,scorer}.py to jarvis_core/agent/evals/ for p50/p95/p99 latency + cost reporting.` |
+| **3.5.9** | **/compact-style working-memory compressor (STEAL #12)** | Async coroutine that, when context > N tokens, calls LLM with structured summarization prompt over the truncation window; emits `SystemCompactBoundaryMessage` dataclass replacing truncated history. TWIN PROCESS with heartbeat-emitted consolidation: /compact writes to short-term working memory, heartbeat writes long-term insights to KB. | ⬜ Wave 3 — `/dev Port OpenClaude src/services/compact/compact.ts pattern. Replace fork with async coroutine. Reuse jarvis_core/memory/compression.py LLM-filter as the summarization primitive.` |
 
 **Practical Exercise:** Agent self-manages memory: heartbeat triggers consolidation between user turns, promotes important facts, evicts stale entries, remembers user preferences — all without manual `/memory` commands. `kb_compact.py` runs without displacing legitimate transient state observations. `/compact`-style working-memory compressor kicks in when context exceeds threshold, replacing old turns with a single summary boundary message.
 
@@ -174,7 +178,7 @@ Build a complete agent that:
 | 3.2 Tool Design & Registration (Phases A/B/C shipped — 18 callable tools; 3.2.3 lifecycle hooks shipped) | 🔄 In Progress | 3/4 |
 | 3.3 Planning & Decomposition (3.3.2 plan.py + 3.3.3 executor.py shipped; concept lessons deferred) | 🔄 In Progress | 2/4 |
 | 3.4 ReAct + MIRROR-lite + CoT detector + STEAL #5/#8/#9/#10 (trace, observation, monitor, reflection, permissions, bash_classifier, react.py) | 🔄 In Progress | 7/9 |
-| 3.5 Memory-Augmented Agents + Heartbeat Consolidation + /compact (STEAL #12) | ⬜ Not Started | 0/9 |
+| 3.5 Memory-Augmented Agents + Heartbeat + /compact (Wave 1: MemoryManager + ReActLoop wiring shipped) | 🔄 In Progress | 3/9 |
 
 ---
 
