@@ -100,3 +100,6 @@ jarvis_data/Q&A/
 ollama_models/
 
 .databricks
+
+# Personalization capture buffer (machine-local raw firehose; distilled profile + KB entries migrate instead)
+jarvis_data/observation_queue.jsonl
