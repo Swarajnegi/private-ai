@@ -845,6 +845,51 @@ Key documented fact: **`expect_or_fail` fails a single flow and does NOT cause o
 
 ---
 
+### SDP-Q2 — Backfilling historical data into an existing streaming table
+
+**Question:** A streaming table already holds 2026 data (fed incrementally). You need to backfill 2024–2025 (two years of history) into the *same* streaming table — without re-running the backfill on every pipeline update. How?
+
+**Canonical answer:**
+
+Use **multiple flows into one streaming table** — SDP lets many flows target the same table. Split into two:
+- **Continuous incremental flow** — the live 2026+ feed (Auto Loader stream).
+- **One-time backfill flow** — a **batch** read of the complete 2024–2025 history, marked **`ONCE`** so it loads exactly once and never re-runs on later updates (unless the table is fully refreshed).
+
+**The critical detail: `ONCE` is a *flow-level* flag, not an Auto Loader option.** The backfill source is a **batch read** (the history is static/complete); Auto Loader is only for the ongoing stream.
+
+**SQL**
+```sql
+CREATE OR REFRESH STREAMING TABLE orders;
+
+-- continuous incremental (Auto Loader stream)
+CREATE FLOW incremental AS INSERT INTO orders BY NAME
+SELECT * FROM STREAM read_files('/landing/2026/', format => 'csv');
+
+-- one-time backfill (BATCH read, runs once)
+CREATE FLOW backfill_history AS INSERT INTO orders BY NAME ONCE
+SELECT * FROM read_files('/archive/2024_2025/', format => 'parquet');
+```
+
+**Python**
+```python
+dp.create_streaming_table("orders")
+
+@dp.append_flow(target="orders")                 # continuous incremental
+def incremental():
+    return (spark.readStream.format("cloudFiles")
+            .option("cloudFiles.format", "csv").load("/landing/2026/"))
+
+@dp.append_flow(target="orders", once=True)      # one-time backfill, BATCH read
+def backfill_history():
+    return spark.read.format("parquet").load("/archive/2024_2025/")
+```
+
+**Senior-bar nuance:** `ONCE` runs the backfill flow a single time; later updates skip it (its checkpoint marks it done) — *unless* the table is fully refreshed, which re-runs all flows. Backfill and incremental flows are independent (own checkpoints, keyed by flow name), so you can add the backfill later without touching the live stream and without a full refresh. Common interview slip (mine, 2026-06-03): saying `ONCE` lives "in the Auto Loader settings" — it's a property of the **flow** (`INSERT INTO … ONCE` / `@dp.append_flow(once=True)`), and the backfill is a **batch** read, not Auto Loader.
+
+**One-liner:** *"Many flows can write one streaming table: a continuous Auto Loader incremental flow plus a one-time batch backfill flow flagged `ONCE` (flow-level, not an Auto Loader option). `ONCE` loads history exactly once and won't re-run unless the table is fully refreshed."*
+
+---
+
 ## System Design (Data)
 
 *(No entries yet — Q11–Q13 pending.)*
