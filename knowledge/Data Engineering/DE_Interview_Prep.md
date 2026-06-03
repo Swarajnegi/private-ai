@@ -14,10 +14,11 @@
 
 1. [Spark Internals](#spark-internals)
 2. [Streaming Semantics](#streaming-semantics)
-3. [System Design (Data)](#system-design-data)
-4. [Distributed Systems Theory](#distributed-systems-theory)
-5. [Coding](#coding)
-6. [Behavioral (STAR)](#behavioral-star)
+3. [Lakeflow / Spark Declarative Pipelines (SDP)](#lakeflow--spark-declarative-pipelines-sdp)
+4. [System Design (Data)](#system-design-data)
+5. [Distributed Systems Theory](#distributed-systems-theory)
+6. [Coding](#coding)
+7. [Behavioral (STAR)](#behavioral-star)
 
 ---
 
@@ -794,6 +795,53 @@ Spark's source checkpoint also advances after a successful batch. On restart, ch
 The source must be replayable (Kafka: replay from offset; file sources: files are immutable). If the source isn't replayable (e.g., a socket or a queue that deletes on read), exactly-once is impossible regardless of the sink.
 
 **Senior-bar nuance:** Delta's exactly-once guarantee is for the **write path**. If your streaming query also reads from Delta (e.g., a lookup join), and that Delta table changes between micro-batches, the read is snapshot-isolated per batch — consistent, but not "exactly-once reads." Exactly-once is a write-side property.
+
+---
+
+## Lakeflow / Spark Declarative Pipelines (SDP)
+
+> SDP is the current name for the engine formerly called DLT. Python module: `from pyspark import pipelines as dp` (the `dlt` module is superseded). Full decorator/flow syntax reference (PySpark + SQL) lives in the workspace cheat-sheet `SDP_Syntax.py`.
+
+### SDP-Q1 — Pipeline write atomicity: partial successes, no-write failures, and where expectations fit
+
+**Question:** Are there partial successes in an SDP pipeline? When a pipeline *fails*, in which cases is there NO partial write (no tables/MVs materialized), and in which cases are partial writes left behind? Where do expectations sit in this?
+
+**Canonical answer:**
+
+**The one mental model — the atomic unit is the *flow* (one table's update), not the pipeline.** Every dataset update is backed by a Delta transaction, so atomicity has two scopes:
+- **Within one table/MV** → strictly all-or-nothing. A table is *never* half-written. (Streaming table = atomic per micro-batch; MV = commits the whole recomputed version or keeps the previous one.)
+- **Across the pipeline DAG** → **partial success is normal.** Each node commits independently; some succeed while others fail.
+
+So yes — partial successes exist, but at the *pipeline* level, never inside one table.
+
+**Case A — NOTHING is written (no datasets materialized at all): the planning / graph-validation failure class.** SDP evaluates every dataset definition and builds the full dataflow graph *before* running any query; if validation fails the whole update aborts before execution.
+- Unresolved column, syntax error, type mismatch, schema-validation failure
+- Missing source table, **circular dependency** in the DAG
+- Illegal API inside a dataset function — `collect()`, `count()`, `save()`, `saveAsTable()`, `toPandas()`, `start()` (SDP re-evaluates definitions during planning, so eager actions break it)
+- A dataset function that doesn't return a DataFrame
+
+**Case B — PARTIAL writes land (some datasets updated, others not): the runtime failure class.** The graph was valid, execution started, and a *specific flow* failed. Already-committed datasets stay; the failed flow + its downstream dependents don't run.
+- **DAG ordering** — bronze + silver commit, then gold throws → bronze/silver keep new data, gold keeps its prior version.
+- **Independent branches** — flow B fails; flows A and C (not dependent on B) still commit.
+- **`expect_or_fail` violation** — fails *only that flow* (see table); sibling flows commit.
+- **Streaming checkpoint** — already-committed micro-batches persist; only the failing batch is dropped and replayed on restart.
+- **Infra failure mid-run** (OOM, node loss) — whatever committed before the crash persists.
+
+**Where expectations sit:**
+
+| Decorator / SQL | What gets written | Update outcome |
+|---|---|---|
+| `@dp.expect` / `CONSTRAINT … EXPECT (…)` | ALL rows incl. violating (just logged) | **Succeeds** |
+| `@dp.expect_or_drop` / `… ON VIOLATION DROP ROW` | Valid rows only; bad rows dropped | **Succeeds** (filtered subset — "partial" by row count, *not* a failure) |
+| `@dp.expect_or_fail` / `… ON VIOLATION FAIL UPDATE` | Nothing from the failing batch — that flow's txn never commits | **Fails — that single flow only** |
+
+Key documented fact: **`expect_or_fail` fails a single flow and does NOT cause other flows in the pipeline to fail.** Consequence:
+- The **guarded table has no partial write** — the bad batch/version never commits; it keeps its prior good state.
+- The **pipeline is partially written** — the *other* independent flows already committed.
+
+**Senior-bar nuance (corrects the common framing):** "Pipeline failure ⇒ no partial write" is only true for **validation/planning** failures (they abort before execution, so nothing materializes). **Runtime** failures usually *do* leave partial pipeline writes — committed datasets persist. And `expect_or_fail` does **not** half-write the table it guards; it produces *pipeline-level* partial writes by failing just its own flow while siblings commit. `expect_or_drop` is not a failure at all — it commits the valid subset.
+
+**One-liner:** *A single table is always atomic (Delta all-or-nothing). Validation failures abort the whole graph before any write, so nothing materializes; runtime failures — including `expect_or_fail` — fail only their own flow, so committed/independent datasets persist and the pipeline ends partially written; `expect_or_drop` just commits the valid subset.*
 
 ---
 
