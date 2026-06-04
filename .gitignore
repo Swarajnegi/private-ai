@@ -103,3 +103,10 @@ ollama_models/
 
 # Personalization capture buffer (machine-local raw firehose; distilled profile + KB entries migrate instead)
 jarvis_data/observation_queue.jsonl
+
+# Cognitive Synthesis Loop — regenerable indexes + local surfacing state (Wave 2, Stage 3.5.10/3.5.7/3.5.11)
+# Derived from the queue + KB; rebuildable via correlation.py --backfill / consolidator re-run. The durable
+# life_state KB entries (in knowledge_base.jsonl) are what migrate, not these caches.
+jarvis_data/behavioral_state_model.jsonl
+jarvis_data/life_state_feed.jsonl
+jarvis_data/.surfaced_watermark
