@@ -126,11 +126,13 @@ Total 18 callable: 16 concurrency-safe, 2 unsafe + requires_permission (code_exe
 
 ---
 
-## Sub-Phase 3.5: Memory-Augmented Agents (MemGPT) 🔄 (Wave 1: 3/9 builds shipped 2026-05-30; concept lessons deferred per L301)
+## Sub-Phase 3.5: Memory-Augmented Agents (MemGPT) 🔄 (Wave 1: 3/11 builds shipped 2026-05-30; scope expanded 2026-06-04 with the Cognitive Synthesis Loop, +2 lessons; concept lessons deferred per L301)
 
 **Wave 1 closure 2026-05-30.** Foundation MemGPT-style three-tier MemoryManager landed + ReActLoop wired for auto-retrieval before each query. Workflow 3 (8 reviewers across 4 lenses) stalled in flight; fell back to solo internal review — found 4 high-severity issues (cross-tier id collision in add(), ASCII-only tokenization in HOT retrieval, missing anti-injection guardrail on auto-retrieved memory, two separate system-role messages violating Anthropic Messages API). All 4 fixed with regression-guard smoke tests.
 
 **Total Wave 1:** ~1,000 LOC across 2 files (memory_manager.py NEW + react.py MOD), 122 smoke tests (51 + 71). 19-module agent regression sweep clean.
+
+**Scope expansion 2026-06-04 (KB L310).** The user tested whether JARVIS could independently notice that their Stage-3 learning engagement dropped *because* their attention shifted to DE/Spark/SQL interview-prep across the partitioned chats. It could not — the failure was **synthesis, not information** (the signals were already in the injected profile). Root cause: three missing loops — (1) no read-path joins cross-chat captures into a live turn, (2) the consolidator is unbuilt **and** was scoped per-turn rather than cross-domain-over-time, (3) no proactive-surfacing path (insights inject as *background*, never *raised*). Per user directive (2026-06-04) this is a **first-class production capability**, not a temporary script: Wave 2 is re-scoped from `{3.5.6, 3.5.7}` to the full **Cognitive Synthesis Loop** `{3.5.6 heartbeat, 3.5.7 consolidator (widened), 3.5.10 correlation engine, 3.5.11 surfacing daemon}`. The design below is the canonical contract; it MUST satisfy the IMPREGNABLE + OBSOLESCENCE-PROOF definition-of-done.
 
 **Goal:** Agents that self-manage memory — heartbeat consolidation, hot/warm/cold tiers, self-editing.
 
@@ -144,13 +146,70 @@ Total 18 callable: 16 concurrency-safe, 2 unsafe + requires_permission (code_exe
 | 3.5.4 | MemGPT Architecture | Hot/warm/cold memory hierarchy | ⊘ Deferred (research lesson, per L301; structural pattern already encoded in `memory_manager.py`) |
 | 3.5.5 | Self-Editing Memory | Agent decides what to remember/forget/update | **[OK] COMPLETE** — `memory_manager.py` (858 LOC, 51 smoke tests). `MemoryManager` with HOT (in-memory OrderedDict LRU, Unicode token-overlap retrieval), WARM/COLD (shared Chroma collection differentiated by `metadata.tier`), self-editing API: add/promote/demote/evict/clear_hot; tier-weighted score merge (+0.2 HOT, -0.1 COLD); cross-tier id collision check on add; metadata sanitization for Chroma. |
 | **3.5.6** | **Async heartbeat event loop** (metacognitive integration) | `request_heartbeat=true` flag on tool calls triggers async consolidation — event-driven, NOT clock-driven (per metacognitive review Section 2.2 hardware reality check) | ⬜ Wave 2 — `/dev Implement heartbeat scheduler in jarvis_core/agent/heartbeat.py with request_heartbeat flag on tool-call interface.` |
-| **3.5.7** | **Sleep-time consolidation agent** (metacognitive integration) | Heartbeat-triggered task: read recent context, extract Cognitive_State_Update, write tagged `heartbeat-emitted` to KB | ⬜ Wave 2 — `/dev Implement consolidation agent in jarvis_core/agent/consolidator.py. Writes use Cognitive_State_Update schema from 3.1.6. ALL entries carry tag heartbeat-emitted.` |
+| **3.5.7** | **Sleep-time consolidation agent** (metacognitive integration; **WIDENED for cross-domain synthesis**) | Heartbeat-triggered LLM brain. Drains `observation_queue.jsonl`, calls the 3.5.10 correlation engine, reasons over the behavioral state model + recent KB. Writes deduped per-domain `Cognitive_Pattern` **AND** cross-domain `life_state` synthesis entries via **kb_append ONLY**, all tagged `heartbeat-emitted`. Uses `Cognitive_State_Update` schema (3.1.6). Anti-injection: captured text is untrusted DATA; no tool access beyond whitelisted kb_append. | ⬜ Wave 2 — `/dev Implement consolidation agent in jarvis_core/agent/consolidator.py. Consumes BehavioralStateModel from correlation.py. Writes use Cognitive_State_Update schema from 3.1.6 via scripts/kb_append.py. ALL entries carry tag heartbeat-emitted.` |
 | 3.5.8 | Agent Evaluation (STEAL #6) | Port OpenJarvis EvalRecord → EvalResult → RunSummary framework | ⬜ Wave 3 — `/dev Port OpenJarvis evals/core/{types,runner,scorer}.py to jarvis_core/agent/evals/ for p50/p95/p99 latency + cost reporting.` |
 | **3.5.9** | **/compact-style working-memory compressor (STEAL #12)** | Async coroutine that, when context > N tokens, calls LLM with structured summarization prompt over the truncation window; emits `SystemCompactBoundaryMessage` dataclass replacing truncated history. TWIN PROCESS with heartbeat-emitted consolidation: /compact writes to short-term working memory, heartbeat writes long-term insights to KB. | ⬜ Wave 3 — `/dev Port OpenClaude src/services/compact/compact.ts pattern. Replace fork with async coroutine. Reuse jarvis_core/memory/compression.py LLM-filter as the summarization primitive.` |
+| **3.5.10** | **Cross-Domain Behavioral Correlation Engine** (NEW — closes loop 1+2 of KB L310) | The missing inference substrate. Deterministic feature layer (no LLM, pure generators) turns `observation_queue.jsonl` into a per-domain time-series (volume, cadence, engagement-mode interrogative-vs-dispatch, gaps); epistemic-gated LLM layer proposes cross-domain causal links with confidence + evidence + a **correlation-vs-causation flag**. Emits `behavioral_state_model.jsonl` (regenerable index, gitignored). | ⬜ Wave 2 — `/dev Implement jarvis_core/agent/correlation.py: CrossDomainCorrelationEngine. Deterministic feature extraction + epistemic-gated LLM link proposal via injected llm_call. Output behavioral_state_model.jsonl, --backfill rebuild.` |
+| **3.5.11** | **Proactive Life-State Surfacing Daemon** (NEW — closes loop 3 of KB L310; generalizes `failure_pattern_alarm`) | The RAISE-don't-just-HOLD channel. On session-start, queries KB for `life_state` entries newer than the surfaced-watermark with confidence ≥ floor; if found, emits a distinct **SURFACE-THIS** injection (separate from the background profile injection) instructing JARVIS to volunteer the connection THIS session. Watermark-dedup + rate-limit (never nag). | ⬜ Wave 2 — `/dev Implement jarvis_core/agent/life_state_monitor.py + a SessionStart surfacing-hook variant. Watermark in jarvis_data/.surfaced_watermark. Distinct injection channel from inject_profile.py.` |
 
 **Practical Exercise:** Agent self-manages memory: heartbeat triggers consolidation between user turns, promotes important facts, evicts stale entries, remembers user preferences — all without manual `/memory` commands. `kb_compact.py` runs without displacing legitimate transient state observations. `/compact`-style working-memory compressor kicks in when context exceeds threshold, replacing old turns with a single summary boundary message.
 
 > **Key Paper:** `2310.08560v2.pdf` (MemGPT) — already in your Research Papers folder. The agent treats memory like an OS virtual memory system: Hot = current context, Warm = pinned in ChromaDB, Cold = archived on disk.
+
+---
+
+### Wave 2 Production Design: The Cognitive Synthesis Loop
+
+> **Canonical contract for `{3.5.6, 3.5.7, 3.5.10, 3.5.11}`.** Authored 2026-06-04 per user directive: *"a proper production solution… impregnable and obsolescence-proof,"* not a temporary script. Closes the three loops named in KB L310.
+
+**The capability (Definition of the feature):** Across the 7 partitioned chats and over time, JARVIS detects that activity in one domain explains a behavior change in another — and **volunteers** it. The target line: *"You've been ~2 weeks heavy on Spark/SQL interview prep; your JARVIS-build engagement shifted from interrogative to execution-mode — consistent with deliberate learning-deferral, not disengagement."* Said unprompted, at session start, in any chat.
+
+**Architecture — four components on the MemGPT heartbeat backbone:**
+
+```
+observation_queue.jsonl                         [DONE — Stop-hook, per-turn, redacted, domain-tagged]
+  │  raw signal · LOCAL-ONLY · never leaves the laptop
+  ▼
+[3.5.10] CrossDomainCorrelationEngine           jarvis_core/agent/correlation.py
+  │  DETERMINISTIC layer (pure generators, CPU, ₹0): per-domain time-series —
+  │    volume, cadence, engagement-mode (interrogative vs dispatch), gap detection
+  │  INFERENCE layer (epistemic-gated, via injected llm_call): candidate cross-domain
+  │    links {domain_a, domain_b, direction, window, confidence, evidence, causation_flag}
+  │  emits  behavioral_state_model.jsonl         [regenerable index · gitignored · --backfill]
+  ▼
+[3.5.7]  Consolidator (widened)                 jarvis_core/agent/consolidator.py
+  │  heartbeat-triggered LLM brain · drains queue · reasons over the state model + KB
+  │  writes per-domain Cognitive_Pattern + cross-domain life_state entries
+  │  via scripts/kb_append.py ONLY · tagged heartbeat-emitted
+  ▼
+[profile_synth] → cognitive_profile.md          [BACKGROUND injection — "don't act on this"]
+  │
+[3.5.11] LifeStateMonitor                        jarvis_core/agent/life_state_monitor.py
+  │  RAISE-don't-HOLD channel · generalizes failure_pattern_alarm
+  │  session-start: unsurfaced life_state entry, confidence ≥ floor → emit SURFACE-THIS injection
+  ▼
+SessionStart hook → JARVIS volunteers the connection in chat       [the Iron-Man line]
+
+[3.5.6] Heartbeat scheduler                      jarvis_core/agent/heartbeat.py
+         event-driven (request_heartbeat flag), NOT clock-driven — drives the consolidator
+```
+
+**IMPREGNABLE — security/privacy definition-of-done (non-negotiable):**
+1. **Local-only.** `observation_queue.jsonl` + `behavioral_state_model.jsonl` never leave the laptop. Only distilled insights reach the KB (also local). Honors the ENDGAME privacy invariant.
+2. **Redact-at-capture + re-validate.** Secrets redacted at the Stop-hook; the correlation engine re-scans derived features — no secret ever reaches an LLM call or the index.
+3. **Injection-resistant.** Captured user text is *data*, never instructions. Consolidator + correlation LLM prompts wrap all user content in an anti-injection guardrail (same class as react.py M11). The consolidator has **no tool access** beyond `kb_append` constrained to a type+tag whitelist — a poisoned observation cannot execute tools, write arbitrary entry types, or exfiltrate.
+4. **Fail-closed.** Below the confidence floor → surface **nothing**. No hallucinated "I sense you're stressed." Epistemic control (Strategic Principle #4): correlation ≠ causation is always flagged.
+5. **Single write path.** All KB writes via `kb_append` (flock + content/semantic dedup + collision-proof id + source_machine stamp). Already enforced; the consolidator MUST NOT hand-roll an append.
+6. **Rate-limited surfacing.** Watermark-dedup; one surface per insight; never nag. Trust erosion is the failure mode.
+
+**OBSOLESCENCE-PROOF — future-proof definition-of-done (non-negotiable):**
+1. **Brain-swap-proof.** Every LLM call goes through the injected `llm_call` DI boundary (already in react.py). Cloud API today → Kimi K2.6 local (RTX Spark / RunPod) tomorrow → zero rewrite. The deterministic feature layer is model-independent.
+2. **Cross-runtime.** `behavioral_state_model.jsonl` is regenerable (`--backfill`); synthesized `life_state` KB entries sync via git and are **readable by the personal-laptop Antigravity** (which can't run hooks). Shared data contract; an Antigravity-native capture limb is additive later, not a rewrite.
+3. **Schema-evolution-proof.** Observations + index are **timestamp-keyed, not line-numbered** → compaction-stable; KB uses the stable 8-type schema; `heartbeat-emitted` exemption protects entries from `kb_compact`.
+4. **Scale-proof.** Generator-based sliding-window over the queue (never `list()` the full history); the queue is rotatable/archivable to cold storage without losing derived KB insights.
+5. **Hardware-independent.** Deterministic layer is CPU-only (₹0); the inference layer is the only cloud/GPU touch and is cold-wake/heartbeat-gated.
+
+**DEFINITION OF DONE — the Cross-Domain Awareness Test** (mirrors the Phase 4.0 Cognitive Control Loop's 4-awareness-tests): at session start in **any** chat, JARVIS answers UNPROMPTED, with a confidence score and a correlation-vs-causation flag: *"What has the user been doing across all domains lately, and how is it affecting this domain?"* — correctly surfacing the Spark-prep ↔ JARVIS-engagement link from the example above, **and** failing closed (saying nothing) when uncertain. When both hold, the Cognitive Synthesis Loop is production-complete.
 
 ---
 
@@ -178,7 +237,7 @@ Build a complete agent that:
 | 3.2 Tool Design & Registration (Phases A/B/C shipped — 18 callable tools; 3.2.3 lifecycle hooks shipped) | 🔄 In Progress | 3/4 |
 | 3.3 Planning & Decomposition (3.3.2 plan.py + 3.3.3 executor.py shipped; concept lessons deferred) | 🔄 In Progress | 2/4 |
 | 3.4 ReAct + MIRROR-lite + CoT detector + STEAL #5/#8/#9/#10 (trace, observation, monitor, reflection, permissions, bash_classifier, react.py) | 🔄 In Progress | 7/9 |
-| 3.5 Memory-Augmented Agents + Heartbeat + /compact (Wave 1: MemoryManager + ReActLoop wiring shipped) | 🔄 In Progress | 3/9 |
+| 3.5 Memory-Augmented Agents + Heartbeat + /compact + **Cognitive Synthesis Loop** (Wave 1: MemoryManager + ReActLoop wiring shipped; Wave 2 re-scoped 2026-06-04 +2 lessons) | 🔄 In Progress | 3/11 |
 
 ---
 
