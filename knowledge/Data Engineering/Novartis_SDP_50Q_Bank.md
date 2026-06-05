@@ -6,6 +6,7 @@
 
 ## Contents
 
+- [Caveats — where to hedge (don't over-claim)](#caveats--where-to-hedge-dont-over-claim)
 - [Category 1.1 — Pipeline Structure, Capabilities & Design Thinking (Q1–Q4)](#category-11--pipeline-structure-capabilities--design-thinking-q1q4)
 - [Category 1.2–1.3 — Object Model, Pipeline Modes & Full Refresh (Q5–Q9)](#category-1213--object-model-pipeline-modes--full-refresh-q5q9)
 - [Category 2 — Materialized Views Deep Dive (Q10–Q13)](#category-2--materialized-views-deep-dive-q10q13)
@@ -20,6 +21,23 @@
 - [Category 10–11 — Schema Evolution, Monitoring & Troubleshooting (Q43–Q45)](#category-1011--schema-evolution-monitoring--troubleshooting-q43q45)
 - [Category 12–13 — Strategic Decisions & Practical Experience (Q46–Q50)](#category-1213--strategic-decisions--practical-experience-q46q50)
 
+
+## Caveats — where to hedge (don't over-claim)
+
+> Spots where current docs are ambiguous, version-pinned, or environment-dependent. **State the hedge — don't assert.** (From the adversarial doc-verification pass.)
+
+- **Dev vs Prod modes (Q8) — highest risk.** Current SDP docs tie cluster-reuse + retries to the *update trigger source* (UI Run-now = fast-start/no-retry; Jobs/API/continuous = auto-retry), with `development` as a flag. Be ready to state **both** the legacy "development mode = cluster reuse + no retries" framing and the current one. Retry defaults: `numUpdateRetryAttempts`=5 triggered / unlimited continuous; `maxFlowRetryAttempts`=2.
+- **MV + expectations conflict.** Pipeline-defined MVs support expectations (incrementally refreshable, with caveats); the standalone Databricks-SQL `CREATE MATERIALIZED VIEW` page lists them *unsupported*. Answer per your surface (pipeline vs DBSQL).
+- **`__apply_changes_storage_` backing table + tombstone view (Q20) = Hive metastore only, NOT Unity Catalog.** Apollo/Novartis pipelines are UC → don't lean on that as the "gold not reflecting deletes" explanation.
+- **Incremental MV requires serverless.** Solid, but it's a synthesis of two doc statements (refresh always runs on serverless internally; classic-compute *pipelines* fully recompute), not one verbatim sentence.
+- **Per-function aggregate incrementality.** Don't claim COUNT/SUM/MIN/MAX individually incrementalize — it's cost-model-decided at plan time (`GROUP_AGGREGATE` / `GENERIC_AGGREGATE` techniques, visible in the `planning_information` event log).
+- **Deletion vectors default (Q37) = rollout/workspace-dependent.** "Check the admin UI / table property" is the safe answer, not a fixed default.
+- **Preview/Beta — don't call GA:** `create_sink` + update flows (Public Preview), REPLACE WHERE flows (Beta, Preview channel), standalone DBSQL `FLOW AUTO CDC` (Public Preview). The pipeline `AUTO CDC INTO` / `create_auto_cdc_flow` form **is** GA.
+- **Oracle `_change_ts` (Q14) is a project column, not a Databricks field.** Confirm the real source column (Dynamics exposes `SinkModifiedOn`). The query-based connector runs serverless-by-default (classic = Beta/API-only).
+- **Tombstone GC.** "2 days" is grounded; don't quote `172800s` as a verbatim doc figure. Set via the `pipelines.cdc.tombstoneGCThresholdInSeconds` table property on the target ST.
+- **`expect_or_fail` sibling-flow behavior.** The per-flow failure model is right, but "fails only that flow, siblings still commit" wasn't pinned to a doc sentence — frame as per-flow and offer to confirm if probed.
+- **AUTO CDC API signature.** `stored_as_scd_type`, `sequence_by`, `keys`, `apply_as_deletes` match current convention; do a final glance at the AUTO CDC reference page for the exact `stored_as_scd_type=1` (int) vs `"2"` (str) form before the round.
+- **Runtime-pinned numbers.** AQE `autoBroadcastJoinThreshold`=30MB, ABAC DBR 16.4+ floors, `addNewColumnsWithTypeWidening` (Preview) — all DBR-version-dependent; current channel = DBR 17.3. Anchor to the fleet's runtime if cited.
 
 ## Category 1.1 — Pipeline Structure, Capabilities & Design Thinking (Q1–Q4)
 
