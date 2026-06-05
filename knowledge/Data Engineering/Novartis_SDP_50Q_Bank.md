@@ -20,6 +20,26 @@
 - [Category 9 — Unity Catalog & Security (Q40–Q42)](#category-9--unity-catalog--security-q40q42)
 - [Category 10–11 — Schema Evolution, Monitoring & Troubleshooting (Q43–Q45)](#category-1011--schema-evolution-monitoring--troubleshooting-q43q45)
 - [Category 12–13 — Strategic Decisions & Practical Experience (Q46–Q50)](#category-1213--strategic-decisions--practical-experience-q46q50)
+- [Advanced Topics — Deep Dive](#advanced-topics--deep-dive)
+  - [Stream–Stream Joins](#streamstream-joins)
+  - [Stream–Snapshot (Stream–Static) Joins](#streamsnapshot-streamstatic-joins)
+  - [Late-Arriving Data](#late-arriving-data)
+  - [Triggered vs Continuous Execution Mode](#triggered-vs-continuous-execution-mode)
+  - [Streaming Optimization](#streaming-optimization)
+  - [Streaming Table — Full Refresh vs Incremental Refresh](#streaming-table--full-refresh-vs-incremental-refresh)
+  - [Auto Loader (cloudFiles) — Important Options & Configs](#auto-loader-cloudfiles--important-options--configs)
+  - [SDP-Specific Optimization Configs](#sdp-specific-optimization-configs)
+  - [Stateful Processing](#stateful-processing)
+  - [Materialized View — Optimization](#materialized-view--optimization)
+  - [Materialized View — Full vs Incremental Refresh](#materialized-view--full-vs-incremental-refresh)
+  - [Backfill](#backfill)
+  - [Append Flow & AUTO CDC Flow (SCD1 and SCD2)](#append-flow--auto-cdc-flow-scd1-and-scd2)
+  - [Limitations of ST, MV, SDP, Flows & Expectations (consolidated)](#limitations-of-st-mv-sdp-flows--expectations-consolidated)
+  - [Use Cases of All (decision guide)](#use-cases-of-all-decision-guide)
+  - [Expectations — Everything (types, actions, where logged)](#expectations--everything-types-actions-where-logged)
+  - [Event Log — Where, What & How to Read](#event-log--where-what--how-to-read)
+  - [Deployment Mode — Development vs Production](#deployment-mode--development-vs-production)
+  - [Product Editions — CORE, PRO, ADVANCED](#product-editions--core-pro-advanced)
 
 
 ## Caveats — where to hedge (don't over-claim)
@@ -2597,3 +2617,2914 @@ GROUP BY time_window, region;
 **Honest gap:** My highest-volume work is CDC/SCD2 ingestion, not multi-day-watermark analytics joins. For those I lean on the documented contract (watermark on both sides + time-bound condition, MV when correctness on late dimensions matters) and **verify defaults against current Databricks docs** before shipping — I don't trust memory on state-changing behavior.
 
 **One-liner:** I rate myself production-ready — I run 422 SDP pipelines and have debugged real SCD2, mutable-source, and sequencing incidents; I handle wide-watermark stream-stream joins and streaming aggregations independently by bounding state with watermarks plus time-bound conditions and escalating to materialized views when late-arriving correctness matters.
+
+
+## Advanced Topics — Deep Dive
+
+> Deeper reference on the topics flagged for the Novartis round (stream/snapshot joins, late data, refresh semantics, Auto Loader configs, SDP optimization, stateful processing, expectations & event-log internals, deployment modes, editions). SDP-only, doc-verified 2026-06-04. All Python/SQL in fenced code blocks.
+
+### Stream–Stream Joins
+
+**What it is**
+
+A stream–stream join joins two *streaming* sources (both growing/unbounded) on a key, inside an SDP streaming table or `@dp.append_flow`. Unlike a stream–static join (stateless — the static Delta side is just re-snapshotted at the start of each microbatch), a stream–stream join is **stateful on BOTH sides**: each row from each stream must be buffered in a state store because its matching partner may arrive in a *later* microbatch on the *other* stream. SDP supports five join types (verified against Databricks docs):
+
+| Join type | Emits unmatched rows? | Watermark requirement |
+|---|---|---|
+| Inner | No | **Recommended** (optional) on both sides — without it state grows unbounded |
+| Left outer | Yes (NULLs for right) | **Mandatory** on both sides + time-bound condition |
+| Right outer | Yes (NULLs for left) | **Mandatory** on both sides + time-bound condition |
+| Full outer | Yes (NULLs either side) | **Mandatory** on both sides + time-bound condition |
+| Left semi | No | **Mandatory** on the right + time-bound condition (left side optional, but recommended for full state cleanup; Databricks recommends watermarks on both sides of all stream–stream joins) |
+
+Stream–stream joins only support **append** output mode — matched rows are appended to the target streaming table; nothing is ever updated/retracted.
+
+**How it works (mechanics)**
+
+- **Two state stores, keyed by join key.** When a microbatch arrives on stream A, every A-row is (a) matched against B-rows already in B's state store, AND (b) stored in A's state store so future B-rows can match it. Symmetric for B. Without eviction, both stores grow forever → OOM.
+- **The two mandatory ingredients for bounded state:**
+  1. **A watermark on BOTH sides** — `withWatermark(eventTimeCol, lateness)` (Python) / `WATERMARK col DELAY OF INTERVAL ...` (SQL). A watermark = a moving timestamp threshold ("I will not accept events older than max_seen_event_time − lateness").
+  2. **A time-bound (interval) predicate in the join condition** — e.g. `click.ts BETWEEN imp.ts AND imp.ts + interval 3 minutes`. This is what tells the engine *when no further match is possible*, so it can drop rows from state. Watermark alone is not enough; the engine needs the interval to reason about cross-stream matchability. The interval predicate must reference the **same columns** the watermarks are defined on.
+- **Global watermark = the slowest stream.** Each stream tracks its own max event time and derives its own watermark. The engine then computes ONE *global* watermark and, by default, takes the **minimum** across streams. Rationale: if stream B stalls (upstream outage), a min-based global watermark keeps moving at B's slow pace so the engine doesn't wrongly flag still-pending A-rows as un-matchable and emit premature/incorrect output. Safety over latency.
+- **State eviction.** A buffered row is dropped once the global watermark advances past the latest event time at which any partner could still legally arrive (derived from the interval predicate + watermark). After eviction, no further match for that row is attempted.
+- **Delayed OUTER NULL emission (the subtle, must-say point).** For outer joins, an unmatched row must NOT immediately emit a NULL-padded result — a match might still arrive in a later microbatch. The engine holds the unmatched row and only emits the `(row, NULLs)` result **once the watermark guarantees no match can ever arrive** (i.e., the time window for a partner has fully closed). This is why outer joins *require* watermarks: without them the engine can never prove "no match will come," so it could never correctly emit NULLs. Consequence: outer-join NULL rows are emitted **late** (after the lateness/interval window elapses), not in the triggering microbatch. Spark's wording: "The outer NULL results will be generated with a delay that depends on the specified watermark delay and the time range condition." A further subtlety: because the micro-batch engine advances watermarks at the *end* of a microbatch and only triggers a microbatch when there is new data, the outer NULL result can be delayed further if no new data arrives in the stream.
+
+**Key configs / syntax**
+
+Python — inner stream–stream join inside an append flow (canonical impressions × clicks, click within 3 min of impression):
+
+```python
+from pyspark import pipelines as dp
+from pyspark.sql.functions import expr
+
+dp.create_streaming_table("adImpressionClicks")
+
+@dp.append_flow(target="adImpressionClicks")
+def joinClicksAndImpressions():
+    clicksDf = (
+        spark.readStream.table("rawClicks")
+            .withWatermark("clickTimestamp", "3 minutes")
+    )
+    impressionsDf = (
+        spark.readStream.table("rawAdImpressions")
+            .withWatermark("impressionTimestamp", "3 minutes")
+    )
+    return (
+        impressionsDf.alias("imp").join(
+            clicksDf.alias("click"),
+            expr("""
+                imp.userId = click.userId AND
+                clickAdId = impressionAdId AND
+                clickTimestamp >= impressionTimestamp AND
+                clickTimestamp <= impressionTimestamp + interval 3 minutes
+            """),
+            "inner"
+        ).select("imp.userId", "impressionAdId", "clickTimestamp", "impressionSeconds")
+    )
+```
+
+Python — left outer (only the join-type string changes; watermark + interval predicate become MANDATORY, and NULL-padded rows emit only after the 3-min window closes):
+
+```python
+joinDf = impressionsDf.alias("imp").join(
+    clicksDf.alias("click"),
+    expr("""
+        imp.userId = click.userId AND
+        clickAdId = impressionAdId AND
+        clickTimestamp >= impressionTimestamp AND
+        clickTimestamp <= impressionTimestamp + interval 3 minutes
+    """),
+    "leftOuter"
+)
+```
+
+Python — different lateness per stream (allowed; engine still derives one global watermark = min of the two):
+
+```python
+impressionsDf = spark.readStream.table("rawAdImpressions").withWatermark("impressionTimestamp", "1 hour")
+clicksDf      = spark.readStream.table("rawClicks").withWatermark("clickTimestamp", "2 hours")
+```
+
+SQL — same inner join as a streaming table (note `WATERMARK ... DELAY OF INTERVAL` attached to each `STREAM(...)` side, plus the interval predicate in `ON`):
+
+```sql
+CREATE OR REFRESH STREAMING TABLE silver.adImpressionClicks
+AS SELECT
+  imp.userId, impressionAdId, clickTimestamp, impressionSeconds
+FROM STREAM (bronze.rawAdImpressions)
+  WATERMARK impressionTimestamp DELAY OF INTERVAL 3 MINUTES imp
+INNER JOIN STREAM (bronze.rawClicks)
+  WATERMARK clickTimestamp DELAY OF INTERVAL 3 MINUTES click
+ON imp.userId = click.userId
+  AND clickAdId = impressionAdId
+  AND clickTimestamp >= impressionTimestamp
+  AND clickTimestamp <= impressionTimestamp + interval 3 minutes
+```
+
+Tuning configs (verified):
+
+| Config | Default | Effect |
+|---|---|---|
+| `spark.sql.streaming.multipleWatermarkPolicy` | `min` | Global-watermark policy. `max` = use fastest stream (lower latency) but **drops** data from slower streams — Databricks recommends applying with caution. |
+| `spark.sql.streaming.stateStore.providerClass` | **RocksDB** in Databricks Runtime 17.3+ (`com.databricks.sql.streaming.state.RocksDBStateStoreProvider`); HDFS-backed (in-memory) only on DBR < 17.3 | On older runtimes, explicitly set the RocksDB provider for large join state to avoid executor OOM. Serverless SDP pipelines manage the state store automatically. |
+| `WATERMARK ... DELAY OF INTERVAL` | n/a | Must be a positive interval **less than a month**. |
+
+**Use cases**
+
+- Correlating two real-time event streams within a bounded time window: ad impression ↔ click, order ↔ payment, request ↔ response, sensor-A ↔ sensor-B readings.
+- Enriching one stream with another stream whose records arrive around the same time (not a slowly-changing dimension — that's stream–static).
+- In an Apollo Gen2-style medallion flow, this would live in a **Silver** streaming table correlating two Bronze event streams; my actual Gen2 work was overwhelmingly CDC SCD2 (`dp.create_auto_cdc_flow` / `dp.create_auto_cdc_from_snapshot_flow`) rather than stream–stream joins, because the entities were mutable D365 dimensions, not paired event streams.
+
+**Limitations & gotchas**
+
+- **No watermark or no interval predicate → unbounded state → OOM.** This is the #1 failure. Both are required; one without the other still grows state.
+- **Outer joins make watermark non-negotiable**, and their NULL rows are emitted **late** by design — downstream consumers must tolerate delayed unmatched rows, not treat absence-so-far as a final NULL.
+- **Append mode only.** No `update`/`complete`. If you need update-mode semantics, late-row re-joins after watermark expiry, or many-to-many joins, the built-in join can't do it — you drop to `transformWithState` (custom stateful operator, DBR 16.2+) instead.
+- **`min` global watermark stalls output if one stream lags** — a stalled source delays *all* join output; monitor per-source freshness.
+- **Changing a stateful join's logic** (watermark threshold, keys, interval) makes existing checkpointed state incompatible → requires a **full refresh** to rebuild state, which can lose data if a source (e.g. short-retention Kafka) no longer holds history. Keep Bronze minimally-transformed so Silver/Gold can recompute with full history.
+- **Time interval predicate columns must match the watermark columns**; mismatched columns won't let the engine bound state.
+
+**When to prefer a Materialized View instead**
+
+Use an MV (`@dp.materialized_view` / `CREATE OR REFRESH MATERIALIZED VIEW`) when one side is effectively a **dimension/lookup that changes and must be retroactively applied**. A stream–stream (or stream–static) join never re-applies a late dimension update to facts already emitted. An MV recomputes from full inputs (incrementally where possible — note **incremental MV refresh is only available on serverless** SDP/Databricks SQL compute; on classic compute every refresh is a full recompute) so the latest dimension state is always reflected — at the cost of batch-style recompute latency instead of low-latency incremental append. Rule of thumb: paired event streams correlated within a time window → stream–stream join; fact + mutable dimension where correctness requires retroactive joins → MV.
+
+**Interview soundbite:** A stream–stream join keeps a keyed state store on both sides, so it needs a watermark on each side plus a time-bound interval predicate to let the engine evict state and — for outer joins — delay emitting NULLs until the global (slowest-stream) watermark proves no match can still arrive; drop either ingredient and state grows unbounded.
+
+### Stream–Snapshot (Stream–Static) Joins
+
+**What it is**
+
+A stream–static join (Databricks docs also call it a "stream–snapshot join") joins a **streaming source** (the fact stream — append-only, incrementally growing) to a **static/batch source** (a dimension table, read with `spark.read.table(...)` rather than `readStream`). It is the canonical pattern for **dimension enrichment / lookup**: attach customer name, region, product attributes, etc., to a fast-moving fact stream. In SDP it is the natural way to build an enriched silver streaming table.
+
+It is **stateless** — there is no watermark, no state store, no checkpointed join state for the static side. This is the key distinction from a stream–stream join (which requires a watermark on *both* sides plus a time-bounded condition to evict state). Because there is no state, you get low latency and no unbounded-state risk.
+
+**How it works (mechanics)**
+
+- Per microbatch, only the **new fact rows** from the streaming source are processed (incremental). They are joined against a **snapshot** of the static Delta table — which snapshot depends on execution mode (table below).
+- The static side is read as a **point-in-time snapshot** of the latest valid Delta version; there is no incremental read of the static side. *Which* version that is depends on execution mode:
+
+| SDP execution mode | Static-side snapshot used |
+|---|---|
+| **Triggered** | The static table as of **the time the update started** — one consistent snapshot for the whole update. |
+| **Continuous** | The **most recent version** of the static table is queried **each time the table processes an update** (i.e., the snapshot advances during the run). |
+
+  (Pipeline mode is set in pipeline settings, not defaulted in the join code; note that materialized views and streaming tables defined in Databricks SQL always refresh in triggered mode.)
+- Determinism caveat (verified, Structured Streaming join doc): if the static table changes between runs, **reprocessing the same streaming data can produce different results** — a stream–static join is non-deterministic when the static side is mutating, because each microbatch binds to whatever version is current at processing time.
+
+**Key configs / syntax**
+
+PySpark — stream side via `spark.readStream`, static side via `spark.read` (the asymmetry IS the join type):
+
+```python
+from pyspark import pipelines as dp
+
+@dp.table
+def customer_sales():
+    return (
+        spark.readStream.table("sales")
+        .join(spark.read.table("customers"), ["customer_id"], "left")
+    )
+```
+
+Broadcast the small static side explicitly so it ships to every executor and avoids a shuffle (the dimension is the small side):
+
+```python
+from pyspark import pipelines as dp
+from pyspark.sql.functions import broadcast
+
+@dp.table
+def customer_sales_broadcast():
+    facts = spark.readStream.table("sales")
+    dim = spark.read.table("customers")
+    return facts.join(broadcast(dim), ["customer_id"], "left")
+```
+
+SQL — the streaming side is wrapped in `STREAM(...)`, the dimension is referenced plainly (no `STREAM`):
+
+```sql
+CREATE OR REFRESH STREAMING TABLE customer_sales
+AS SELECT s.*, c.customer_name, c.region
+FROM STREAM(sales) AS s
+LEFT JOIN customers AS c
+  USING (customer_id)
+```
+
+(The SDP doc's own snippet shows `INNER JOIN LEFT customers USING (customer_id)` — that is a doc typo; the valid form is a single join type, `LEFT JOIN` or `INNER JOIN`, as above.) You can also stream-read files directly on the fact side with `STREAM read_files(...)` and still join to a static dimension table.
+
+**Use cases**
+
+| Scenario | Why stream–static fits |
+|---|---|
+| Fact-stream dimension enrichment (orders + customer, events + device) | Dimension is slowly-changing; facts are append-only and high-volume. |
+| Denormalizing a silver streaming table before gold | Stateless, low-latency, each fact row processed once. |
+| Lookup against a small reference/config table | Broadcast the static side — zero shuffle. |
+| My Apollo Gen2 silver layer | Enrich an STG/BRZ streaming entity (e.g., a transactional fact) against a small full-load dimension entity by reading the dimension with `spark.read.table(...)` while the fact stays `readStream`. |
+
+**Limitations & gotchas**
+
+- **No retroactive correction (the critical one).** Late-arriving or updated dimension rows are **NOT applied to facts already processed**. A fact joined yesterday against `customer_id=42` keeps yesterday's `customers` row even if `customers` is corrected today. SDP docs are explicit: results "are not recalculated unless a full refresh is performed." Fixes:
+  - **Full refresh** the streaming table — re-joins all facts against the now-current dimension. Expensive; and dangerous if the streaming source has limited retention (a full refresh can lose data when the source no longer holds history — e.g., a short-retention Kafka source — so keep raw history in a bronze table and recompute silver/gold from it).
+  - **Restructure as a materialized view (MV)** or restructure the pipeline — an MV recomputes (incremental batch recompute), so it reflects the latest dimension. Use this when retroactive accuracy matters more than streaming-once semantics. This is the SDP-doc-recommended remedy.
+- **Static side must be slowly-changing.** The pattern assumes the dimension changes slowly. Rapidly mutating dimensions break the "approximately current" assumption and amplify the non-determinism above.
+- **Static side assumed Delta.** The documented snapshot behavior assumes the static data is stored using Delta Lake.
+- **Stale snapshot under long-running triggered updates.** In triggered mode the snapshot is frozen at update start; a very long update enriches late facts with an already-stale dimension.
+- **Broadcast only when small.** If the "static" table isn't actually small, `broadcast()` can OOM executors; let the optimizer pick a shuffle/sort-merge join instead. (In SDP real-time mode specifically, only broadcast stream-to-static joins are supported — stream-to-stream joins are not.)
+- **Not a stream–stream join.** No watermark, no time-bound condition, no state — do not confuse the two. If the dimension is itself a high-velocity stream you need time-bounded matching, that is a stream–stream join with watermarks on both sides.
+- **Output.** A stream–static join supports append-style output; it does not produce retractions for prior dimension changes (consistent with the no-retroactive-correction rule).
+
+**Interview soundbite:** A stream–static join is a stateless dimension lookup that snapshots the static Delta table (at update start in triggered mode, latest version each update in continuous mode), so it's fast and watermark-free — but late dimension updates never flow back into already-processed facts, so when I need retroactive correctness I either full-refresh the streaming table or rebuild it as a materialized view, and I `broadcast()` the dimension to kill the shuffle.
+
+### Late-Arriving Data
+
+**What it is**
+A *late-arriving record* is an event whose true event-time is older than data the pipeline has already processed — it shows up "out of order." Two distinct sub-problems hide under one name: (1) **out-of-order events within a key** (a CDC update for `id=5` at `seq=4` arrives after `seq=6` already landed), and (2) **late events against a time-window aggregation** (a click timestamped 10:00 arrives at 10:09 after the 10:00–10:05 window looked closed). SDP (Spark Declarative Pipelines / Lakeflow Declarative Pipelines) gives a *different* mechanism for each, and each mechanism makes a different latency-vs-completeness trade. The whole topic is one tension: **streaming bounds state to stay fast and therefore drops late data; batch/MV recomputes everything and therefore loses nothing but pays latency.**
+
+**How it works (mechanics) — the five mechanisms**
+
+| # | Mechanism | What it handles | The trade it makes | Late record's fate |
+|---|---|---|---|---|
+| 1 | **Watermark** (`WATERMARK ... DELAY OF INTERVAL` / `withWatermark`) | Late events in stateful aggregations / dedup / stream-stream joins | Latency/state vs completeness | **Dropped** if beyond threshold |
+| 2 | **AUTO CDC `sequence_by`** | Out-of-order CDC upserts/updates per key | None on correctness — reorders by sequence, not arrival | SCD1: stale row ignored; SCD2: lands in correct history slot |
+| 3 | **Tombstone retention** (`pipelines.cdc.tombstoneGCThresholdInSeconds`, default 2 days) | Late `DELETE`s arriving out of order (SCD2) | Storage vs delete-correctness | Applied correctly if within retention; mis-applied/ignored after GC |
+| 4 | **Materialized view (MV) recompute** | Any late data feeding an aggregation | Latency vs completeness (opposite of watermark) | **Never dropped** — absorbed on next refresh |
+| 5 | **REPLACE WHERE flow (Beta)** | Targeted backfill / correction of a predicate range | Manual targeting vs full reprocessing | Re-evaluated into the predicate window, no streaming state |
+
+**Mechanism 1 — Watermark: bounds state, DROPS beyond threshold.** A watermark declares a timestamp column plus a lateness tolerance. Structured Streaming tracks the max event-time seen, subtracts the threshold, and once a window's end falls below that line it closes the window and **evicts the state**. Records arriving after that are dropped (records *within* the threshold are always processed; records outside *might* be processed but it is not guaranteed). This is mandatory for incremental aggregations — without a watermark, aggregations either grow state unbounded (OOM on long-running pipelines) or fall back to full recompute every update.
+
+```sql
+CREATE OR REFRESH STREAMING TABLE event_counts AS
+SELECT window(event_time, '1 minute') AS time_window, region, COUNT(*) AS cnt
+FROM STREAM(events_raw)
+  WATERMARK event_time DELAY OF INTERVAL 3 MINUTES
+GROUP BY time_window, region;
+```
+
+```python
+from pyspark import pipelines as dp
+from pyspark.sql.functions import window
+
+@dp.table
+def event_counts():
+    return (
+        spark.readStream.table("events_raw")
+            .withWatermark("event_time", "3 minutes")
+            .groupBy(window("event_time", "1 minute"), "region")
+            .count()
+    )
+```
+
+Smaller threshold = lower latency, more drops, less state. Larger threshold = more completeness, higher latency, bigger state (more compute). For **stream-stream joins** you must set a watermark on *both* sides plus a time-bound (interval) join condition, or state grows without bound; for **outer joins** watermarking is mandatory and unmatched rows are emitted with NULLs for the missing side only **after** the lateness threshold passes (append mode delays the NULL emission until the window can no longer match). With multiple input streams the engine takes the **minimum** as the global watermark by default (safe — paces to the slowest stream); `spark.sql.streaming.multipleWatermarkPolicy = max` uses the fastest stream's watermark to cut latency **but drops data from slower streams** (Databricks says apply with caution). Note: changing a watermark threshold (or any stateful-query logic) makes the existing state incompatible — you must do a **full refresh** to rebuild state.
+
+**Mechanism 2 — AUTO CDC `sequence_by`: reorders, does NOT drop.** This is the one that matters most for my Apollo Gen2 bronze layer. `dp.create_auto_cdc_flow` (SQL: `CREATE FLOW ... AS AUTO CDC INTO`) takes a `sequence_by` column that defines the *logical* event order, independent of arrival order. The engine reorders by sequence value, so a late row (older sequence) arriving after a newer one does the right thing automatically:
+- **SCD Type 1:** the older-sequence late row will **not overwrite** a newer value already applied (the stale update is effectively dropped — the docs' own example drops the `sequenceNum=5` update because `=6` already arrived).
+- **SCD Type 2:** the late row lands in its **correct historical slot** with the right `__START_AT` / `__END_AT` boundaries (these carry the propagated sequence values), rather than being appended as the latest version.
+
+`sequence_by` must be a monotonically increasing, sortable type, with one distinct update per key per sequencing value, and **non-NULL** (NULL sequencing values are not supported). Ties or multi-column ordering use a `struct()`.
+
+```python
+from pyspark import pipelines as dp
+
+dp.create_streaming_table("customers_brz")
+
+dp.create_auto_cdc_flow(
+    target="customers_brz",
+    source="customers_stg",
+    keys=["id"],
+    sequence_by="operation_date",
+    apply_as_deletes="operation = 'DELETE'",
+    except_column_list=["operation", "operation_date", "_rescued_data"],
+    stored_as_scd_type="2",
+)
+```
+
+```sql
+CREATE OR REFRESH STREAMING TABLE customers_brz;
+
+CREATE FLOW customers_brz_cdc AS AUTO CDC INTO
+  customers_brz
+FROM STREAM(customers_stg)
+KEYS (id)
+APPLY AS DELETE WHEN operation = 'DELETE'
+SEQUENCE BY operation_date
+COLUMNS * EXCEPT (operation, operation_date, _rescued_data)
+STORED AS SCD TYPE 2;
+```
+
+> **My production scar tissue:** in Apollo Gen2 the bronze SCD2 tables sequenced by **file modification time** broke exactly here. File-mod-time is too coarse — multiple genuine CDC events for the same key shared one timestamp, so `sequence_by` had more than one update per sequencing value (which AUTO CDC requires to be distinct) and out-of-order rows landed in wrong history slots. The fix is a finer, genuinely monotonic sequence column (a source change-version / commit LSN), or a `struct(file_mod_time, secondary_monotonic_col)` to break ties.
+
+**Mechanism 3 — Tombstone retention for late DELETEs.** With `APPLY AS DELETE WHEN` on an SCD Type 2 target, a delete cannot just remove the row — a *later-sequenced* event might still arrive and would need to "un-see" the delete. So the deleted row is temporarily retained as a **tombstone** in the underlying Delta table, and a metastore view filters tombstones out of normal reads. The tombstone is garbage-collected after `pipelines.cdc.tombstoneGCThresholdInSeconds`, **default 2 days**. If a late event for that key arrives within the window, ordering stays correct; if it arrives after GC, the tombstone is gone and correctness is lost. Set this table property to exceed your worst-case arrival-to-processing delay — Databricks explicitly recommends raising it when using Auto Loader + AUTO CDC, because Auto Loader does not guarantee file discovery/processing order in either directory-listing or file-notification mode.
+
+```sql
+CREATE OR REFRESH STREAMING TABLE customers_brz
+  TBLPROPERTIES ('pipelines.cdc.tombstoneGCThresholdInSeconds' = '604800');  -- 7 days
+```
+
+**Mechanism 4 — MV recompute absorbs late data with NO drops.** A `@dp.materialized_view` (SQL: `CREATE OR REFRESH MATERIALIZED VIEW`) is a *batch* flow. You write batch semantics; on serverless pipelines the engine reprocesses only new data and changes in the sources whenever possible (incremental refresh) and falls back to full recompute otherwise — note incremental refresh is **serverless-only** (classic compute always fully recomputes; for SDP-defined MVs you must configure the pipeline as serverless). Because it re-reads the source rather than maintaining bounded streaming state, **late-arriving rows are simply picked up on the next refresh — nothing is dropped, no watermark needed.** The rule: **push late-sensitive aggregations to a materialized view.** You trade the streaming table's low latency for guaranteed completeness.
+
+```python
+from pyspark import pipelines as dp
+from pyspark.sql.functions import window
+
+@dp.materialized_view
+def event_counts_complete():
+    return (
+        spark.read.table("events_raw")
+            .groupBy(window("event_time", "1 minute"), "region")
+            .count()
+    )
+```
+
+```sql
+CREATE OR REFRESH MATERIALIZED VIEW event_counts_complete AS
+SELECT window(event_time, '1 minute') AS time_window, region, COUNT(*) AS cnt
+FROM events_raw
+GROUP BY time_window, region;
+```
+
+**Mechanism 5 — REPLACE WHERE flow (Beta) for targeted backfill/correction.** A `FLOW REPLACE WHERE <predicate>` defines a predicate on the target; on each run all rows matching the predicate are deleted and replaced by re-evaluating the source query for that same range — rows outside the predicate are untouched. The source must be a **batch (non-streaming) source** (a streaming source throws), so this handles late data, upstream reprocessing, and backfills **without streaming semantics (no watermark management)**, and can target a window the streaming engine would have dropped. Requires the **`PREVIEW` channel** (set the `pipelines.channel` table property to `"PREVIEW"`); Databricks recommends Unity Catalog + serverless (incremental refresh of the flow is serverless-only). `BY NAME` is required and the predicate must be deterministic. Gotcha: a **full refresh re-runs the source query using only the current predicate** — if a 7-day-predicate pipeline ran for a year, a full refresh leaves only the last 7 days and permanently deletes older rows. Guard with `pipelines.reset.allowed = 'false'`. (`REPLACE WHERE` and `ONCE` are mutually exclusive.)
+
+```sql
+CREATE OR REFRESH STREAMING TABLE orders_enriched
+  TBLPROPERTIES (
+    'pipelines.channel' = 'PREVIEW',
+    'pipelines.reset.allowed' = 'false'
+  )
+  FLOW REPLACE WHERE event_date >= date_add(current_date(), -7) BY NAME
+  AS SELECT * FROM source_orders;
+```
+
+(Classic one-shot backfill without REPLACE WHERE uses an append-once flow — `@dp.append_flow(once=True)` / SQL `CREATE FLOW ... AS INSERT INTO ... ONCE ... BY NAME` — which runs exactly once and re-runs only on full refresh.)
+
+**Use cases**
+- Windowed metrics tolerant of small drops, low-latency dashboards → **watermark** on a streaming table.
+- CDC bronze ingestion (my 211 BRZ SCD2 tables) → **`sequence_by`** handles out-of-order updates; **tombstone retention** handles late deletes.
+- Late-sensitive financial/regulatory aggregations where dropping is unacceptable → **materialized view**.
+- One-off correction of a bad day's data or initial historical load → **REPLACE WHERE (Beta)** or **append-once** flow.
+
+**Limitations & gotchas**
+- **The stream-snapshot non-retroactive trap.** When a streaming table joins a *static* dimension (a stream-static / stream-snapshot join), the static side is snapshotted at stream/update start (triggered pipelines query the static table as of update start; continuous pipelines query the latest version each update). A late-arriving *dimension* update is **not retroactively applied** to facts already processed. There is no watermark or `sequence_by` for the static side. If retroactive correction is required, restructure as a **materialized view** (recomputes the join) or stream both sides.
+- Watermark drops are **silent** — beyond-threshold records vanish with no error. The `numRowsDroppedByWatermark` state-operator metric in `StreamingQueryProgress` gives an (imprecise) signal; monitor it before trusting a threshold.
+- `sequence_by` on a too-coarse column (file modification time) silently violates the one-distinct-update-per-sequencing-value requirement and mis-orders ties — the Apollo Gen2 incident. Use a genuinely monotonic key.
+- Tombstone GC at 2 days is often too short for batch/daily file-drop pipelines; a late DELETE after GC corrupts SCD2 history.
+- AUTO CDC source must be a true streaming, append-only source; reading a *mutable* source as a stream throws on encountering a change/deletion (my "streaming-on-mutable-source" incident — fix with the `skipChangeCommits` reader option, or read it as an MV which has no append-only restriction).
+- Stacking SCD2 on top of an SCD2 source double-counts history boundaries (my "SCD2-on-SCD2" incident) — sequence the downstream off the upstream's `__START_AT`, or consume the upstream as a non-historized view.
+
+**Interview soundbite:** "Late data is a latency-vs-completeness dial: a streaming table with a watermark bounds state and silently drops anything past the threshold, AUTO CDC `sequence_by` reorders out-of-order events losslessly per key (and tombstone retention — default 2 days — covers late deletes), while a materialized view recompute drops nothing at the cost of latency — so I push late-sensitive aggregations to an MV and only stream what can tolerate drops."
+
+### Triggered vs Continuous Execution Mode
+
+**What it is**
+Execution mode is the **pipeline-level lifecycle setting** for a Spark Declarative Pipelines (SDP) / Lakeflow Declarative Pipelines update. It answers one question: *after the pipeline computes its tables, does it stop or keep running?* Two values:
+
+- **Triggered** — refresh every table once based on the data available when the update started, then **stop** and tear the cluster down. Batch-like, cheap, the default.
+- **Continuous** — keep the cluster alive and ingest new data **as it arrives** to keep every table fresh until you manually stop it. Always-on, low-latency, costlier.
+
+This is controlled by a single boolean pipeline property, `continuous`, whose **default value is `false`** (i.e. triggered). It is set via the **Pipeline mode** option in pipeline settings, or directly in the pipeline JSON. Pipeline mode is **independent of table type** — both `@dp.table` streaming tables and `@dp.materialized_view` materialized views run under either mode.
+
+**Critical distinction — execution mode is NOT deployment mode.** These are two orthogonal axes that interview candidates routinely conflate:
+
+| Axis | Values | Controls | Where set |
+|---|---|---|---|
+| **Execution / trigger mode** (this topic) | Triggered vs Continuous | Does the update stop or stay running? | `continuous: true/false` pipeline property |
+| **Deployment mode** | Development vs Production | Cluster reuse, retry behavior, dev-tagging, schedule pausing | `development: true/false` (set by Databricks Asset Bundle `mode: development`/`production`, or the Dev/Prod toggle in the UI) |
+
+A pipeline can be any of the four combinations — e.g. *triggered + development* (fast-iterate ETL), or *continuous + production* (always-on stream). Mixing them up ("continuous mode means production") is a wrong answer.
+
+**How it works (mechanics)**
+
+*Triggered:* The update starts a cluster, discovers the dataset graph, computes each dataset exactly once against the snapshot of source data at update start, writes results, and shuts the cluster down. New data that lands *after* the update started is not processed until the next trigger. Triggering can come from the **Run now** button, a schedule, the Pipelines API, or — importantly — a **Pipeline task inside a Lakeflow Job** (only triggered pipelines can be a job task; continuous pipelines cannot, since triggering an always-on pipeline is redundant).
+
+*Continuous:* The cluster stays up and each flow runs as a long-lived streaming/repeating query. To avoid wasted recompute, SDP **automatically monitors dependent Delta tables and performs an update on a downstream dataset only when the contents of those dependent tables actually change** — so a continuous pipeline isn't blindly recomputing materialized views every interval. Continuous pipelines use automatic retry/restart behavior (restart the cluster for specific recoverable errors such as memory leaks and stale credentials; retry on errors such as a failure to start a cluster), the same reliability profile that Jobs- and API-triggered updates get.
+
+**Inside Structured Streaming (the layer below pipeline mode).** Each flow in an SDP pipeline is ultimately a Structured Streaming query, and Structured Streaming has its own `trigger(...)` on the `DataStreamWriter`. Pipeline mode maps onto these:
+
+| Streaming trigger | Syntax | Semantics | Maps to pipeline mode |
+|---|---|---|---|
+| `availableNow=True` | `.trigger(availableNow=True)` | Process **all available data in multiple micro-batches, then terminate**. Supports sizing (e.g. `maxBytesPerTrigger` / `maxFilesPerTrigger`; sizing options vary by source). This is the engine behind triggered SDP. | Triggered |
+| `processingTime='10 seconds'` | `.trigger(processingTime='10 seconds')` | Fixed-interval micro-batches; checks for new data every interval. Balances cost vs latency. | Continuous (via `pipelines.trigger.interval`) |
+| Unspecified (default) | N/A | Equivalent to `processingTime='0 seconds'` — runs as fast as possible, processing continuously as long as new data arrives (general-purpose ~3–5 s latency per the docs). Can drive high cloud-storage API cost. | n/a (raw streaming) |
+| `realTime='5 minutes'` | `.trigger(realTime='5 minutes')` | Real-time mode; end-to-end tail latency under 1 s (commonly ~300 ms, as low as ~5 ms). The string sets the long-running batch duration. Public Preview. | Continuous + real-time |
+| `continuous='1 second'` | `.trigger(continuous='1 second')` | Spark OSS experimental continuous *processing* (experimental since Spark 2.3). **Not supported / not recommended on Databricks** — use real-time mode instead. Unrelated to SDP "continuous pipeline mode" despite the name collision. | — |
+
+Note: `Trigger.Once` is **deprecated** (since Databricks Runtime 11.3 LTS) — migrate to `Trigger.AvailableNow`. On **serverless** compute, only `Trigger.AvailableNow()` and `Trigger.Once()` are supported (Databricks recommends `AvailableNow`); time-based triggers (`Trigger.ProcessingTime`/`Trigger.Continuous`) are blocked, and a streaming query with **no** explicit trigger fails with `INFINITE_STREAMING_TRIGGER_NOT_SUPPORTED` (because Spark defaults to `Trigger.ProcessingTime("0 seconds")`). For an always-on stream on serverless you must use an SDP pipeline in continuous mode.
+
+**Key configs / syntax**
+
+Setting the mode in the pipeline JSON / settings:
+
+```json
+{
+  "continuous": false
+}
+```
+
+```json
+{
+  "continuous": true
+}
+```
+
+For a continuous pipeline you tune freshness/cost with `pipelines.trigger.interval` — how often each flow starts an update. This setting is **only meaningful in continuous mode** (a triggered pipeline processes each table once). Databricks recommends setting it **per table** because streaming vs complete (batch) queries have different defaults.
+
+Per-table in Python:
+
+```python
+from pyspark import pipelines as dp
+
+@dp.table(
+    spark_conf={"pipelines.trigger.interval": "10 seconds"}
+)
+def events_bronze():
+    return (
+        spark.readStream
+        .format("cloudFiles")
+        .option("cloudFiles.format", "json")
+        .load("/Volumes/main/raw/events")
+    )
+```
+
+Per-table in SQL:
+
+```sql
+SET pipelines.trigger.interval = 10 seconds;
+
+CREATE OR REFRESH STREAMING TABLE events_bronze
+AS SELECT * FROM STREAM read_files('/Volumes/main/raw/events', format => 'json');
+```
+
+Whole-pipeline (rarely needed) via the `configuration` object:
+
+```json
+{
+  "continuous": true,
+  "configuration": {
+    "pipelines.trigger.interval": "10 seconds"
+  }
+}
+```
+
+`pipelines.trigger.interval` **defaults by flow type:**
+
+| Flow type | Default interval |
+|---|---|
+| Streaming queries | 5 seconds |
+| Complete (batch) queries, all inputs Delta | 1 minute |
+| Complete (batch) queries, some inputs non-Delta | 10 minutes |
+
+Valid units: `second(s)`, `minute(s)`, `hour(s)`, `day(s)` — singular or plural, e.g. `"30 second"`, `"1 hour"`.
+
+Real-time mode (continuous + sub-second, requires an explicit update flow) layers on top:
+
+```python
+from pyspark import pipelines as dp
+
+dp.create_sink(
+    "alerts_out",
+    "kafka",
+    {"kafka.bootstrap.servers": "<server:port>", "topic": "alerts"},
+)
+
+@dp.update_flow(
+    name="realtime_flow",
+    target="alerts_out",
+    spark_conf={
+        "pipelines.trigger": "RealTime",
+        "pipelines.trigger.interval": "5 minutes",
+    },
+)
+def realtime_flow():
+    return (
+        spark.readStream
+        .format("kafka")
+        .option("kafka.bootstrap.servers", "<server:port>")
+        .option("subscribe", "txns")
+        .load()
+    )
+```
+
+with `spark.databricks.streaming.realTimeMode.enabled = true` set in the pipeline Spark config. Real-time mode is Public Preview on Databricks Runtime 18.1.3 (SDP preview channel).
+
+**Use cases**
+
+- **Triggered** — the right choice for the vast majority of pipelines. Scheduled batch/incremental ETL with 10-minute, hourly, or daily freshness. Cluster spins up, processes the backlog, tears down → minimal cost. Required if you want to orchestrate the pipeline as a **Lakeflow Job task**.
+- **Continuous** — only when freshness needs to be in the **seconds-to-minutes** range (the docs target ~10 s to a few minutes). Operational dashboards, low-latency ingest where always-on cost is justified.
+- **Real-time mode** (continuous variant) — ultra-low-latency operational workloads needing sub-second response: fraud detection, real-time personalization.
+
+For my Apollo Gen2 pipelines (211 STG streaming tables + 211 Bronze SCD2 tables fed from ADLS `incoming/`), every SDP pipeline runs **triggered**: JOB2 is kicked off after JOB1's preprocessing notebook lands the files, so there's no benefit to an always-on cluster — the data arrives in discrete batches from the Synapse Link → ADLS flow, and triggered mode lets the cluster tear down between runs to keep cost down. Continuous would burn an always-on cluster waiting on a source that only updates in batches.
+
+**Limitations & gotchas**
+
+- **`continuous` defaults to `false`** — forgetting this and assuming always-on is a common error.
+- **Continuous = always-on cluster = significantly more expensive.** Don't reach for it just to "be modern"; justify it with a real sub-minute SLA.
+- **Continuous pipelines can't be a Job task** — only triggered pipelines can be triggered by a Pipeline task in a Lakeflow Job.
+- **DBSQL-defined** materialized views and streaming tables **always refresh in triggered mode**, regardless of any pipeline setting.
+- **`pipelines.trigger.interval` is ignored in triggered mode** — it only governs continuous flows.
+- **Name-collision trap:** Structured Streaming's experimental `Trigger.Continuous` (`continuous='1 second'`) is *not* the same thing as SDP continuous pipeline mode, and Databricks does not support that streaming trigger — use real-time mode. Stating they're the same is wrong.
+- **Serverless:** time-based streaming triggers are unavailable; an always-on stream on serverless must be an SDP continuous pipeline, not a hand-rolled `.trigger(processingTime=...)` query. A serverless streaming query with no explicit trigger fails with `INFINITE_STREAMING_TRIGGER_NOT_SUPPORTED`.
+- **Don't conflate with dev/prod deployment mode** — different axis, different property (`development` vs `continuous`).
+
+**Interview soundbite:** "Triggered vs continuous is the SDP execution axis — `continuous` defaults to false, so the pipeline refreshes every table once off the data available at start and tears the cluster down (cheap, schedulable as a Job task); flip `continuous: true` only for a real seconds-to-minutes SLA, where the cluster stays up and `pipelines.trigger.interval` governs freshness — and it's a completely separate axis from the dev/prod *deployment* mode."
+
+### Streaming Optimization
+
+**What it is**
+A toolkit of levers to make Spark Declarative Pipelines (SDP / Lakeflow Declarative Pipelines) streaming tables — `@dp.table` / `CREATE OR REFRESH STREAMING TABLE` — run with bounded state, bounded memory, predictable latency, and clean file layout. In Apollo Gen2 these matter directly: 211 STG streaming tables feeding 211 Bronze SCD2 tables (`create_auto_cdc_flow`) — any unbounded state or small-files problem multiplies across 422 pipelines. The two-job split exists precisely because SDP can't run arbitrary Python, so all tuning happens via dataset decorators, the pipeline `configuration` / `spark_conf`, and source-reader options.
+
+**How it works (mechanics)**
+
+Each lever attacks one cost: state size, microbatch size, file layout, skew, or checkpoint latency. Define each term on first use; concrete defaults below are doc-verified against current Databricks docs.
+
+**1. Watermark — bound state for stateful ops.**
+A *watermark* is a time threshold telling Spark "no more late data past this point" so it can evict (drop) intermediate state and emit results. Without it, aggregations / joins / dedup grow state without bound → high latency → out-of-memory (OOM). For aggregations, watermark is *mandatory* for incremental processing — otherwise the materialized result is fully recomputed each update. Concretely: a 3-minute watermark on a stream-stream join means once event time advances 3 min past a row, that row's state is purged; a click arriving 4 min after its impression is dropped. Trade-off: smaller threshold = lower latency + smaller state but more dropped late records; larger threshold = more completeness but more state and compute.
+
+```python
+from pyspark import pipelines as dp
+from pyspark.sql.functions import window
+
+@dp.table()
+def profit_by_hour():
+    return (
+        spark.readStream.table("sales")
+            .withWatermark("timestamp", "1 hour")
+            .groupBy(window("timestamp", "1 hour").alias("time"))
+            .aggExpr("sum(profit) AS profit")
+    )
+```
+
+```sql
+CREATE OR REFRESH STREAMING TABLE gold.adImpressionSeconds AS
+SELECT impressionAdId,
+       window(clickTimestamp, "5 minutes") AS impressions_window,
+       sum(impressionSeconds) AS totalImpressionSeconds
+FROM STREAM(silver.adImpressionClicks)
+WATERMARK clickTimestamp DELAY OF INTERVAL 3 MINUTES
+GROUP BY impressionAdId, window(clickTimestamp, "5 minutes");
+```
+
+Stream-stream join: watermark on **both** sides + a time-bounded join condition — omit either and state grows forever. Because each source has an incomplete view, the streaming engine keeps one global watermark based on the slowest stream.
+
+```sql
+CREATE OR REFRESH STREAMING TABLE silver.adImpressionClicks AS
+SELECT imp.userId, impressionAdId, clickTimestamp, impressionSeconds
+FROM STREAM(bronze.rawAdImpressions)
+  WATERMARK impressionTimestamp DELAY OF INTERVAL 3 MINUTES imp
+INNER JOIN STREAM(bronze.rawClicks)
+  WATERMARK clickTimestamp DELAY OF INTERVAL 3 MINUTES click
+ON imp.userId = click.userId
+AND clickAdId = impressionAdId
+AND clickTimestamp >= impressionTimestamp
+AND clickTimestamp <= impressionTimestamp + interval 3 minutes;
+```
+
+**2. Trigger interval matched to data volume — fix the small-files problem.**
+*Cause:* every microbatch commit writes at least one file per shuffle partition per stateful table. Triggering too frequently on a low-volume source (e.g., continuous mode on a trickle) produces thousands of tiny files. *Why it hurts reads:* each file needs a separate metadata lookup + I/O round trip, and cloud-storage LIST APIs throttle at scale — so downstream reads (and the next SCD2 layer) crawl. *Fix:* pick a trigger cadence that lets a meaningful amount of data accumulate between updates. Databricks default and recommendation is **triggered mode on a schedule**, not continuous, for the vast majority of pipelines. Continuous mode is only for seconds-to-minutes latency; real-time mode for sub-second. In Apollo Gen2, JOB2 running triggered on a schedule (rather than continuous) is the correct default — it batches each entity's incoming files into fewer, larger Bronze files.
+
+```python
+from pyspark import pipelines as dp
+
+@dp.table()
+def stg_account():
+    return (
+        spark.readStream.format("cloudFiles")
+            .option("cloudFiles.format", "parquet")
+            .option("cloudFiles.maxFilesPerTrigger", 1000)
+            .load("/Volumes/raw/incoming/account")
+    )
+```
+
+| Pipeline mode | Latency | File-layout effect | When |
+|---|---|---|---|
+| Triggered (default) | minutes–hours | Larger files, fewer commits | Default; vast majority of pipelines (Apollo JOB2) |
+| Continuous | seconds–minutes | More commits → small-files risk | Only if sub-minute freshness required |
+| Real-time (`spark.databricks.streaming.realTimeMode.enabled`) | sub-second / ms | N/A (Kafka source+sink) | Fraud, ops alerting; Public Preview, requires continuous=true + an `@dp.update_flow` with `pipelines.trigger="RealTime"`; Kafka/Event Hubs/MSK only, Delta not supported as source or sink |
+
+**3. RocksDB state store + changelog checkpointing — handle large state.**
+RocksDB is an embedded key-value store that spills state to local disk instead of holding it all in JVM heap, so it survives large state (big joins, wide dedup) without OOM. *Changelog checkpointing* writes only records that changed since the last checkpoint (a delta) to durable storage, instead of snapshotting + uploading whole SST files every batch — cutting checkpoint duration and end-to-end latency. Defaults (doc-verified): RocksDB is the **default state store provider in DBR 17.3 and above** and changelog checkpointing is **enabled by default in 17.3 and above** (changelog checkpointing itself is available from DBR 13.3 LTS). Below 17.3 you must enable both explicitly. **Serverless pipelines manage state store config automatically** — you don't set this. For classic-compute SDP, set in the pipeline JSON `configuration`:
+
+```json
+{
+  "configuration": {
+    "spark.sql.streaming.stateStore.providerClass":
+      "com.databricks.sql.streaming.state.RocksDBStateStoreProvider"
+  }
+}
+```
+
+```python
+spark.conf.set(
+    "spark.sql.streaming.stateStore.rocksdb.changelogCheckpointing.enabled", "true")
+```
+
+Gotcha: the state-management scheme can't change across restarts — switching to RocksDB on an existing checkpoint requires a **new checkpoint location** (full refresh). (Note: changelog checkpointing alone *can* be enabled on an existing stream while preserving state; it's the in-memory→RocksDB provider switch that forces a new checkpoint.)
+
+**4. numShufflePartitions sized to state — state stores are per shuffle partition.**
+State is sharded one store instance per shuffle partition, so partition count *is* your state parallelism. Too few = giant per-partition stores + skew; too many = file/metadata overhead. Databricks recommendation for stateful queries: set shuffle partitions to **1–2× the total cores** in the cluster.
+
+```json
+{ "configuration": { "spark.sql.shuffle.partitions": "64" } }
+```
+
+Critical gotcha (verified): partition count is **fixed at checkpoint creation** — changing `spark.sql.shuffle.partitions` has no effect on an existing stateful checkpoint; you'd need a new checkpoint. (Stateless queries support dynamic shuffle-partition changes without a new checkpoint in DBR 18.0+; on-demand stateful repartitioning via `spark.sql.streaming.stateStore.partitions` without losing state exists only in DBR 18.3+, and requires the RocksDB state store.) On serverless SDP, leave shuffle partitions to the platform, so don't hand-tune unless on classic compute.
+
+**5. maxFilesPerTrigger / maxBytesPerTrigger — bound the microbatch.**
+*Admission controls* cap how much each microbatch ingests, preventing one huge batch from causing spill, OOM, or cascading delays.
+
+| Option | Default | Meaning |
+|---|---|---|
+| `maxFilesPerTrigger` (`cloudFiles.maxFilesPerTrigger` for Auto Loader) | 1000 (Delta & Auto Loader; no max for other file sources) | Hard upper bound on files per microbatch |
+| `maxBytesPerTrigger` (`cloudFiles.maxBytesPerTrigger`) | None | Soft max on bytes; can exceed if smallest input unit is bigger (e.g., 10g limit + 3 GB files → processes 12 GB) |
+| `maxOffsetsPerTrigger` (Kafka) | None | Approx records per microbatch from Kafka |
+
+When both file and byte limits are set, the batch stops at whichever is hit **first** (the lower limit). Two notes for Apollo Gen2: (a) on **serverless SQL-warehouse** streaming tables, leave both unset to let dynamic admission control auto-scale; (b) in **DBR 18.0+**, `cloudFiles.maxFilesPerTrigger` is dynamically configured and need not be set manually (this DBR 18.0 auto-config applies to the *files* limit, not `maxBytesPerTrigger`). This is the direct lever when JOB1 dumps an unusually large incoming/ batch and JOB2's STG read would otherwise OOM.
+
+```python
+from pyspark import pipelines as dp
+
+@dp.table()
+def stg_account():
+    return (
+        spark.readStream.format("cloudFiles")
+            .option("cloudFiles.format", "parquet")
+            .option("cloudFiles.maxBytesPerTrigger", "10g")
+            .load("/Volumes/raw/incoming/account")
+    )
+```
+
+**6. Liquid clustering — layout & pruning.**
+Liquid clustering replaces static `PARTITIONED BY` + `ZORDER` with self-tuning, skew-resistant, incremental data layout; you can change clustering keys without rewriting the table. It clusters data so queries filtering on the keys skip (prune) irrelevant files. Supported on streaming tables and materialized views, including in SDP. `CLUSTER BY AUTO` lets Databricks pick keys from workload history (requires predictive optimization, which runs the key selection + clustering asynchronously as a maintenance op). Mutually exclusive with `PARTITIONED BY`.
+
+```sql
+CREATE OR REFRESH STREAMING TABLE events
+CLUSTER BY AUTO
+AS SELECT * FROM STREAM read_files("/Volumes/raw/events", format => "parquet");
+```
+
+```python
+from pyspark import pipelines as dp
+
+# Explicit keys:
+@dp.table(cluster_by=["event_date", "region"])
+def events():
+    return (spark.readStream.format("cloudFiles")
+            .option("cloudFiles.format", "parquet")
+            .load("/Volumes/raw/events"))
+
+# Automatic key selection: @dp.table(cluster_by_auto=True)
+```
+
+For Apollo Bronze SCD2, clustering on the business key + `__START_AT` makes point-in-time and current-version reads prune hard.
+
+**7. Salt skewed join / groupBy keys.**
+*Skew* = a few key values hold most rows, so a few tasks do all the work (hotspots) and stretch update time. *Salt* = append a random bucket suffix to the hot key, aggregate in **two stages** (partial per salted key, then re-aggregate dropping the salt), spreading the load. For skew in *stored* tables, use liquid clustering instead.
+
+```python
+from pyspark.sql.functions import col, floor, rand
+
+partial = (df.withColumn("salt", floor(rand() * 16))
+             .groupBy("hot_key", "salt").agg({"amount": "sum"}))
+final = partial.groupBy("hot_key").agg({"sum(amount)": "sum"})
+```
+
+**8. Broadcast small dimensions.**
+If one join side is a small dim table, broadcast it to every executor and skip the shuffle entirely — far cheaper than a shuffle (sort-merge) join. Use a `BROADCAST` hint (SQL) or `broadcast()` (Python). In SDP real-time mode, only stream-to-static **broadcast** joins are supported (stream-stream is not).
+
+```sql
+CREATE OR REFRESH MATERIALIZED VIEW enriched_orders AS
+SELECT o.*, /*+ BROADCAST(p) */ p.product_name, p.category
+FROM orders o JOIN products p ON o.product_id = p.product_id;
+```
+
+```python
+from pyspark import pipelines as dp
+from pyspark.sql.functions import broadcast
+
+@dp.materialized_view
+def enriched_orders():
+    orders = spark.read.table("orders")
+    products = spark.read.table("products")
+    return orders.join(broadcast(products), "product_id")
+```
+
+**9. asyncProgressTracking — cut offset-commit latency.**
+Normally Spark must persist offsets (`offsetLog`) and commits (`commitLog`) *before* the next microbatch proceeds, so offset I/O sits on the critical path. Async progress tracking commits offsets/commits asynchronously, removing that blocking step. Options: `asyncProgressTrackingEnabled` (default `false`), `asyncProgressTrackingCheckpointIntervalMs` (default `1000`). Limits (verified): for **Kafka sinks, async progress tracking only supports stateless pipelines**; incompatible with `Trigger.once` / `Trigger.availableNow` (the query fails if enabled); no exactly-once guarantee (offset ranges can shift on failure). This is a high-throughput Kafka-sink lever, not for Apollo's Delta-sink SCD2 tables.
+
+```python
+(stream.writeStream
+    .format("kafka")
+    .option("topic", "out")
+    .option("checkpointLocation", "/Volumes/cat/sch/vol/cp")
+    .option("asyncProgressTrackingEnabled", "true")
+    .option("asyncProgressTrackingCheckpointIntervalMs", "5000")
+    .start())
+```
+
+**10. Drop unnecessary stateful ops.**
+Every stateful operator (aggregation, `dropDuplicates`/`dropDuplicatesWithinWatermark`, stream-stream join, custom `transformWithState`) keeps state, adds a shuffle, and adds checkpoint cost. Cheapest state is the state you never keep: filter/project before the stateful op; use a static broadcast join instead of stream-stream where one side is a slow-changing dim; push dedup upstream so downstream tables stay stateless. In Apollo Gen2, the STG layer is deliberately a near-passthrough streaming table (stateless append) so all the SCD2 state lives in exactly one place — the Bronze `create_auto_cdc_flow` — rather than being duplicated across both layers (the SCD2-on-SCD2 incident is what you get when you don't).
+
+**Key configs / syntax**
+
+| Lever | Knob | Default | Set where |
+|---|---|---|---|
+| Watermark | `withWatermark()` / `WATERMARK ... DELAY OF INTERVAL` | none | dataset query |
+| Trigger cadence | triggered vs continuous | triggered | pipeline mode |
+| RocksDB | `spark.sql.streaming.stateStore.providerClass` | RocksDB in DBR 17.3+ | pipeline `configuration` (auto on serverless) |
+| Changelog ckpt | `...rocksdb.changelogCheckpointing.enabled` | true in 17.3+ | spark conf |
+| Shuffle partitions | `spark.sql.shuffle.partitions` | platform-managed on serverless | pipeline config; fixed at checkpoint |
+| File admission | `cloudFiles.maxFilesPerTrigger` | 1000 (auto-configured in DBR 18.0+) | source reader option |
+| Byte admission | `cloudFiles.maxBytesPerTrigger` | None | source reader option |
+| Kafka admission | `maxOffsetsPerTrigger` | None | Kafka reader option |
+| Layout/pruning | `CLUSTER BY AUTO` / `cluster_by=[...]` / `cluster_by_auto=True` | off | DDL / `@dp.table` |
+| Async commits | `asyncProgressTrackingEnabled` | false | writeStream option (Kafka sink, stateless) |
+
+**Use cases**
+- High-cardinality aggregation / dedup with growing memory → watermark + RocksDB + changelog.
+- Trickle source writing thousands of tiny files → triggered mode + longer interval (small-files fix).
+- One executor stuck at 100% while others idle → salt the skewed key, or liquid-cluster the table.
+- Star-schema enrichment → broadcast the dimension.
+- Catch-up after backlog blows up the microbatch → `maxFilesPerTrigger` / `maxBytesPerTrigger`.
+- Kafka-to-Kafka stateless throughput → asyncProgressTracking.
+
+**Limitations & gotchas**
+- Shuffle-partition count and state-store scheme are **frozen at checkpoint creation** — changing them on an existing stateful stream requires a new checkpoint (full refresh) unless you're on DBR 18.3+ on-demand stateful repartitioning (DBR 18.0+ for stateless dynamic shuffle partitions).
+- Stream-stream join without watermarks on **both** sides + a time-bound condition = unbounded state.
+- `maxBytesPerTrigger` is a **soft** max — a single oversized input unit overshoots it.
+- asyncProgressTracking: Kafka sink = stateless only, fails under `Trigger.availableNow`/`Trigger.once`, no exactly-once.
+- On **serverless** SDP, don't hand-set RocksDB/shuffle/admission configs — serverless manages state config and uses dynamic admission control; manual settings can hurt.
+- Liquid clustering: updated rows aren't auto-re-clustered (`OPTIMIZE` needed); can't combine with `PARTITIONED BY`; can't change clustering keys of a streaming table / MV via `ALTER TABLE`.
+- Watermark too small drops late data silently; too large bloats state and compute — must be tuned + monitored against the event-log `flow_progress` metrics.
+
+**Interview soundbite:** "I bound state with watermarks, bound the microbatch with maxFilesPerTrigger/maxBytesPerTrigger, size shuffle partitions to 1–2x cores knowing state stores are per-partition and frozen at the checkpoint, run RocksDB with changelog checkpointing for large state, fix small-files by matching trigger cadence to volume, and kill skew with salting plus liquid clustering — and on serverless I let SDP manage most of that automatically."
+
+### Streaming Table — Full Refresh vs Incremental Refresh
+
+**What it is**
+
+A streaming table (ST) in SDP (Spark Declarative Pipelines — `@dp.table` in Python, `CREATE OR REFRESH STREAMING TABLE` in SQL) is a *stateful, append-only* sink built on Structured Streaming. Every flow writing into it owns an internal **checkpoint** (an offset log that records "where in the source I last read"). The *update mode* you pick decides whether that checkpoint is honored or wiped:
+
+| Mode | What it does to data | What it does to checkpoints | Reads from source |
+|---|---|---|---|
+| **Refresh (default / incremental)** | Keeps existing rows, **appends** new ones | Honored — resumes from last committed offset | Only NEW records since last checkpoint |
+| **Full refresh** | **Truncates** all existing data + metadata | **Removed** + new checkpoints created per flow | ALL records the source still retains, from the beginning |
+| **Reset streaming flow checkpoints** | Keeps existing rows (no truncate) | Cleared for selected flows only | Reprocesses all source records into the existing table |
+
+Incremental is the normal, every-update behavior. Full refresh is the explicit "clear and rebuild from scratch" button — and it is the dangerous one when the source no longer holds full history.
+
+**How it works (mechanics)**
+
+*Incremental (default `REFRESH`):* The per-flow checkpoint is keyed by **flow name**. If you set no explicit flow name, the default flow name is the fully qualified target table name (`catalog.schema.table`); if you named the flow (e.g. `flow_name=` on `create_auto_cdc_flow`), it is `catalog.schema.flow_name`. On each pipeline update the flow reads the source's offset log, finds offsets greater than the last committed checkpoint, processes only those, and advances the checkpoint. This is why an append-only source (Auto Loader / `read_files`, Delta append, Kafka) is required — by default streaming tables require append-only sources. To incrementally consume a Delta source that has in-place updates/deletes, set `skipChangeCommits` on the `spark.readStream` (it ignores file-changing operations and processes only appends; in Databricks Runtime 12.2 LTS and above it replaces the legacy `ignoreChanges` option). `skipChangeCommits` cannot be used when the source ST is the target of `create_auto_cdc_flow`.
+
+*Full refresh:* "discards all existing data and metadata and restarts the stream from the beginning." Concretely it **(1) truncates the streaming table, (2) removes all checkpoint data, (3) restarts the streaming process with new checkpoints for every flow writing to the table.** Because the checkpoint is gone, the flow re-reads the *entire current contents of the source* — not the data that was previously in the table. If the source has aged data out, those rows are simply gone:
+
+| Data source | Reason input data is absent | Outcome of full refresh |
+|---|---|---|
+| Kafka | Short retention threshold (e.g. 24h) | Records no longer present in Kafka are dropped from the target |
+| Files in object storage | Lifecycle / TTL policy aged files out | Deleted files are dropped from the target |
+| Records in a table | Deleted for compliance | Only records still present in the source are processed |
+
+This is the core trap: after a full refresh the table can have **fewer rows than before**, because "full" means "everything the source *currently* has," not "everything the table once had."
+
+**When a full refresh is actually required** (doc-verified scenarios — a `REFRESH` alone will *not* pick up these because the checkpoint/state is incompatible):
+- **Stateful-logic changes** — modifying aggregation grouping keys or aggregate functions; adding/removing aggregations; changing join keys/types; adding/removing joins; changing deduplication columns or dedup logic.
+- **Schema changes (non-backward-compatible)** — renaming columns without column-mapping mode; changing dedup columns; type narrowing (`BIGINT→INT`, `DOUBLE→FLOAT`); incompatible type changes (`STRING→INT`); hard deletion of a column. (Adding a column is generally safe — no full refresh.)
+- **Physical layout changes** — e.g. migrating legacy partitioning to a new clustering scheme.
+- **Upstream source changes** — modifying source tables read by the query; switching source type (Kafka→Delta, Auto Loader→Kafka); changing source location/path/Kafka topic; dropping-and-recreating a source Delta table *even if the schema is identical*.
+- **Corruption / data-continuity** — checkpoint directory or schema-tracking files corrupted/deleted; CDC logs expired.
+
+**Key configs / syntax**
+
+Trigger a full refresh of one ST in SQL. The grammar is `REFRESH { MATERIALIZED VIEW | [ STREAMING ] TABLE } table_name [ FULL | { SYNC | ASYNC } ]` — `STREAMING` is an optional keyword, so `REFRESH STREAMING TABLE` and `REFRESH TABLE` are equivalent (not a legacy form):
+
+```sql
+REFRESH STREAMING TABLE sales FULL;
+-- STREAMING is optional in the grammar; this is equivalent:
+REFRESH TABLE sales FULL;
+```
+
+In SDP you usually trigger full refresh from the **pipeline UI** ("Full Refresh" button) or selectively via the REST API. **Selective full refresh of chosen tables** (refresh only specific tables full while others run a normal refresh) uses `full_refresh_selection`, which takes a list of *tables/datasets* (not flow names):
+
+```bash
+curl -X POST \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{ "full_refresh_selection": ["my_catalog.my_schema.sales"] }' \
+  https://<host>/api/2.0/pipelines/<pipeline-id>/updates
+```
+
+**Reset only the checkpoint** (reprocess all source rows into the *existing* table without truncating — the safer middle ground; risk is duplicate rows unless the writer is idempotent, e.g. an AUTO CDC target). `reset_checkpoint_selection` takes a list of **flow names** that MUST be fully qualified `catalog.schema.flow_name`; a bare name throws `IllegalArgumentException` (the default flow name equals the fully qualified target table name):
+
+```bash
+curl -X POST \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{ "reset_checkpoint_selection": ["my_catalog.my_schema.customers_incremental_flow"] }' \
+  https://<host>/api/2.0/pipelines/<pipeline-id>/updates
+```
+
+**Protect a table from being wiped** — `pipelines.reset.allowed` (default `true`). Set to `false` to forbid full refresh on that table (does NOT block incremental writes / new data flowing in — it only blocks the destructive reset). This is the guardrail for any table holding data the source can no longer replay (backfilled data, manual deletes you want retained):
+
+```sql
+CREATE OR REFRESH STREAMING TABLE raw_user_table
+TBLPROPERTIES (pipelines.reset.allowed = false)
+AS SELECT * FROM STREAM read_files("/Volumes/.../data-user", format => "csv");
+
+CREATE OR REFRESH STREAMING TABLE bmi_table
+AS SELECT userid, (weight/2.2) / pow(height*0.0254, 2) AS bmi
+FROM STREAM(raw_user_table);
+```
+
+Same protection in Python:
+
+```python
+from pyspark import pipelines as dp
+
+@dp.table(
+    name="raw_user_table",
+    table_properties={"pipelines.reset.allowed": "false"},
+)
+def raw_user_table():
+    return (
+        spark.readStream.format("cloudFiles")
+            .option("cloudFiles.format", "csv")
+            .load("/Volumes/.../data-user")
+    )
+
+@dp.table(name="bmi_table")
+def bmi_table():
+    return (
+        spark.readStream.table("raw_user_table")
+            .selectExpr("userid", "(weight/2.2) / pow(height*0.0254, 2) AS bmi")
+    )
+```
+
+**Medallion mitigation** — keep a **full-history bronze ST** (flexible types like `STRING`/`VARIANT`, ideally `pipelines.reset.allowed=false`) so that when a downstream silver/gold ST needs a full refresh (stricter types, schema change), it rebuilds from the durable bronze table instead of from a short-retention raw source. The bronze table absorbs source volatility; the downstream tables become safely re-refreshable. **Append-once backfill** (`@dp.append_flow(once=True)` in Python / `CREATE FLOW ... AS INSERT INTO ONCE` in SQL) lets you re-add historical data after a full refresh without re-running a full refresh on the bronze table; the `once` flow stays idle in the graph and auto-reruns only when the pipeline is fully refreshed.
+
+**Use cases**
+
+- **Incremental:** every normal scheduled/triggered update — the 211 STG streaming tables in Apollo Gen2 run incremental on each JOB2 run, consuming only the new files JOB1 dropped into `incoming/`.
+- **Full refresh:** one-off recovery or migration — corrupted checkpoint, a stateful-logic change, a non-backward-compatible schema change, or switching a flow's source.
+- **Selective full refresh:** dev iteration on a single table, or rebuilding just the failed table without re-running the whole pipeline.
+- **Checkpoint reset:** rewind-and-replay when you must preserve existing rows but reprocess source (only safe with idempotent writers like AUTO CDC targets).
+
+**Limitations & gotchas**
+
+- A full refresh "does not reprocess data unless your source retains the full historical dataset" — on Kafka/aged-out files this **silently shrinks** the table. This is invisible until you compare row counts.
+- **Downstream cascade:** if an ST is full-refreshed, dependent downstream tables fail until they are *also* full-refreshed — unless the upstream ST has `skipChangeCommits` enabled. Downstream materialized views must be full-refreshed too.
+- Full refresh on large tables is costly/slow; downstream consumers may see incomplete results mid-refresh.
+- In **Apollo Gen2** terms: a careless full refresh of a Bronze SCD2 table fed by `create_auto_cdc_flow` would wipe the SCD2 history and re-derive it from whatever the source still has — if the upstream `incoming/` files were lifecycle-deleted, the rebuilt history is incomplete. Protect SCD2 bronze with `pipelines.reset.allowed=false` and rely on checkpoint reset + idempotent AUTO CDC instead, since the AUTO CDC writer is idempotent on the target table.
+- For materialized views, full vs incremental return the **same result** (MV refresh is cost-driven and idempotent); the destructive asymmetry is unique to streaming tables — never conflate the two.
+- `reset_checkpoint_selection` requires fully qualified **flow names** (`catalog.schema.flow_name`); a bare name throws `IllegalArgumentException`. `full_refresh_selection`/`refresh_selection`, by contrast, take **table/dataset** names — the flow-name fully-qualified-or-fail rule is documented only for `reset_checkpoint_selection`.
+
+**Interview soundbite:** Incremental refresh resumes from each flow's checkpoint and appends only new rows, while a full refresh truncates the streaming table, deletes all checkpoints, and re-reads only what the source *still* retains — so on short-retention sources it can leave you with fewer rows than before, which is why we put a full-history bronze ST in the medallion and set `pipelines.reset.allowed=false` to fence off any table we can't safely rebuild.
+
+### Auto Loader (cloudFiles) — Important Options & Configs
+
+**What it is**
+Auto Loader is Databricks' incremental file-ingestion source, invoked through the Structured Streaming connector `cloudFiles`. It discovers new files in cloud object storage (ADLS `abfss://`, Unity Catalog Volumes `/Volumes/`, S3 `s3://`, GCS `gs://`, Azure Blob `wasbs://`) as they land and ingests each exactly once, tracking which files it has already processed in a RocksDB key-value store in its checkpoint. In **SDP (Spark Declarative Pipelines / Lakeflow)** it is the canonical ingestion engine behind a `@dp.table` streaming table — and crucially, SDP **manages the schema location and checkpoint for you** (you do NOT set `cloudFiles.schemaLocation` or `checkpointLocation` inside a pipeline). In my Apollo Gen2 work, every one of the 211 STG streaming tables is an Auto Loader `read_files`/`cloudFiles` reader over the per-entity `incoming/` folder produced by the JOB1 preprocessing notebook.
+
+**How it works (mechanics)**
+- File discovery runs in one of two detection modes (directory listing = default, or file notification — see below) and emits each newly-seen file path into a micro-batch.
+- Auto Loader normally keys "have I seen this?" on the **file path** alone (one file = one ingest). With `cloudFiles.allowOverwrites=true` it additionally keys on the file's last-modified timestamp so an overwritten/appended file is re-ingested.
+- Schema inference (when no schema provided): samples the **most recent (by modification time) 50 GB or 1000 files, whichever limit is crossed first**, writes the inferred schema to a `_schemas` directory under `schemaLocation`, and infers untyped formats (JSON/CSV/XML) as **all strings** unless `inferColumnTypes=true`. (Sample size is tunable via the SQL configs `spark.databricks.cloudFiles.schemaInference.sampleSize.numBytes` and `.numFiles`.)
+- Schema evolution on a newly-seen column: stream **fails with `UnknownFieldException`** after merging the new column to the end of the stored schema → on **restart** the evolved schema is used. Configure the stream with Lakeflow Jobs / SDP so this restart is automatic, making the "failure" just a one-cycle pause.
+
+**Key configs / syntax**
+
+Core / schema options (defaults verified against the Spark API options reference):
+
+| Option | Default | Meaning |
+|---|---|---|
+| `cloudFiles.format` | None (**required**) | `avro`, `binaryFile`, `csv`, `json`, `orc`, `parquet`, `text`, `xml`. |
+| `cloudFiles.schemaLocation` | None (required to infer schema **outside** SDP) | Directory storing inferred schema + drift history (`_schemas`). **Managed automatically by SDP — do not set it in a pipeline.** |
+| `cloudFiles.schemaEvolutionMode` | `addNewColumns` when no schema provided; `none` when a schema IS provided | Controls behavior on a new column (table below). |
+| `cloudFiles.inferColumnTypes` | `false` | If `false`, JSON/CSV/XML columns inferred as **strings**; `true` infers real types (int/double/timestamp etc.). Note: the SQL `read_files` TVF flips this default to **`true`**. |
+| `cloudFiles.schemaHints` | None | SQL-syntax type overrides for known columns (e.g. `"id long, ts timestamp"`) without supplying a full schema. `addNewColumns` still works when the schema arrives only as a hint. |
+| `rescuedDataColumn` | None (column itself is **on by default** as `_rescued_data` for Auto Loader) | Name of the column that captures unparseable values (type mismatch, missing-in-schema, case difference). Set this to rename it. |
+| `cloudFiles.partitionColumns` | None | Comma-separated Hive-style partition keys (`year=2022/month=2/...`) inferred from the directory path; set `""` to ignore them. |
+| `readerCaseSensitive` | `true` | When `true`, columns differing only by case are rescued into `_rescued_data`; set `false` to read case-insensitively. (DBR 13.3+; supersedes the deprecated `parserCaseSensitive`.) |
+
+`schemaEvolutionMode` behavior on encountering a new column (valid values: `addNewColumns`, `none`, `rescue`, `failOnNewColumns`):
+
+| Mode | Behavior on a new column |
+|---|---|
+| `addNewColumns` (default, no schema given) | Stream fails with `UnknownFieldException`, adds column to schema; resumes on restart. Existing column types unchanged. On a *type change* (vs new column) the type does NOT evolve: mismatched values are set to `NULL` and routed to `_rescued_data`. |
+| `rescue` | Never evolves, never fails on schema change; all new columns land in `_rescued_data`. |
+| `failOnNewColumns` | Stream fails and will **not** restart until you update the provided schema/schema hints or remove the offending file. |
+| `none` | Ignores new columns silently; no data rescued unless `rescuedDataColumn` is set; never fails on schema change. |
+
+Separately, `addNewColumnsWithTypeWidening` is a distinct mode (**Public Preview, DBR 16.4+**, not in the standard valid-values list): same as `addNewColumns`, **plus** it widens supported types (`int`→`long`, `float`→`double`); unsupported widenings (e.g. `int`→`string`) go to `_rescued_data`.
+
+Throughput / rate-limit and discovery options:
+
+| Option | Default | Meaning |
+|---|---|---|
+| `cloudFiles.maxFilesPerTrigger` | `1000` | Max new files per micro-batch — a **hard** limit. In DBR 18.0+ this is dynamically auto-configured and need not be set. |
+| `cloudFiles.maxBytesPerTrigger` | None | **Soft** byte cap per micro-batch (e.g. `10g`); if a single file is bigger it still goes whole. Used with `maxFilesPerTrigger` → whichever limit hits **first** wins. In DBR 18.0+ this is dynamically auto-configured. |
+| `cloudFiles.includeExistingFiles` | `true` | Whether to ingest files already present at first start. **Evaluated only on the first stream start** — changing it after restart has no effect. |
+| `cloudFiles.allowOverwrites` | `false` | If `true`, re-ingests appended/overwritten files (also keys on last-modified time). Default `false` = exactly-once on immutable files. |
+| `cloudFiles.useNotifications` | `false` | `true` = file notification mode; `false` = directory listing mode. |
+| `cloudFiles.useManagedFileEvents` | `false` | `true` = use Unity Catalog **file events** (recommended modern path; one queue/subscription per external location). DBR 14.3 LTS+. Do not combine with `backfillInterval`/`useNotifications`/`fetchParallelism`/`pathRewrites`/`resourceTags`. |
+| `cloudFiles.backfillInterval` | None | Async backfill cadence (e.g. `1 week`) to re-scan and catch files missed by classic notifications. **Not needed** with file events — Databricks handles backfill automatically (the file-events service runs periodic full directory listings as a safety net). |
+
+**Detection modes — directory listing vs file notification**
+
+| Aspect | Directory listing (default) | File notification mode (`useNotifications=true`) |
+|---|---|---|
+| Discovery | Lists the input directory via storage `LIST` calls | Subscribes to a cloud queue; cost scales with file count, not directory size |
+| Azure plumbing | None | **Azure Event Grid (subscription) + Azure Queue Storage (queue)** — Auto Loader can auto-create them given a service principal |
+| AWS plumbing | None | **SNS (subscription) + SQS (queue)** |
+| Permissions to auto-create (Azure) | — | `cloudFiles.subscriptionId`, `cloudFiles.resourceGroup`, `cloudFiles.tenantId`, `cloudFiles.clientId`, `cloudFiles.clientSecret` (or reuse an existing queue via `cloudFiles.queueName` + `cloudFiles.connectionString`) |
+| When to use | Simplest start, low file volume | Millions of files/hour, lower `LIST` cost |
+
+Databricks now recommends **file events** (`useManagedFileEvents`) on a Unity Catalog external location over both — it gives notification-grade performance without per-stream queue setup. Note: classic file notification mode is **not supported on Azure premium storage accounts**, because premium accounts don't support queue storage. (Per-storage-account classic limit on ADLS/Blob is 500 concurrent notification pipelines.)
+
+PySpark in an SDP pipeline (schema/checkpoint managed by SDP — note the absence of `schemaLocation`/`checkpointLocation`):
+
+```python
+from pyspark import pipelines as dp
+from pyspark.sql.functions import col
+
+@dp.table(name="stg_accounts")
+def stg_accounts():
+    return (
+        spark.readStream.format("cloudFiles")
+        .option("cloudFiles.format", "parquet")
+        .option("cloudFiles.inferColumnTypes", "true")
+        .option("cloudFiles.schemaEvolutionMode", "addNewColumns")
+        .option("rescuedDataColumn", "_rescued_data")
+        .option("cloudFiles.maxFilesPerTrigger", "1000")
+        .load("/Volumes/novartis/apollo/incoming/accounts/")
+    )
+```
+
+Plain Structured Streaming outside SDP (here you DO manage both locations):
+
+```python
+(
+    spark.readStream.format("cloudFiles")
+    .option("cloudFiles.format", "json")
+    .option("cloudFiles.schemaLocation", "/Volumes/novartis/apollo/_schemas/accounts")
+    .option("cloudFiles.inferColumnTypes", "true")
+    .option("cloudFiles.schemaEvolutionMode", "addNewColumns")
+    .load("/Volumes/novartis/apollo/incoming/accounts/")
+    .writeStream
+    .option("checkpointLocation", "/Volumes/novartis/apollo/_ckpt/accounts")
+    .trigger(availableNow=True)
+    .toTable("stg_accounts")
+)
+```
+
+File notification mode (classic, Azure — Auto Loader auto-provisions Event Grid + Queue):
+
+```python
+(
+    spark.readStream.format("cloudFiles")
+    .option("cloudFiles.format", "json")
+    .option("cloudFiles.useNotifications", "true")
+    .option("cloudFiles.subscriptionId", "<sub-id>")
+    .option("cloudFiles.resourceGroup", "<rg>")
+    .option("cloudFiles.tenantId", "<tenant-id>")
+    .option("cloudFiles.clientId", "<sp-app-id>")
+    .option("cloudFiles.clientSecret", dbutils.secrets.get("scope", "sp-secret"))
+    .option("cloudFiles.schemaLocation", "/Volumes/.../_schemas/events")
+    .load("abfss://container@account.dfs.core.windows.net/events/")
+    .writeStream.option("checkpointLocation", "/Volumes/.../_ckpt/events")
+    .toTable("stg_events")
+)
+```
+
+SQL surface — `read_files` (the table-valued function that wraps Auto Loader; used inside `CREATE OR REFRESH STREAMING TABLE ... STREAM read_files(...)`). Options drop the `cloudFiles.` prefix. Note: in `read_files`, `inferColumnTypes` defaults to `true` (the opposite of the `cloudFiles` reader):
+
+```sql
+CREATE OR REFRESH STREAMING TABLE stg_accounts AS
+SELECT *
+FROM STREAM read_files(
+  '/Volumes/novartis/apollo/incoming/accounts/',
+  format            => 'parquet',
+  inferColumnTypes  => true,
+  schemaEvolutionMode => 'addNewColumns',
+  rescuedDataColumn => '_rescued_data',
+  maxFilesPerTrigger => 1000
+);
+```
+
+```sql
+-- Ad-hoc batch read (not streaming) with the same engine:
+SELECT * FROM read_files('/Volumes/.../events/', format => 'json', multiLine => true);
+```
+
+**Use cases**
+- The default landing-zone ingestor for any SDP bronze/staging layer reading files from ADLS or Volumes — exactly my 211 STG streaming tables in Apollo Gen2, each Auto-Loading the entity's `incoming/` folder.
+- Vendor feeds with drifting schemas: `addNewColumns` + `_rescued_data` lets the pipeline self-heal on a new column instead of breaking.
+- High-fan-in directories with millions of files/hour: switch to file events / notification mode to escape `LIST` cost.
+
+**Limitations & gotchas**
+- **In SDP, never set `schemaLocation` or `checkpointLocation`** — the pipeline owns them. Setting them manually fights the runtime, and a full refresh won't touch the manually-configured directories.
+- A **new column** triggers `UnknownFieldException` and a one-cycle stream restart — expected, not a bug; rely on Lakeflow Jobs/SDP auto-restart.
+- A **dropped column** is a soft delete: existing data keeps its values, new rows get `NULL`. A **type mismatch** that can't widen lands in `_rescued_data` (and the column value is set to `NULL`) rather than failing — so monitor that column or you silently lose visibility into bad data.
+- `cloudFiles.includeExistingFiles` and the detection mode's first listing are **first-run-only** — toggling `includeExistingFiles=false` later does nothing.
+- `allowOverwrites=true` in notification mode can **double-ingest** a file (notification event time vs modification time differ) — you must dedupe downstream. Auto Loader is built for **immutable** files; this is exactly the "streaming-on-mutable-source" trap I hit on Apollo Gen2.
+- Without a schema, JSON/CSV/XML come in as **strings** unless `inferColumnTypes=true` — a silent behavior that bites people expecting typed columns.
+
+**Interview soundbite:** Auto Loader is the `cloudFiles` streaming source that incrementally and exactly-once ingests files from object storage, with `_rescued_data` to capture parse failures and `schemaEvolutionMode=addNewColumns` to self-heal on new columns — and in SDP I let the pipeline manage the schema location and checkpoint rather than setting them myself.
+
+### SDP-Specific Optimization Configs
+
+These are the knobs that ship *inside* Lakeflow Spark Declarative Pipelines (SDP — the current name for the engine formerly called DLT). They split into two scopes: **table properties** (set per dataset via `TBLPROPERTIES` in SQL or `table_properties={...}` / dedicated kwargs in the `from pyspark import pipelines as dp` decorators) and **pipeline settings** (set in the pipeline JSON `configuration`/top-level fields, or the UI). Knowing which scope a knob lives in is itself an interview discriminator — setting a pipeline-level field as a table property silently does nothing.
+
+**What it is**
+
+The SDP-native optimization surface, distinct from generic Spark tuning (`spark.sql.shuffle.partitions`, AQE, broadcast hints). These knobs control file compaction, full-refresh protection, micro-batch cadence, data layout, runtime version, edition, and compute scaling — all things SDP manages on your behalf unless you override them.
+
+**How it works (mechanics)**
+
+For Unity Catalog managed tables, SDP delegates physical maintenance (`OPTIMIZE`, `VACUUM`, `ANALYZE`) to **predictive optimization (PO)**, which runs these asynchronously as queued maintenance operations chosen by cost-aware heuristics (it only queues an operation when the predicted data-skipping/storage savings outweigh the maintenance cost). On liquid-clustered tables, the `OPTIMIZE` that PO runs performs *incremental* clustering, not a full rewrite, and PO never runs `ZORDER`. PO is enabled by default for accounts created on or after 2024-11-11; older accounts are being enabled via a gradual rollout (expected to complete ~Aug 2026), so confirm with `DESCRIBE` / the PO status check rather than assuming it. The properties below either feed or override that automation. The single most operationally important one in my experience is `pipelines.reset.allowed`, because it changes the blast radius of a full refresh.
+
+**Key configs / syntax**
+
+Lead-with-these-four ranked by interview value:
+
+| Knob | Scope | Default | What it does |
+|---|---|---|---|
+| `pipelines.reset.allowed` | Table property | `true` | When `false`, blocks **full refresh** of that table (full refresh resets streaming-table state/checkpoints and re-derives from source, dropping records if the source no longer has them). Incremental writes and new data still flow in. Protects backfilled / manually-corrected / short-retention-source tables. |
+| `pipelines.autoOptimize.managed` | Table property | `true` | Enables/disables SDP's automatically-scheduled optimization (file compaction + layout) for that table. **Not used** when the table is governed by predictive optimization. |
+| `pipelines.trigger.interval` | Table property (via `spark_conf` / `SET`) *or* pipeline `configuration` | Streaming queries: **5 s**; complete (batch) queries all-Delta sources: **1 min**; complete queries with any non-Delta source: **10 min** | Micro-batch cadence per flow. Because a triggered pipeline processes each table once, it is honored only in **continuous** pipelines. Set per-table — streaming and batch defaults differ, so a pipeline-wide value is usually wrong. |
+| `CLUSTER BY AUTO` / `cluster_by_auto=True` | Table clause / decorator kwarg | off | Automatic liquid clustering — predictive optimization picks and maintains clustering keys from query history (requires PO; needs DBR 15.4 LTS+ for intelligent key selection). Replaces `PARTITIONED BY` and Z-ordering; skew-resistant and incremental. |
+
+Other SDP-specific knobs:
+
+| Knob | Scope | Default | Notes |
+|---|---|---|---|
+| `pipelines.autoOptimize.zOrderCols` | Table property | None | Comma-separated Z-order columns. **Legacy** — docs recommend `CLUSTER BY AUTO` instead. |
+| `cluster_by=[...]` / `CLUSTER BY (cols)` | Table clause / kwarg | off | Manual liquid clustering keys. Mutually exclusive with `PARTITIONED BY`. |
+| `pipelines.cdc.tombstoneGCThresholdInSeconds` | Table property (on the AUTO CDC target) | `172800` (2 days) | How long SCD2 delete **tombstones** are retained before GC. AUTO CDC keeps a deleted row as a hidden tombstone to handle out-of-order deletes, then exposes a metastore view that filters them. Raise it above your worst-case event-to-pipeline delay. |
+| `channel` | Pipeline setting | `current` | Runtime version: `current` (prod) or `preview` (test upcoming runtime). Can also be set per-statement in SQL via the `pipelines.channel` TBLPROPERTY (`"CURRENT"`/`"PREVIEW"`, default `"CURRENT"`). |
+| `edition` | Pipeline setting | `ADVANCED` | `CORE` = streaming ingest only; `PRO` = + CDC (AUTO CDC); `ADVANCED` = + expectations. Pick the cheapest that covers your features. (Edition also sets UI/API update-history retention: Core 5 days, Pro/Advanced 30 days.) |
+| `photon` | Pipeline setting | `false` | Enables the Photon engine. Billed at a different DBU rate. You enable it via this field; you cannot set the cluster `runtime_engine` directly. |
+| `pipelines.maxFlowRetryAttempts` | Pipeline setting | 2 retries (3 total attempts) | Bounds per-flow retries on retryable failures. |
+| `pipelines.numUpdateRetryAttempts` | Pipeline setting | 5 (triggered) / unlimited (continuous) | Bounds whole-update retries. Applies only to pipelines using automatic retry/restart behavior; not to ad-hoc/`Validate` updates from the editor. |
+
+`pipelines.reset.allowed=false` — the canonical backfill-protection pattern:
+
+```sql
+CREATE OR REFRESH STREAMING TABLE raw_user_table
+TBLPROPERTIES(pipelines.reset.allowed = false)
+AS SELECT * FROM STREAM read_files("/Volumes/raw/users", format => "csv");
+```
+
+```python
+from pyspark import pipelines as dp
+
+@dp.table(
+    table_properties={"pipelines.reset.allowed": "false"}
+)
+def raw_user_table():
+    return (
+        spark.readStream.format("cloudFiles")
+        .option("cloudFiles.format", "csv")
+        .load("/Volumes/raw/users")
+    )
+```
+
+Auto file compaction + optimized writes (managed optimization on, explicit), plus disabling it for a hot append-only table:
+
+```python
+from pyspark import pipelines as dp
+
+@dp.table(
+    table_properties={"pipelines.autoOptimize.managed": "true"}
+)
+def compacted_table():
+    return spark.readStream.table("upstream")
+
+@dp.table(
+    table_properties={"pipelines.autoOptimize.managed": "false"}
+)
+def hot_append_table():
+    return spark.readStream.table("upstream")
+```
+
+Per-table trigger interval (continuous pipeline):
+
+```python
+from pyspark import pipelines as dp
+
+@dp.table(
+    spark_conf={"pipelines.trigger.interval": "10 seconds"}
+)
+def fast_stream():
+    return spark.readStream.table("source")
+```
+
+```sql
+SET pipelines.trigger.interval=10 seconds;
+
+CREATE OR REFRESH MATERIALIZED VIEW agg_daily
+AS SELECT day, count(*) FROM events GROUP BY day;
+```
+
+Pipeline-scoped trigger interval (JSON `configuration`):
+
+```json
+{
+  "configuration": {
+    "pipelines.trigger.interval": "1 hour"
+  }
+}
+```
+
+Automatic liquid clustering (preferred over partitioning/Z-order):
+
+```python
+from pyspark import pipelines as dp
+
+@dp.table(cluster_by_auto=True)
+def events():
+    return (
+        spark.readStream.format("cloudFiles")
+        .option("cloudFiles.format", "parquet")
+        .load("/Volumes/raw/events")
+    )
+```
+
+```sql
+CREATE OR REFRESH STREAMING TABLE events
+CLUSTER BY AUTO
+AS SELECT * FROM STREAM read_files("/Volumes/raw/events", format => "parquet");
+```
+
+Explicit clustering keys when you know the predicates (note: SQL can't give *initial-key hints* with `AUTO` — only the Python API can seed `cluster_by` + `cluster_by_auto=True` together):
+
+```python
+from pyspark import pipelines as dp
+
+@dp.table(cluster_by=["event_date", "region"])
+def events_clustered():
+    return spark.readStream.table("raw_events")
+```
+
+CDC tombstone retention for SCD2 (raise above worst-case file-arrival delay — directly relevant to my out-of-order Auto Loader incidents):
+
+```sql
+CREATE OR REFRESH STREAMING TABLE customer_history
+TBLPROPERTIES(pipelines.cdc.tombstoneGCThresholdInSeconds = 604800);
+```
+
+**Use cases**
+
+- `pipelines.reset.allowed=false`: any table where source data can't recreate current state — Bronze SCD2 tables built by `dp.create_auto_cdc_flow`, manually-corrected records, or short-retention sources (Kafka, object-store lifecycle policies). On my Apollo Gen2 211 Bronze SCD2 tables, this is the guardrail that stops an accidental full refresh from re-deriving history from the latest snapshot only.
+- `cluster_by_auto`: high-cardinality filter columns where query patterns shift (entity-keyed Bronze tables queried by different downstream consumers).
+- `tombstoneGCThresholdInSeconds`: I tie this to JOB1→JOB2 lag — when `sequence_by` on file modification time was too coarse and deletes arrived out of order, a longer tombstone window kept SCD2 deletes correct.
+- `trigger.interval` raised on low-volume sources to avoid the small-files problem.
+- `edition=PRO` is the floor for any CDC pipeline; `ADVANCED` only if you run `@dp.expect*` constraints.
+
+**Limitations & gotchas**
+
+- `reset.allowed=false` blocks full refresh but **not** incremental writes — it is not a freeze. Downstream tables still recompute on update.
+- `autoOptimize.managed` is **ignored** when predictive optimization governs the table; don't expect it to do anything on a PO-managed UC table.
+- `trigger.interval` is a **no-op in triggered pipelines** — each table runs once per update regardless. Only continuous mode honors it.
+- `CLUSTER BY` is mutually exclusive with `PARTITIONED BY`. Liquid-clustered tables use Delta writer v7 / reader v3 — older clients can't read them, and you can't downgrade the protocol.
+- Cluster attributes like `runtime_engine`, `spark_version`, `autotermination_minutes`, `data_security_mode` are **system-set and not user-overridable** — SDP owns the cluster lifecycle. Photon is the only runtime-engine lever, via the `photon` field.
+- Serverless pipelines block most session-level `spark_conf` overrides; the SDP table-/flow-scoped `spark_conf` in decorators still works, but general session Spark tuning is limited.
+- **Serverless enhanced autoscaling** = horizontal (more executors) **plus vertical** (auto-picks larger/smaller instance types — driver, workers, or both — on OOM, scales down when memory is underutilized). Vertical is serverless-only and covers DBSQL MVs/streaming tables too. Photon billing differs from non-Photon.
+
+**Interview soundbite:** "The four SDP knobs I reach for are `pipelines.reset.allowed=false` to fence backfilled SCD2 tables from a destructive full refresh, `pipelines.autoOptimize.managed` for auto-compaction, per-table `pipelines.trigger.interval` for continuous-mode cadence, and `CLUSTER BY AUTO` for self-tuning data layout — and I always keep straight that reset/autoOptimize/tombstoneGC are table properties while channel/edition/photon and pipeline-scope trigger live in the pipeline settings."
+
+### Stateful Processing
+
+**What it is**
+
+*State* is intermediate data that a streaming query must remember **across microbatches** to compute a correct result. A *stateless* query (a plain `@dp.table` doing filter/project/`read_files` append) only tracks which source offsets it has consumed — it never needs to look back. A *stateful* query must carry forward partial results: running aggregates, in-flight join rows waiting for a match, or seen-keys for dedup. JARVIS/Apollo Gen2 angle: my 211 STG streaming tables are mostly stateless appends, but `dp.create_auto_cdc_flow` (SCD2 bronze) is internally a stateful operator — it keeps per-key history to apply ordered changes — which is why a coarse `sequence_by` corrupts ordering and why "SCD2-on-SCD2" double-stateful chains are fragile.
+
+Stateful operations recognized by Spark: streaming aggregation, `distinct`, `dropDuplicates` / `dropDuplicatesWithinWatermark`, stream-stream joins, and arbitrary stateful (`transformWithState` / legacy `flatMapGroupsWithState`).
+
+**How it works (mechanics)**
+
+- Each microbatch reads new source rows, **merges** them into the state store (keyed by grouping key / join key / dedup key), emits output, and **persists** the updated state to the checkpoint so a crashed task replays from the last committed microbatch (exactly-once on state).
+- State is partitioned by **shuffle partitions**. Spark schedules one state-store instance per shuffle partition per stateful operator, so total state-store instances ≈ shuffle_partitions × num_stateful_operators.
+- **Watermarks are what make state finite.** Without a watermark, the engine cannot know when a key/window is "done," so it keeps every key forever → unbounded state → OOM. With a watermark, once event-time passes `window_end + watermark_threshold`, the engine emits the final result and **evicts** that state. Critically, a watermark is *also* what makes aggregations **incremental** rather than fully recomputed on every update — the docs are explicit: "To ensure queries that perform aggregations are processed incrementally and not fully recomputed with each update, you must use watermarks."
+- A watermark = `(timestamp_column, late_data_threshold)`. The current watermark is computed as `MAX(event_time seen across all partitions) − threshold`; because coordinating this value across partitions has a cost, the watermark used is only guaranteed to be at least `threshold` behind the true max event time. Rows older than the current watermark are treated as late and may be dropped.
+
+**Key configs / syntax**
+
+| Config / API | Value / default | Purpose |
+|---|---|---|
+| `spark.sql.streaming.stateStore.providerClass` | RocksDB is **default in DBR 17.3+**; below 17.3 set to `com.databricks.sql.streaming.state.RocksDBStateStoreProvider` | Off-heap state store; avoids JVM GC pauses / OOM on large state. Serverless pipelines manage this automatically. |
+| `spark.sql.streaming.stateStore.rocksdb.changelogCheckpointing.enabled` | available DBR 13.3 LTS+; **`true` by default in DBR 17.3+**; else set `true` | Writes only changed records per checkpoint (not a full snapshot) → lower checkpoint duration + end-to-end latency. |
+| `spark.sql.shuffle.partitions` | default 200 | Sets stateful parallelism. **Fixed at checkpoint creation** for stateful queries — changing it is ignored by an existing checkpoint. |
+| `spark.sql.streaming.stateStore.partitions` | DBR 18.3+ (requires RocksDB) | On-demand state repartitioning — resize partitions *without* losing checkpoint state (stop → set → restart; repartition runs after the last planned microbatch). Takes precedence over `spark.sql.shuffle.partitions`. (Separately, DBR 18.0+ lets *stateless* queries change shuffle partitions on restart.) |
+| `spark.sql.streaming.noDataMicroBatches.enabled` | default `true` | When `true`, the engine runs empty (no-data) microbatches so watermark/timeout-driven emits fire on time. Set `false` to skip empty microbatches — but then watermark/timeout emits wait until new data arrives. |
+| `withWatermark("col", "3 minutes")` / SQL `WATERMARK col DELAY OF INTERVAL 3 MINUTES` | — | Declares the watermark. |
+
+Tuning recommendation from docs: shuffle partitions = 1–2× cluster cores; use compute-optimized workers for heavy state; cap RocksDB per-node memory (automatic in 17.3+).
+
+```python
+from pyspark import pipelines as dp
+from pyspark.sql.functions import window
+
+@dp.table
+def event_counts():
+    return (
+        spark.readStream.table("events_raw")
+            .withWatermark("event_time", "3 minutes")
+            .groupBy(window("event_time", "1 minute"), "region")
+            .count()
+    )
+```
+
+```sql
+CREATE OR REFRESH STREAMING TABLE event_counts AS
+SELECT window(event_time, '1 minute') AS time_window, region, COUNT(*) AS cnt
+FROM STREAM(events_raw)
+  WATERMARK event_time DELAY OF INTERVAL 3 MINUTES
+GROUP BY time_window, region;
+```
+
+**Window types** (`window()` / `session_window()` — `timeColumn` must be `TimestampType`/`TimestampNTZType`; microsecond precision, months-and-longer not supported; use `current_timestamp()` for processing-time windows):
+
+| Window | Definition | A row belongs to | Args |
+|---|---|---|---|
+| **Tumbling (fixed)** | Fixed-size, non-overlapping, contiguous | exactly one window | `window(col, "1 hour")` (slide omitted ⇒ tumbling) |
+| **Sliding** | Fixed-size, overlapping; advances by slide | possibly many windows | `window(col, "6 hours", slideDuration="1 hour")`; `slideDuration ≤ windowDuration` |
+| **Session** | Dynamic length; opens on first row, extended by each row within `gapDuration`, closes after a `gapDuration` idle gap | one dynamic session | `session_window(col, gapDuration="30 minutes")` |
+
+```python
+from pyspark.sql.functions import session_window, sum
+
+sessionized = (activity
+  .withWatermark("timestamp", "1 hour")
+  .groupBy("user_id", session_window("timestamp", gapDuration="30 minutes"))
+  .agg(sum("page_views").alias("total_page_views")))
+```
+
+**Stream-stream join** — watermark required on **both** sides + a time-range condition (using the same fields the watermarks are defined on); the engine maintains one global watermark from the slowest stream:
+
+```python
+from pyspark import pipelines as dp
+from pyspark.sql.functions import expr
+
+dp.create_streaming_table("adImpressionClicks")
+
+@dp.append_flow(target="adImpressionClicks")
+def join_clicks_impressions():
+    clicks = spark.readStream.table("rawClicks").withWatermark("clickTimestamp", "3 minutes")
+    impressions = spark.readStream.table("rawAdImpressions").withWatermark("impressionTimestamp", "3 minutes")
+    return impressions.alias("imp").join(
+        clicks.alias("click"),
+        expr("""imp.userId = click.userId AND clickAdId = impressionAdId
+                AND clickTimestamp >= impressionTimestamp
+                AND clickTimestamp <= impressionTimestamp + interval 3 minutes"""),
+        "inner").select("imp.userId", "impressionAdId", "clickTimestamp", "impressionSeconds")
+```
+
+```sql
+CREATE OR REFRESH STREAMING TABLE silver.adImpressionClicks AS
+SELECT imp.userId, impressionAdId, clickTimestamp, impressionSeconds
+FROM STREAM(bronze.rawAdImpressions)
+  WATERMARK impressionTimestamp DELAY OF INTERVAL 3 MINUTES imp
+INNER JOIN STREAM(bronze.rawClicks)
+  WATERMARK clickTimestamp DELAY OF INTERVAL 3 MINUTES click
+ON imp.userId = click.userId AND clickAdId = impressionAdId
+   AND clickTimestamp >= impressionTimestamp
+   AND clickTimestamp <= impressionTimestamp + interval 3 minutes;
+```
+
+> Note on outer joins: an inner stream-stream join only emits matched pairs. With a left/right **outer** join, unmatched rows are NULL-padded and emitted **only after** the watermark guarantees no future match can arrive — so outer-join NULL rows are delayed by the watermark, not produced immediately. (Inner joins, as above, never emit NULL-padded rows.)
+
+**Deduplication** — `dropDuplicates(["k"])` keeps all seen keys forever unless bounded by a watermark; `dropDuplicatesWithinWatermark(["k"])` (DBR 13.3 LTS+) bounds state by the watermark and tolerates duplicates whose timestamps differ. Records arriving within the watermark threshold are always deduplicated; records outside it *may* be (not guaranteed). Set the watermark threshold larger than the max timestamp gap between duplicates to guarantee they collapse:
+
+```python
+clicksDedupDf = (
+  spark.readStream
+    .option("withEventTimeOrder", "true")
+    .table("rawClicks")
+    .withWatermark("clickTimestamp", "5 seconds")
+    .dropDuplicatesWithinWatermark(["userId", "clickAdId"]))
+```
+
+`withEventTimeOrder` (Python-only) processes the initial Delta snapshot in event-time order so out-of-order initial reads don't jump the watermark ahead and drop legitimately-old rows. Declare it inline as above, or pipeline-wide via `spark_conf` → `spark.databricks.delta.withEventTimeOrder.enabled = "true"`.
+
+**Arbitrary stateful processing** — `transformWithState` / `transformWithStateInPandas` (DBR 16.2+; Python standard-access 16.3+, Scala standard-access 17.3+) is the current recommended API for custom per-key state, replacing legacy `flatMapGroupsWithState` / `applyInPandasWithState` / `mapGroupsWithState`. You subclass `StatefulProcessor`, declare `ValueState`/`ListState`/`MapState`, implement `handleInputRows` (fires only when a key has rows in the microbatch) and `handleExpiredTimer` (fires on a timer even with no rows). State is isolated per grouping key — you cannot compare/update across keys (use a `MapState` second key, e.g. `ip_address` under `user_id`, for sub-session tracking).
+
+**Inspecting state** — the state reader (`format("state-metadata")` for operator metadata: `operatorId`, `operatorName` such as `stateStoreSave` / `dedupeWithinWatermark`, `stateStoreName`, `numPartitions`, `minBatchId`, `maxBatchId`; and `format("statestore")` for key/value rows) and the SQL TVFs `read_state_metadata(path)` / `read_statestore(path, operatorId => ...)` are **batch read-only** tools that operate on a raw Structured Streaming **checkpoint path**:
+
+```python
+df = spark.read.format("state-metadata").load("<checkpointLocation>")
+left = spark.read.format("statestore").option("operatorId", 1).load("<checkpointLocation>")
+```
+
+```sql
+SELECT * FROM read_state_metadata('/checkpoint/path');
+SELECT * FROM read_statestore('/checkpoint/path', operatorId => 1);
+```
+
+> **Hard limitation (interview trap):** per the docs, you **cannot** query state information for Lakeflow Spark Declarative Pipelines, streaming tables, or materialized views, and you **cannot** use these readers on serverless compute. They require a raw Structured Streaming checkpoint on DBR 16.3+ standard access mode, or DBR 14.3 LTS+ on dedicated / no-isolation access mode. So for my 422 SDP pipelines these readers do **not** apply directly — SDP state is observed via the **pipeline event log** and `StreamingQueryProgress` metrics instead.
+
+**Use cases**
+
+- Windowed aggregations (hourly/rolling/session metrics) over event-time streams.
+- Stream-stream enrichment joins (impressions ⋈ clicks) with bounded matching windows.
+- Idempotent ingestion from at-least-once sources (Kafka/Event Hubs) via `dropDuplicatesWithinWatermark`.
+- SCD2 history maintenance — Apollo Gen2 bronze `dp.create_auto_cdc_flow` is an internal stateful operator that orders changes by `sequence_by`.
+
+**Limitations & gotchas**
+
+- **No watermark ⇒ unbounded state.** Windowed/dedup/distinct queries without a watermark grow state forever and OOM; aggregations also become full-recompute instead of incremental.
+- **Changing stateful logic invalidates state.** Altering grouping keys/aggregates, join schema/equi-join keys/type (inner↔outer), dedup columns, or user-state schema is **not allowed across restarts** — the checkpointed state schema must stay identical. In SDP, changing a watermark threshold or aggregation columns forces a **full refresh** to rebuild state from scratch.
+- **Shuffle-partition count is frozen at checkpoint creation** for stateful queries. Pre-18.3 you cannot retune it without a new checkpoint (state loss). DBR 18.3+ `spark.sql.streaming.stateStore.partitions` repartitions without checkpoint loss.
+- **Watermark threshold is a latency↔correctness tradeoff.** Too small ⇒ late rows silently dropped; too large ⇒ more state, more memory, later emits.
+- Out-of-order initial-snapshot processing can jump the watermark ahead and then drop legitimately-old rows — use `withEventTimeOrder` (Python-only) for ordered initial processing.
+- `dropDuplicates()` / `dropDuplicatesWithinWatermark()` can fail the state-schema compatibility check when switching compute **access modes**.
+- Pack too many state partitions on one executor and per-node maintenance (snapshot upload/cleanup) starves → slow recovery. Use RocksDB + changelog checkpointing; cap RocksDB memory per node (automatic in 17.3+).
+- Output mode for windowed aggregations: `append` (watermark-bounded, evicts state) vs `complete` (keeps all window state indefinitely — only for small, finite key spaces).
+
+**Interview soundbite:** "State is the partial result the engine carries between microbatches for aggregations, joins, and dedup; the watermark is non-negotiable — it bounds that state so it doesn't OOM and makes aggregations incremental instead of full-recompute — and because state lives in the RocksDB-backed checkpoint, any change to the stateful logic invalidates it and forces a full refresh. And one trap: the state-reader TVFs don't work on SDP pipelines or serverless — for SDP I read the event log and StreamingQueryProgress, not `read_statestore`."
+
+### Materialized View — Optimization
+
+A materialized view (MV — a Lakeflow/SDP dataset that caches a query result and keeps it in sync with upstream Delta tables) is "optimized" almost entirely by one lever: **getting it to refresh incrementally instead of fully recomputing every run.** A `FULL_RECOMPUTE` re-scans and re-aggregates the entire source on each pipeline trigger; an incremental refresh processes only the rows that changed since the last update. On my Apollo Gen2 pipeline the Bronze SCD2 layer is built from streaming tables (`@dp.table` + `create_auto_cdc_flow`), but any roll-up or dimension-enrichment layer I model as an MV (`@dp.materialized_view`) lives or dies on this distinction — a 200M-row entity that full-recomputes on every 15-minute trigger is a cost incident waiting to happen.
+
+**What it is**
+
+Optimizing an MV = (1) diagnosing whether it currently incrementalizes, and (2) reshaping the query, the base tables, and the refresh policy so the engine can keep choosing incremental. The output of incremental vs. full is identical (equivalent to the batch query); the difference is purely compute cost and latency.
+
+**How it works (mechanics)**
+
+- **Cost model picks the technique.** By default (`REFRESH POLICY AUTO`) Databricks runs a cost analysis on every refresh and picks the cheaper of incremental or full recompute — even when the query *is* incrementalizable, a large changeset can make full cheaper, and it will pick full.
+- **Incremental requires serverless.** Refreshes always run on serverless pipelines. An MV on classic (non-serverless) compute is *always* fully recomputed — no exceptions. For an SDP-defined MV you must configure the pipeline to use serverless; for a Databricks SQL MV the serverless pipeline is used automatically (the workspace doesn't even need serverless SDP enabled).
+- **The chosen technique is logged.** Each refresh emits a `planning_information` event in the pipeline event log naming the technique: `FULL_RECOMPUTE`, `NO_OP` (no base change), or an incremental technique. The full set of incremental techniques is `ROW_BASED`, `PARTITION_OVERWRITE`, `WINDOW_FUNCTION`, `APPEND_ONLY`, `GROUP_AGGREGATE`, `GENERIC_AGGREGATE`. When it's full, the event carries a *reason code* telling you exactly why it fell back.
+
+**Step 1 — Diagnose: is it actually refreshing incrementally?**
+
+Two complementary tools. Use `EXPLAIN CREATE MATERIALIZED VIEW` for *structural* eligibility before/without running, and the event log for what *actually* happened at runtime.
+
+Query the event log for the refresh technique (in current SDP it is the `event_log()` table-valued function — there is no legacy `system.event_log`):
+
+```sql
+SELECT timestamp, message
+FROM event_log(TABLE(my_catalog.my_schema.my_mv))
+WHERE event_type = 'planning_information'
+ORDER BY timestamp DESC;
+```
+
+A healthy line reads `Flow 'my_mv' has been planned ... to be executed as GROUP_AGGREGATE.` A bad one reads `... as FULL_RECOMPUTE.` plus a reason code.
+
+Test structural eligibility without a run (Databricks SQL; Databricks Runtime 17.3 and above). Strip expectations and fully qualify sources first, because `CREATE MATERIALIZED VIEW` queries from a pipeline may not run under `EXPLAIN` as-is:
+
+```sql
+EXPLAIN CREATE MATERIALIZED VIEW dim_account
+AS SELECT account_id, SUM(txn_amount) AS revenue
+FROM my_catalog.bronze.transactions
+GROUP BY account_id;
+```
+
+A pass returns `The Materialized View can be incrementally refreshed.` Important caveat: `EXPLAIN` confirms *structural* eligibility only — under `AUTO` the cost model can still choose full at runtime. Only `REFRESH POLICY INCREMENTAL`/`INCREMENTAL STRICT` override that.
+
+**Fall-back reason codes (from the `planning_information` event) — map symptom to fix**
+
+| Reason code | Meaning | Fix lever |
+|---|---|---|
+| `CHANGE_SET_MISSING` | First-ever compute of the MV | Expected once; ignore |
+| `PLAN_NOT_DETERMINISTIC` | A non-deterministic operator/expression in the definition (event reports `operator_name` / `expression_name`) | Remove `rand()`, `uuid()`, non-WHERE `current_timestamp()` |
+| `PLAN_NOT_INCREMENTALIZABLE` | An operator isn't incrementalizable (e.g. `WITH RECURSIVE`) | Rewrite the query shape |
+| `QUERY_FINGERPRINT_CHANGED` | MV definition changed (or an SDP release changed plans) | Expected after an edit; one full run then steady |
+| `CONFIGURATION_CHANGED` | A key config changed (e.g. `spark.sql.ansi.enabled`) | Pin configs; avoid churning them |
+| `ROW_TRACKING_NOT_ENABLED` | A base table lacks row tracking | `ALTER TABLE ... SET TBLPROPERTIES('delta.enableRowTracking'=true)` |
+| `EXPECTATIONS_NOT_SUPPORTED` | An expectation case blocks incremental (MV reads a view with expectations, or has a `DROP` expectation + `NOT NULL` columns in schema) | See expectation rule below |
+| `TOO_MANY_FILE_ACTIONS` / `TOO_MANY_PARTITIONS_CHANGED` | Changeset too large for incremental | Reduce base-table file/partition churn; lower trigger frequency |
+| `INCREMENTAL_PLAN_REJECTED_BY_COST_MODEL` | Cost model judged full cheaper | Override with `REFRESH POLICY INCREMENTAL` if you know better |
+| `MAP_TYPE_NOT_SUPPORTED` | Map-typed column in the MV | Restructure to avoid map types |
+| `SERIALIZATION_VERSION_CHANGED` | Query-fingerprinting logic changed | Expected across runtime upgrades; transient |
+
+(The event-log schema also documents `DATA_HAS_CHANGED`, `TIME_ZONE_CHANGED`, and `PRIOR_TIMESTAMP_MISSING` as additional full-recompute reasons.)
+
+**Step 2 — Fix the query so it stays incrementalizable**
+
+The query must use only operations the engine can incrementalize. Verified support table (from the SDP incremental-refresh docs):
+
+| Construct | Incremental? | Note |
+|---|---|---|
+| `SELECT` of deterministic built-ins + immutable UDFs | Yes | Non-deterministic funcs break it (time funcs allowed only in `WHERE`) |
+| `GROUP BY` with supported aggregates | Yes | `GROUP_AGGREGATE` / `GENERIC_AGGREGATE` |
+| `WHERE`, `HAVING` | Yes | `current_date()`/`current_timestamp()`/`now()` allowed *only here* |
+| `INNER` / `LEFT OUTER` / `RIGHT OUTER` / `FULL OUTER JOIN` | Yes | Starred in docs: require row tracking on the joined sources |
+| `OVER` (window functions) | Yes | Must specify `PARTITION BY` columns |
+| `QUALIFY` | Yes | |
+| `UNION ALL`, `WITH` (CTE) | Yes | CTEs only if their bodies use supported clauses |
+| `WITH RECURSIVE` | No | Always full recompute |
+| Expectations (`@dp.expect`) | Mostly yes | NOT incremental if the MV reads a view that has expectations, or has a `DROP` expectation + `NOT NULL` columns in schema |
+
+Things that force `FULL_RECOMPUTE` and how to handle each:
+
+- **`COUNT(DISTINCT col)`** — has a documented privacy gotcha: the MV's underlying files store the actual distinct values of the column to support refresh, even though the column isn't in the MV schema. (Treat its incremental eligibility as not guaranteed — verify per-query with `EXPLAIN CREATE MATERIALIZED VIEW`; the SDP support table does not list distinct-count among the incrementalizable aggregates and validating it is the safe move.) Fix: pre-aggregate distinct keys in an upstream staging layer, or accept approximate counts via a sketch column maintained upstream.
+- **Non-deterministic functions** (`rand()`, `uuid()`, `current_timestamp()` outside `WHERE`, time-zone-sensitive expressions) — replace with deterministic equivalents or push the timestamp into a `WHERE` filter. Non-deterministic time functions (`current_date()`, `current_timestamp()`, `now()`) are supported *only* in `WHERE`.
+- **Changed UDFs** — the engine tries to detect a UDF behavior change and trigger full refresh, but a UDF that calls external libs can change silently and *not* be detected, leaving stale results. After editing any UDF, you own running a manual full refresh: `REFRESH MATERIALIZED VIEW mv FULL`.
+- **Unsupported sources** — volumes, external locations, foreign catalogs, and foreign Iceberg tables don't incrementalize. Supported: Delta tables (Unity Catalog managed + external Delta-backed), other MVs, streaming tables (including `AUTO CDC ... INTO` targets), and Unity Catalog managed Iceberg tables (v2 and v3; v3 recommended for best incremental support). Source tables with row filters or column masks also block incremental.
+
+Enable the Delta features the engine needs on **every base table** (row tracking is the one that silently causes `ROW_TRACKING_NOT_ENABLED`):
+
+```sql
+ALTER TABLE my_catalog.bronze.transactions SET TBLPROPERTIES (
+  delta.enableRowTracking = true,
+  delta.enableDeletionVectors = true,
+  delta.enableChangeDataFeed = true
+);
+```
+
+**Step 3 — Override the cost model when you know better**
+
+If `EXPLAIN` says incrementalizable but the log keeps showing `INCREMENTAL_PLAN_REJECTED_BY_COST_MODEL`, force it. Behavior differs by phase: on a normal refresh, `INCREMENTAL` falls back to full if the plan can't incrementalize, whereas `INCREMENTAL STRICT` *fails the refresh* instead of silently full-recomputing — the right choice when an unexpected full recompute would blow an SLA or cost budget. On `CREATE`/re-initialization, *both* `INCREMENTAL` and `INCREMENTAL STRICT` fail outright if the query is not incrementalizable (only `AUTO`/`FULL` would proceed).
+
+```sql
+CREATE OR REFRESH MATERIALIZED VIEW dim_account
+REFRESH POLICY INCREMENTAL
+AS SELECT account_id, SUM(txn_amount) AS revenue
+FROM my_catalog.bronze.transactions GROUP BY account_id;
+```
+
+```python
+from pyspark import pipelines as dp
+from pyspark.sql.functions import sum
+
+@dp.materialized_view(refresh_policy="incremental_strict")
+def dim_account():
+    return (
+        spark.read.table("my_catalog.bronze.transactions")
+        .groupBy("account_id")
+        .agg(sum("txn_amount").alias("revenue"))
+    )
+```
+
+(`refresh_policy` is Beta; accepted values are `auto`, `incremental`, `incremental_strict`, `full`; default `auto`.) On an `INCREMENTAL STRICT` refresh failure you get a non-incrementalizable error with the offending operator/expression named, so the cause is debuggable rather than silent.
+
+**Step 4 — Reduce per-refresh work even when incremental**
+
+- **Broadcast small-dimension joins.** A `/*+ BROADCAST(dim) */` hint ships the small table to every executor and skips the shuffle. Why: shuffle joins are the dominant cost in star-schema enrichment MVs.
+
+```sql
+CREATE OR REFRESH MATERIALIZED VIEW enriched_orders AS
+SELECT /*+ BROADCAST(p) */ o.*, p.product_name, p.category
+FROM my_catalog.bronze.orders o
+JOIN my_catalog.bronze.products p ON o.product_id = p.product_id;
+```
+
+- **`CLUSTER BY` on the MV (and base tables).** Liquid clustering data-skips at read time and is self-tuning, skew-resistant, and incremental (rewrites only data that needs reorganizing), unlike static `PARTITIONED BY` (mutually exclusive with it). Why: smaller scan footprint per refresh and per downstream query. Name keys explicitly, or use `CLUSTER BY AUTO` (SQL) / `cluster_by_auto=True` (Python) to let Databricks pick keys — automatic key selection *requires predictive optimization* (it runs asynchronously as a maintenance op). Note: you cannot change MV/ST clustering keys via `ALTER TABLE` — set them at create time.
+
+```python
+from pyspark import pipelines as dp
+from pyspark.sql.functions import sum
+
+@dp.materialized_view(cluster_by=["account_id", "txn_date"])
+def dim_account():
+    return (
+        spark.read.table("my_catalog.bronze.transactions")
+        .groupBy("account_id", "txn_date")
+        .agg(sum("txn_amount").alias("revenue"))
+    )
+```
+
+```sql
+CREATE OR REFRESH MATERIALIZED VIEW dim_account
+CLUSTER BY (account_id, txn_date) AS
+SELECT account_id, txn_date, SUM(txn_amount) AS revenue
+FROM my_catalog.bronze.transactions GROUP BY account_id, txn_date;
+```
+
+- **Salt skewed keys.** When a join/`GROUP BY` key is lopsided (a few keys hold most rows), a handful of tasks hotspot and stretch refresh time. Append a bucket suffix, aggregate in two stages (per-salt, then re-aggregate), then drop the salt. Why: spreads the hot key across partitions for the in-flight computation that clustering can't fix.
+
+```python
+from pyspark.sql import functions as F
+from pyspark import pipelines as dp
+
+@dp.materialized_view()
+def revenue_by_account():
+    salted = (
+        spark.read.table("my_catalog.bronze.transactions")
+        .withColumn("salt", F.pmod(F.hash("account_id"), F.lit(16)))
+        .groupBy("account_id", "salt")
+        .agg(F.sum("txn_amount").alias("partial"))
+    )
+    return salted.groupBy("account_id").agg(F.sum("partial").alias("revenue"))
+```
+
+Note the tension: a *random* salt (`F.rand()`) is non-deterministic and will block incremental refresh, so either reserve random salting for an MV you accept as full-recompute, or salt **deterministically** (e.g. `pmod(hash(natural_key), 16)`, as above) to keep incremental eligibility.
+
+- **Pre-aggregate in a staging ST/MV.** Split one heavy MV into a lightweight upstream layer (e.g. a streaming table or MV that pre-rolls counts) feeding a thin final MV. Why: keeps each layer's per-refresh changeset small and isolates a distinct-count or window step so only that layer pays the full-recompute tax, not the whole chain.
+- **Reduce refresh cadence.** Match the pipeline trigger interval to data volume. Why: triggering a low-volume source too often writes many tiny files (each a metadata lookup + I/O round trip; cloud listing throttles at scale) and pays fixed per-refresh overhead with little new data. Let data accumulate between updates.
+
+**Use cases**
+
+- A dashboard-acceleration roll-up over a Bronze SCD2 table that must refresh cheaply every 15 min → MV with deterministic `GROUP BY` + `INCREMENTAL STRICT` + row tracking on the base.
+- Star-schema enrichment of a fact against small dims → MV with `BROADCAST` hints + `CLUSTER BY` on the join key.
+- A distinct-count metric → pre-aggregate layer upstream, thin MV downstream, so a `COUNT(DISTINCT)` doesn't full-recompute a 200M-row entity.
+
+**Limitations & gotchas**
+
+- Classic compute = always full recompute; incremental needs serverless. This is the single most common "why won't it incrementalize" answer.
+- `EXPLAIN` eligibility ≠ guaranteed incremental under `AUTO` — the cost model still decides.
+- MVs don't support identity/surrogate columns, CDF reads *from* the MV, or time travel.
+- `SUM` over a NULL-able column where only `NULL` values remain returns `0`, not `NULL`.
+- Editing the MV definition or a UDF triggers a one-time full recompute (`QUERY_FINGERPRINT_CHANGED`); that's expected, but a *silently* changed UDF can leave stale data — force a full refresh yourself.
+- Underlying MV files may store upstream raw values (incl. PII) to support incremental refresh even if those columns aren't in the MV schema (the docs use `COUNT(DISTINCT field_a)` as the example) — don't share the storage with untrusted consumers.
+
+**Interview soundbite:** "First I check the `planning_information` event in `event_log()` — if it says `FULL_RECOMPUTE` I read the reason code, confirm the pipeline is serverless and base tables have row tracking on, make the query deterministic with supported aggregates (no `rand()`; validate any `COUNT(DISTINCT)` with `EXPLAIN`), and if the cost model is being conservative I pin `REFRESH POLICY INCREMENTAL STRICT`; then I trim per-refresh work with broadcast joins, `CLUSTER BY`, deterministic salting, and a staging pre-aggregation layer."
+
+### Materialized View — Full vs Incremental Refresh
+
+**What it is**
+
+A materialized view (MV) in Spark Declarative Pipelines (SDP / Lakeflow Declarative Pipelines) is a Delta table whose contents are the precomputed result of a `SELECT`, kept in sync with its sources by the pipeline. Every refresh guarantees **batch-equivalent results** — the MV always equals what you'd get by rerunning the full query from scratch. SDP gets there one of two ways:
+
+| Refresh type | What it does | Where it runs |
+|---|---|---|
+| **Incremental refresh** | Detects only the changed rows in upstream sources since the last refresh and applies the delta (append/merge) to the MV. Cheaper. | **Serverless ONLY** |
+| **Full recompute (full refresh)** | Clears the table + all checkpoints and reprocesses the entire source dataset. | Serverless or classic |
+
+The output is **identical** either way — incremental is purely a cost optimization. SDP runs a cost analysis and picks the cheaper of the two per run (under the default `AUTO` policy).
+
+**How it works (mechanics)**
+
+- **Incremental is gated on serverless.** MVs updated on **classic compute are ALWAYS fully recomputed**. No serverless = no incremental, full stop. (Note: standalone MVs defined in Databricks SQL auto-use a serverless pipeline for refresh even if the workspace isn't serverless-enabled for SDP; SDP-defined MVs require you to configure the pipeline as serverless.)
+- **AUTO cost model (default).** Per run, SDP checks (a) is the query structurally incrementalizable, and (b) given the actual changeset size, is incremental cheaper than full. A large changeset can make full recompute cheaper even for an eligible query — so AUTO may still choose `FULL_RECOMPUTE`.
+- **Technique selection.** When it does go incremental, the planner picks a specific technique based on the query shape. These are the human-readable technique names you see in the `planning_information` event-log message (`Flow '...' has been planned ... to be executed as ROW_BASED.`); the raw event payload spells them as the `MaintenanceType` enum (`MAINTENANCE_TYPE_ROW_BASED`, etc.):
+
+| Technique (event-log message) | Incremental? | Triggered by |
+|---|---|---|
+| `FULL_RECOMPUTE` | No | Query not incrementalizable, or full is cheaper |
+| `NO_OP` | n/a | No changes detected on base tables — refresh skipped |
+| `APPEND_ONLY` | Yes | Source only got inserts (no upserts/deletes) |
+| `ROW_BASED` | Yes | Modular changesets for `JOIN`/`FILTER`/`UNION ALL` composed via row tracking |
+| `PARTITION_OVERWRITE` | Yes | Changes localized to whole partitions (MV co-partitioned with a source), rewritten as units |
+| `GROUP_AGGREGATE` | Yes | Associative aggregates (`count`/`sum`/`mean`/`stddev`) at the top level of the query |
+| `GENERIC_AGGREGATE` | Yes | Non-associative aggregates (e.g. `median`) at the top level — only affected groups recomputed |
+| `WINDOW_FUNCTION` | Yes | Top-level `OVER (PARTITION BY ...)` window queries — only changed partitions recomputed |
+
+  This mapping is **plan-decided, not guaranteed per function** — the same `SUM`/`COUNT` query can resolve to `GROUP_AGGREGATE`, `GENERIC_AGGREGATE`, or even `FULL_RECOMPUTE` depending on sources, changeset, and row-tracking state. Don't promise a technique in an interview; say "the cost model plans it."
+
+- **MV recompute absorbs late data.** Because each refresh re-derives batch-equivalent state from the source (full or incremental delta), late-arriving rows in the source are naturally folded in on the next refresh — there's no watermark dropping them like there would be in a stateful streaming table. This is a reason to choose an MV over a streaming aggregate when correctness on late data matters more than exactly-once cost control.
+
+**What forces a full recompute**
+
+- **Classic (non-serverless) compute** — always full.
+- **Non-deterministic functions** in the body (e.g. `rand()`); exception: non-deterministic *time* functions (`current_date()`, `current_timestamp()`, `now()`) are allowed **in `WHERE`** only. (In the event log these surface as `PlanNotDeterministicSubType` values `NON_DETERMINISTIC_EXPRESSION` / `TIME_FUNCTION`.)
+- **Unsupported operations** — `WITH RECURSIVE` CTEs, reads from views that contain expectations, an MV with a `DROP` expectation plus `NOT NULL` columns in its schema, subquery expressions, aggregates/window functions not at the top of the plan, `DISTINCT` aggregates, `MAP` types.
+- **Unsupported sources** — volumes, external locations, foreign catalogs, foreign Iceberg tables. (Supported incremental sources: Delta tables incl. UC managed/external, MVs, streaming tables incl. `AUTO CDC ... INTO` targets, UC managed Iceberg v2/v3 — v3 recommended for best incremental support.)
+- **Changed UDF** — SDP attempts to detect a UDF behavior change and full-refresh; but a UDF that calls other libraries can change silently, and then **you** must trigger the full refresh manually. Only deterministic UDFs are incrementalizable.
+- **Re-initialization / change events** (`IssueType` enum in the `planning_information` payload) — schema change (`DATA_SCHEMA_CHANGED`), time-zone change (`TIME_ZONE_CHANGED`), data changed in a non-incrementalizable way (`DATA_HAS_CHANGED`), missing last-run timestamp (`PRIOR_TIMESTAMP_MISSING`), CDF disabled (`CDF_UNAVAILABLE`), row tracking off (`ROW_TRACKING_NOT_ENABLED`), vacuumed source files (`DATA_FILE_MISSING`), or first compute (`CHANGE_SET_MISSING`).
+- **Row-tracking off** — many techniques (the starred ones in the support matrix: most joins, `UNION ALL`, `WHERE`/`HAVING`, `SELECT` exprs) require `delta.enableRowTracking` on the source; disabling it drops eligibility (`ROW_TRACKING_NOT_ENABLED`).
+
+**Key configs / syntax**
+
+`REFRESH POLICY` overrides the AUTO cost model. Default is `AUTO` if omitted.
+
+| Policy | Incremental available | Incremental NOT available | Re-init required |
+|---|---|---|---|
+| `AUTO` (default) | cost model picks cheaper | full refresh | full refresh |
+| `INCREMENTAL` | incremental | **falls back to full** | full if incrementalizable; **fails on `CREATE` if query can never incrementalize** |
+| `INCREMENTAL STRICT` | incremental | **refresh FAILS** | full if incrementalizable, else fails |
+| `FULL` | always full | always full | full |
+
+Use `INCREMENTAL STRICT` when an unexpected full recompute would blow an SLA/cost budget — you want it to fail loudly so you can debug, not silently burn compute.
+
+```sql
+-- SQL surface (Databricks SQL / SDP MV)
+CREATE OR REFRESH MATERIALIZED VIEW transaction_summary
+REFRESH POLICY INCREMENTAL STRICT
+AS SELECT account_id, COUNT(txn_id) AS txn_count, SUM(txn_amount) AS account_revenue
+   FROM transactions_table
+   GROUP BY account_id;
+```
+
+```python
+from pyspark import pipelines as dp
+from pyspark.sql.functions import count, sum
+
+@dp.materialized_view(
+    refresh_policy="incremental_strict"
+)
+def transaction_summary():
+    return (
+        spark.read.table("transactions_table")
+        .groupBy("account_id")
+        .agg(
+            count("*").alias("txn_count"),
+            sum("txn_amount").alias("account_revenue"),
+        )
+    )
+```
+
+Force a one-off full recompute (Databricks SQL standalone MV):
+
+```sql
+REFRESH MATERIALIZED VIEW transaction_summary FULL;
+```
+
+In an SDP pipeline you full-refresh selected datasets or the whole pipeline via the pipeline's refresh semantics (the **Full refresh / Full refresh all** option on the update), not a per-MV SQL keyword.
+
+Optimize the source tables to maximize incremental eligibility (Databricks recommends all three):
+
+```sql
+ALTER TABLE transactions_table SET TBLPROPERTIES (
+  delta.enableRowTracking      = true,
+  delta.enableChangeDataFeed   = true,
+  delta.enableDeletionVectors  = true
+);
+```
+
+**Check eligibility before you ship** — `EXPLAIN CREATE MATERIALIZED VIEW` confirms *structural* incrementalizability (it does NOT guarantee AUTO will choose incremental at runtime; the cost model can still pick full). Strip `CONSTRAINT ... EXPECT` clauses and fully-qualify sources first:
+
+```sql
+EXPLAIN CREATE MATERIALIZED VIEW foo
+AS SELECT k, sum(v) FROM source.src_schema.tbl GROUP BY k;
+-- == Incremental Update Eligibility ==
+-- The Materialized View can be incrementally refreshed.
+```
+
+**Determine what actually happened** — query the pipeline event log for the planning decision:
+
+```sql
+SELECT timestamp, message
+FROM event_log(TABLE(my_catalog.my_schema.transaction_summary))
+WHERE event_type = 'planning_information'
+ORDER BY timestamp DESC;
+-- e.g. "Flow 'transaction_summary' has been planned ... to be executed as GROUP_AGGREGATE."
+```
+
+(In the raw `planning_information` payload the `MaintenanceType` enum maps the same way: anything other than `MAINTENANCE_TYPE_COMPLETE_RECOMPUTE` or `MAINTENANCE_TYPE_NO_OP` is an incremental technique. The `technique_information.incrementalization_issues[].issue_type` field, e.g. `INCREMENTAL_PLAN_REJECTED_BY_COST_MODEL`, tells you *why* it fell back.)
+
+**Use cases**
+
+- **Gold-layer aggregations / metrics** served to dashboards — large `GROUP BY` rollups where incremental refresh turns a full re-scan into a cheap delta apply.
+- **Silver enrichment joins** against dimension tables where you want batch-correct, late-data-absorbing results without managing streaming state.
+- In my Apollo Gen2 work the Bronze SCD2 tables are streaming (`@dp.table` + `dp.create_auto_cdc_flow`), but a gold reporting rollup over those Bronze entities is the natural MV candidate — `INCREMENTAL` policy on serverless, so daily JOB2 runs only reprocess the day's changed accounts instead of all 211 entities' history.
+
+**Limitations & gotchas**
+
+- **Serverless is mandatory for incremental** — the single most common "why is my MV always full-recomputing" answer is classic compute.
+- **Be robust to full refresh even if the query is incrementalizable** — a full recompute against a source that has since deleted/archived old rows (retention threshold) will silently lose those rows and can even change the schema if columns disappeared. If records must be processed exactly once, use a **streaming table**, not an MV.
+- **`AUTO` can full-recompute an eligible query** when the changeset is large enough that full is cheaper — eligibility (`EXPLAIN`) ≠ guaranteed incremental execution. Pin with `INCREMENTAL`/`INCREMENTAL STRICT` if you need predictability.
+- **Per-technique incrementality is plan-decided, not per-function** — never claim "`SUM` is always `GROUP_AGGREGATE`."
+- **Expectations narrow eligibility** — reading from a view with expectations, or a `DROP` expectation combined with `NOT NULL` schema columns, forces full recompute (`EXPECTATIONS_NOT_SUPPORTED` for the read-through-view case).
+- **Row filters / column masks** on a source kill incremental refresh entirely.
+- **UDF drift** is on you — if a UDF's behavior changes via an external library SDP can't see, manually full-refresh or the MV serves stale results.
+
+**Interview soundbite:** An SDP materialized view always returns batch-equivalent results; on serverless it tries an incremental refresh — picking a plan-decided technique like `GROUP_AGGREGATE` or `ROW_BASED` and falling back to `FULL_RECOMPUTE` when the query is non-incrementalizable or a full recompute is simply cheaper — and I pin that behavior with `REFRESH POLICY INCREMENTAL STRICT` plus `event_log(...)` `planning_information` checks when an unexpected full refresh would break my SLA.
+
+### Backfill
+
+**What it is**
+Backfilling is retroactively pushing historical data through a pipeline that was designed for current/streaming data — without disturbing the live incremental flow and without a full refresh. In SDP (Spark Declarative Pipelines / Lakeflow Declarative Pipelines) the canonical pattern is **multiple flows into ONE streaming table**: a continuous incremental flow (e.g. Auto Loader) plus one or more **one-time BATCH backfill flows** flagged with `ONCE`. Any number of append flows can write to a single target; each is an independent, separately-checkpointed `@dp.append_flow` / `CREATE FLOW`.
+
+In Apollo Gen2 terms: the BRZ/STG streaming tables are fed by their default incremental flow off `ADLS incoming/`. When a new historical partition (or a corrected re-extract) shows up for one of the 211 entities, I add a `ONCE` backfill flow into the same streaming table instead of running a full refresh that would re-tear-down the SCD2 history.
+
+**How it works (mechanics)**
+- A streaming table can host **N flows**. The default flow (same name as the table) is created with the table; additional flows are declared standalone against an existing `create_streaming_table` target.
+- The incremental flow is a **streaming read** (must return a streaming DataFrame). The backfill flow is flagged `ONCE`, which flips it to a **BATCH read** (must return a batch DataFrame) that runs exactly once.
+- `ONCE` semantics: the flow runs on first pipeline update, then becomes **idle** and is **skipped on every subsequent normal update**. It remains in the pipeline graph (clear audit trail). The ONLY thing that re-runs it is a **full refresh**, which re-executes all flows to recreate state.
+- This is the trap to protect against: a full refresh re-runs the `ONCE` flow AND clears all state/checkpoints, rebuilding the streaming table from its sources. If the backfill source directory is gone, or you don't want history rebuilt, set the table property `pipelines.reset.allowed = false` to forbid full refresh entirely (it still allows incremental writes — it only blocks the destructive reset).
+- **Independent checkpoints, keyed by flow name.** Each flow's streaming checkpoint is identified by its flow name. Consequences: renaming a flow orphans its checkpoint (the renamed flow is treated as brand new and reprocesses), and you cannot reuse a flow name within a pipeline (the old checkpoint won't match the new definition). Name backfill flows deterministically (e.g. `..._backfill_2024`). To reset one flow's checkpoint without a full table refresh, pass its fully-qualified `catalog.schema.flow_name` to `reset_checkpoint_selection` on the pipeline update API (the simple name fails with `IllegalArgumentException`).
+
+**Key configs / syntax**
+
+| Knob | Python | SQL | Notes |
+| --- | --- | --- | --- |
+| One-time flag | `once=True` on `@dp.append_flow` | `INSERT INTO ONCE` (or `AUTO CDC ONCE`) | Flow-level, NOT a reader option |
+| Backfill read type | `spark.read...` (batch DF) | plain `read_files(...)` (no `STREAM`) | Must be batch when `ONCE` |
+| Incremental read type | `spark.readStream...` (streaming DF) | `STREAM read_files(...)` / `STREAM(table)` | Default flow stays streaming |
+| Flow name | `name="..."` (defaults to fn name) | `CREATE FLOW <flow_name>` | Keys the checkpoint |
+| Target | `target="<st>"` | `INSERT INTO <st> BY NAME` | `BY NAME` = column-name match |
+| Protect backfilled data | `table_properties={"pipelines.reset.allowed": "false"}` | `TBLPROPERTIES (pipelines.reset.allowed = false)` | Default is `true`; set on the target ST |
+
+`@dp.append_flow` parameters: `function` (the decorated fn, required), `target` (required), `name` (defaults to fn name), `once` (default `False`), `comment`, `spark_conf`. The function must return a streaming DataFrame normally, or a **batch** DataFrame when `once=True`.
+
+Continuous incremental flow + one-time batch backfill into the SAME streaming table (Python):
+
+```python
+from pyspark import pipelines as dp
+
+source_root = spark.conf.get("registration_events_source_root_path")
+incremental_path = f"{source_root}/*/*/*"
+
+# Target streaming table (protect history against accidental full refresh)
+dp.create_streaming_table(
+    name="registration_events_raw",
+    comment="Raw registration events",
+    table_properties={"pipelines.reset.allowed": "false"},
+)
+
+# 1) Continuous incremental Auto Loader flow (streaming read)
+@dp.append_flow(
+    target="registration_events_raw",
+    name="flow_registration_events_raw_incremental",
+)
+def ingest():
+    return (
+        spark.readStream
+        .format("cloudFiles")
+        .option("cloudFiles.format", "json")
+        .option("cloudFiles.inferColumnTypes", "true")
+        .option("cloudFiles.schemaEvolutionMode", "addNewColumns")
+        .option("modifiedAfter", "2024-12-31T23:59:59.999+00:00")
+        .load(incremental_path)
+    )
+
+# 2) One-time BATCH backfill flow, flagged ONCE (note spark.read, NOT readStream)
+def setup_backfill_flow(year: str):
+    backfill_path = f"{source_root}/year={year}/*/*"
+    @dp.append_flow(
+        target="registration_events_raw",
+        once=True,
+        name=f"flow_registration_events_raw_backfill_{year}",
+        comment=f"Backfill {year} raw registration events",
+    )
+    def backfill():
+        return (
+            spark.read
+            .format("json")
+            .option("inferSchema", "true")
+            .load(backfill_path)
+        )
+
+for year in ["2024", "2023", "2022"]:
+    setup_backfill_flow(year)
+```
+
+Same pattern in SQL — incremental `STREAM` flow plus `INSERT INTO ONCE` backfill flows into one streaming table:
+
+```sql
+-- Target streaming table; block destructive full refresh
+CREATE OR REFRESH STREAMING TABLE registration_events_raw
+  TBLPROPERTIES (pipelines.reset.allowed = false);
+
+-- Continuous incremental flow (streaming read)
+CREATE FLOW registration_events_raw_incremental
+AS INSERT INTO registration_events_raw BY NAME
+SELECT * FROM STREAM read_files(
+  "/Volumes/gc/demo/event_registration/*/*/*",
+  format => "json",
+  inferColumnTypes => true,
+  schemaEvolutionMode => "addNewColumns",
+  modifiedAfter => "2024-12-31T23:59:59.999+00:00"
+);
+
+-- One-time BATCH backfill flow (ONCE => no STREAM keyword)
+CREATE FLOW registration_events_raw_backfill_2024
+AS INSERT INTO ONCE registration_events_raw BY NAME
+SELECT * FROM read_files(
+  "/Volumes/gc/demo/event_registration/year=2024/*/*",
+  format => "json",
+  inferColumnTypes => true
+);
+```
+
+`CREATE FLOW` grammar (both backfill-capable):
+
+```sql
+CREATE FLOW flow_name [COMMENT comment] AS
+{
+  AUTO CDC [ONCE] INTO target_table create_auto_cdc_flow_spec |
+  INSERT [ONCE] INTO target_table BY NAME query
+}
+```
+
+**AUTO CDC backfill subtlety:** `AUTO CDC ... ONCE` also exists (one-time CDC hydration), but unlike append flows the AUTO CDC source must still be a **streaming** source even when `ONCE` is set (the docs state this explicitly). So for Apollo Gen2 BRZ SCD2 tables fed by `create_auto_cdc_flow`, a one-time CDC backfill uses `once=True` on the CDC flow with a streaming source — not a batch read. The `name` and `once` parameters on `create_auto_cdc_flow` (Python) and `AUTO CDC [ONCE] INTO` (SQL) are the supported way to run both an incremental CDC flow and a one-time CDC hydration into the same target.
+
+**REPLACE WHERE flow (targeted predicate backfill, Beta):** a `REPLACE WHERE` flow re-materializes only the rows matching a predicate, so you can backfill/restate a slice. It is in **Beta** and **requires the Preview pipelines channel** (set the table property `pipelines.channel = "PREVIEW"`); `BY NAME` is required. It exists in two forms — inside an SDP pipeline, and for standalone streaming tables created in Databricks SQL. For the standalone case, direct DML is the simpler restatement path:
+
+```sql
+INSERT INTO orders_enriched
+SELECT * FROM orders_enriched_legacy
+WHERE date < '2025-01-01';
+```
+
+Warning on `REPLACE WHERE`: a full refresh re-runs the flow with ONLY its current predicate. A 7-day predicate running for a year, then fully refreshed, leaves the table with just the last 7 days — everything else is permanently deleted. Same fix: `pipelines.reset.allowed = false`.
+
+**Use cases**
+- Hydrate a streaming table with years of historical partitions on top of a live incremental feed (one `ONCE` flow per year for parallelism).
+- Re-extract / correct one Apollo Gen2 entity's history without nuking SCD2 on the whole BRZ table.
+- Complex one-shot load that must be batch (e.g. a heavy aggregation) before insertion, which streaming semantics can't express.
+- Consolidating multiple historical sources into one ST instead of `UNION` (avoids full refresh).
+
+**Limitations & gotchas**
+- **The classic slip:** `ONCE` is a **flow-level** flag and the backfill is a **BATCH** read — it is NOT an Auto Loader option and NOT a streaming read. `once=True` requires `spark.read` (Python) / no `STREAM` keyword (SQL). Returning a streaming DataFrame with `once=True` is an error.
+- `ONCE` re-runs on full refresh. Without `pipelines.reset.allowed=false`, an accidental full refresh re-injects the backfill AND clears state, rebuilding the ST from source — silently duplicating or dropping data (a full refresh drops records the source no longer retains).
+- Backfill is append-only into the target; the pipeline must **tolerate duplicates** if the same data lands twice (idempotency is on you).
+- Schema of historical data must be compatible with current schema. `cloudFiles.schemaEvolutionMode` defaults to `addNewColumns` when no schema is provided (and to `none` when a schema is provided); `addNewColumns` adds new columns but does NOT evolve existing column types — type changes land in the rescued data column.
+- Flow names key checkpoints: don't rename, don't reuse. Reset a single flow's checkpoint via `reset_checkpoint_selection` with the fully-qualified flow name.
+- Expectations can't live in the `@dp.append_flow` body — declare them on the target streaming table / `create_streaming_table`.
+- AUTO CDC `ONCE` still needs a streaming source; only append-flow `ONCE` is a batch read.
+
+**Interview soundbite:** "Backfill in SDP is just a second flow into the same streaming table — a one-time BATCH `@dp.append_flow(once=True)` (`INSERT INTO ONCE ... BY NAME` in SQL) running alongside the continuous Auto Loader flow; `ONCE` is flow-level and re-fires only on a full refresh, so I set `pipelines.reset.allowed=false` on the target to protect the backfilled history."
+
+### Append Flow & AUTO CDC Flow (SCD1 and SCD2)
+
+**What it is**
+
+Two flow *types* that write into a streaming table (ST) target in SDP (Spark Declarative Pipelines / Lakeflow Declarative Pipelines). A **flow** is the unit of data movement; every ST/MV gets a *default* append flow at creation (named the same as the target), and you can attach extra named flows to the same target.
+
+| Flow type | API (Python / SQL) | What it does | Target rule |
+|---|---|---|---|
+| **Append** | `@dp.append_flow` / `CREATE FLOW ... AS INSERT INTO ... BY NAME` | Appends new rows each update (structured-streaming append mode). Many append flows can fan-in to one ST. | ST or sink |
+| **AUTO CDC** | `dp.create_auto_cdc_flow` / `CREATE FLOW ... AS AUTO CDC INTO` | Upsert/delete from a change feed (CDF) into an ST as SCD1 or SCD2. | ST only; an ST targeted by AUTO CDC can be targeted *only* by other AUTO CDC flows |
+| **AUTO CDC FROM SNAPSHOT** | `dp.create_auto_cdc_from_snapshot_flow` / SQL equivalent | Diffs successive *full snapshots* to synthesize a change feed, then applies it as SCD1/SCD2. | ST only; cannot share a target with `create_auto_cdc_flow` |
+
+Naming note: `create_auto_cdc_flow` replaces the legacy `apply_changes()` (same signature); SQL `AUTO CDC INTO` replaces legacy `APPLY CHANGES INTO`. Use the AUTO CDC names.
+
+**How it works (mechanics)**
+
+- **Append flow fan-in:** instead of `spark.readStream.table(a).union(...)`, declare one ST and attach N `@dp.append_flow` functions, each reading a different streaming source. Each flow keeps its **own checkpoint** (keyed by flow name), so you add a source without a full refresh. Renaming a flow orphans its checkpoint — it becomes a brand-new flow and re-reads from scratch; you also cannot reuse a flow name in a pipeline.
+- **AUTO CDC upsert default:** for each `INSERT`/`UPDATE` event, match on `keys`; matching row → update, no match → insert. `apply_as_deletes` reclassifies an event as a delete. Out-of-order events are reordered by `sequence_by` automatically (this is the whole point vs. hand-rolled `MERGE INTO`).
+- **Tombstones:** an AUTO CDC delete is retained temporarily as a tombstone in the backing Delta table (to handle out-of-order arrivals), and a metastore view filters it out, so late out-of-order events still resolve correctly. Retention defaults to **two days**, configurable via the `pipelines.cdc.tombstoneGCThresholdInSeconds` **table property**. Set it above your max event-arrival delay if Auto Loader feeds the source (Auto Loader gives no file-ordering guarantee). Docs frame the tombstone/GC mechanism specifically around out-of-order **delete** handling for SCD type 2 sources.
+- **SCD1 vs SCD2:** SCD1 = current-state only (overwrite in place; a delete removes the row, no `__START_AT`/`__END_AT`). SCD2 = full history; SDP adds `__START_AT` / `__END_AT` columns (same dtype as `sequence_by`), closes the prior version's `__END_AT` when a new version arrives, and a delete closes out the current version (sets `__END_AT`) rather than hard-deleting.
+- **Backing objects (Hive metastore only):** declaring an AUTO CDC target `foo` creates a *view* `foo` plus an internal backing table named by prepending `__apply_changes_storage_` to the target name (`__apply_changes_storage_foo`) — query the view, never the backing table. (Applies to `AUTO CDC` only, not `AUTO CDC FROM SNAPSHOT`, and only under Hive metastore, not Unity Catalog.)
+
+**Key configs / syntax**
+
+`create_auto_cdc_flow` full signature and parameter semantics (doc-verified against `ldp-python-ref-apply-changes`):
+
+| Param | Type | Default | Notes |
+|---|---|---|---|
+| `target` | str | — required | ST created via `dp.create_streaming_table()` |
+| `source` | str | — required | streaming change feed |
+| `keys` | list | — required | primary key column(s); list of strings or `col()` (no qualifiers) |
+| `sequence_by` | str / `col()` / `struct(...)` | — required | sortable per-row ordering; use `struct("ts","id")` to break ties. NULL sequencing values are not supported |
+| `ignore_null_updates` | bool | `False` | `True` = nulls in event keep existing target value (partial updates); also applies to nested columns |
+| `apply_as_deletes` | str / `expr()` | `None` | e.g. `"operation = 'DELETE'"` |
+| `apply_as_truncates` | str / `expr()` | `None` | **SCD1 only**; SCD2 does not support truncate |
+| `column_list` / `except_column_list` | list | all columns | which source cols land in target |
+| `stored_as_scd_type` | str / int | **`1`** | `1` or `2` (or `"1"`/`"2"`) |
+| `track_history_column_list` / `track_history_except_column_list` | list | all columns | SCD2 only: which cols trigger a new history version |
+| `name` | str | = `target` | flow name (= checkpoint id) |
+| `once` | bool | `False` | one-time backfill; return value must be a batch DF |
+
+Critical gotcha to verbalize: `track_history_except_column_list`. If you don't exclude operational-metadata columns (ingestion timestamp, `_rescued_data`, a re-run marker), every pipeline re-run that touches only those cols spawns a **false SCD2 version** — history balloons with no real business change.
+
+**Append flow — fan-in union (PySpark):**
+
+```python
+from pyspark import pipelines as dp
+
+dp.create_streaming_table("customers_us")
+
+@dp.append_flow(target="customers_us", name="us_west")
+def append_west():
+    return spark.readStream.table("customers_us_west")
+
+@dp.append_flow(target="customers_us", name="us_east")
+def append_east():
+    return spark.readStream.table("customers_us_east")
+```
+
+**Append flow — fan-in union (SQL):**
+
+```sql
+CREATE OR REFRESH STREAMING TABLE customers_us;
+
+CREATE FLOW us_west AS INSERT INTO customers_us BY NAME
+SELECT * FROM STREAM(customers_us_west);
+
+CREATE FLOW us_east AS INSERT INTO customers_us BY NAME
+SELECT * FROM STREAM(customers_us_east);
+```
+
+**Append flow — one-time backfill (SQL):**
+
+```sql
+CREATE FLOW backfill AS INSERT INTO ONCE customers_us BY NAME
+SELECT * FROM read_files("/mnt/hist/customers", "csv");
+```
+
+**AUTO CDC — SCD1 (PySpark).** Target-level expectations go on `create_streaming_table` as dict params, NOT on the flow:
+
+```python
+from pyspark import pipelines as dp
+
+dp.create_streaming_table(
+    name="customers_current",
+    expect_all_or_drop={"valid_id": "id IS NOT NULL"},
+)
+
+dp.create_auto_cdc_flow(
+    target="customers_current",
+    source="customers_cdc_clean",
+    keys=["id"],
+    sequence_by="operation_date",
+    apply_as_deletes="operation = 'DELETE'",
+    except_column_list=["operation", "operation_date", "_rescued_data"],
+    stored_as_scd_type=1,
+)
+```
+
+**AUTO CDC — SCD1 (SQL):**
+
+```sql
+CREATE OR REFRESH STREAMING TABLE customers_current
+  (CONSTRAINT valid_id EXPECT (id IS NOT NULL) ON VIOLATION DROP ROW);
+
+CREATE FLOW customers_current_cdc AS AUTO CDC INTO
+  customers_current
+FROM stream(customers_cdc_clean)
+KEYS (id)
+APPLY AS DELETE WHEN operation = 'DELETE'
+SEQUENCE BY operation_date
+COLUMNS * EXCEPT (operation, operation_date, _rescued_data)
+STORED AS SCD TYPE 1;
+```
+
+**AUTO CDC — SCD2 (PySpark).** This is the Apollo Gen2 Bronze pattern — STG streaming table feeds a BRZ SCD2 table per entity:
+
+```python
+from pyspark import pipelines as dp
+
+dp.create_streaming_table("account_brz")
+
+dp.create_auto_cdc_flow(
+    target="account_brz",
+    source="account_stg",
+    keys=["accountId"],
+    sequence_by="SinkModifiedOn",
+    apply_as_deletes="IsDelete = 'true'",
+    except_column_list=["IsDelete", "_rescued_data"],
+    stored_as_scd_type="2",
+    track_history_except_column_list=["SinkModifiedOn", "_ingest_ts"],
+)
+```
+
+**AUTO CDC — SCD2 (SQL).** Note `TRACK HISTORY ON * EXCEPT (...)` — the `*` is required (clause grammar is `TRACK HISTORY ON {columnList | * EXCEPT (exceptColumnList)}`):
+
+```sql
+CREATE OR REFRESH STREAMING TABLE account_brz;
+
+CREATE FLOW account_brz_cdc AS AUTO CDC INTO
+  account_brz
+FROM stream(account_stg)
+KEYS (accountId)
+APPLY AS DELETE WHEN IsDelete = 'true'
+SEQUENCE BY SinkModifiedOn
+COLUMNS * EXCEPT (IsDelete, _rescued_data)
+STORED AS SCD TYPE 2
+TRACK HISTORY ON * EXCEPT (SinkModifiedOn, _ingest_ts);
+```
+
+**AUTO CDC FROM SNAPSHOT — for the 5 full-load entities (PySpark).** No change feed exists, so SDP diffs snapshots:
+
+```python
+from pyspark import pipelines as dp
+
+dp.create_streaming_table("region_brz")
+
+dp.create_auto_cdc_from_snapshot_flow(
+    target="region_brz",
+    source="region_snapshot",
+    keys=["regionId"],
+    stored_as_scd_type=2,
+)
+```
+
+**Use cases**
+
+- **Append fan-in:** consolidate per-region / per-Kafka-topic / multi-directory streams into one ST without `UNION` and without full refresh; `INSERT INTO ONCE` for one-time historical backfill (re-runs only on full refresh).
+- **AUTO CDC SCD1:** current-state dimensions where history is not needed (latest customer address).
+- **AUTO CDC SCD2:** auditable history — exactly the 211 BRZ tables in Apollo Gen2 (`account_stg` → `account_brz` via `sequence_by=SinkModifiedOn`), tracking every D365 change.
+- **FROM SNAPSHOT:** the 5 full-load entities with no CDF — diff today's vs. yesterday's full dump.
+
+**Limitations & gotchas**
+
+- AUTO CDC source must be a **streaming** source read with `STREAM(...)`; if the read sees an update/delete on an existing record it errors — that's the SCD2-on-SCD2 / streaming-on-mutable-source incident. Fix: read from append-only sources, or add the `skipChangeCommits` read option (camelCase in `option()`; SQL `WITH (SKIPCHANGECOMMITS)`) to tolerate change commits. Note: `skipChangeCommits` cannot be set on a source that is itself the target of an AUTO CDC flow.
+- `sequence_by` must be strictly orderable and fine-grained, and NULL sequencing values are unsupported. File-modification-time was too coarse in Apollo Gen2 (many rows shared a tick → nondeterministic version order); switch to a real event timestamp or `struct(ts, id)` to break ties.
+- **Expectations cannot be declared on `@dp.append_flow` or on the AUTO CDC flow** — they must live on the target ST (`create_streaming_table(expect_all=...)` or the `CONSTRAINT` clause). For SCD2 with an explicit schema you must include `__START_AT`/`__END_AT` (same dtype as `sequence_by`).
+- `apply_as_truncates` / `APPLY AS TRUNCATE WHEN` is **SCD1-only**.
+- Skipping `track_history_except_column_list` on SCD2 = false versions on every metadata-only re-run (default is `TRACK HISTORY ON *`, i.e. track all columns).
+- For-loop / fan-out: each generated flow reads the full source independently (throughput hit on Kafka); you must explicitly pass a Python value into the flow-defining function (same rule as creating tables in a `for` loop); and never *shrink* the loop's value list — a dropped value silently drops its target data.
+
+**Interview soundbite:** Append flows fan multiple streaming sources into one streaming table without `UNION` or full refresh, while `create_auto_cdc_flow` upserts a change feed into that table as SCD1 (current-only) or SCD2 (history via `__START_AT`/`__END_AT`), reordering out-of-order events by `sequence_by` and using `track_history_except_column_list` (SQL: `TRACK HISTORY ON * EXCEPT`) to keep operational-metadata columns from spawning phantom history versions.
+
+### Limitations of ST, MV, SDP, Flows & Expectations (consolidated)
+
+**What it is**
+A single reference of the hard constraints across the five SDP (Spark Declarative Pipelines / Lakeflow Declarative Pipelines) building blocks: streaming tables (ST = `@dp.table` / `CREATE OR REFRESH STREAMING TABLE`), materialized views (MV = `@dp.materialized_view` / `CREATE OR REFRESH MATERIALIZED VIEW`), the pipeline/runtime itself, flows (`@dp.append_flow`, `dp.create_auto_cdc_flow`, `@dp.update_flow`, `dp.create_sink`, REPLACE WHERE), and expectations (`@dp.expect*` / `CONSTRAINT ... EXPECT`). Knowing where each object *breaks* is what separates "I've used SDP" from "I've operated SDP in production" — every Apollo Gen2 incident I hit maps to one row below.
+
+**How it works (mechanics)**
+Each object inherits the processing model of its underlying engine: ST inherits Spark Structured Streaming's append-only semantics (a stream throws if the source mutates); MV inherits batch recompute semantics with an optional incremental fast-path that only exists on serverless; flows are the foundational read-process-write unit and gate which CDC/aggregate/sink patterns are even legal; expectations are row-level boolean filters injected into the query plan. The limitations fall out of those models, not from arbitrary product gating.
+
+#### Consolidated limitations by object
+
+| Object | Limitation | Mechanism / why | Workaround |
+|---|---|---|---|
+| **Streaming Table (ST)** | Source must be **append-only** | Structured Streaming throws on `UPDATE`/`DELETE`/`MERGE INTO`/`OVERWRITE` in the source | Use `skipChangeCommits` (processes only appends) **or** switch to an MV |
+| **ST** | `skipChangeCommits` **cannot** be used when the ST is the **target of an AUTO CDC flow** (`create_auto_cdc_flow`) | The flag is a `spark.readStream.option()` on the read side; AUTO CDC owns the write side | Read the upstream's Change Data Feed instead, or stage to an intermediate ST first |
+| **ST** | Reading from the **target of an `AUTO CDC ... INTO`** (or any update-producing op) as a streaming source fails | Those ops emit updates, not appends; STs reject update inputs (set `skipChangeCommits` on the read, or use an MV) | Make the downstream an MV, or read with `skipChangeCommits` |
+| **ST** | **Late data past the watermark is dropped** | `WATERMARK col DELAY OF INTERVAL n` closes the time window; later records are silently discarded | Widen the delay (costs state/memory) or backfill via REPLACE WHERE |
+| **ST** | **Full refresh is destructive** on short-retention sources (Kafka, file sources past retention) | `REFRESH STREAMING TABLE t FULL` truncates and reprocesses from source; missing source data = permanent loss | Keep a bronze ST with full history; set `pipelines.reset.allowed='false'` |
+| **ST** | Changing **stateful logic** (watermark threshold, aggregation/window keys) forces a **full refresh** | Existing checkpoint state is incompatible with new logic | Plan logic changes; recompute from a full-history bronze layer |
+| **ST** | `TRIGGER ON UPDATE`: max **10 upstream tables** (and 30 upstream views) per ST; max **1000** STs/MVs with `TRIGGER ON UPDATE` per workspace; `AT MOST EVERY INTERVAL` defaults to and cannot be **< 1 minute** | Trigger-scheduling limits | Reduce sources or use scheduled/continuous trigger |
+| **Materialized View (MV)** | **Incremental refresh only on serverless** | Incremental refresh requires serverless pipelines; classic compute always full-recomputes | Run the pipeline on serverless |
+| **MV** | Many ops **force full recompute** even on serverless: non-deterministic functions (`rand()`, etc.), unsupported query shapes/operators (e.g. complex joins) | Cost model can't compute a delta for these; the cost model also picks `FULL_RECOMPUTE` when it is cheaper | Use `EXPLAIN CREATE MATERIALIZED VIEW` (DBR 17.3+, strip `CONSTRAINT...EXPECT` first) to check structural eligibility; rewrite to deterministic, simple aggregates; pin `REFRESH POLICY INCREMENTAL` / `INCREMENTAL STRICT` to override the cost model |
+| **MV** | **Not low-latency** | Batch flow; recomputes on trigger, not row-by-row | Use an ST for freshness/low latency |
+| **MV** | **No identity columns / surrogate keys**; identity values **may be recomputed** on refresh | Recompute can re-issue identity values | Databricks recommends identity columns only on STs (per Pipeline Limitations); identity columns are also unsupported on AUTO CDC targets |
+| **SDP pipeline / runtime** | **`PIVOT` clause is not supported** | `pivot` requires eager loading of input to compute the output schema, which pipelines do not support | Pre-compute the pivot upstream |
+| **MV** | No `OPTIMIZE`/`VACUUM` (auto-managed); `CONSTRAINT...EXPECT` clauses must be stripped before `EXPLAIN CREATE MATERIALIZED VIEW` | Maintenance is engine-owned | n/a |
+| **SDP pipeline / runtime** | **Cannot run arbitrary Python** in dataset functions; dataset fns must **return a Spark DataFrame** | SDP evaluates dataset code multiple times during planning + runs; side effects break this | Do imperative work in a *separate* upstream job (my Apollo Gen2 two-job pattern: JOB1 notebook preprocesses → JOB2 SDP pipeline) |
+| **SDP** | **Banned** ops inside dataset fns: `collect()`, `count()`, `toPandas()`, `save()`, `saveAsTable()`, `start()`, `toTable()` | These materialize/trigger/write outside the declarative graph | Express logic as transformations on the returned DataFrame |
+| **SDP** | Each **dataset defined once**; target of a **single operation** across all pipelines | Declarative graph requires one owner per dataset | Exception: STs accept **multiple append flows** (fan-in) |
+| **SDP** | Workspace concurrency: **1000 concurrent pipeline updates**; **100 source files** if only individual files/notebooks are referenced; **50 source entries** (files or folders), with up to **1000 files** referenced via folders | Workspace/pipeline quotas | Organize source into folders; split pipelines |
+| **SDP** | Requires the **Premium plan**; **expectations** additionally require the **Advanced product edition** (vs `Core` ingest-only / `Pro` CDC) | Product gating | Set pipeline `edition` to `Advanced` (the all-features edition) |
+| **Flows — AUTO CDC** (`create_auto_cdc_flow`) | Source **must be a streaming, append-only** source; target **must be an ST** | AUTO CDC is a streaming flow type | Stage CDC data into a streaming bronze first |
+| **Flows — AUTO CDC** | An ST that is an AUTO CDC target can **only** be targeted by **other AUTO CDC flows** (not append flows) | Mixed write semantics on one target are disallowed | Keep CDC targets pure |
+| **Flows — Update flow** (`@dp.update_flow`) — **Python-only** | Writes only to **sinks**; emits only changed records of non-watermarked streaming aggregates; used by real-time mode (`pipelines.trigger = "RealTime"`) | New flow type, sink-scoped | n/a |
+| **Flows — Sinks** (`dp.create_sink`) — **Public Preview** | **Python only** (no SQL); **streaming only** (no batch); **only `append_flow` + `update_flow`** can write (no `create_auto_cdc_flow`); **expectations not supported**; can't read a sink in a dataset def; full refresh **does not clear** the sink (data is re-appended); Delta table names must be **fully qualified** (UC: `catalog.schema.table`; HMS: `schema.table`) | Sinks are external streaming targets outside the managed graph | Use Kafka/EventHubs/Delta formats (or custom Python data source) |
+| **Flows — REPLACE WHERE** — **Beta** | Requires **PREVIEW** channel (`pipelines.channel='PREVIEW'`); target must be **created in the pipeline**; **one** REPLACE WHERE flow per target; target **can't** also be an AUTO CDC/append target; **expectations not supported**; **`BY NAME` required**; full refresh re-runs only the **current predicate** (older predicate-override/DML rows are permanently deleted); incremental refresh requires **serverless** | Selective overwrite-by-predicate semantics | Set `pipelines.reset.allowed='false'`; backfill history via `INSERT INTO` |
+| **Expectations** | **Cannot mix actions** in one `expect_all` dict | A single `expect_all*` decorator applies **one** collective action (warn/drop/fail) | Use separate `expect_all`, `expect_all_or_drop`, `expect_all_or_fail` decorators |
+| **Expectations** | **Row-level only** — `expectation_expr` may use literals, column identifiers, and **deterministic built-in SQL functions/operators**, but **no aggregate, analytic window, ranking window, or table-valued generator functions**, and **no subqueries**; no custom Python / no external service calls | Evaluated per-row in the query plan | Compute aggregates upstream and expect on the result column |
+| **Expectations** | **FAIL** (`expect_or_fail` / `ON VIOLATION FAIL UPDATE`) **stops the update on the first invalid record** and atomically rolls back the table-update transaction; **no metrics recorded** for FAIL; failure of one flow does **not** fail other parallel flows | First bad row stops that flow's update | Use `warn`/`drop` if you need metrics + continuity |
+| **Expectations** | **Not supported** on: **sinks**, **AUTO CDC FROM SNAPSHOT** (`create_auto_cdc_from_snapshot_flow`), and **REPLACE WHERE** targets | Those flow/object types lack the expectation surface | For SNAPSHOT: apply SCD1 to an intermediate table, read its CDF, then AUTO CDC to the final table with expectations |
+| **Expectations** | Multiple expectations with **grouped collective** actions are **Python-only** (SQL supports multiple expectations but not grouped collective actions) | Decorator-based grouping is a Python API feature | Repeat individual `CONSTRAINT ... EXPECT` clauses in SQL |
+
+**Key configs / syntax**
+The append-only escape hatch on an ST (note: illegal if the ST is an AUTO CDC target):
+
+```python
+from pyspark import pipelines as dp
+
+@dp.table
+def silver_b():
+    return spark.readStream.option("skipChangeCommits", "true").table("bronze_a")
+```
+
+```sql
+-- WITH read options require Databricks Runtime 17.3+
+CREATE OR REFRESH STREAMING TABLE silver_b
+AS SELECT * FROM STREAM bronze_a WITH (SKIPCHANGECOMMITS);
+```
+
+Multiple grouped expectations (Python-only collective action) — each decorator carries exactly one action:
+
+```python
+@dp.table
+@dp.expect_all_or_drop({"valid_id": "id IS NOT NULL", "valid_ts": "ts > '2012-01-01'"})
+@dp.expect_all("soft_checks", {"has_region": "region IS NOT NULL"})
+def events():
+    return spark.readStream.table("raw_events")
+```
+
+```sql
+CREATE OR REFRESH STREAMING TABLE events(
+  CONSTRAINT valid_id EXPECT (id IS NOT NULL) ON VIOLATION DROP ROW,
+  CONSTRAINT valid_ts EXPECT (ts > '2012-01-01') ON VIOLATION DROP ROW
+) AS SELECT * FROM STREAM(raw_events);
+```
+
+Watermark to bound state and define the late-drop threshold (records past `DELAY OF INTERVAL` are dropped):
+
+```sql
+CREATE OR REFRESH STREAMING TABLE event_counts AS
+SELECT window(event_time, '1 minute') AS time_window, region, COUNT(*) AS cnt
+FROM STREAM(events_raw)
+  WATERMARK event_time DELAY OF INTERVAL 3 MINUTES
+GROUP BY time_window, region;
+```
+
+Check MV incrementalization eligibility (the `event_log` TVF; `event_type = 'planning_information'` reports the technique, e.g. `ROW_BASED`, `GROUP_AGGREGATE`, or `FULL_RECOMPUTE`):
+
+```sql
+SELECT timestamp, message
+FROM event_log(TABLE(catalog.schema.my_mv))
+WHERE event_type = 'planning_information'
+ORDER BY timestamp DESC;
+```
+
+**Use cases**
+- Picking ST vs MV: append-only growing source + low latency → ST; CDC/aggregate targets, automatic change propagation, can tolerate latency → MV (these are exactly the inputs that *break* an ST).
+- The "SDP can't run arbitrary Python" limit is the architectural reason for a two-job pattern: in Apollo Gen2, JOB1 (a plain notebook) does the imperative preprocessing that's banned inside dataset functions, lands files in ADLS `incoming/`, and JOB2 (the SDP pipeline) declaratively builds 211 STG STs + 211 BRZ SCD2 tables.
+
+**Limitations & gotchas**
+- **Preview/Beta flags matter in an interview**: sinks are **Public Preview** and **Python-only**; the update flow is **Python-only** (no SQL surface); REPLACE WHERE is **Beta** and needs the **PREVIEW** channel. Naming a Beta feature as GA is a credibility hit.
+- **Expectations are blocked on more surfaces than people expect** — sinks, AUTO CDC FROM SNAPSHOT, and REPLACE WHERE targets. I hit the SNAPSHOT one directly on my 5 full-load entities (`create_auto_cdc_from_snapshot_flow`): the documented fix is SCD1 to an intermediate table → read its CDF → AUTO CDC to the final table with the expectations attached. (Note: at the product-edition level, expectations also require the `Advanced` edition.)
+- **Full refresh is a footgun** in three different objects (ST, REPLACE WHERE, and MV-from-Kafka) — all three can silently shrink your table if the source no longer retains the data.
+
+**Interview soundbite:** "Every SDP object's limits trace back to its engine model — STs reject mutating sources because Structured Streaming is append-only, MVs only refresh incrementally on serverless, dataset functions ban `collect`/`saveAsTable` because the graph re-evaluates them, and expectations are row-level booleans blocked on sinks, snapshot CDC, and REPLACE WHERE — which is exactly why Apollo Gen2 splits imperative work into JOB1 and keeps JOB2 purely declarative."
+
+### Use Cases of All (decision guide)
+
+**What it is**
+A single-page routing reference for picking the correct SDP (Spark Declarative Pipelines / Lakeflow Declarative Pipelines) primitive for a given job. Two orthogonal decisions are made on every node of the dataflow graph: (1) the **dataset type** — what kind of object you publish (streaming table, materialized view, temporary view), and (2) the **flow type** — how data lands into a streaming-table target (append, AUTO CDC, AUTO CDC FROM SNAPSHOT, or update flow into a sink). A "flow" is the unit of processing that writes into a target; a streaming table can have many flows fanning into it, while a materialized view has exactly one implicit flow.
+
+**How it works (mechanics)**
+- Dataset type is decided by **read semantics**: `spark.readStream` / `STREAM(...)` → streaming table (incremental, append-only consumption of the source); `spark.read` / plain `SELECT` → materialized view (you write full-recompute logic; the engine does an incremental refresh under the hood *only on serverless* — on classic compute an MV is always fully recomputed); not published at all → temporary view.
+- Flow type is decided by **what the source emits**: append-only rows → default append flow; a row-level change feed (insert/update/delete events) → AUTO CDC; only periodic full extracts with no change feed → AUTO CDC FROM SNAPSHOT; need to push results out of the lakehouse → update flow into a sink.
+- Every Python pipeline imports the module the same way; all decorators hang off `dp`. Import the SQL functions you reference (`col`, `expr`, `struct`) explicitly.
+
+```python
+from pyspark import pipelines as dp
+from pyspark.sql.functions import col, expr, struct
+```
+
+**Key configs / syntax — Dataset type decision table**
+
+| Dataset type | API (Python / SQL) | Read semantics | Published to UC? | Medallion layer | Concrete scenario |
+|---|---|---|---|---|---|
+| **Streaming table** | `@dp.table` / `CREATE OR REFRESH STREAMING TABLE` | `spark.readStream` / `STREAM(...)` | Yes | Bronze (and incremental silver) | Apollo Gen2: 211 `*_STG` streaming tables ingesting Synapse-Link delta exports from ADLS `incoming/` via `read_files` — append-only, high-volume, never reprocess old files |
+| **Materialized view** | `@dp.materialized_view` / `CREATE OR REFRESH MATERIALIZED VIEW` | `spark.read` / batch `SELECT` | Yes | Silver/Gold marts | Join `BRZ` patient + study tables into a gold "active enrollments per site" mart that must always be correct as upstream SCD2 rows change (incrementally refreshed only on serverless; full recompute on classic) |
+| **Temporary view** | `@dp.temporary_view` / `CREATE TEMPORARY VIEW` | either | No (intermediate only) | any (glue) | Cleansed/typed projection of a raw `_STG` table reused by 3 downstream tables; you do not want to publish or pay storage for it |
+
+```python
+@dp.table()
+def customers_stg():
+    return (
+        spark.readStream.format("cloudFiles")
+        .option("cloudFiles.format", "parquet")
+        .load("/Volumes/.../incoming/customers")
+    )
+
+@dp.materialized_view()
+def regional_sales():
+    partners = spark.read.table("partners")
+    sales = spark.read.table("sales")
+    return partners.join(sales, on="partner_id", how="inner")
+
+@dp.temporary_view()
+def customers_typed():
+    return spark.readStream.table("customers_stg").withColumn("id", col("id").cast("int"))
+```
+
+```sql
+CREATE OR REFRESH STREAMING TABLE customers_stg
+  AS SELECT * FROM STREAM read_files('/Volumes/.../incoming/customers', format => 'parquet');
+
+CREATE OR REFRESH MATERIALIZED VIEW regional_sales
+  AS SELECT * FROM partners INNER JOIN sales ON partners.partner_id = sales.partner_id;
+
+CREATE TEMPORARY VIEW customers_typed
+  AS SELECT CAST(id AS INT) AS id, * FROM STREAM(customers_stg);
+```
+
+**Key configs / syntax — Flow type decision table** (all flows below target a **streaming table**, except the MV which is implicit)
+
+| Flow type | API (Python / SQL) | Source shape | SCD support | Medallion layer | Concrete scenario |
+|---|---|---|---|---|---|
+| **Append (default)** | implicit, or `@dp.append_flow` / `CREATE FLOW ... AS INSERT INTO ... BY NAME` | One or many append-only streams | n/a (no upsert) | Bronze ingest, fan-in silver | Union region-A + region-B + region-C `clicks` topics into one `clicks_bronze` ST without a `UNION` (each region is its own append flow, so adding a 4th region needs no full refresh) |
+| **AUTO CDC** | `dp.create_auto_cdc_flow` / `CREATE FLOW ... AS AUTO CDC INTO` | Row-level change feed (CDF / Debezium / GoldenGate) | SCD1 **or** SCD2 | Bronze→Silver dimension | Apollo Gen2: 211 `BRZ` SCD2 tables — each `_STG` feed carries change rows; `sequence_by` orders events, `apply_as_deletes` handles tombstones, `track_history_except_column_list` excludes audit cols from history triggers |
+| **AUTO CDC FROM SNAPSHOT** | `dp.create_auto_cdc_from_snapshot_flow` (Python only) | Periodic **full extracts**, no change feed | SCD1 **or** SCD2 | Bronze→Silver dimension | Apollo Gen2: the 5 full-load entities — each run is a complete snapshot; SDP diffs consecutive snapshots to derive inserts/updates/deletes, including deriving deletes for keys that vanished |
+| **Update flow + Sink** | `@dp.update_flow` + `dp.create_sink` (Python only) | A streaming query | n/a | Gold egress / reverse-ETL | Push enriched fraud-scored events to a Kafka topic, or write gold aggregates to an external Delta table consumed outside Unity Catalog |
+
+```python
+dp.create_streaming_table("customers_brz")
+
+dp.create_auto_cdc_flow(
+    target="customers_brz",
+    source="customers_stg",
+    keys=["customer_id"],
+    sequence_by="_change_ts",
+    apply_as_deletes=expr("op = 'DELETE'"),
+    stored_as_scd_type=2,
+    track_history_except_column_list=["_change_ts", "_ingest_file"],
+)
+```
+
+```python
+dp.create_streaming_table("products_brz")
+
+dp.create_auto_cdc_from_snapshot_flow(
+    target="products_brz",
+    source="products_snapshot_stg",
+    keys=["product_id"],
+    stored_as_scd_type=2,
+)
+```
+
+```python
+dp.create_sink(
+    name="fraud_alerts_kafka",
+    format="kafka",
+    options={"kafka.bootstrap.servers": "broker:9092", "topic": "fraud_alerts"},
+)
+
+@dp.update_flow(target="fraud_alerts_kafka")
+def to_kafka():
+    return (
+        spark.readStream.table("scored_events_gold")
+        .selectExpr("CAST(event_id AS STRING) AS key", "to_json(struct(*)) AS value")
+    )
+```
+
+```sql
+CREATE OR REFRESH STREAMING TABLE customers_brz;
+
+CREATE FLOW customers_cdc AS AUTO CDC INTO customers_brz
+  FROM STREAM(customers_stg)
+  KEYS (customer_id)
+  APPLY AS DELETE WHEN op = 'DELETE'
+  SEQUENCE BY _change_ts
+  STORED AS SCD TYPE 2
+  TRACK HISTORY EXCEPT (_change_ts, _ingest_file);
+```
+
+**Use cases — one-glance "if you see X, reach for Y"**
+
+| If the requirement is… | Dataset type | Flow type |
+|---|---|---|
+| High-volume raw ingest, never reprocess old files | Streaming table | Append (`read_files`/Auto Loader) |
+| Merge several append-only sources into one target | Streaming table | `@dp.append_flow` ×N (not `UNION`) |
+| Replicate an OLTP dimension that has a CDC feed, keep history | Streaming table | AUTO CDC, `stored_as_scd_type=2` |
+| Same, but only nightly full dumps exist (no feed) | Streaming table | AUTO CDC FROM SNAPSHOT |
+| Always-correct aggregation / join over changing sources | Materialized view | implicit (engine incremental refresh — serverless only; classic = full recompute) |
+| Reusable intermediate not worth publishing | Temporary view | n/a |
+| Stream results out to Kafka / external Delta (reverse-ETL) | (sink) | `create_sink` + `@dp.update_flow` (or `@dp.append_flow`) |
+
+**Limitations & gotchas**
+- **Defaults:** AUTO CDC and AUTO CDC FROM SNAPSHOT both default to `stored_as_scd_type=1` — you must explicitly set `2` to get history (`__START_AT`/`__END_AT` columns). Forgetting this silently gives SCD1 and no audit trail.
+- **Snapshot semantics:** AUTO CDC FROM SNAPSHOT auto-derives deletes (a key present in target but absent from the new snapshot is closed/removed); AUTO CDC only deletes when you pass `apply_as_deletes` / `APPLY AS DELETE WHEN`.
+- **Same target, one CDC API:** you cannot point both `create_auto_cdc_flow` and `create_auto_cdc_from_snapshot_flow` at the same streaming table.
+- **Sink constraints:** `create_sink` accepts only `append_flow` and `update_flow` — not AUTO CDC; sinks are Python-only, streaming-only, and expectations are **not** enforced on sink writes. Full refresh does **not** clear a sink (data is re-appended).
+- **Expectations + CDC:** expectations are **not supported with AUTO CDC FROM SNAPSHOT**; for AUTO CDC (feed-based), define the `CONSTRAINT ... EXPECT` on the target table. You also cannot define expectations inside an `@dp.append_flow` body — put them on the `create_streaming_table()` target.
+- **AUTO CDC sequencing:** `sequence_by` must be a monotonically increasing representation of the correct event order, with one distinct update per key at each sequencing value; `NULL` sequence values are **not supported**. This is exactly the Apollo Gen2 incident where file-modification-time was too coarse (ties → non-deterministic ordering) — fix by combining columns to break ties: Python `sequence_by=struct("ts", "id")`, SQL `SEQUENCE BY STRUCT(ts, id)`.
+- **Streaming-on-mutable-source:** AUTO CDC targets are themselves mutable; a plain `spark.readStream` off an SCD2 BRZ table for another flow throws on the first update/delete because streaming reads assume append-only sources. Consume the change feed instead, or set `skipChangeCommits` (Python) when reading the source, or target a materialized view (no append-only restriction).
+- **Python-only flows:** AUTO CDC FROM SNAPSHOT, `update_flow`, and `create_sink` have no SQL surface; AUTO CDC and append flows exist in both. The AUTO CDC APIs require SDP `Pro` or `Advanced` edition, or serverless (`Core` runs streaming ingest only; the `edition` default is `ADVANCED`).
+- **MV vs ST cost:** materialized views recompute (incrementally where possible, **serverless only** — classic compute always full-recomputes) and can full-recompute on non-incremental ops; streaming tables never reprocess consumed input — pick ST whenever append-only incremental is acceptable.
+
+**Interview soundbite:** "I choose the dataset type by read semantics — streaming table for append-only incremental bronze, materialized view for always-correct silver/gold marts (incrementally refreshed on serverless), temporary view for unpublished glue — and the flow type by source shape: append for fan-in, AUTO CDC for change feeds, AUTO CDC FROM SNAPSHOT for periodic full extracts, and update-flow-into-a-sink for reverse-ETL egress, which is exactly the 211 STG-append + 211 BRZ AUTO-CDC-SCD2 split in our Apollo Gen2 pipelines."
+
+### Expectations — Everything (types, actions, where logged)
+
+**What it is**
+Expectations are optional data-quality clauses attached to a Spark Declarative Pipelines (SDP) dataset (a streaming table, materialized view, or temporary view). Each is a triple: a **name/description** (unique per dataset, used as the metric identifier), a **constraint** (a SQL boolean expression evaluated row-by-row), and an **action** (what to do when the row fails). Unlike a database `CHECK` constraint — which rejects the write outright — an expectation lets you choose: keep the bad row and just count it, drop it, or fail the flow. There are exactly **six Python decorators** (`@dp.expect`, `@dp.expect_or_drop`, `@dp.expect_or_fail` for a single constraint; `@dp.expect_all`, `@dp.expect_all_or_drop`, `@dp.expect_all_or_fail` for a dict of constraints) plus the equivalent SQL `CONSTRAINT ... EXPECT ...` clause.
+
+**How it works (mechanics)**
+
+Three actions exist. Default is **warn**.
+
+| Action | Python (single) | Python (plural / dict) | SQL clause | What happens to the row | Metrics recorded? |
+|---|---|---|---|---|---|
+| **warn** (default) | `@dp.expect` | `@dp.expect_all` | `EXPECT (...)` (no `ON VIOLATION`) | Violating row **written to target** anyway; pass/fail counted | Yes — `passed_records` / `failed_records` |
+| **drop** | `@dp.expect_or_drop` | `@dp.expect_all_or_drop` | `EXPECT (...) ON VIOLATION DROP ROW` | Violating row **dropped before write**; counted | Yes — adds `dropped_records` |
+| **fail** | `@dp.expect_or_fail` | `@dp.expect_all_or_fail` | `EXPECT (...) ON VIOLATION FAIL UPDATE` | First violation **aborts the flow**; if the operation is a table update, the transaction is atomically rolled back. Manual intervention required before reprocessing | **No** — `fail` records no data_quality metrics (the update died) |
+
+Critical singular-vs-plural semantics:
+- **Singular** decorators take two positional args: `(description, constraint)`. Stack multiple singular decorators to apply several independent checks, each with its own action and its own metric line.
+- **Plural** decorators take **one Python dict** `{description: constraint, ...}`. The combining logic differs by action:
+  - `expect_all` (warn): each constraint is **counted independently** — every key produces its own pass/fail metric, all rows still written.
+  - `expect_all_or_drop`: a row is dropped if it **violates ANY** constraint in the dict (logical AND of all constraints must hold to survive). Per-constraint metrics still reported individually.
+  - `expect_all_or_fail`: the flow fails if **ANY** row violates **ANY** constraint in the dict.
+- You **cannot mix actions inside one dict**. One dict = one action. To mix warn + drop + fail, use three separate decorators / dicts.
+- SQL supports multiple expectations per dataset (comma-separated `CONSTRAINT` clauses), but **only Python lets you group expectations into a dict and apply a collective action** (`expect_all*`). There is no `expect_all` keyword in SQL.
+
+`fail`'s blast radius is **one flow, not the whole pipeline**: if you have multiple parallel flows, one flow failing on an expectation does not kill the others. (Apollo Gen2 relevance: with 422 SDP pipelines / many flows, an `expect_or_fail` on one STG entity rolls back only that entity's update — sibling entity flows keep running.)
+
+**Key configs / syntax**
+
+Singular decorators, stacked, on a streaming table:
+
+```python
+from pyspark import pipelines as dp
+
+@dp.table
+@dp.expect("valid_timestamp", "timestamp > '2012-01-01'")
+@dp.expect_or_drop("valid_current_page", "current_page_id IS NOT NULL AND current_page_title IS NOT NULL")
+@dp.expect_or_fail("valid_count", "count > 0")
+def customers():
+    return spark.readStream.table("datasets.samples.raw_customers")
+```
+
+Plural / dict decorators (reuse the same dict across many datasets — this is the portability win):
+
+```python
+from pyspark import pipelines as dp
+
+valid_pages = {
+    "valid_count": "count > 0",
+    "valid_current_page": "current_page_id IS NOT NULL AND current_page_title IS NOT NULL",
+}
+
+@dp.table
+@dp.expect_all(valid_pages)            # warn: each counted independently, all rows kept
+def raw_data():
+    return spark.readStream.table("source")
+
+@dp.table
+@dp.expect_all_or_drop(valid_pages)    # drop row if it violates ANY key (AND)
+def prepared_data():
+    return spark.read.table("raw_data")
+
+@dp.table
+@dp.expect_all_or_fail(valid_pages)    # fail flow if ANY row violates ANY key
+def customer_facing_data():
+    return spark.read.table("prepared_data")
+```
+
+SQL surface (each constraint comma-separated inside the table's column/constraint list):
+
+```sql
+CREATE OR REFRESH STREAMING TABLE customers(
+  CONSTRAINT valid_customer_age EXPECT (age BETWEEN 0 AND 120),
+  CONSTRAINT valid_current_page EXPECT (current_page_id IS NOT NULL AND current_page_title IS NOT NULL) ON VIOLATION DROP ROW,
+  CONSTRAINT valid_count EXPECT (count > 0) ON VIOLATION FAIL UPDATE
+) AS SELECT * FROM STREAM(datasets.samples.raw_customers);
+```
+
+Note SQL has no `expect_all` equivalent — Databricks docs recommend merging multiple checks into a single `EXPECT` with `AND` when you want one action/one metric line in SQL.
+
+**Expectations on CDC / AUTO CDC targets.** `create_auto_cdc_flow` / `@dp.append_flow` write into a target created by `dp.create_streaming_table`. You cannot decorate the CDC/append flow function itself — you put the expectations on the **target table declaration** via the `expect_all=`, `expect_all_or_drop=`, `expect_all_or_fail=` dict parameters of `dp.create_streaming_table` (these params provide the same behavior and syntax as the decorators, just as keyword arguments). Same "can't mix actions in one dict" rule applies. (Apollo Gen2: this is exactly how you'd guard the 211 BRZ SCD2 tables built by `create_auto_cdc_flow` — expectations attach to the `create_streaming_table` target, not to the flow.)
+
+```python
+from pyspark import pipelines as dp
+
+dp.create_streaming_table(
+    name="brz_account",
+    expect_all_or_drop={
+        "valid_pk": "account_id IS NOT NULL",
+        "valid_seq": "SinkModifiedOn IS NOT NULL",
+    },
+)
+
+dp.create_auto_cdc_flow(
+    target="brz_account",
+    source="stg_account",
+    keys=["account_id"],
+    sequence_by="SinkModifiedOn",
+    stored_as_scd_type=2,
+    apply_as_deletes="Op = 'D'",
+    track_history_except_column_list=["SinkModifiedOn"],
+)
+```
+
+SQL equivalent puts the `CONSTRAINT` in the target's `CREATE STREAMING TABLE`, then the `AUTO CDC` flow targets it:
+
+```sql
+CREATE OR REFRESH STREAMING TABLE brz_account(
+  CONSTRAINT valid_pk EXPECT (account_id IS NOT NULL) ON VIOLATION DROP ROW
+);
+
+CREATE FLOW brz_account_cdc AS AUTO CDC INTO brz_account
+FROM STREAM(stg_account)
+KEYS (account_id)
+APPLY AS DELETE WHEN Op = 'D'
+SEQUENCE BY SinkModifiedOn
+STORED AS SCD TYPE 2;
+```
+
+**Where it is logged.** Two completely different destinations depending on action — this is the high-leverage interview detail:
+
+1. **warn and drop → the pipeline EVENT LOG** (a queryable Delta table). The relevant events have `event_type = 'flow_progress'`, and the metrics live in nested JSON under `details:flow_progress.data_quality`:
+   - `details:flow_progress.data_quality.dropped_records` — count dropped (drop action).
+   - `details:flow_progress.data_quality.expectations` — an array of per-constraint objects, each with `name`, `dataset`, `passed_records`, `failed_records`. `failed_records` only says the row violated the check — per the docs it "tracks whether the expectation was met, but does not describe what happens to the records (warn, fail, or drop)."
+   - Also visible in the UI: pipeline → dataset → **Data quality** tab.
+2. **fail → NOT in data_quality metrics.** Because the update aborts, no metrics are written. Instead an `EXPECTATION_VIOLATION` error appears in the **failed update's error details**. With verbosity `VERBOSITY_ALL` the error message includes the violated expectation(s), the offending **input record**, and the **output record**, letting you pinpoint the bad row (verbosity `VERBOSITY_OUTPUT` shows only the output record; `VERBOSITY_NONE` shows neither):
+
+```console
+[EXPECTATION_VIOLATION] Flow 'sensor-pipeline' failed to meet the expectation.
+Violated expectations: 'temperature_in_valid_range'.
+Input data: '{"id":"TEMP_001","temperature":-500,"timestamp_ms":"1710498600"}'.
+Output record: '{"sensor_id":"TEMP_001","temperature":-500,"change_time":"2024-03-15 10:30:00"}'.
+Missing input data: false
+```
+
+Query the event log to build a DQ dashboard. The `event_log()` TVF takes either a pipeline ID string or `TABLE(<st_or_mv_name>)`, and can be called only by the pipeline / table owner (use a shared cluster or SQL warehouse):
+
+```sql
+SELECT
+  timestamp,
+  expectation.name        AS constraint_name,
+  expectation.dataset     AS dataset,
+  expectation.passed_records,
+  expectation.failed_records,
+  details:flow_progress.data_quality.dropped_records AS dropped_records
+FROM event_log('<pipeline-id>')
+LATERAL VIEW EXPLODE(
+  FROM_JSON(details:flow_progress.data_quality.expectations, 'array<struct<name:string,dataset:string,passed_records:bigint,failed_records:bigint>>')
+) AS expectation
+WHERE event_type = 'flow_progress'
+ORDER BY timestamp DESC;
+```
+
+**Quarantine pattern** (keep bad rows for triage instead of silently dropping). Add a boolean flag column computed from the inverse of your rules, attach `expect_all` (warn) so metrics still flow, then split into valid/invalid views downstream:
+
+```python
+from pyspark import pipelines as dp
+from pyspark.sql.functions import expr
+
+rules = {
+    "valid_pickup_zip": "(pickup_zip IS NOT NULL)",
+    "valid_dropoff_zip": "(dropoff_zip IS NOT NULL)",
+}
+quarantine_rules = "NOT({0})".format(" AND ".join(rules.values()))
+
+@dp.temporary_view
+def raw_trips_data():
+    return spark.readStream.table("samples.nyctaxi.trips")
+
+@dp.table(temporary=True, partition_cols=["is_quarantined"])
+@dp.expect_all(rules)
+def trips_data_quarantine():
+    return spark.readStream.table("raw_trips_data").withColumn("is_quarantined", expr(quarantine_rules))
+
+@dp.temporary_view
+def valid_trips_data():
+    return spark.read.table("trips_data_quarantine").filter("is_quarantined = false")
+
+@dp.temporary_view
+def invalid_trips_data():
+    return spark.read.table("trips_data_quarantine").filter("is_quarantined = true")
+```
+
+```sql
+CREATE OR REFRESH TEMPORARY STREAMING TABLE trips_data_quarantine(
+  CONSTRAINT quarantined_row EXPECT (pickup_zip IS NOT NULL OR dropoff_zip IS NOT NULL)
+)
+PARTITIONED BY (is_quarantined)
+AS SELECT *, NOT ((pickup_zip IS NOT NULL) AND (dropoff_zip IS NOT NULL)) AS is_quarantined
+   FROM STREAM(raw_trips_data);
+```
+
+**Use cases**
+- **warn**: ingestion / bronze where you must keep every row but want a quality trend (e.g., counting null `SinkModifiedOn` on STG entities without dropping them).
+- **drop**: bad rows are expected and must not propagate (range/outlier filtering, null-key filtering before a join).
+- **fail**: critical invariants where any bad row signals an upstream break — primary-key uniqueness (`@dp.expect_or_fail("unique_pk", "num_entries = 1")` over a `groupBy(pk).count()`), row-count conservation across a transform, no-missing-records after a left join.
+- **quarantine**: regulated / pharma data (Novartis) where you can neither lose rows nor ship dirty rows — divert and reprocess.
+
+**Limitations & gotchas**
+- Constraints are **deterministic built-in SQL only** — no aggregate functions, no analytic/ranking window functions, no table-valued generator functions, and **no subqueries** referencing other tables (no custom Python UDFs / external calls). (Use a prior view to compute the value, then EXPECT on it.)
+- Expectations / data-quality metrics are supported **only** on streaming tables, materialized views, temporary views — **not on sinks** (`dp.create_sink`).
+- **Not supported with `AUTO CDC FROM SNAPSHOT`** (`create_auto_cdc_from_snapshot_flow`). So Apollo Gen2's full-load entities built via snapshot CDC cannot carry expectations on the snapshot flow.
+- `fail` records **no** data_quality metrics — don't build a dashboard expecting fail counts; you watch the update error / `EXPECTATION_VIOLATION` instead.
+- `failed_records` measures violations, **not** the disposition of the row — a warn'd row and a dropped row both increment `failed_records`; only `dropped_records` tells you it left the dataset.
+- Views compute lazily, so a view's DQ metrics may be missing, or duplicated (one set per downstream consumer).
+- Metric capture can require `pipelines.metrics.flowTimeReporter.enabled`; a `COMPLETED` flow may report nothing while a `RUNNING` micro-batch carries the metrics.
+- Expectation descriptions must be **unique within a dataset** (reusable across datasets).
+
+**Interview soundbite:** Six operators — `expect`/`expect_or_drop`/`expect_or_fail` for single and the `expect_all*` trio for a dict; warn keeps and counts, drop discards before write, fail rolls back the single flow; warn/drop land in the event log's `flow_progress.data_quality` (per-constraint `passed_records`/`failed_records` plus `dropped_records`) while fail emits an `EXPECTATION_VIOLATION` error in the update details with no metrics, and on CDC targets the expectations live on the `create_streaming_table` `expect_all*` params, not on the AUTO CDC flow.
+
+### Event Log — Where, What & How to Read
+
+**What it is**
+
+The event log is the primary observability primitive in SDP (Spark Declarative Pipelines / Lakeflow Declarative Pipelines). Every pipeline update (a "run") writes one structured row per event to a **Delta table**. It captures execution progress, data-quality (expectation) metrics, planning decisions (incremental vs full recompute), data lineage, user/audit actions, and resource usage. Because it is a Delta table, you query it with normal SQL and the `:` JSON-path operator — no log scraping.
+
+In my Apollo Gen2 setup (422 SDP pipelines = 211 STG streaming tables + 211 BRZ SCD2 tables), the event log is how I triage which of the 211 entities failed a `dp.create_auto_cdc_flow` SCD2 write, prove SCD2 row counts to the client, and confirm whether a Bronze materialized-view refresh went incremental or fell back to `FULL_RECOMPUTE`.
+
+**How it works (mechanics)**
+
+- **Default publishing mode (Unity Catalog):** the pipeline writes the event log to a *hidden* Delta table in the pipeline's default catalog/schema, named `event_log_{pipeline_id}` (system UUID with dashes → underscores). It appears in `system.information_schema.tables` but is invisible in Catalog Explorer. By default only the pipeline **run-as user** can query it — but in default mode the hidden table "can still be queried by all sufficiently privileged users," so this is a privilege boundary, not a hard owner-only lock.
+- **Two ways to read it:**
+  1. **Direct table query (default publishing mode).** Query the hidden table via `event_log(<pipelineId>)`, or — if you've published it (below) — the named UC table directly. This path is governable: you can `GRANT SELECT` to share.
+  2. **The `event_log()` table-valued function (TVF).** Available in Databricks SQL and DBR 13.3 LTS+. This is the *only* path for **legacy publishing mode** pipelines. Two call forms:
+
+```sql
+-- By pipeline ID (system UUID from the Pipeline details panel)
+SELECT * FROM event_log("04c78631-3dd7-4856-b2a6-7d84e9b2638b");
+
+-- By a streaming table or materialized view it owns/created
+SELECT * FROM event_log(TABLE(my_catalog.my_schema.stg_account));
+```
+
+- **Hard access constraints on the TVF path (interview gotchas — these apply to the `event_log()` TVF specifically):**
+  - The TVF can be called **only by the dataset/pipeline OWNER** (pipeline owner / ST or MV owner).
+  - Must run on a **shared cluster or a SQL warehouse** (e.g., SQL Editor on a warehouse) — not a single-user/dedicated cluster.
+  - You **cannot** read multiple pipelines' logs in one `event_log()` call, and a view created over the TVF **can be queried only by the owner and cannot be shared** with other users.
+- **Standard pattern — wrap in a view once, query many times** (this view is referenced by all queries below):
+
+```sql
+CREATE VIEW event_log_raw AS
+SELECT * FROM event_log("<pipeline-id>");
+```
+
+- **Streaming the log** (in Unity Catalog, views support streaming reads):
+
+```python
+df = spark.readStream.table("event_log_raw")
+```
+
+**Row schema (top-level columns)**
+
+| Column | Type | Meaning |
+|---|---|---|
+| `id` | STRING | Unique event record id |
+| `sequence` | STRING (JSON) | Ordering metadata |
+| `origin` | STRING (JSON) | `pipeline_id`, `pipeline_name`, `update_id` (= run id), `flow_name`, `flow_id`, `cluster_id`, region, etc. |
+| `timestamp` | TIMESTAMP | Event time in **UTC** |
+| `message` | STRING | Human-readable description |
+| `level` | STRING | `INFO`, `WARN`, `ERROR`, `METRICS` (METRICS = high-volume, Delta-only, not shown in UI) |
+| `maturity_level` | STRING | `STABLE`, `EVOLVING`, `DEPRECATED`, or `NULL` (NULL = stable record predating the field, release 2022.37) — do **not** build alerts on EVOLVING/DEPRECATED fields |
+| `error` | STRING | Error detail if any |
+| `details` | STRING (JSON) | **The payload** — shape depends on `event_type`; parse with `details:...` |
+| `event_type` | STRING | Discriminator for `details` (see below) |
+
+**`event_type` values and what they carry**
+
+| `event_type` | What it tells you |
+|---|---|
+| `create_update` | A new run started; captures full effective config (incl. `effective_publishing_mode`) + `cause`. Use it to find the latest `update_id`. |
+| `update_progress` | Run lifecycle `state`: terminal states are `COMPLETED` / `FAILED` / `CANCELED`. |
+| `flow_progress` | Per-flow `status` + metrics (`num_output_rows`, `num_upserted_rows`, `num_deleted_rows`, `backlog_bytes`/`backlog_files`) + **data_quality** (expectation pass/fail/drop). The workhorse event. |
+| `flow_definition` | **Lineage** + query plan: `input_datasets`, `output_dataset`, `flow_type`, `explain_text`, `schema`. `flow_type` ∈ {`COMPLETE`, `CHANGE` (= `dp.create_auto_cdc_flow` / AUTO CDC), `SNAPSHOT_CHANGE` (= `dp.create_auto_cdc_from_snapshot_flow` / AUTO CDC from snapshot), `APPEND`, `MATERIALIZED_VIEW`, `VIEW`}. (Docs still describe `CHANGE`/`SNAPSHOT_CHANGE` with the legacy `APPLY CHANGES INTO` wording — same mechanism, AUTO CDC is the current SDP name.) |
+| `planning_information` | Why a refresh was **incremental vs FULL_RECOMPUTE** — `technique_information` (chosen + considered techniques) + `incrementalization_issues` + source/target table info. |
+| `dataset_definition` | `dataset_type` (ST vs MV), `num_flows`, attached `expectations`. |
+| `sink_definition` | `dp.create_sink` `format` + `options`. |
+| `user_action` | Audit: `CREATE`, `START`, etc. + `user_name`. |
+| `runtime_details` | DBR version used for the update (`runtime_version.dbr_version`). |
+| `cluster_resources` / `autoscale` | Slot utilization, executor counts — **classic compute only** (not serverless). |
+| `operation_progress` | `type` ∈ {`AUTO_LOADER_LISTING`, `AUTO_LOADER_BACKFILL`, `CONNECTOR_FETCH`, `CDC_SNAPSHOT`}; `status`, `duration_ms`. |
+| `stream_progress` | StreamingQueryListener-style metrics (offsets, batchId, durationMs). |
+| `hook_progress` | Event-hook (`name`, `status`). |
+| `deprecation` / `behavior_change_in_spark_connect` | Deprecated-API warnings; environment-version / Spark Connect compat scan findings. |
+
+**Publishing the event log to a durable UC table**
+
+By default the log lives in a hidden table tied to the pipeline. For durable, governable, cross-team querying, publish it to a named UC table via the pipeline's Advanced settings (default publishing mode only — legacy mode errors with `EVENT_LOG_PICKER_FEATURE_NOT_SUPPORTED`):
+
+```json
+{
+  "id": "ec2a0ff4-d2a5-4c8c-bf1d-d9f12f10e749",
+  "name": "billing_pipeline",
+  "event_log": {
+    "catalog": "catalog_name",
+    "schema": "schema_name",
+    "name": "event_log_table_name"
+  }
+}
+```
+
+Then query the table directly (still wrap in a view for convenience). Note: the event-log location also serves as the schema location for Auto Loader queries, so Databricks recommends creating a view and granting on the view rather than sharing the table directly:
+
+```sql
+CREATE VIEW event_log_raw
+AS SELECT * FROM catalog_name.schema_name.event_log_table_name;
+```
+
+**Key configs / syntax**
+
+| Concern | Value / rule |
+|---|---|
+| Call forms (TVF) | `event_log("<pipeline-id>")` or `event_log(TABLE(<fq-ST-or-MV>))` |
+| Caller (TVF path) | Dataset/pipeline **OWNER** only; TVF-backed view is non-shareable |
+| Caller (published-table path) | Any user with `SELECT` (default mode is governable; grant on a view) |
+| Compute (TVF path) | **Shared cluster or SQL warehouse** only |
+| Default location | hidden `event_log_{pipeline_id}` in pipeline's default catalog.schema |
+| Scope | one pipeline per `event_log()` call |
+| Time zone | `timestamp` is **UTC** |
+| JSON parse | `details:flow_progress.status`, `from_json(...)`, `explode(...)` (`:` enters JSON; nested hops via `.` or `:`) |
+| Latest run | filter `event_type='create_update'`, `ORDER BY timestamp DESC LIMIT 1` → `origin.update_id` |
+
+**Use cases (verbatim SQL queries)**
+
+1) Expectation pass/fail trend for the latest update (data-quality triage on Bronze SCD2 entities):
+
+```sql
+WITH latest_update AS (
+  SELECT origin.update_id AS id
+  FROM event_log_raw
+  WHERE event_type = 'create_update'
+  ORDER BY timestamp DESC
+  LIMIT 1
+)
+SELECT
+  row_expectations.dataset        AS dataset,
+  row_expectations.name           AS expectation,
+  SUM(row_expectations.passed_records) AS passing_records,
+  SUM(row_expectations.failed_records) AS failing_records
+FROM (
+  SELECT explode(
+    from_json(
+      details:flow_progress:data_quality:expectations,
+      "array<struct<name: string, dataset: string, passed_records: int, failed_records: int>>"
+    )
+  ) AS row_expectations
+  FROM event_log_raw, latest_update
+  WHERE event_type = 'flow_progress'
+    AND origin.update_id = latest_update.id
+)
+GROUP BY row_expectations.dataset, row_expectations.name;
+```
+
+2) MV refresh technique — was it incremental or FULL_RECOMPUTE, and why:
+
+```sql
+WITH latest_update AS (
+  SELECT origin.pipeline_id, origin.update_id AS latest_update_id
+  FROM event_log_raw
+  WHERE event_type = 'create_update'
+  ORDER BY timestamp DESC
+  LIMIT 1
+),
+parsed_planning AS (
+  SELECT
+    origin.flow_name,
+    from_json(
+      details:planning_information,
+      'struct<technique_information: array<struct<
+         maintenance_type: string, is_chosen: boolean, is_applicable: boolean, cost: double,
+         incrementalization_issues: array<struct<issue_type: string,
+           prevent_incrementalization: boolean, operator_name: string>>>>>'
+    ) AS parsed
+  FROM event_log_raw
+  JOIN latest_update lu ON origin.update_id = lu.latest_update_id
+  WHERE details:planning_information IS NOT NULL
+)
+SELECT
+  flow_name,
+  FILTER(parsed.technique_information, t -> t.is_chosen = true)[0].maintenance_type AS chosen_technique,
+  parsed.technique_information AS all_considered_techniques
+FROM parsed_planning;
+```
+
+Read it as: `maintenance_type = MAINTENANCE_TYPE_COMPLETE_RECOMPUTE` means full recompute, and `MAINTENANCE_TYPE_NO_OP` means nothing changed (neither is incremental). Any *other* value (`MAINTENANCE_TYPE_ROW_BASED`, `..._APPEND_ONLY`, `..._GROUP_AGGREGATE`, `..._GENERIC_AGGREGATE`, `..._WINDOW_FUNCTION`, `..._PARTITION_OVERWRITE`) is incremental. Common forced-full reasons in `incrementalization_issues.issue_type`: `CHANGE_SET_MISSING` (first compute), `EXPECTATIONS_NOT_SUPPORTED`, `ROW_TRACKING_NOT_ENABLED`, `PLAN_NOT_DETERMINISTIC`, `PLAN_NOT_INCREMENTALIZABLE`, `INCREMENTAL_PLAN_REJECTED_BY_COST_MODEL`, `QUERY_FINGERPRINT_CHANGED`, `CONFIGURATION_CHANGED`.
+
+3) Lineage (build the DAG edges):
+
+```sql
+WITH latest_update AS (
+  SELECT origin.update_id AS id
+  FROM event_log_raw
+  WHERE event_type = 'create_update'
+  ORDER BY timestamp DESC
+  LIMIT 1
+)
+SELECT
+  details:flow_definition.output_dataset AS flow_name,
+  details:flow_definition.input_datasets AS input_flow_names,
+  details:flow_definition.flow_type      AS flow_type
+FROM event_log_raw
+JOIN latest_update ON origin.update_id = latest_update.id
+WHERE details:flow_definition IS NOT NULL
+ORDER BY timestamp;
+```
+
+4) Failure triage — pull the failed flows and their error from the latest run:
+
+```sql
+WITH latest_update AS (
+  SELECT origin.update_id AS id
+  FROM event_log_raw
+  WHERE event_type = 'create_update'
+  ORDER BY timestamp DESC
+  LIMIT 1
+)
+SELECT
+  timestamp,
+  origin.flow_name,
+  details:flow_progress.status AS status,
+  level,
+  message,
+  error
+FROM event_log_raw
+JOIN latest_update ON origin.update_id = latest_update.id
+WHERE event_type = 'flow_progress'
+  AND details:flow_progress.status IN ('FAILED', 'SKIPPED', 'STOPPED')
+ORDER BY timestamp;
+```
+
+5) Audit — who started/created the pipeline:
+
+```sql
+SELECT timestamp,
+       details:user_action:action    AS action,
+       details:user_action:user_name AS user_name
+FROM event_log_raw
+WHERE event_type = 'user_action';
+```
+
+**Limitations & gotchas**
+
+- **TVF path = owner-only + shared/SQL-warehouse-only.** A teammate on a single-user/dedicated cluster cannot read it via the TVF, and the TVF-backed view can't be shared. To share, publish to a UC table (default mode) and grant `SELECT` on a view. This is the #1 trip-up.
+- **One pipeline per `event_log()` call**; no cross-pipeline union. For 422 pipelines like Apollo Gen2, publish each log to a UC table to run fleet-wide quality dashboards.
+- **Legacy vs default publishing mode diverge.** In legacy publishing mode you *must* use the TVF and *cannot* publish the log to UC (`EVENT_LOG_PICKER_FEATURE_NOT_SUPPORTED`); legacy is deprecated. Default mode writes to a hidden table in the pipeline's default catalog/schema and can be published to a named UC table. Also: migrating legacy→default changes the `flow_progress` dataset name from `table` to fully qualified `catalog.schema.table`, so update any event-log queries.
+- **Never delete the event log** (or its parent catalog/schema) — future updates can fail. Missing data files / truncated Delta log surface as `EVENT_LOG_TABLE_MISSING_DATA_FILES` / `EVENT_LOG_TABLE_DELTA_TRUNCATED_TRANSACTION_LOG`; recovery is restore-to-earlier-version or drop.
+- `cluster_resources` and `autoscale` events are **classic-compute only** — empty on serverless pipelines.
+- **Incremental MV refresh requires serverless.** Materialized views updated on classic compute are *always* fully recomputed; only serverless pipelines can incrementally refresh (and only when the query plan supports it). So a `FULL_RECOMPUTE` in `planning_information` may just mean the pipeline isn't serverless.
+- Timestamps are **UTC**; convert before showing to stakeholders.
+- Don't build alerting on fields whose `maturity_level` is `EVOLVING` or `DEPRECATED`; `stream_progress` is EVOLVING.
+- `expect_or_fail` (`ON VIOLATION FAIL UPDATE`) records **no** pass/fail metrics — it fails the flow on the first bad row. Per docs it fails only that single flow (not the whole pipeline), so your data-quality query sees a `FAILED` flow status, not a failed-record count.
+
+**Interview soundbite:** The SDP event log is a per-run Delta table. In default publishing mode it lives as a hidden `event_log_{pipeline_id}` table you query (and can publish to a named UC table for grants); the `event_log('<pipeline-id>')` / `event_log(TABLE(<st-or-mv>))` TVF is the owner-only, shared-cluster/SQL-warehouse path required for legacy-mode pipelines. Wrap it in a view, filter by `event_type` — `flow_progress` for data quality, `planning_information` for incremental-vs-FULL_RECOMPUTE, `flow_definition` for lineage — and publish to UC when you need durable, shareable, fleet-wide monitoring.
+
+### Deployment Mode — Development vs Production
+
+**What it is**
+
+A pipeline-level operational setting that controls how an SDP (Spark Declarative Pipelines / Lakeflow Spark Declarative Pipelines) update behaves around **compute lifecycle** (does the cluster stay warm or tear down?) and **failure handling** (does it retry/recover automatically or fail loud immediately?). It is *not* the same axis as triggered-vs-continuous, which controls **execution** (does the update stop when caught up, or run forever?). Both axes are orthogonal — you can have a development+triggered pipeline or a production+continuous one.
+
+There are two framings in current Databricks docs, and a strong interviewer expects you to reconcile them:
+
+| Framing | What flips the behavior | Where it lives in docs |
+|---|---|---|
+| **Deployment mode** (classic framing) | The `development` boolean on the pipeline (default `false` = production) | Pipeline settings / `development` field / bundle `mode` |
+| **Update run behavior** (current framing) | The **update trigger source** — UI **Run now**/ad-hoc vs Jobs/API/continuous | "Run a pipeline update" → "Update run behavior" page |
+
+These describe the *same two behavior bundles* (fast-start/no-retry vs auto-retry/teardown) but attribute the trigger to different things. State both.
+
+**How it works (mechanics)**
+
+**Development / fast-start behavior (debugging-focused — UI Run now and ad-hoc updates):**
+
+| Behavior | Detail |
+|---|---|
+| Cluster reuse | Cluster is **reused** across updates to avoid restart overhead. |
+| Cluster idle window | By default the cluster runs for **2 hours**, governed by `pipelines.clusterShutdown.delay` (default `2 hours` in this mode). |
+| Retries | **Disabled.** Pipeline retries are turned off so errors surface immediately and you can fix and rerun fast. |
+| Runtime auto-revert | **Not active** (revert only happens in production mode + channel `current`). |
+
+**Production / automatic retry and restart behavior (Jobs, Pipelines API, continuous):**
+
+| Behavior | Detail |
+|---|---|
+| Cluster lifecycle | The cluster **shuts down immediately** after the run completes (`pipelines.clusterShutdown.delay` default `0 seconds` in this mode) — no warm reuse across updates. |
+| Recovery restarts | Restarts the cluster for specific recoverable errors (e.g. memory leaks, stale credentials). |
+| Retries | **Automatic** for specific errors (e.g. cluster-launch failures): a bounded **flow** retry (`maxFlowRetryAttempts`) and a bounded **update** retry (`numUpdateRetryAttempts`), with the flow retry as the finer-grained unit before the whole update is re-run. |
+| Runtime auto-revert | If a versionless-runtime upgrade prevents the pipeline from starting, the runtime is **pinned back to the last known-good version** — but **only** when the pipeline runs in **production mode AND `channel = current`**. Databricks support is auto-notified. |
+
+The granularity matters for the soundbite: SDP retries the failing flow up to its bound before escalating to re-running the whole update.
+
+**Key configs / syntax**
+
+The `development` boolean in the pipeline JSON settings (default `false`):
+
+```json
+{
+  "name": "apollo_gen2_brz_account",
+  "development": false,
+  "continuous": false,
+  "channel": "current",
+  "configuration": {
+    "pipelines.numUpdateRetryAttempts": "5",
+    "pipelines.maxFlowRetryAttempts": "2",
+    "pipelines.clusterShutdown.delay": "0s"
+  }
+}
+```
+
+Retry-related properties (set under `configuration`):
+
+| Property | Type | What it bounds | Default |
+|---|---|---|---|
+| `pipelines.numUpdateRetryAttempts` | int | Max retries of the **whole update** before permanent failure (each retry is a full update). Applies only to pipelines using automatic retry/restart behavior — not editor ad-hoc updates or `Validate` updates. | **5** for triggered; **unlimited** for continuous |
+| `pipelines.maxFlowRetryAttempts` | int | Max retries of a **single flow** on a retryable failure before failing the update — stops one flaky flow from stalling the whole update. | **2** (so 3 total attempts including the original) |
+| `pipelines.clusterShutdown.delay` | duration | How long the cluster lingers after the update. | `2 hours` (fast-start), `0 seconds` (automatic retry/restart) |
+
+Toggling via **bundles** (Declarative Automation Bundles, formerly Databricks Asset Bundles — the CI/CD-correct way) — `databricks bundle deploy -t dev` vs `-t prod`:
+
+```yaml
+targets:
+  dev:
+    mode: development
+  prod:
+    mode: production
+    git:
+      branch: main
+```
+
+```bash
+databricks bundle deploy -t dev
+databricks bundle deploy -t prod
+```
+
+`mode: development` on deploy:
+- Marks every related deployed SDP pipeline as `development: true`.
+- Prepends a `[dev ${workspace.current_user.short_name}]` prefix to non-file/non-notebook resource names and tags each deployed job and pipeline with a `dev` tag.
+- **Pauses all schedules and triggers**, enables concurrent runs on jobs, allows `--cluster-id` (or the `cluster_id` mapping) to override cluster definitions for reuse, and disables the deployment lock — all for fast iteration.
+
+`mode: production` on deploy:
+- **Validates** that all related deployed SDP pipelines are `development: false` (deploy fails otherwise — a hard guardrail against shipping a dev pipeline to prod).
+- Validates the current Git branch matches the target's `git.branch` (override with `--force`).
+- Disallows cluster-definition overrides (`--compute-id` / `compute_id`); recommends `run_as` a service principal.
+
+You can also flip the mode interactively in the pipeline UI via the **Development / Production** toggle in the editor/settings.
+
+**Use cases**
+
+| Scenario | Mode | Why |
+|---|---|---|
+| Iterating on a new STG streaming table or a `create_auto_cdc_flow` definition; rerunning every few minutes | Development (UI Run now) | Warm cluster reuse + immediate error surfacing kills the restart tax. |
+| Scheduled nightly JOB2 run of the 422 Apollo Gen2 pipelines via Lakeflow Jobs | Production | Cluster teardown after the run + auto-retry rides out transient ADLS / cluster-start failures unattended. |
+| Continuous low-latency streaming table | Production (continuous) | Unlimited update retries keep it alive; flow retries bounded at 2 so one bad flow fails fast. |
+| Promoting validated code from a feature branch | `bundle deploy -t prod` | Enforces `development: false` + branch check before it lands. |
+
+In the Apollo Gen2 two-job pattern, JOB1 (the preprocessing notebook that lands files in `incoming/`) is plain Lakeflow Jobs compute, but the JOB2 SDP pipelines are exactly where this matters: during a Novartis entity onboarding I run the pipeline in development mode to debug SCD2 behavior on a single STG→BRZ pair with a reused cluster, then flip `development: false` and let the scheduled job run it in production with the 5-attempt update retry envelope.
+
+**Limitations & gotchas**
+
+- **Two framings, one behavior set.** If you say "dev mode reuses the cluster" an interviewer may counter "but the docs tie that to UI Run now." Both are right — UI **Run now**/ad-hoc = fast-start/no-retry, while Jobs/API/continuous = auto-retry/teardown. The `development` boolean is the persisted pipeline-level switch; the trigger source is the per-run switch. (For triggered pipelines you can also override per-run via **Run now with different settings**.) Say both.
+- **`numUpdateRetryAttempts` does NOT apply to ad-hoc updates** — editor/ad-hoc runs and `Validate`/dry-run updates never retry the update regardless of the setting.
+- **Continuous defaults to unlimited update retries**, which is intentional (a streaming pipeline should self-heal), but means a genuinely broken continuous pipeline can retry forever — bound it explicitly if you want it to fail closed.
+- **Runtime auto-revert is conditional.** It only fires in **production mode + `channel = current`**. A dev pipeline, or a prod pipeline on `channel = preview`, gets no automatic revert if a versionless upgrade breaks it — relevant because Lakeflow is a versionless product that upgrades the runtime under you.
+- **`autotermination_minutes` is illegal** on SDP compute — the runtime owns cluster lifecycle via `clusterShutdown.delay`, so a compute policy that sets `autotermination_minutes` throws an error.
+- **Bundle prod deploy fails if any related pipeline is `development: true`** — a feature, not a bug; it stops a half-configured dev pipeline reaching production.
+- **Dev cluster lingering 2 hours costs money** — convenient for iteration, but a forgotten dev/ad-hoc run keeps a classic cluster warm; lower `clusterShutdown.delay` or use serverless if cost-sensitive.
+
+**Interview soundbite:** "Development/fast-start mode reuses the cluster (default 2-hour `clusterShutdown.delay`) for fast iteration and disables retries so errors surface immediately; production/automatic-retry mode tears the cluster down right after the run (`clusterShutdown.delay` default 0s), restarts it on recoverable errors, and auto-retries at flow then update granularity — `maxFlowRetryAttempts` defaulting to 2 (3 attempts total) and `numUpdateRetryAttempts` to 5 for triggered / unlimited for continuous — and only a production pipeline on channel `current` auto-reverts the runtime to last-known-good; current docs map this same split to the trigger source, where UI Run now/ad-hoc is fast-start/no-retry and Jobs/API/continuous get the auto-retry path."
+
+### Product Editions — CORE, PRO, ADVANCED
+
+**What it is**
+
+SDP (Spark Declarative Pipelines / Lakeflow Declarative Pipelines) ships in three *product editions* — `CORE`, `PRO`, `ADVANCED` — that gate the feature set a pipeline may use and the corresponding billing rate. You pick one per pipeline via the `edition` pipeline field. Editions are *additive*: each tier is a strict superset of the one below it. CORE = streaming ingest/transform only; PRO = CORE + change data capture (CDC / AUTO CDC / SCD Type 1 & 2); ADVANCED = PRO + data-quality *expectations* (CONSTRAINT ... EXPECT). Default = `ADVANCED`.
+
+**How it works (mechanics)**
+
+- `edition` is a top-level pipeline setting (set in the pipeline UI dropdown or the JSON spec), not per-table. Every dataset in that pipeline runs under the one chosen edition.
+- At the *Validate / start-update* phase, SDP discovers all tables/views and checks for analysis errors. If any flow uses a feature above the selected edition (e.g. an expectation in a CORE pipeline, or `AUTO CDC` in a CORE pipeline), the update fails closed with an explicit error message explaining the reason; you then edit the pipeline to select the appropriate edition. It does not silently downgrade behavior.
+- Edition is independent of compute type, channel (`current`/`preview`), and `photon` (whose own default is `false`). It is also independent of pipeline mode (triggered vs. continuous).
+- **Serverless caveat (CDC):** the docs state CDC requires "serverless SDP **or** the SDP `Pro` or `Advanced` editions." So on *serverless* SDP, CDC works without raising the classic-compute edition lever — the edition lever for CDC matters mainly for *classic-compute* pipelines. Serverless bills on its own serverless DBU model. New pipelines default to serverless + Unity Catalog + current channel. (Whether serverless similarly waives the ADVANCED requirement for *expectations* is not stated in the docs — see riskFlag; assume expectations still need ADVANCED unless you confirm otherwise.)
+- Edition also controls **past-update retention** in the UI / Pipelines API (see table below); active non-terminal updates always show regardless, and the underlying event log keeps everything either way.
+
+**Key configs / syntax**
+
+The edition is set as the `edition` field. Type `string`; valid values `CORE`, `PRO`, `ADVANCED`; optional; default `ADVANCED`.
+
+```json
+{
+  "name": "apollo_gen2_brz_account",
+  "catalog": "novartis_prod",
+  "schema": "bronze",
+  "serverless": false,
+  "edition": "PRO",
+  "channel": "CURRENT",
+  "photon": true,
+  "libraries": [
+    { "file": { "path": "/Workspace/.../transformations/brz_account.py" } }
+  ]
+}
+```
+
+A PRO-tier feature (CDC) that forces `edition` to be at least `PRO` (or serverless):
+
+```python
+from pyspark import pipelines as dp
+
+dp.create_streaming_table("brz_account")
+
+dp.create_auto_cdc_flow(
+    target="brz_account",
+    source="stg_account",
+    keys=["account_id"],
+    sequence_by="sys_change_version",
+    apply_as_deletes="operation = 'DELETE'",
+    stored_as_scd_type=2,
+    track_history_except_column_list=["operation", "_ingest_ts"],
+)
+```
+
+An ADVANCED-tier feature (expectations enforcement) that forces `edition` to be `ADVANCED`:
+
+```python
+from pyspark import pipelines as dp
+
+@dp.table(name="stg_account")
+@dp.expect_or_drop("valid_account_id", "account_id IS NOT NULL")
+@dp.expect_or_fail("valid_version", "sys_change_version > 0")
+def stg_account():
+    return spark.readStream.format("cloudFiles").load("/mnt/incoming/account/")
+```
+
+SQL surface for the same two tiers:
+
+```sql
+-- PRO: CDC / AUTO CDC into a streaming table
+CREATE OR REFRESH STREAMING TABLE brz_account;
+
+CREATE FLOW brz_account_cdc
+AS AUTO CDC INTO brz_account
+FROM STREAM(stg_account)
+KEYS (account_id)
+APPLY AS DELETE WHEN operation = 'DELETE'
+SEQUENCE BY sys_change_version
+COLUMNS * EXCEPT (operation, _ingest_ts)
+STORED AS SCD TYPE 2;
+
+-- ADVANCED: expectations with enforcement
+CREATE OR REFRESH STREAMING TABLE stg_account (
+  CONSTRAINT valid_account_id EXPECT (account_id IS NOT NULL) ON VIOLATION DROP ROW,
+  CONSTRAINT valid_version    EXPECT (sys_change_version > 0) ON VIOLATION FAIL UPDATE
+) AS SELECT * FROM STREAM read_files('/mnt/incoming/account/');
+```
+
+**Feature matrix by edition**
+
+| Capability | CORE | PRO | ADVANCED |
+|---|---|---|---|
+| Streaming tables (`@dp.table` / `CREATE ... STREAMING TABLE`) | ✅ | ✅ | ✅ |
+| Materialized views (`@dp.materialized_view`) | ✅ | ✅ | ✅ |
+| Auto Loader / `read_files` ingest, transforms, flows, sinks | ✅ | ✅ | ✅ |
+| CDC: `create_auto_cdc_flow` / `AUTO CDC INTO` (SCD1 & SCD2) | ❌ | ✅ | ✅ |
+| `create_auto_cdc_from_snapshot_flow` / `AUTO CDC FROM SNAPSHOT` | ❌ | ✅ | ✅ |
+| Expectations (`@dp.expect` warn, `_or_drop`, `_or_fail`; `ON VIOLATION DROP ROW` / `FAIL UPDATE`) | ❌ | ❌ | ✅ |
+| Past-update retention (UI + Pipelines API) | 5 days | 30 days | 30 days |
+| Default edition | — | — | ✅ (`ADVANCED`) |
+
+> Note on `@dp.expect` (warn-only): warn is the *default* violation policy (`@dp.expect` / SQL `EXPECT` with no `ON VIOLATION` clause), but it is still the data-quality *expectations* feature and belongs to ADVANCED along with drop/fail. CORE has no expectations at all. Pick ADVANCED for any pipeline that declares a `CONSTRAINT ... EXPECT`, even warn-only.
+
+**Use-case-per-edition**
+
+| Edition | Pick it when... | Concrete example |
+|---|---|---|
+| `CORE` | Plain append-only streaming ingest/transform, no history tracking, no quality gates | A raw landing streaming table that just `read_files()`s NDJSON from ADLS `incoming/` into a Delta streaming table, no dedup, no SCD, no constraints |
+| `PRO` | You need CDC / upserts / SCD1 or SCD2 but enforce no expectations | My Apollo Gen2 BRZ layer: 211 SCD2 tables built via `create_auto_cdc_flow` (`sequence_by`, `apply_as_deletes`, `track_history_except_column_list`) + the 5 full-load entities via `create_auto_cdc_from_snapshot_flow`. CDC = needs at least PRO (or serverless) |
+| `ADVANCED` | You enforce row-level data-quality constraints (drop/fail), or just want every feature + the default | My STG streaming tables that drop/fail on bad keys or out-of-range `sequence_by` values before they ever reach the SCD2 BRZ layer; also the safe default when you don't want to think about it |
+
+**Limitations & gotchas**
+
+- **Default is ADVANCED, which is the most expensive tier.** If you leave `edition` unset on classic compute you silently pay the top rate even for a plain-ingest pipeline. Cost rule: pick the *lowest* edition that covers your features — CORE for plain ingest, PRO if you do CDC, ADVANCED only if you enforce expectations.
+- **Fail-closed on feature mismatch.** A CORE pipeline containing any `AUTO CDC` flow, or a CORE/PRO pipeline containing any expectation (even warn-only), errors with an explicit message; read it, bump the edition, re-run.
+- **Edition is per-pipeline, not per-table.** One expensive feature on one table pulls the whole pipeline up to that edition. In a fan-out design like 422 pipelines, you can give each pipeline its own edition — e.g. CORE for any pure-landing pipelines, PRO for the CDC/SCD2 ones — rather than forcing all to ADVANCED.
+- **Serverless changes the CDC lever.** On serverless, CDC works without the Pro/Advanced edition requirement, and billing follows serverless DBU rates — so the CORE/PRO cost optimization for CDC only bites on classic compute. (The expectations side of this is unconfirmed in docs; do not assume serverless waives ADVANCED for expectations.)
+- **Retention side effect.** CORE keeps only 5 days of past updates visible in the UI/API vs 30 for PRO/ADVANCED; if you downgrade a pipeline to CORE for cost, you also shorten its visible update history (older updates are excluded from list responses but the underlying event log still retains the records).
+- **Tags ≠ billing attribution by edition.** Pipeline tags are *not* associated with billing; to attribute cost use cluster tags / `system.billing.usage`. Edition + `photon` are the real billing-rate levers.
+
+**Interview soundbite:** SDP editions are additive feature-and-billing tiers set per pipeline via the `edition` field — CORE for plain streaming ingest, PRO adds CDC / AUTO CDC / SCD1 & SCD2, ADVANCED adds data-quality expectations — and since the default is ADVANCED (the priciest), on classic compute you should always drop each pipeline to the lowest edition its features actually need; note that serverless satisfies the CDC requirement on its own (docs: "serverless SDP or the Pro/Advanced editions").
