@@ -40,6 +40,26 @@
   - [Event Log — Where, What & How to Read](#event-log--where-what--how-to-read)
   - [Deployment Mode — Development vs Production](#deployment-mode--development-vs-production)
   - [Product Editions — CORE, PRO, ADVANCED](#product-editions--core-pro-advanced)
+- [Clarifications & Deep-Dive (round 2)](#clarifications--deep-dive-round-2)
+  - [C1 — Incremental MV refresh: supported vs unsupported queries (serverless vs classic)](#c1--incremental-mv-refresh-supported-vs-unsupported-queries-serverless-vs-classic)
+  - [C2 — Which flows can write to the same ST/MV](#c2--which-flows-can-write-to-the-same-stmv)
+  - [C3 — Auto Loader schema evolution (`addNewColumns`) in depth](#c3--auto-loader-schema-evolution-addnewcolumns-in-depth)
+  - [C4 — All `schemaEvolutionMode` modes](#c4--all-schemaevolutionmode-modes)
+  - [C5 — `pipelines.reset.allowed = false`](#c5--pipelinesresetallowed--false)
+  - [C6 — Watermarks + why an ST join doesn't recompute on dimension change](#c6--watermarks--why-an-st-join-doesnt-recompute-on-dimension-change)
+  - [C7 — `deletionVectors` / `rowTracking` / `changeDataFeed`](#c7--deletionvectors--rowtracking--changedatafeed)
+  - [C8 — Why MVs are "always correct" without watermarks](#c8--why-mvs-are-always-correct-without-watermarks)
+  - [C9 — CDC tombstone retention (`pipelines.cdc.tombstoneGCThresholdInSeconds`)](#c9--cdc-tombstone-retention-pipelinescdctombstonegcthresholdinseconds)
+  - [C10 — Schema hints vs full schema (keeping `addNewColumns`)](#c10--schema-hints-vs-full-schema-keeping-addnewcolumns)
+  - [C11 — Stream–stream join internals (symmetric hash, 4 state stores, watermark)](#c11--streamstream-join-internals-symmetric-hash-4-state-stores-watermark)
+  - [C12 — Selective checkpoint reset](#c12--selective-checkpoint-reset)
+  - [C13 — MV + expectations: incremental-refresh exceptions](#c13--mv--expectations-incremental-refresh-exceptions)
+  - [C14 — One pipeline across multiple `.py` / `.sql` files](#c14--one-pipeline-across-multiple-py--sql-files)
+  - [C15 — REPLACE WHERE flows](#c15--replace-where-flows)
+  - [C16 — The windowed streaming aggregate, explained](#c16--the-windowed-streaming-aggregate-explained)
+  - [C17 — Reading expectation metrics from the event log (code)](#c17--reading-expectation-metrics-from-the-event-log-code)
+  - [C18 — Quarantine pattern (preserve bad rows instead of dropping)](#c18--quarantine-pattern-preserve-bad-rows-instead-of-dropping)
+  - [C19 — Event log: query every aspect of a pipeline (event_type catalog + recipes)](#c19--event-log-query-every-aspect-of-a-pipeline-event_type-catalog--recipes)
 
 
 ## Caveats — where to hedge (don't over-claim)
@@ -5528,3 +5548,466 @@ CREATE OR REFRESH STREAMING TABLE stg_account (
 - **Tags ≠ billing attribution by edition.** Pipeline tags are *not* associated with billing; to attribute cost use cluster tags / `system.billing.usage`. Edition + `photon` are the real billing-rate levers.
 
 **Interview soundbite:** SDP editions are additive feature-and-billing tiers set per pipeline via the `edition` field — CORE for plain streaming ingest, PRO adds CDC / AUTO CDC / SCD1 & SCD2, ADVANCED adds data-quality expectations — and since the default is ADVANCED (the priciest), on classic compute you should always drop each pipeline to the lowest edition its features actually need; note that serverless satisfies the CDC requirement on its own (docs: "serverless SDP or the Pro/Advanced editions").
+
+
+## Clarifications & Deep-Dive (round 2)
+
+> Follow-up clarifications on the bank above (prep 2026-06-06). SDP-only; all Python/SQL in fenced code blocks. C1 & C13 doc-verified against the incremental-refresh page (2026-05-28).
+
+### C1 — Incremental MV refresh: supported vs unsupported queries (serverless vs classic)
+
+**Compute rule is absolute:** incremental refresh happens **only on serverless**. On **classic compute the MV is always fully recomputed**, regardless of query. On serverless the query shape decides eligibility — and even then the `AUTO` cost model may still pick full recompute if cheaper (override with `REFRESH POLICY INCREMENTAL` / `INCREMENTAL STRICT`).
+
+**Supported (incrementalizable):**
+
+| Clause | Notes |
+|---|---|
+| `SELECT` expressions | deterministic built-ins + **immutable** UDFs |
+| `GROUP BY` aggregations | supported |
+| `WITH` (CTEs) | supported |
+| `UNION ALL` | supported |
+| `WHERE`, `HAVING` | filters supported |
+| `INNER / LEFT / RIGHT / FULL OUTER JOIN` | supported |
+| `OVER` window functions | must specify `PARTITION BY` |
+| `QUALIFY` | supported |
+| `EXPECTATIONS` | yes — with 2 exceptions (see C13) |
+| Non-deterministic **time** funcs (`current_date()`, `current_timestamp()`, `now()`) | **only in `WHERE`** |
+
+**Unsupported → forces FULL recompute:** `WITH RECURSIVE`; any **other** non-deterministic function (`rand()`, time funcs outside `WHERE`); a **UDF whose behavior changed**; **unsupported sources** (volumes, external locations, foreign catalogs, foreign Iceberg); sources with **row filters / column masks**; anything not expressible via the supported clauses.
+
+**Two silent demoters:** most supported clauses (joins, filters, windows, `UNION ALL`, `SELECT` exprs, expectations) **require row-tracking** on the source; and source **updates/deletes** that can't be tracked → full recompute. Check eligibility with `EXPLAIN CREATE MATERIALIZED VIEW` and the actual run via the `planning_information` event-log technique (`ROW_BASED` etc. vs `FULL_RECOMPUTE`).
+
+**One-liner:** *Classic = always full; serverless = incremental only if the query uses supported clauses AND sources have row-tracking/CDF, else it silently falls back to full recompute.*
+
+### C2 — Which flows can write to the same ST/MV
+
+| Target | What can write to it |
+|---|---|
+| **Streaming table** | **Multiple `append_flow`s** → fan-in/union into one ST (the multi-source + backfill pattern). An **AUTO CDC flow** also targets a streaming table — but it *owns* that table's upsert/delete identity, so you don't normally also append-flow into a CDC target. |
+| **Materialized view** | **No** — an MV is a **single defining query**, not a multi-flow fan-in target. |
+| **`update_flow`** | Targets **sinks only** (`create_sink` → Delta/Kafka). **Not** an ST or MV. |
+
+All append flows into one ST must produce a compatible schema (`BY NAME`).
+
+**One-liner:** *Only streaming tables take multiple flows (append fan-in, or one AUTO CDC writer); MVs are single-query; update flows feed sinks, not ST/MV.*
+
+### C3 — Auto Loader schema evolution (`addNewColumns`) in depth
+
+**Scenario — an `orders` CSV feed:**
+- **Day 1** schema `{id, amount}`. Auto Loader infers it, persists it in the **schemaLocation**, auto-adds `_rescued_data`.
+- **Day 5** source adds `discount_code`. With **`addNewColumns`** (default, no schema supplied): the stream **throws `UnknownFieldException` and stops**, records the new column in the schemaLocation, and on **restart resumes** with the evolved schema. Under a Lakeflow **Job** the auto-restart makes it seamless. Pre-Day-5 rows keep `discount_code = NULL`.
+- **Dropped column:** `addNewColumns` **never removes** — if the source stops sending `amount`, new rows land `amount = NULL` (**silent soft delete**; add a DQ check if it matters).
+- **Type mismatch:** `amount` int → source sends `"12.5"` → bad value goes to **`_rescued_data`** (column keeps its type). `addNewColumnsWithTypeWidening` (Preview, DBR 16.4+) **applies** a widening change (`int→long`) instead of rescuing.
+
+`_rescued_data` is auto-added whenever Auto Loader infers a schema; it captures any field that doesn't match so data is never silently lost.
+
+**One-liner:** *`addNewColumns` fails-then-resumes on a new column, only ever ADDS — drops become NULLs, type mismatches go to `_rescued_data`.*
+
+### C4 — All `schemaEvolutionMode` modes
+
+| Mode | Behavior |
+|---|---|
+| **`addNewColumns`** (default when no schema provided) | New column → stream **fails**, records it, resumes on restart. |
+| **`rescue`** | Never fails/evolves; new + mismatched data captured in **`_rescued_data`**; stream keeps running. |
+| **`failOnNewColumns`** | Stream **fails and stays failed** on a new column until you fix the schema manually. |
+| **`none`** (default when you **provide** a schema) | New columns **ignored** — not loaded, not rescued, no failure. |
+| **`addNewColumnsWithTypeWidening`** (Preview, DBR 16.4+) | Like `addNewColumns` **plus** widens existing types (`int→long`) instead of rescuing. |
+
+### C5 — `pipelines.reset.allowed = false`
+
+**What:** a **table property**; when `false`, a **full refresh is blocked** for that table — it's **skipped** during full refresh, preserving data + checkpoint. **Why:** protect tables whose source **can't be replayed** (backfilled tables; bronze fed from Kafka/files that age out). **Where / on what:** set on **streaming tables or materialized views** in the dataset definition.
+
+```python
+@dp.table(name="bronze_orders", table_properties={"pipelines.reset.allowed": "false"})
+def bronze_orders():
+    return (spark.readStream.format("cloudFiles")
+            .option("cloudFiles.format", "csv")
+            .load("/Volumes/cat/sch/incoming/orders"))
+```
+```sql
+CREATE OR REFRESH STREAMING TABLE bronze_orders
+  TBLPROPERTIES ('pipelines.reset.allowed' = 'false')
+AS SELECT * FROM STREAM read_files('/Volumes/cat/sch/incoming/orders', format => 'csv');
+```
+
+**One-liner:** *A per-table property that makes full refresh skip the table — set it on any ST/MV whose source history you can't replay.*
+
+### C6 — Watermarks + why an ST join doesn't recompute on dimension change
+
+**Watermark in a streaming aggregate:** the engine keeps per-group state; **watermark = max(event_time) − threshold**, a moving cutoff. Once it passes a window, that group is finalized, emitted, and its state **evicted**; a row arriving with event_time **below** the watermark is **late → dropped** (contribution lost). No watermark → state grows unbounded.
+
+**ST join freezes the dimension:** a streaming table joining a fact **stream** to a **dimension** processes each fact **once, at arrival**, against the dimension *as it was then*. A later dimension edit does **not** re-join already-processed facts (the stream only sees new rows), so old facts keep stale dimension values. An **MV** recomputes the join over the *current* dimension → corrects everything.
+
+**One-liner:** *Streaming aggregates drop data past the watermark and streaming joins freeze the dimension at arrival — need current-correct results despite late/edited data → MV.*
+
+### C7 — `deletionVectors` / `rowTracking` / `changeDataFeed`
+
+| Property | What it does | Why it helps SDP |
+|---|---|---|
+| `delta.enableDeletionVectors` | Deletes/updates mark rows in a side file (merge-on-read) instead of rewriting whole files. | Cheap deletes/updates/MERGE → faster CDC & SCD2 writes. |
+| `delta.enableRowTracking` | Stable row-id + commit-version per row; engine knows exactly which rows changed. | **Required** for most incremental MV techniques (`ROW_BASED`) — apply only changed rows, not full recompute. |
+| `delta.enableChangeDataFeed` | Readable row-level change feed (`_change_type`). | Downstream reads just the changes; underpins incremental/CDC reads. |
+
+Databricks **recommends all three on every MV source table** — together they make "what changed?" cheap, enabling incremental over full recompute.
+
+```sql
+ALTER TABLE source_tbl SET TBLPROPERTIES (
+  delta.enableDeletionVectors = true,
+  delta.enableRowTracking = true,
+  delta.enableChangeDataFeed = true);
+```
+
+**One-liner:** *Deletion vectors = cheap updates; row tracking = which rows changed (key to incremental MV); CDF = readable change feed — enable all three on MV sources.*
+
+### C8 — Why MVs are "always correct" without watermarks
+
+The guarantee is **batch-equivalence**: each refresh produces the same result a fresh batch query over the current base data would. A late/out-of-order row that has landed in the base table is simply **included next refresh** — there's no "window closed" concept, because the answer is **re-derived**, not accumulated. The per-row "tracking" lives on the **source Delta tables** (`enableRowTracking` + CDF), not in the MV; it just lets the engine apply only the **delta** (incremental). If it can't, it recomputes fully — either way the result equals the batch query.
+
+**One-liner:** *The MV doesn't remember rows — it re-derives the batch-correct answer each refresh; source row-tracking only makes that re-derivation incremental.*
+
+### C9 — CDC tombstone retention (`pipelines.cdc.tombstoneGCThresholdInSeconds`)
+
+On an AUTO CDC **delete** (`apply_as_deletes`), the engine keeps a **tombstone** ("key X was deleted") so a **late/out-of-order** event for X is handled correctly (no resurrecting a deleted row from a stale update). Tombstones are GC'd after a retention period — **default 2 days**, set via the **target streaming table** property `pipelines.cdc.tombstoneGCThresholdInSeconds` (seconds). **Risk:** a late event for a deleted key arriving **after** GC can **resurrect** the row. **Fix:** set the threshold **above your worst-case event-arrival-to-pipeline delay**. Trade-off: longer retention = more state/storage.
+
+**One-liner:** *Tombstones let CDC ignore late events for deleted keys (default 2-day GC); raise it above your worst late-arrival window so a late re-insert can't resurrect a row.*
+
+### C10 — Schema hints vs full schema (keeping `addNewColumns`)
+
+Providing a **full fixed schema** (`.schema(...)`) flips evolution to **`none`**. To keep **`addNewColumns`** *and* pin some types, don't pass a full schema — pass **`cloudFiles.schemaHints`** (partial). Hints type the named columns and let Auto Loader still infer + evolve the rest. ("unless given as a schema hint" = provide your typing via hints, not `.schema()`.)
+
+```python
+@dp.table(name="bronze_orders")
+def bronze_orders():
+    return (spark.readStream.format("cloudFiles")
+            .option("cloudFiles.format", "csv")
+            .option("cloudFiles.schemaHints", "id LONG, amount DECIMAL(10,2)")  # partial typing
+            .option("cloudFiles.schemaEvolutionMode", "addNewColumns")          # still evolves
+            .load("/Volumes/cat/sch/incoming/orders"))
+```
+
+**One-liner:** *Pin types with `schemaHints`, not a full `.schema()` — that's the only way to keep `addNewColumns` while controlling some types.*
+
+### C11 — Stream–stream join internals (symmetric hash, 4 state stores, watermark)
+
+**Setup:** join `impressions` ⨝ `clicks` on `ad_id`, "click within 3 min of impression." Either side can arrive first, so both sides are **buffered** in state and each new row probes the other side — a **symmetric hash join**.
+
+**Why 4 state-store instances (per shuffle partition):** each side needs two structures:
+
+| Side | Keyed buffer | Match tracker |
+|---|---|---|
+| impressions | impressions waiting, keyed by `ad_id` | which matched (for outer-join NULLs) |
+| clicks | clicks waiting, keyed by `ad_id` | which matched |
+
+2 sides × 2 = **4** (most stateful ops use 1).
+
+**Data flow + eviction** (watermark 3 min, interval 3 min):
+
+| time | event | state | output | watermark |
+|---|---|---|---|---|
+| 10:00 | impression A (7) | buffer A | — | 10:00 |
+| 10:02 | click (7) | probe → match A | **(A, click)** | 10:02 |
+| 10:05 | impression B (9) | buffer B | — | 10:05 |
+| 10:09 | time advances | wm=10:06 → B's window closed → **evict B**; outer join emits **(B, NULL)** | (B, NULL) | 10:06 |
+| 10:10 | **late** click (9) | B already evicted → **dropped** | — | — |
+
+The engine keeps one **global watermark = min across streams** (slowest stream gates eviction so matchable rows aren't dropped); the **time-interval condition** says when no further match is possible → evict. `multipleWatermarkPolicy=max` follows the fastest stream but drops slow-stream data (use with caution). Outer joins **require** watermarks; output is **append-only**. **Stream–static** is stateless (no watermark; static side re-read at each micro-batch start; late dim edits not retroactive).
+
+**One-liner:** *Both sides buffered (4 stores = keyed-buffer + match-tracker × 2); the min global watermark + interval condition decide when buffered rows can't match and get evicted — later arrivals are dropped.*
+
+### C12 — Selective checkpoint reset
+
+`reset_checkpoint_selection` resets specific flows' checkpoints (reprocess from scratch) while leaving everything else intact. Flow names must be **fully qualified** (`catalog.schema.flow_name`) — a bare name throws `IllegalArgumentException`. For a join/union, reset **all participating source flows**.
+
+```python
+dp.create_streaming_table("main.sales.joined")
+
+@dp.append_flow(target="main.sales.joined", name="orders_src")   # -> main.sales.orders_src
+def orders_src():
+    return spark.readStream.table("main.raw.orders")
+
+@dp.append_flow(target="main.sales.joined", name="returns_src")  # -> main.sales.returns_src
+def returns_src():
+    return spark.readStream.table("main.raw.returns")
+```
+```bash
+# update-time parameter (Pipelines API / CLI), not a decorator; confirm exact field in your workspace
+databricks pipelines start-update <pipeline-id> \
+  --reset-checkpoint-selection main.sales.orders_src main.sales.returns_src
+```
+
+**One-liner:** *Name your flows, reset their checkpoints by fully-qualified name at update time, and for a join/union reset all source flows together.*
+
+### C13 — MV + expectations: incremental-refresh exceptions
+
+An MV with expectations **can** still be incrementally refreshed, **except** (→ full recompute):
+1. **The MV reads from a view that contains expectations** (the logic is outside the MV's incremental plan).
+2. **The MV has a `DROP` expectation AND `NOT NULL` columns in its schema** (row-removal + NOT-NULL enforcement can't be reasoned about incrementally).
+
+**Practical:** apply expectations **directly on the MV** (not via a view), and **avoid pairing `DROP` with `NOT NULL` columns** (use `WARN`, or enforce NOT-NULL upstream in the ST).
+
+**One-liner:** *Expectations don't block incremental MV refresh — except a `DROP` expectation alongside `NOT NULL` columns, or reading from a view that holds the expectations.*
+
+### C14 — One pipeline across multiple `.py` / `.sql` files
+
+SDP parses **all** source files into one dependency graph before running, so datasets reference each other by name across files.
+
+```python
+# transforms/customers.py
+from pyspark import pipelines as dp
+from pyspark.sql.functions import udf
+from pyspark.sql.types import StringType
+
+@udf(StringType())
+def norm_region(r):
+    return (r or "").strip().upper()
+
+@dp.temporary_view
+def stg_customers():
+    return (spark.read.table("main.raw.customers")
+            .select("cust_id", norm_region("region").alias("region")))
+```
+```sql
+-- transforms/orders.sql
+CREATE TEMPORARY VIEW stg_orders AS
+SELECT cust_id, amount FROM main.raw.orders WHERE amount > 0;
+```
+```sql
+-- transforms/gold.sql
+CREATE OR REFRESH MATERIALIZED VIEW gold_region_revenue AS
+SELECT c.region, SUM(o.amount) AS revenue
+FROM stg_customers c JOIN stg_orders o USING (cust_id)
+GROUP BY c.region;
+```
+SDP resolves `stg_customers` (Python) and `stg_orders` (SQL) as upstream nodes of the MV automatically.
+
+**One-liner:** *Datasets reference each other by name across `.py` and `.sql`; SDP builds one graph from all files, so a Python temp view and a SQL temp view can feed the same MV.*
+
+### C15 — REPLACE WHERE flows
+
+Recompute and **overwrite only the slice** of a streaming table matching a predicate, without streaming semantics — it **deletes** the predicate-matched rows and **re-inserts** the re-evaluated batch source for that predicate. **Use:** late-arriving data for a range, selective reprocessing/correction, backfills.
+
+**Scenario:** `sales` partitioned by `sale_date`; `2026-06-01` was wrong upstream and got corrected. Recompute just that day instead of a full refresh.
+
+```sql
+CREATE OR REFRESH STREAMING TABLE sales
+  TBLPROPERTIES ('pipelines.channel' = 'PREVIEW');
+
+CREATE FLOW sales_fix AS INSERT INTO sales BY NAME
+  REPLACE WHERE sale_date = '2026-06-01'
+  SELECT * FROM cleaned_sales_batch;   -- batch source; engine auto-applies the predicate
+```
+```python
+@dp.append_flow(target="sales", replace_where="sale_date = '2026-06-01'")
+def sales_fix():
+    return spark.read.table("cleaned_sales_batch")   # batch read
+```
+
+**Rules:** **Beta** — `pipelines.channel='PREVIEW'`; **batch (non-streaming)** source; **`BY NAME`**; **deterministic** predicate; **mutually exclusive with `ONCE`**; don't add the predicate to the source query (auto-applied). Not a generic big-join helper.
+
+**One-liner:** *"Recompute just this slice" — delete + re-insert the predicate-matched rows from a batch source, fixing one partition/day instead of full-refreshing.*
+
+### C16 — The windowed streaming aggregate, explained
+
+```sql
+CREATE OR REFRESH STREAMING TABLE per_min_counts AS
+SELECT window(event_time, '1 minute') AS w, state, COUNT(*) AS cnt
+FROM STREAM(events) WATERMARK event_time DELAY OF INTERVAL 3 MINUTES
+GROUP BY w, state;
+```
+- `FROM STREAM(events)` — read `events` as a stream.
+- `WATERMARK event_time DELAY OF INTERVAL 3 MINUTES` — tolerate up to 3 min late; later events are **dropped**.
+- `window(event_time, '1 minute')` — 1-minute **tumbling** buckets.
+- `GROUP BY w, state` + `COUNT(*)` — count per (window, state).
+
+Result is **per-window**, not a running total:
+
+| w | state | cnt |
+|---|---|---|
+| 10:00–10:01 | CA | 42 |
+| 10:01–10:02 | CA | 39 |
+
+**"incremental only because of the watermark":** the watermark lets the engine finalize+emit a window after 3 min and **evict** its state (bounded memory, incremental). Without it, state grows forever. Cost: events >3 min late aren't counted.
+
+**One-liner:** *Counts events per 1-minute bucket per state; the 3-minute watermark closes+evicts each window (bounded, incremental) at the price of dropping anything >3 min late.*
+
+### C17 — Reading expectation metrics from the event log (code)
+
+**Where it lives:** the event log is a hidden Delta table `event_log_{pipeline_id}` in the pipeline's default catalog/schema, queried via the **`event_log(<pipeline-id>)`** TVF (or `event_log(TABLE(catalog.schema.dataset))`). Only the pipeline's **run-as user** can query it by default (publish it to a UC table to share). Expectation metrics sit in `event_type = 'flow_progress'` under `details:flow_progress:data_quality` — an `expectations[]` array (each with `name`, `dataset`, `passed_records`, `failed_records`) plus a top-level `dropped_records`.
+
+```sql
+-- Per-expectation pass/fail (explode the array)
+SELECT
+  row_exp.dataset,
+  row_exp.name                AS expectation,
+  SUM(row_exp.passed_records) AS passed,
+  SUM(row_exp.failed_records) AS failed
+FROM (
+  SELECT explode(
+    from_json(
+      details:flow_progress:data_quality:expectations,
+      'array<struct<name STRING, dataset STRING, passed_records BIGINT, failed_records BIGINT>>'
+    )
+  ) AS row_exp
+  FROM event_log('<pipeline-id>')          -- or event_log(TABLE(main.sales.orders))
+  WHERE event_type = 'flow_progress'
+)
+GROUP BY 1, 2
+ORDER BY failed DESC;
+
+-- Dropped-row count per flow_progress event
+SELECT timestamp,
+       details:flow_progress:data_quality:dropped_records::bigint AS dropped
+FROM event_log('<pipeline-id>')
+WHERE event_type = 'flow_progress'
+ORDER BY timestamp DESC;
+```
+```python
+metrics = spark.sql("""
+  SELECT explode(from_json(
+           details:flow_progress:data_quality:expectations,
+           'array<struct<name STRING, dataset STRING, passed_records BIGINT, failed_records BIGINT>>'
+         )) AS e
+  FROM event_log('<pipeline-id>')
+  WHERE event_type = 'flow_progress'
+""")
+(metrics.select("e.dataset", "e.name", "e.passed_records", "e.failed_records")
+        .groupBy("dataset", "name")
+        .sum("passed_records", "failed_records")
+        .show(truncate=False))
+```
+
+**One-liner:** *Expectation pass/fail/drop counts live in the hidden `event_log_{pipeline_id}` Delta table under `flow_progress.data_quality`; explode `expectations` from the `event_log(<pipeline-id>)` TVF (run-as user only) to build a DQ dashboard.*
+
+### C18 — Quarantine pattern (preserve bad rows instead of dropping)
+
+**Problem:** `expect_or_drop` removes bad rows but you **lose them** — only a count survives in the event log. When you must keep bad rows **for investigation** (fix upstream, then re-ingest), use **quarantine**: tag rows valid/invalid once, then split into a **clean** table and a **side quarantine** streaming table.
+
+```sql
+-- 1) tag once with a validity flag
+CREATE TEMPORARY VIEW orders_tagged AS
+SELECT *, (id IS NOT NULL AND amount > 0) AS is_valid
+FROM STREAM bronze_orders;
+
+-- 2) clean table = valid rows only
+CREATE OR REFRESH STREAMING TABLE orders_clean AS
+SELECT * EXCEPT (is_valid) FROM STREAM orders_tagged WHERE is_valid;
+
+-- 3) quarantine side table = the bad rows, preserved (with a timestamp / reason)
+CREATE OR REFRESH STREAMING TABLE orders_quarantine AS
+SELECT *, current_timestamp() AS quarantined_at
+FROM STREAM orders_tagged WHERE NOT is_valid;
+```
+```python
+from pyspark import pipelines as dp
+from pyspark.sql.functions import expr, current_timestamp
+
+RULES = {"valid_id": "id IS NOT NULL", "valid_amount": "amount > 0"}
+is_valid = " AND ".join(RULES.values())
+
+@dp.temporary_view
+def orders_tagged():
+    return spark.readStream.table("bronze_orders").withColumn("is_valid", expr(is_valid))
+
+@dp.table(name="orders_clean")
+@dp.expect_all(RULES)                       # WARN -> still get pass/fail metrics in the event log
+def orders_clean():
+    return spark.readStream.table("orders_tagged").where("is_valid").drop("is_valid")
+
+@dp.table(name="orders_quarantine")         # side table preserves the rejects
+def orders_quarantine():
+    return (spark.readStream.table("orders_tagged").where("NOT is_valid")
+            .withColumn("quarantined_at", current_timestamp()))
+```
+
+Two flows read the **same tagged upstream**: `orders_clean` keeps `is_valid` rows (the `@dp.expect_all` is WARN, so you still get DQ metrics while the filter does the split), and `orders_quarantine` keeps `NOT is_valid` rows with a timestamp/reason — so you can inspect failures, correct the source, and re-ingest, none of which a plain `DROP` allows.
+
+**One-liner:** *Quarantine = tag rows valid/invalid once, route valid → clean table and invalid → a side streaming table (with reason + timestamp), preserving bad rows for investigation instead of silently dropping them.*
+
+
+### C19 — Event log: query every aspect of a pipeline (event_type catalog + recipes)
+
+**Where it lives:** a hidden Delta table `event_log_{pipeline_id}` in the pipeline's default catalog/schema (shows in `system.information_schema.tables`, not Catalog Explorer). Query via the **`event_log()` TVF**; **only the run-as user** can query by default. Publish it (Advanced settings → `event_log: {catalog, schema, name}`) and put a **view** over it before granting (sharing the raw table can leak schema metadata). Never delete the event log / its catalog / schema.
+
+```sql
+SELECT * FROM event_log('<pipeline-id>');             -- run-as user
+SELECT * FROM event_log(TABLE(main.sales.orders));    -- scoped to one dataset
+CREATE VIEW event_log_raw AS SELECT * FROM event_log('<pipeline-id>');  -- working view (streamable)
+```
+
+**Top-level columns (every row):** `id`, `sequence`, `origin` (struct: `pipeline_id`, `pipeline_name`, `pipeline_type`, `update_id`, **`flow_id`**, `flow_name`, `batch_id`, `cluster_id`, `cloud`, `region`, `org_id`, `table_name`, `dataset_name`, `sink_name`, `request_id`), `timestamp` (UTC), `message`, `level` (`INFO`/`WARN`/`ERROR`/**`METRICS`** = Delta-only, hidden from UI), `maturity_level` (`STABLE`/`EVOLVING`/`DEPRECATED`/`NULL`), `error`, **`details`** (JSON whose shape depends on `event_type`), `event_type`.
+
+`origin.flow_id` is the **incremental identity** — stable while a flow refreshes incrementally; it **changes on MV full refresh, checkpoint reset, or full recompute**. `pipeline_type` ∈ `WORKSPACE`/`DBSQL`/`MANAGED_INGESTION`/`BRICKSTORE`/`BRICKINDEX`.
+
+**The `event_type` catalog (16):**
+
+| `event_type` | Tells you | `details` path |
+|---|---|---|
+| `create_update` | run started; config, `run_as`, `cause` | `details:create_update` |
+| `update_progress` | whole-run state → `COMPLETED`/`FAILED`/`CANCELED` | `details:update_progress.state` |
+| `user_action` | audit: `CREATE`/`START`/cancel + who | `details:user_action.{action,user_name}` |
+| `runtime_details` | DBR version | `details:runtime_details.dbr_version` |
+| `flow_definition` | lineage + schema + query plan (DAG edges) | `details:flow_definition.{output_dataset,input_datasets,flow_type}` |
+| `dataset_definition` | a dataset (flow source/dest) | `details:dataset_definition` |
+| `sink_definition` | a sink | `details:sink_definition` |
+| `flow_progress` | **per-flow** lifecycle + row metrics + data quality | `details:flow_progress.{status,metrics.*,data_quality.*}` |
+| `planning_information` | **why a MV went incremental vs full** | `details:planning_information.technique_information` |
+| `operation_progress` | Auto Loader listing/backfill, connector fetch, CDC snapshot | `details:operation_progress.{type,status,duration_ms}` |
+| `stream_progress` | Structured-Streaming per-microbatch metrics | `details:stream_progress.progress` |
+| `cluster_resources` | **classic compute only** — slot utilization, autoscale state | `details:cluster_resources.*` |
+| `autoscale` | **classic compute only** — resize requests | `details:autoscale.*` |
+| `hook_progress` | event-hook status | `details:hook_progress.{name,status}` |
+| `deprecation` | deprecated features in use | `details:deprecation` |
+| `behavior_change_in_spark_connect` | env-version compat-scan flags | `details:behavior_change_in_spark_connect` |
+
+`flow_progress.status` ∈ `QUEUED/STARTING/RUNNING/COMPLETED/FAILED/SKIPPED/STOPPED/IDLE/EXCLUDED`; `operation_progress.type` ∈ `AUTO_LOADER_LISTING/AUTO_LOADER_BACKFILL/CONNECTOR_FETCH/CDC_SNAPSHOT`.
+
+**Recipe book (over `event_log_raw`):**
+
+```sql
+-- run history: status + duration
+SELECT origin.update_id,
+       MIN(CASE WHEN event_type='create_update' THEN timestamp END) AS started,
+       MAX_BY(details:update_progress.state, timestamp) AS final_state
+FROM event_log_raw WHERE event_type IN ('create_update','update_progress')
+GROUP BY origin.update_id ORDER BY started DESC;
+
+-- per-flow row metrics + dropped-by-DQ
+SELECT origin.flow_name, details:flow_progress.status AS status,
+       details:flow_progress.metrics.num_output_rows::bigint   AS out_rows,
+       details:flow_progress.metrics.num_upserted_rows::bigint AS upserts,
+       details:flow_progress.metrics.num_deleted_rows::bigint  AS deletes,
+       details:flow_progress.data_quality.dropped_records::bigint AS dq_dropped
+FROM event_log_raw WHERE event_type='flow_progress';
+
+-- expectation pass/fail
+SELECT e.dataset, e.name, SUM(e.passed_records) passed, SUM(e.failed_records) failed
+FROM (SELECT explode(from_json(details:flow_progress:data_quality:expectations,
+        'array<struct<name STRING,dataset STRING,passed_records BIGINT,failed_records BIGINT>>')) AS e
+      FROM event_log_raw WHERE event_type='flow_progress') GROUP BY 1,2;
+
+-- lineage
+SELECT details:flow_definition.output_dataset AS output,
+       details:flow_definition.input_datasets AS inputs
+FROM event_log_raw WHERE details:flow_definition IS NOT NULL;
+
+-- why full vs incremental (MV)
+SELECT timestamp, origin.flow_name, message
+FROM event_log_raw WHERE event_type='planning_information' ORDER BY timestamp DESC;
+
+-- Auto Loader ingestion · backlog · autoscaling · audit · runtime · streaming
+SELECT * FROM event_log_raw WHERE event_type='operation_progress'
+  AND details:operation_progress.type IN ('AUTO_LOADER_LISTING','AUTO_LOADER_BACKFILL');
+SELECT timestamp, details:flow_progress.metrics.backlog_bytes::double AS backlog
+  FROM event_log_raw WHERE event_type='flow_progress';
+SELECT * FROM event_log_raw WHERE event_type IN ('autoscale','cluster_resources');   -- classic only
+SELECT timestamp, details:user_action:action, details:user_action:user_name
+  FROM event_log_raw WHERE event_type='user_action';
+SELECT origin.update_id, details:runtime_details:runtime_version:dbr_version
+  FROM event_log_raw WHERE event_type='runtime_details';
+SELECT parse_json(get_json_object(details,'$.stream_progress.progress_json'))
+  FROM event_log_raw WHERE event_type='stream_progress';
+```
+
+**Gotchas:** run-as only (publish + view to share); `level='METRICS'` rows are hidden from the UI; `flow_id` change = that flow full-refreshed/reset; **`FAIL` expectations record NO data-quality metrics** (the update fails before metrics are written — evidence is the `error` field / message, not `data_quality`); expectation metrics can be absent for some datasets; `planning_information.technique_information.incrementalization_issues` (e.g. `DATA_HAS_CHANGED`, `TIME_ZONE_CHANGED`, `PRIOR_TIMESTAMP_MISSING`) explains *why* a MV went full.
+
+**One-liner:** *Every aspect of a pipeline is one `event_type` filter on the `event_log()` TVF — `update_progress` (runs), `flow_progress` (per-flow metrics + DQ), `flow_definition` (lineage), `planning_information` (incremental-vs-full), `operation_progress` (Auto Loader), `cluster_resources`/`autoscale` (classic compute), `user_action` (audit).*
