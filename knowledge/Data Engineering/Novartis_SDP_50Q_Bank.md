@@ -60,6 +60,7 @@
   - [C17 — Reading expectation metrics from the event log (code)](#c17--reading-expectation-metrics-from-the-event-log-code)
   - [C18 — Quarantine pattern (preserve bad rows instead of dropping)](#c18--quarantine-pattern-preserve-bad-rows-instead-of-dropping)
   - [C19 — Event log: query every aspect of a pipeline (event_type catalog + recipes)](#c19--event-log-query-every-aspect-of-a-pipeline-event_type-catalog--recipes)
+  - [C20 — Runtime channels: `current` vs `preview`](#c20--runtime-channels-current-vs-preview)
 
 
 ## Caveats — where to hedge (don't over-claim)
@@ -6011,3 +6012,32 @@ SELECT parse_json(get_json_object(details,'$.stream_progress.progress_json'))
 **Gotchas:** run-as only (publish + view to share); `level='METRICS'` rows are hidden from the UI; `flow_id` change = that flow full-refreshed/reset; **`FAIL` expectations record NO data-quality metrics** (the update fails before metrics are written — evidence is the `error` field / message, not `data_quality`); expectation metrics can be absent for some datasets; `planning_information.technique_information.incrementalization_issues` (e.g. `DATA_HAS_CHANGED`, `TIME_ZONE_CHANGED`, `PRIOR_TIMESTAMP_MISSING`) explains *why* a MV went full.
 
 **One-liner:** *Every aspect of a pipeline is one `event_type` filter on the `event_log()` TVF — `update_progress` (runs), `flow_progress` (per-flow metrics + DQ), `flow_definition` (lineage), `planning_information` (incremental-vs-full), `operation_progress` (Auto Loader), `cluster_resources`/`autoscale` (classic compute), `user_action` (audit).*
+
+
+### C20 — Runtime channels: `current` vs `preview`
+
+`channel` selects **which version of the SDP/Lakeflow runtime** runs your pipeline. There are exactly **two** values (no separate stable/beta/LTS tiers):
+
+| Channel | What it is | Use for |
+|---|---|---|
+| **`current`** (default) | The current/stable runtime — **all GA *and* Public Preview features live here** | **Production** (Databricks' recommendation) |
+| **`preview`** | The **next** runtime version — test upcoming engine changes before they become `current` | Staging/test pipelines; a few features gated to it (some Beta flows, MLflow models in a UC pipeline) |
+
+**Two scopes for the same knob:**
+- **Pipeline setting `channel`** — whole pipeline (config field; default `current`).
+- **Table property `pipelines.channel`** — per-dataset, used for **standalone** (DBSQL-created) MV/ST and to opt a table into a preview-gated feature:
+```sql
+CREATE OR REPLACE MATERIALIZED VIEW sales
+TBLPROPERTIES ('pipelines.channel' = 'preview')
+AS ...;
+```
+
+**Gotchas:**
+- Default is `current`; **GA + Public Preview features are already in `current`**, so `preview` is *not* needed for most Public Preview things — it's specifically for testing the **next runtime**.
+- **Version mapping rolls** (don't memorize): as of Apr–May 2026, `current` = DBR 17.3, `preview` = DBR 18.1 (earlier in 2026 both were 17.3). Find the actual version per run via the event-log `runtime_details` event.
+- **Serverless gotcha:** standalone MV/ST on serverless generic compute **reject `preview`** — only `current` (error `STANDALONE_MATERIALIZED_VIEW_STREAMING_TABLE_PREVIEW_CHANNEL_NOT_SUPPORTED` → "remove `pipelines.channel` or set it to `CURRENT`").
+- A change that works on `preview` **may behave differently on `current`** — validate before deploying to prod.
+- **Best practice:** keep prod on `current`; run a **staging pipeline on `preview` weekly** with failure alerts to catch breakage before the next runtime auto-upgrades into `current`.
+- Runtime **auto-revert** to last-known-good happens only on **production mode + `channel=current`** (see C-section on deployment modes / Q8).
+
+**One-liner:** *`channel` picks the runtime — `current` (default, stable, has all GA + Public Preview features) or `preview` (test the next runtime); set it pipeline-wide via `channel` or per-table via `pipelines.channel`, but `preview` isn't supported for serverless standalone MV/ST.*
