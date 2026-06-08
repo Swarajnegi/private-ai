@@ -5715,6 +5715,43 @@ The engine keeps one **global watermark = min across streams** (slowest stream g
 
 **One-liner:** *Both sides buffered (4 stores = keyed-buffer + match-tracker × 2); the min global watermark + interval condition decide when buffered rows can't match and get evicted — later arrivals are dropped.*
 
+**Worked example — `adImpressionClicks` (clean SDP, append-flow into a streaming table):**
+
+```python
+from pyspark import pipelines as dp
+from pyspark.sql.functions import expr
+
+dp.create_streaming_table("adImpressionClicks")
+
+@dp.append_flow(target="adImpressionClicks")
+def joinClicksAndImpressions():
+    clicksDf = (spark.readStream.table("rawClicks")
+                .withWatermark("clickTimestamp", "3 minutes"))
+    impressionsDf = (spark.readStream.table("rawAdImpressions")
+                     .withWatermark("impressionTimestamp", "3 minutes"))
+    return (impressionsDf.alias("imp").join(
+        clicksDf.alias("click"),
+        expr("""
+            imp.userId = click.userId AND
+            click.clickAdId = imp.impressionAdId AND
+            click.clickTimestamp >= imp.impressionTimestamp AND
+            click.clickTimestamp <= imp.impressionTimestamp + interval 3 minutes
+        """),
+        "inner")
+        .select("imp.userId", "imp.impressionAdId", "click.clickTimestamp", "imp.impressionSeconds"))
+```
+```sql
+CREATE OR REFRESH STREAMING TABLE adImpressionClicks AS
+SELECT imp.userId, imp.impressionAdId, click.clickTimestamp, imp.impressionSeconds
+FROM STREAM rawAdImpressions AS imp WATERMARK impressionTimestamp DELAY OF INTERVAL 3 MINUTES
+JOIN STREAM rawClicks AS click   WATERMARK clickTimestamp      DELAY OF INTERVAL 3 MINUTES
+  ON imp.userId = click.userId
+ AND imp.impressionAdId = click.clickAdId
+ AND click.clickTimestamp >= imp.impressionTimestamp
+ AND click.clickTimestamp <= imp.impressionTimestamp + INTERVAL 3 MINUTES;
+```
+Correct because: **watermark on both sides** (global watermark = the slower stream) + a **time-bound interval condition** (so buffered rows that can no longer match are evicted — no unbounded state) + **inner** join → append-only output, which an `append_flow` into a streaming table requires. Qualify every join/select column with its alias (`imp.` / `click.`) — bare names are ambiguous and error-prone.
+
 ### C12 — Selective checkpoint reset
 
 `reset_checkpoint_selection` resets specific flows' checkpoints (reprocess from scratch) while leaving everything else intact. Flow names must be **fully qualified** (`catalog.schema.flow_name`) — a bare name throws `IllegalArgumentException`. For a join/union, reset **all participating source flows**.
