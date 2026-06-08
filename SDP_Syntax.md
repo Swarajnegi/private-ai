@@ -272,3 +272,220 @@ A flow is the simplest unit in SDP: a query + a target. It's the thing that actu
 | **Update** | Stream stateful aggregates to a sink (Kafka), emitting only changed rows. | `dp.create_sink` + `@dp.update_flow(...)` (Preview, Python only) |
 
 **Two rules worth knowing:** any number of append flows can write to one target, but a table that's an Auto CDC target can only be targeted by other Auto CDC flows — you can't mix append + CDC into the same table.
+
+---
+
+## Table properties, refresh policy, watermarks & Auto Loader options
+
+### A. Most important table properties (ST + MV)
+
+Table properties tune full-refresh protection, auto-optimize, CDC tombstone GC, incremental-refresh eligibility on MV sources, and free-form tags. Set them as a Python `dict` on the decorator (`table_properties={...}`) or as a SQL `TBLPROPERTIES (...)` clause. Pipeline-managed tables don't accept `ALTER TABLE ... SET TBLPROPERTIES` — change the definition and re-run the update. Note: the runtime channel (`current`/`preview`) is a **pipeline-level setting**, not a table property — see the box below.
+
+| Property | Default | Purpose |
+|---|---|---|
+| `pipelines.reset.allowed` | `true` | Set `'false'` to block full refresh on this table (protects backfilled / manually-deleted / `REPLACE WHERE` data); incremental writes and downstream recomputes still flow. |
+| `pipelines.autoOptimize.managed` | `true` | Enable/disable SDP auto-scheduled optimization of this table. Not used when the pipeline is governed by predictive optimization (which runs full `OPTIMIZE`/`VACUUM` on its own cadence). |
+| `pipelines.autoOptimize.zOrderCols` | None | Comma-separated columns to Z-order by, e.g. `'year,month'`. Databricks recommends liquid clustering (`CLUSTER BY` / `CLUSTER BY AUTO`) over Z-ordering for pipeline tables. |
+| `pipelines.cdc.tombstoneGCThresholdInSeconds` | `172800` (2 days) | Delete-tombstone retention on an `AUTO CDC` target ST (SCD type 2 / out-of-order handling). Raise above your max event-arrival-to-run lag when the CDC source is Auto Loader (no file-order guarantee). |
+| `delta.autoOptimize.optimizeWrite` | (unset) | Delta optimized writes — compact files at write time. On SDP this is generally managed; set explicitly only to override. |
+| `delta.autoOptimize.autoCompact` | (unset) | Delta auto-compaction after writes. On SDP this is generally managed; set explicitly only to override. |
+| `delta.enableChangeDataFeed` | `false` | Emit row-level change feed; recommended on MV **source** tables to make MV refresh incrementalizable. |
+| `delta.enableRowTracking` | (unset) | Row tracking; required by many MV incremental-refresh operations on source tables. |
+| `delta.enableDeletionVectors` | (unset) | Deletion vectors; recommended on MV source tables for incremental refresh. |
+| `quality` | (user tag) | Free-form medallion tag, e.g. `'bronze'` / `'silver'` / `'gold'`. |
+
+```python
+from pyspark import pipelines as dp
+
+@dp.table(
+    table_properties={
+        "pipelines.reset.allowed": "false",
+        "pipelines.autoOptimize.managed": "true",
+        "pipelines.cdc.tombstoneGCThresholdInSeconds": "604800",
+        "quality": "bronze",
+    },
+    cluster_by=["event_date", "region"],   # liquid clustering; mutually exclusive with partition_cols
+)
+def raw_user_table():
+    return spark.readStream.format("cloudFiles") \
+        .option("cloudFiles.format", "csv") \
+        .load("/databricks-datasets/iot-stream/data-user")
+
+@dp.materialized_view(
+    table_properties={
+        "delta.enableChangeDataFeed": "true",
+        "delta.enableRowTracking": "true",
+        "delta.enableDeletionVectors": "true",
+        "quality": "silver",
+    },
+    cluster_by_auto=True,                   # CLUSTER BY AUTO — Databricks picks/maintains keys
+)
+def user_summary():
+    return spark.read.table("raw_user_table").groupBy("region").count()
+```
+
+```sql
+CREATE OR REFRESH STREAMING TABLE raw_user_table
+CLUSTER BY (event_date, region)            -- liquid clustering; cannot combine with PARTITIONED BY
+TBLPROPERTIES (
+  pipelines.reset.allowed = false,
+  pipelines.autoOptimize.managed = true,
+  pipelines.cdc.tombstoneGCThresholdInSeconds = 604800,
+  quality = 'bronze'
+)
+AS SELECT * FROM STREAM read_files('/databricks-datasets/iot-stream/data-user', format => 'csv');
+
+CREATE OR REFRESH MATERIALIZED VIEW user_summary
+CLUSTER BY AUTO                            -- Databricks chooses & maintains clustering keys
+TBLPROPERTIES (
+  delta.enableChangeDataFeed   = true,
+  delta.enableRowTracking      = true,
+  delta.enableDeletionVectors  = true,
+  quality = 'silver'
+)
+AS SELECT region, count(*) AS cnt FROM raw_user_table GROUP BY region;
+```
+
+> **Runtime channel is a pipeline setting, not a table property.** Set `channel` in the pipeline JSON / settings: `current` (default, stable, production) or `preview` (test upcoming runtime changes). Values are lowercase, and it does **not** go in `TBLPROPERTIES` / `table_properties`.
+
+---
+
+### B. Refresh policy on a materialized view
+
+`REFRESH POLICY` controls how a materialized-view refresh handles incrementalization. Omitting it defaults to `AUTO`. Incremental refresh runs only on **serverless** pipelines; on classic compute every refresh is a full recompute regardless of policy. The Python kwarg is `refresh_policy` (Beta, default `'auto'`) with lowercase values.
+
+| Policy (SQL / Python) | Behavior |
+|---|---|
+| `AUTO` / `'auto'` (default) | Cost model picks incremental vs full per refresh; falls back to full when incremental isn't available or on create/re-init (e.g. schema change). |
+| `INCREMENTAL` / `'incremental'` | Prefer incremental. **`CREATE` fails** if the query can't be incrementalized at all; once created, a refresh that can't go incremental (e.g. row-tracking turned off on a source) falls back to full. |
+| `INCREMENTAL STRICT` / `'incremental_strict'` | Strictly require incremental. `CREATE` fails if not incrementalizable, and a refresh that can't go incremental **fails** instead of silently doing a full recompute (use for cost/SLA guarantees). Create/re-init still does a full refresh when incrementalization is otherwise possible. |
+| `FULL` / `'full'` | Always full recompute, even when the query is incrementalizable. |
+
+```python
+from pyspark import pipelines as dp
+
+@dp.materialized_view(refresh_policy="incremental_strict")   # Beta; needs serverless
+def daily_sales():
+    return spark.read.table("sales").groupBy("k").sum("v")
+```
+
+```sql
+CREATE OR REFRESH MATERIALIZED VIEW daily_sales
+REFRESH POLICY INCREMENTAL STRICT          -- needs serverless; refresh fails rather than full-recompute
+AS SELECT k, sum(v) AS total FROM sales GROUP BY k;
+```
+
+---
+
+### C. Watermark syntax (streaming)
+
+A watermark declares a timestamp column plus a late-data tolerance; records arriving after the threshold may be dropped. Watermarks are **required** to make stateful aggregations refresh incrementally (instead of full recompute each update) and to bound state in joins. Python uses `.withWatermark('event_ts', '3 minutes')` on the streaming DataFrame; SQL uses `WATERMARK event_ts DELAY OF INTERVAL 3 MINUTES` (the interval must be a positive value less than a month).
+
+Windowed aggregation:
+
+```python
+from pyspark import pipelines as dp
+from pyspark.sql.functions import window
+
+@dp.table
+def event_counts():
+    return (
+        spark.readStream.table("events_raw")
+            .withWatermark("event_ts", "3 minutes")
+            .groupBy(window("event_ts", "1 minute"), "region")
+            .count()
+    )
+```
+
+```sql
+CREATE OR REFRESH STREAMING TABLE event_counts AS
+SELECT window(event_ts, '1 minute') AS time_window, region, COUNT(*) AS cnt
+FROM STREAM(events_raw)
+  WATERMARK event_ts DELAY OF INTERVAL 3 MINUTES
+GROUP BY time_window, region;
+```
+
+Stream-stream join (watermark on **both** sides + a time-bound condition, or state grows unbounded):
+
+```python
+from pyspark import pipelines as dp
+from pyspark.sql.functions import expr
+
+@dp.table
+def matched_clicks():
+    impressions = spark.readStream.table("impressions").withWatermark("imp_ts", "3 minutes")
+    clicks      = spark.readStream.table("clicks").withWatermark("click_ts", "3 minutes")
+    return impressions.join(
+        clicks,
+        expr("ad_id = click_ad_id AND click_ts BETWEEN imp_ts AND imp_ts + INTERVAL 3 MINUTES"),
+    )
+```
+
+```sql
+CREATE OR REFRESH STREAMING TABLE matched_clicks AS
+SELECT i.ad_id, i.imp_ts, c.click_ts
+FROM STREAM(impressions) WATERMARK imp_ts DELAY OF INTERVAL 3 MINUTES AS i
+JOIN STREAM(clicks)      WATERMARK click_ts DELAY OF INTERVAL 3 MINUTES AS c
+  ON i.ad_id = c.ad_id
+ AND c.click_ts BETWEEN i.imp_ts AND i.imp_ts + INTERVAL 3 MINUTES;
+```
+
+> Across multiple watermarked streams the engine tracks one global watermark at the pace of the slowest stream (`min` policy by default; `spark.sql.streaming.multipleWatermarkPolicy = max` switches to the fastest at the cost of dropping slow-stream data). Changing a watermark threshold or aggregation keys invalidates existing streaming state — a full refresh is then required to rebuild it.
+
+---
+
+### D. Most important Auto Loader (cloudFiles) options
+
+Auto Loader is the `cloudFiles` Structured Streaming source for incremental ingestion from cloud object storage. In SDP, set options on the reader (Python) or as named args to `read_files(...)` (SQL). **Inside a streaming-table query, SDP manages both the checkpoint and `cloudFiles.schemaLocation` — omit them; setting them manually means a full refresh won't reset those directories.**
+
+| Option | Default | Purpose |
+|---|---|---|
+| `cloudFiles.format` | (required) | Source file format: `json`, `csv`, `xml`, `parquet`, `avro`, `orc`, `text`, `binaryFile`. |
+| `cloudFiles.schemaLocation` | None (required outside SDP to infer schema) | Where inferred schema + evolution are stored. **Managed by SDP** — omit inside a streaming-table query. |
+| `cloudFiles.schemaEvolutionMode` | `addNewColumns` (no schema given) / `none` (schema given) | New-column handling: `addNewColumns`, `addNewColumnsWithTypeWidening`, `rescue`, `failOnNewColumns`, `none`. |
+| `cloudFiles.inferColumnTypes` | `false` | Infer real types (JSON/CSV/XML columns are inferred as strings by default). |
+| `cloudFiles.schemaHints` | None | Override inferred types for named columns, e.g. `"id long, ts timestamp"`. |
+| `rescuedDataColumn` | column named `_rescued_data` | Set this option to capture unparsed/mismatched/missing/case-mismatched fields (as a JSON blob + source path) instead of dropping them; value is the column name. |
+| `cloudFiles.useNotifications` | `false` | `true` = classic file-notification mode; `false` = directory listing. Same option in Python and SQL. Databricks now recommends `cloudFiles.useManagedFileEvents` (file events) over classic notifications. |
+| `cloudFiles.useManagedFileEvents` | `false` | `true` = use the managed file-events service for discovery (load path must be an external location with file events enabled). DBR 14.3 LTS+. |
+| `cloudFiles.maxFilesPerTrigger` | `1000` | Max new files per microbatch (hard limit). DBR 18.0+ configures this dynamically. |
+| `cloudFiles.maxBytesPerTrigger` | None | Max new bytes per microbatch (soft limit, e.g. `10g`). With both set, the lower limit wins. DBR 18.0+ configures this dynamically. |
+| `cloudFiles.includeExistingFiles` | `true` | Process files already present at stream start; evaluated only on first start. |
+| `cloudFiles.allowOverwrites` | `false` | Reprocess files when they're overwritten/changed in place (uses last-modified time; may cause duplicates). |
+| `cloudFiles.backfillInterval` | None | Async backfill cadence (e.g. `1 day`) to catch files missed by notifications; no duplicates. Do not use with `cloudFiles.useManagedFileEvents = true`. |
+| `cloudFiles.partitionColumns` | None | Hive-style partition columns to infer from the path (e.g. `year,month,day`). |
+
+```python
+from pyspark import pipelines as dp
+
+@dp.table(table_properties={"quality": "bronze"})
+def raw_events():
+    return (
+        spark.readStream.format("cloudFiles")
+            .option("cloudFiles.format", "json")
+            .option("cloudFiles.inferColumnTypes", "true")
+            .option("cloudFiles.schemaEvolutionMode", "addNewColumns")
+            .option("cloudFiles.schemaHints", "event_ts timestamp, user_id long")
+            .option("rescuedDataColumn", "_rescued_data")
+            .option("cloudFiles.maxFilesPerTrigger", "500")
+            .option("cloudFiles.backfillInterval", "1 day")
+            # no cloudFiles.schemaLocation / checkpointLocation — SDP manages both
+            .load("/Volumes/main/raw/events")
+    )
+```
+
+```sql
+CREATE OR REFRESH STREAMING TABLE raw_events
+TBLPROPERTIES (quality = 'bronze')
+AS SELECT *
+FROM STREAM read_files(
+  '/Volumes/main/raw/events',
+  format                => 'json',
+  inferColumnTypes      => true,
+  schemaEvolutionMode   => 'addNewColumns',
+  schemaHints           => 'event_ts timestamp, user_id long',
+  rescuedDataColumn     => '_rescued_data',
+  maxFilesPerTrigger    => 500
+  -- schemaLocation/checkpointLocation managed by SDP
+);
+```
