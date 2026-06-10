@@ -194,6 +194,11 @@ SessionStart hook → JARVIS volunteers the connection in chat       [the Iron-M
 
 [3.5.6] Heartbeat scheduler                      jarvis_core/agent/heartbeat.py
          event-driven (request_heartbeat flag), NOT clock-driven — drives the consolidator
+
+[RECALL limb, 2026-06-10, L316]  recall.py + scripts/hooks/inject_recent_activity.py
+         reads observation_queue.jsonl (NEVER git) → day-by-day cross-chat activity digest
+         → 3rd SessionStart hook → every chat opens knowing what you did across all chats.
+         Fixes the gap where a fresh chat fell back to `git log` and missed no-commit days.
 ```
 
 **IMPREGNABLE — security/privacy definition-of-done (non-negotiable):**
