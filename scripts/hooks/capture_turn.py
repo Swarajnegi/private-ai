@@ -115,6 +115,31 @@ def _redact(text: str) -> str:
     return out
 
 
+# --- Harness wrapper blocks: injected by Claude Code into the user turn, NOT
+# user-typed. Stripped before storing so they don't pollute the synthesis signal
+# (e.g. <ide_opened_file> paths contain "JARVIS" and mis-classify as jarvis-build).
+# KB L315. Conservative known-tag list only — never a generic "<...>" strip, which
+# would eat legitimate code/HTML the user pasted. ---
+_HARNESS_TAGS = (
+    "ide_opened_file", "ide_selection", "system-reminder", "task-notification",
+    "local-command-caveat", "local-command-stdout", "command-name",
+    "command-message", "command-args", "user-prompt-submit-hook",
+)
+_HARNESS_PAIRED = re.compile(
+    r"<(" + "|".join(_HARNESS_TAGS) + r")\b[^>]*>.*?</\1>", re.DOTALL | re.IGNORECASE)
+_HARNESS_STANDALONE = re.compile(
+    r"</?(" + "|".join(_HARNESS_TAGS) + r")\b[^>]*/?>", re.IGNORECASE)
+
+
+def _strip_harness_blocks(text: str) -> str:
+    """Remove harness-injected wrapper blocks, leaving only user-typed content."""
+    if not text:
+        return text
+    out = _HARNESS_PAIRED.sub(" ", text)      # paired <tag>...</tag>
+    out = _HARNESS_STANDALONE.sub(" ", out)   # any leftover/standalone tag
+    return out
+
+
 def _block_text(content: Any) -> str:
     """Concatenate the 'text' blocks of a message.content (list or str).
     Ignores tool_use / tool_result blocks."""
@@ -130,16 +155,13 @@ def _block_text(content: Any) -> str:
 
 
 def _is_real_user_text(rec: Dict[str, Any]) -> bool:
-    """True for a genuine user-typed message (not a tool_result, not sidechain)."""
+    """True for a genuine user-typed message: not a tool_result, not sidechain, and
+    NOT just harness wrapper blocks (an <ide_opened_file>-only or <task-notification>-
+    only turn has no user content once stripped, so we skip past it to the real turn)."""
     if rec.get("type") != "user" or rec.get("isSidechain"):
         return False
     content = (rec.get("message") or {}).get("content")
-    if isinstance(content, str):
-        return bool(content.strip())
-    if isinstance(content, list):
-        # Real user text has at least one 'text' block; pure tool_result turns don't.
-        return any(isinstance(b, dict) and b.get("type") == "text" and b.get("text") for b in content)
-    return False
+    return bool(_strip_harness_blocks(_block_text(content)).strip())
 
 
 def _extract_turn(transcript_path: str) -> Optional[Dict[str, str]]:
@@ -171,7 +193,9 @@ def _extract_turn(transcript_path: str) -> Optional[Dict[str, str]]:
     if last_user_idx == -1:
         return None
 
-    user_text = _block_text((records[last_user_idx].get("message") or {}).get("content"))
+    user_text = _strip_harness_blocks(
+        _block_text((records[last_user_idx].get("message") or {}).get("content"))
+    ).strip()
 
     # Collect assistant text emitted AFTER that user message (this turn).
     assistant_parts: List[str] = []
@@ -274,5 +298,75 @@ def main() -> int:
     return 0
 
 
+def _run_self_test() -> None:
+    import tempfile
+
+    print("=" * 70)
+    print("  capture_turn.py -- Smoke Tests (harness-block stripping)")
+    print("=" * 70)
+    passed = 0
+    failed: List[str] = []
+
+    def check(name: str, cond: bool, hint: str = "") -> None:
+        nonlocal passed
+        if cond:
+            passed += 1
+        else:
+            failed.append(f"FAIL: {name}" + (f" ({hint})" if hint else ""))
+
+    # --- strip behavior ---
+    check("T1 paired ide_opened_file stripped, real question kept",
+          _strip_harness_blocks(
+              "<ide_opened_file>The user opened /home/x/JARVIS/y.py</ide_opened_file>\nwhat is AQE?"
+          ).strip() == "what is AQE?")
+    check("T2 task-notification-only -> empty",
+          _strip_harness_blocks(
+              "<task-notification><task-id>w19</task-id></task-notification>").strip() == "")
+    check("T3 system-reminder stripped mid-text",
+          (lambda s: "actual question" in s and "noise" not in s)(
+              _strip_harness_blocks("hi <system-reminder>noise here</system-reminder> actual question")))
+    check("T4 plain text untouched", _strip_harness_blocks("hello world").strip() == "hello world")
+    check("T5 code with < and > NOT stripped (no harness tag)",
+          _strip_harness_blocks("if x < y and a > b: return [i for i in xs]")
+          == "if x < y and a > b: return [i for i in xs]")
+    check("T6 command wrappers stripped",
+          _strip_harness_blocks("<command-name>/next</command-name><command-args></command-args>").strip() == "")
+
+    # --- is_real_user_text now skips pure-wrapper turns ---
+    wrap = {"type": "user", "message": {"content": [
+        {"type": "text", "text": "<task-notification><task-id>w1</task-id></task-notification>"}]}}
+    real = {"type": "user", "message": {"content": [
+        {"type": "text", "text": "<ide_opened_file>f /JARVIS/z</ide_opened_file>\nexplain shuffle partitions"}]}}
+    tres = {"type": "user", "message": {"content": [{"type": "tool_result", "content": "out"}]}}
+    check("T7 pure-wrapper user msg is NOT real", _is_real_user_text(wrap) is False)
+    check("T8 wrapper+question IS real", _is_real_user_text(real) is True)
+    check("T9 tool_result is not real", _is_real_user_text(tres) is False)
+
+    # --- extract_turn skips a trailing pure-wrapper turn, strips the inline wrapper ---
+    with tempfile.TemporaryDirectory() as td:
+        tp = Path(td) / "t.jsonl"
+        recs = [real,
+                {"type": "assistant", "message": {"content": [{"type": "text", "text": "Shuffle partitions are..."}]}},
+                wrap]  # trailing pure-wrapper turn
+        tp.write_text("\n".join(json.dumps(r) for r in recs) + "\n", encoding="utf-8")
+        turn = _extract_turn(str(tp))
+        check("T10 extract finds the real question past the trailing wrapper, inline wrapper stripped",
+              turn is not None and turn["user_text"].strip() == "explain shuffle partitions", str(turn))
+
+    total = passed + len(failed)
+    print(f"\n  Passed: {passed}/{total}")
+    if failed:
+        for f_ in failed:
+            print(f"  {f_}")
+        print("=" * 70)
+        raise SystemExit(1)
+    print(f"  All {total} capture_turn smoke tests passed.")
+    print("=" * 70)
+
+
 if __name__ == "__main__":
-    raise SystemExit(main())
+    # The Stop hook is invoked with NO args (stdin only); --self-test is dev-only.
+    if len(sys.argv) > 1 and sys.argv[1] == "--self-test":
+        _run_self_test()
+    else:
+        raise SystemExit(main())
