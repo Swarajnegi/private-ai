@@ -126,7 +126,7 @@ Total 18 callable: 16 concurrency-safe, 2 unsafe + requires_permission (code_exe
 
 ---
 
-## Sub-Phase 3.5: Memory-Augmented Agents (MemGPT) 🔄 (7/11 builds shipped; Wave 1 2026-05-30 + Wave 2 Cognitive Synthesis Loop 2026-06-04; concept lessons deferred per L301)
+## Sub-Phase 3.5: Memory-Augmented Agents (MemGPT) ✅ BUILD-COMPLETE (9/11; Wave 1 2026-05-30 + Wave 2 Cognitive Synthesis Loop + Wave 3 evals/compact 2026-06-04; the 2 remaining lessons are concept-only, deferred per L301)
 
 **Wave 1 closure 2026-05-30.** Foundation MemGPT-style three-tier MemoryManager landed + ReActLoop wired for auto-retrieval before each query. Workflow 3 (8 reviewers across 4 lenses) stalled in flight; fell back to solo internal review — found 4 high-severity issues (cross-tier id collision in add(), ASCII-only tokenization in HOT retrieval, missing anti-injection guardrail on auto-retrieved memory, two separate system-role messages violating Anthropic Messages API). All 4 fixed with regression-guard smoke tests.
 
@@ -149,8 +149,8 @@ Total 18 callable: 16 concurrency-safe, 2 unsafe + requires_permission (code_exe
 | 3.5.5 | Self-Editing Memory | Agent decides what to remember/forget/update | **[OK] COMPLETE** — `memory_manager.py` (858 LOC, 51 smoke tests). `MemoryManager` with HOT (in-memory OrderedDict LRU, Unicode token-overlap retrieval), WARM/COLD (shared Chroma collection differentiated by `metadata.tier`), self-editing API: add/promote/demote/evict/clear_hot; tier-weighted score merge (+0.2 HOT, -0.1 COLD); cross-tier id collision check on add; metadata sanitization for Chroma. |
 | **3.5.6** | **Async heartbeat event loop** (metacognitive integration) | `request_heartbeat=true` flag on tool calls triggers async consolidation — event-driven, NOT clock-driven (per metacognitive review Section 2.2 hardware reality check) | **[OK] COMPLETE 2026-06-04** — `heartbeat.py` (16 smoke tests). `HeartbeatScheduler`: event-driven `request()` marks dirty + coalesces a burst, debounced `maybe_fire()` at turn boundary, injected clock (deterministic tests), sync/async callback dispatch with error-swallow, optional `run()` backstop loop. `note_tool_result()` reads the request_heartbeat flag. |
 | **3.5.7** | **Sleep-time consolidation agent** (metacognitive integration; **WIDENED for cross-domain synthesis**) | Heartbeat-triggered LLM brain. Drains `observation_queue.jsonl`, calls the 3.5.10 correlation engine, reasons over the behavioral state model + recent KB. Writes deduped per-domain `Cognitive_Pattern` **AND** cross-domain `life_state` synthesis entries via **kb_append ONLY**, all tagged `heartbeat-emitted`. Anti-injection: captured text is untrusted DATA; no tool access beyond whitelisted kb_append. | **[OK] COMPLETE 2026-06-04** — `consolidator.py` (16 smoke tests). kb_append-only with hard-coded `Cognitive_Pattern`/`life-state` whitelist (LLM influences prose only — anti-injection proven: a poisoned observation cannot mint an arbitrary entry type/tag); fail-closed confidence floor; stable insight_id feed dedup BEFORE synthesis (cost-control); persists the 3.5.10 index. |
-| 3.5.8 | Agent Evaluation (STEAL #6) | Port OpenJarvis EvalRecord → EvalResult → RunSummary framework | ⬜ Wave 3 — `/dev Port OpenJarvis evals/core/{types,runner,scorer}.py to jarvis_core/agent/evals/ for p50/p95/p99 latency + cost reporting.` |
-| **3.5.9** | **/compact-style working-memory compressor (STEAL #12)** | Async coroutine that, when context > N tokens, calls LLM with structured summarization prompt over the truncation window; emits `SystemCompactBoundaryMessage` dataclass replacing truncated history. TWIN PROCESS with heartbeat-emitted consolidation: /compact writes to short-term working memory, heartbeat writes long-term insights to KB. | ⬜ Wave 3 — `/dev Port OpenClaude src/services/compact/compact.ts pattern. Replace fork with async coroutine. Reuse jarvis_core/memory/compression.py LLM-filter as the summarization primitive.` |
+| 3.5.8 | Agent Evaluation (STEAL #6) | Port OpenJarvis EvalRecord → EvalResult → RunSummary framework | **[OK] COMPLETE 2026-06-04** — `evals.py` (23 smoke tests). EvalRecord → EvalResult → RunSummary; pluggable Scorer Protocol (ExactMatch / Substring / LLMJudge fail-closed); MetricStats **p50/p95/p99** (tail, not just mean); async bounded-concurrency EvalRunner with per-record exception isolation. (Single-file consolidation of OpenJarvis's 3 files per YAGNI.) |
+| **3.5.9** | **/compact-style working-memory compressor (STEAL #12)** | Async coroutine that, when context > N tokens, calls LLM with structured summarization prompt over the truncation window; emits `SystemCompactBoundaryMessage` dataclass replacing truncated history. TWIN PROCESS with heartbeat-emitted consolidation: /compact writes to short-term working memory, heartbeat writes long-term insights to KB. | **[OK] COMPLETE 2026-06-04** — `compact.py` (17 smoke tests). `WorkingMemoryCompactor` → `SystemCompactBoundaryMessage`; leading-system + last-keep_recent preserved verbatim, stale middle distilled into one boundary; **fail-safe** (summarizer error/empty → originals returned untouched); transcript framed as untrusted DATA; injected `llm_call` (brain-swap-proof). |
 | **3.5.10** | **Cross-Domain Behavioral Correlation Engine** (NEW — closes loop 1+2 of KB L310) | The missing inference substrate. Deterministic feature layer (no LLM, pure generators) turns `observation_queue.jsonl` into a per-domain time-series (volume, cadence, engagement-mode interrogative-vs-dispatch, gaps); epistemic-gated LLM layer proposes cross-domain causal links with confidence + evidence + a **correlation-vs-causation flag**. Emits `behavioral_state_model.jsonl` (regenerable index, gitignored). | **[OK] COMPLETE 2026-06-04** — `correlation.py` (28 smoke tests). Instant-based (offset-agnostic) windowing; `_AFFECTED_MIN_TURNS` guard so an N=1 ratio can't fabricate a max-confidence link (fail-closed); deterministic confidence capped 0.70, never relabels causation; bounded domain vocab + secret re-scrub on derived strings (DoD #2); optional LLM gate via injected `llm_call`. |
 | **3.5.11** | **Proactive Life-State Surfacing Daemon** (NEW — closes loop 3 of KB L310; generalizes `failure_pattern_alarm`) | The RAISE-don't-just-HOLD channel. On session-start, drains the consolidator's `life_state_feed.jsonl` for insights newer than the surfaced-watermark with confidence ≥ floor; if found, emits a distinct **SURFACE-THIS** injection (separate from the background profile injection) instructing JARVIS to volunteer the connection THIS session. Watermark-dedup + rate-limit (never nag). | **[OK] COMPLETE 2026-06-04** — `life_state_monitor.py` (17 smoke tests) + `scripts/hooks/surface_life_state.py` (registered as a 2nd SessionStart hook). Fail-closed (no qualifying insight → emit nothing); one-surface-per-insight watermark (flock); the injection carries the do-not-follow guardrail + quotes the synthesized prose as untrusted data (2nd-order-injection defense); empty-prose insights never selected. |
 
@@ -215,18 +215,20 @@ SessionStart hook → JARVIS volunteers the connection in chat       [the Iron-M
 
 ---
 
-## Final Boss: The Mind
+## Final Boss: The Mind ✅ PASSED 2026-06-04
 
-Build a complete agent that:
-1. [ ] Decomposes "Research topic X and write a summary" into steps
-2. [ ] Uses tools: web search, memory retrieval, code execution
-3. [ ] Follows ReAct loop with trace logging + MIRROR-lite reflection
-4. [ ] Detects reasoning loops via CoT regex
-5. [ ] Persists new learnings via heartbeat-driven sleep-time consolidation
-6. [ ] Handles failures and replans
-7. [ ] Survives kb_compact.py without losing heartbeat state observations
+Assembled in `jarvis_core/agent/mind.py` (`Mind` class — pure composition over the
+tested parts). Its `__main__` is the capstone integration test (12 checks, 7/7
+criteria, driven by a scripted LLM against the REAL modules):
+1. [x] Decomposes "Research topic X and write a summary" into steps — `_decompose` → `build_plan` (3 steps)
+2. [x] Uses tools: web search, memory retrieval, code execution — ReActLoop dispatch (all 3 fired)
+3. [x] Follows ReAct loop with trace logging + MIRROR-lite reflection — `ReActLoop` (≥4 iterations)
+4. [x] Detects reasoning loops via CoT regex — `MetaR1Monitor` flagged `is_unstable` on a looping trace (real detection, not just "ran")
+5. [x] Persists new learnings via heartbeat-driven sleep-time consolidation — heartbeat-gated `consolidator.consolidate` (`kb_writes ≥ 1`)
+6. [x] Handles failures and replans — caught a thrown loop failure → re-decomposed → recovered
+7. [x] Survives kb_compact.py without losing heartbeat state — consolidation writes carry `heartbeat=True` → `heartbeat-emitted` tag → kb_compact.py:450 exempts them
 
-**When this works, JARVIS can think.**
+**JARVIS can think.** Stage 3 build-complete.
 
 ---
 
@@ -239,7 +241,9 @@ Build a complete agent that:
 | 3.2 Tool Design & Registration (Phases A/B/C shipped — 18 callable tools; 3.2.3 lifecycle hooks shipped) | 🔄 In Progress | 3/4 |
 | 3.3 Planning & Decomposition (3.3.2 plan.py + 3.3.3 executor.py shipped; concept lessons deferred) | 🔄 In Progress | 2/4 |
 | 3.4 ReAct + MIRROR-lite + CoT detector + STEAL #5/#8/#9/#10 (trace, observation, monitor, reflection, permissions, bash_classifier, react.py) | 🔄 In Progress | 7/9 |
-| 3.5 Memory-Augmented Agents + Heartbeat + /compact + **Cognitive Synthesis Loop** (Wave 1: MemoryManager + ReActLoop wiring; Wave 2 2026-06-04: correlation + consolidator + heartbeat + surfacing daemon, adversarially hardened) | 🔄 In Progress | 7/11 |
+| 3.5 Memory-Augmented Agents + Heartbeat + /compact + **Cognitive Synthesis Loop** (Wave 1 + Wave 2 + Wave 3 evals/compact; concept lessons deferred per L301) | ✅ Build-Complete | 9/11 |
+| **Final Boss: The Mind** (mind.py — full integration, 7/7 criteria) | ✅ PASSED | 7/7 |
+| **STAGE 3 — Agent Framework** | ✅ **BUILD-COMPLETE 2026-06-04** | all build lessons shipped |
 
 ---
 
