@@ -328,11 +328,17 @@ class CrossDomainCorrelationEngine:
         queue_path: Path = _QUEUE_PATH,
         model_path: Path = _MODEL_PATH,
         confidence_floor: float = _DEFAULT_CONF_FLOOR,
+        domain_classifier: Optional[Any] = None,
     ) -> None:
         self._llm_call = llm_call
         self._queue_path = Path(queue_path)
         self._model_path = Path(model_path)
         self._floor = float(confidence_floor)
+        # Optional embedding classifier (DomainClassifier, duck-typed .classify(text)->str).
+        # When set, the domain is RE-DERIVED from each turn's text at synthesis time,
+        # overriding the hook's coarse keyword domain_guess (KB L314 fix). Off the hot
+        # path — never used in the Stop hook. None -> trust the stored domain_guess.
+        self._classifier = domain_classifier
 
     # ---- public API ------------------------------------------------------
 
@@ -353,7 +359,11 @@ class CrossDomainCorrelationEngine:
             if dt is None or dt < win_start:
                 continue  # unparseable or outside the window — INSTANT compare, offset-agnostic
             sig = rec.get("heuristic_signals", {}) or {}
-            domain = sig.get("domain_guess") or "general"
+            if self._classifier is not None:
+                # Re-derive from text (embedding nearest-prototype) — authoritative.
+                domain = self._classifier.classify(rec.get("user_text", "") or "")
+            else:
+                domain = sig.get("domain_guess") or "general"
             if domain not in _KNOWN_DOMAINS:
                 domain = "general"  # bounded vocab — no free-text domain reaches prompt/feed/tag
             plen = int(sig.get("prompt_len") or len(rec.get("user_text", "") or ""))
@@ -794,6 +804,39 @@ def _run_self_test() -> None:
               _scrub("data-engineering volume 7->35 turns; finance interrogative 80%->20%")
               == "data-engineering volume 7->35 turns; finance interrogative 80%->20%")
 
+        # T27 (KB L314 fix): an injected domain_classifier RE-DERIVES domain from text,
+        # overriding a wrong stored domain_guess. Off the hot path; hook stays stdlib-fast.
+        class _StubClf:
+            def classify(self, text: str) -> str:
+                t = (text or "").lower()
+                if "spark" in t or "sql" in t:
+                    return "data-engineering"
+                if "portfolio" in t or "sip" in t:
+                    return "finance"
+                return "general"
+        rq = Path(td) / "reclass.jsonl"
+        rlines = []
+        for d in range(6, -1, -1):
+            day = now - timedelta(days=d)
+            for _ in range(3):
+                rlines.append(json.dumps({
+                    "ts": day.isoformat(),
+                    "user_text": "explain spark aqe skew handling",
+                    "heuristic_signals": {"prompt_len": 30, "has_correction_markers": False,
+                                          "domain_guess": "general"},  # deliberately WRONG
+                }))
+        rq.write_text("\n".join(rlines) + "\n", encoding="utf-8")
+        m_noclf = asyncio.run(
+            CrossDomainCorrelationEngine(queue_path=rq, model_path=mp).build_model(window_days=14, now=now))
+        m_clf = asyncio.run(
+            CrossDomainCorrelationEngine(queue_path=rq, model_path=mp, domain_classifier=_StubClf()
+                                         ).build_model(window_days=14, now=now))
+        check("T27 no classifier -> trusts stored 'general'",
+              {d.domain for d in m_noclf.domains} == {"general"}, str([d.domain for d in m_noclf.domains]))
+        check("T27b classifier reclassifies general -> data-engineering",
+              "data-engineering" in {d.domain for d in m_clf.domains}
+              and "general" not in {d.domain for d in m_clf.domains}, str([d.domain for d in m_clf.domains]))
+
     total = passed + len(failed)
     print(f"\n  Passed: {passed}/{total}")
     if failed:
@@ -810,6 +853,8 @@ def main() -> int:
     p.add_argument("--window-days", type=int, default=14)
     p.add_argument("--backfill", action="store_true", help="Rewrite the model index from scratch")
     p.add_argument("--stdout", action="store_true", help="Print the model, do not persist")
+    p.add_argument("--reclassify", action="store_true",
+                   help="Re-derive each turn's domain via embedding nearest-prototype (KB L314)")
     p.add_argument("--self-test", action="store_true")
     args = p.parse_args()
 
@@ -818,7 +863,11 @@ def main() -> int:
         return 0
 
     import asyncio
-    eng = CrossDomainCorrelationEngine()
+    classifier = None
+    if args.reclassify:
+        from jarvis_core.agent.domain_classifier import DomainClassifier
+        classifier = DomainClassifier()
+    eng = CrossDomainCorrelationEngine(domain_classifier=classifier)
     model = asyncio.run(eng.build_model(window_days=args.window_days))
     if args.stdout:
         print(json.dumps(model.to_record(), indent=2, ensure_ascii=False))

@@ -535,6 +535,8 @@ def main() -> int:
     p.add_argument("--window-days", type=int, default=14)
     p.add_argument("--floor", type=float, default=_DEFAULT_SURFACE_FLOOR)
     p.add_argument("--dry-run", action="store_true", help="Synthesize but do not write KB/feed")
+    p.add_argument("--no-reclassify", action="store_true",
+                   help="Skip embedding domain reclassification; trust the hook's stored domain_guess")
     p.add_argument("--self-test", action="store_true")
     args = p.parse_args()
 
@@ -543,12 +545,18 @@ def main() -> int:
         return 0
 
     import asyncio
+    classifier = None
+    if not args.no_reclassify:
+        from jarvis_core.agent.domain_classifier import DomainClassifier
+        classifier = DomainClassifier()  # embedding nearest-prototype (KB L314 fix)
+    engine = CrossDomainCorrelationEngine(domain_classifier=classifier)
     if args.dry_run:
         def noop(**kwargs: Any) -> Dict[str, Any]:
             return {"status": "appended", "id": -1}
-        con = Consolidator(append_fn=noop, feed_path=Path("/dev/null"), confidence_floor=args.floor)
+        con = Consolidator(engine=engine, append_fn=noop, feed_path=Path("/dev/null"),
+                           confidence_floor=args.floor)
     else:
-        con = Consolidator(confidence_floor=args.floor)
+        con = Consolidator(engine=engine, confidence_floor=args.floor)
     res = asyncio.run(con.consolidate(window_days=args.window_days))
     print(f"[consolidator] {len(res.insights)} insight(s), {res.kb_writes} KB write(s), "
           f"{res.feed_writes} feed write(s), {res.skipped_low_confidence} skipped (low confidence)")
