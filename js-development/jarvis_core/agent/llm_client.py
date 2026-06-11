@@ -481,29 +481,55 @@ async def _first_thought() -> None:
 async def _ask(question: str) -> None:
     """Interactive entry point: ask JARVIS anything. The Mind on a real model with
     the calculator + the user's own knowledge base (semantic search over the KB)."""
-    from jarvis_core.agent.mind import Mind
+    from jarvis_core.agent.mind import Mind, JARVIS_PSYCHE_PROMPT
     from jarvis_core.agent.tools.calc import CalculatorTool
     from jarvis_core.agent.tools.memory import MemorySemanticSearchTool
+
+    # KB grounding: the memory store must be INJECTED and OPENED (it is a context
+    # manager — connection lives in __enter__). Loads ChromaDB + the embedding
+    # model — acceptable on this interactive path.
+    store_ctx = None
+    collections: List[str] = []
+    tools: Dict[str, Any] = {"calculator": CalculatorTool()}
+    try:
+        from jarvis_core.memory.store import JarvisMemoryStore
+        store_ctx = JarvisMemoryStore()
+        store_ctx.__enter__()
+        collections = [c.name for c in store_ctx._client.list_collections()]
+        tools["memory_semantic_search"] = MemorySemanticSearchTool(store=store_ctx)
+    except Exception as e:
+        print(f"  (KB search unavailable: {type(e).__name__}: {e})")
 
     client = build_llm_call(budget_usd=0.10)
     if not client.model:
         await client.pick_free_model()
+    identity = JARVIS_PSYCHE_PROMPT
+    if collections:
+        identity += f"\n\nAvailable memory collections: {collections}"
     mind = Mind(
         llm_call=client,
-        tools={"calculator": CalculatorTool(),
-               "memory_semantic_search": MemorySemanticSearchTool()},
+        tools=tools,
         max_iterations=8,
         enable_mirror=False,   # free-tier models bury output inside the reflection protocol
         enable_monitor=True,
         allow_replan=True,
+        identity_prompt=identity,
     )
     print(f"  brain   : {client.model}")
     print(f"  query   : {question}")
-    result = await mind.solve(question)
+    try:
+        result = await mind.solve(question)
+    finally:
+        if store_ctx is not None:
+            try:
+                store_ctx.__exit__(None, None, None)
+            except Exception:
+                pass
     if result.react.tool_calls:
         for tc, tr in result.react.tool_calls:
-            out = str(tr.output)
-            print(f"  tool    : {tc.name} -> {out[:140]}{'...' if len(out) > 140 else ''}")
+            out = str(tr.error) if getattr(tr, "error", None) else str(tr.output)
+            tag = "tool!ERR" if getattr(tr, "error", None) else "tool    "
+            print(f"  {tag}: {tc.name} -> {out[:140]}{'...' if len(out) > 140 else ''}")
     print(f"\n  JARVIS  : {result.answer.strip()}")
     print(f"\n  ledger  : {client.ledger_summary()}")
 
