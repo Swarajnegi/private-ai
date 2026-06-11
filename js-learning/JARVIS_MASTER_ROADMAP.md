@@ -81,33 +81,34 @@
 | # | Sub-Phase | Status | Note |
 |---|-----------|--------|------|
 | 3.0 | **Entry Sprint** -- `agent/registry.py` (STEAL #1 RegistryBase) + `agent/cost.py` (STEAL #2 PRICING dict + STEAL #11 cache tiers) + `agent/tool.py` (Tool ABC) | [OK] Complete (2026-05-16) | Foundations landed. 3/3 lessons. |
-| 3.1 | Function Calling & Structured Output (+ `Cognitive_State_Update` Pydantic schema, `TextTelemetry` dataclass) | ⬜ | outlines + Pydantic schemas; metacognitive schemas absorbed here |
-| 3.2 | Tool Design & Registration | ⬜ | Builds on 3.0 registry; adds Tool composition + lifecycle |
-| 3.3 | Planning & Decomposition | ⬜ | Plan dataclass, PlanExecutor, replanning |
-| 3.4 | ReAct Pattern (+ MIRROR-lite system prompt, CoT loop detector regex) | ⬜ | Includes STEAL #5 TraceStep+EventBus trace path; metacognitive reflection absorbed here |
-| 3.5 | Memory-Augmented Agents/MemGPT (+ heartbeat loop, sleep-time consolidation) | ⬜ | Requires `kb_compact.py` exclusion rule for `heartbeat-emitted` tag landed *first* |
+| 3.1 | Function Calling & Structured Output (+ `Cognitive_State_Update` Pydantic schema, `TextTelemetry` dataclass) | ✅ Complete (2026-05-18) | parser.py + errors.py + state.py + telemetry.py |
+| 3.2 | Tool Design & Registration | ✅ Complete | 18 tools registered incl. Phase C cognitive substrate |
+| 3.3 | Planning & Decomposition | ✅ Complete | plan.py + executor.py (DAG, Kahn) |
+| 3.4 | ReAct Pattern (+ MIRROR-lite system prompt, CoT loop detector regex) | ✅ Complete | react.py + trace.py + monitor.py + reflection.py |
+| 3.5 | Memory-Augmented Agents/MemGPT (+ heartbeat loop, sleep-time consolidation) | ✅ Complete (2026-06-10) | Waves 1-3 + Cognitive Synthesis Loop; **Stage 3 Final Boss 7/7 (mind.py), First Light 2026-06-11 (llm_client.py)** |
 
 ---
 
-## Stage 4: Multi-Model Orchestration — The Brain (split into 4.A and 4.B per Decision 2026-05-01)
+## Stage 4: Multi-Model Orchestration — The Brain (split into 4.A and 4.B per Decision 2026-05-01; re-scoped via /master-planner per Decision 2026-06-12)
 
-**Goal:** Build Router → Specialist → Aggregator pattern. Two passes with a deliberate quality gate between them.
+**Goal:** Build the routing substrate — ContextInjector → Router → RouteTarget → ConfidenceGate → (Aggregator) — so a Stage 5 specialist is just another registry row. **₹0 stage** (Decision 2026-06-12): everything on OpenRouter free tier + local CPU embeddings. Detail: [stage_4_orchestration/ROADMAP.md](stage_4_orchestration/ROADMAP.md).
 
 ### Stage 4.A — Orchestration (Pass A)
 | # | Sub-Phase | Status |
 |---|-----------|--------|
-| 4.1 | Brain Base Model: Kimi K2.6 on RunPod (1T/32B-active MoE, MIT, INT4 native) — frontier APIs as escape valve only | ⬜ |
-| 4.2 | Intent Classification & Routing (ModernBERT-Large CPU classifier, NOT small-LLM router) + **STEAL #7** OpenClaude SmartRouter (`python/smart_router.py` — already Python; 3 strategies latency/cost/balanced) | ⬜ |
+| 4.0 | Cognitive Control Loop (boot inhale, autobiography wiring, RoadmapStateReader, Confidence Gate v1, capture parity — closes L324; blocks all other sub-phases per L107) | ⬜ |
+| 4.1 | Route Targets & Per-Model Protocol (L322: ModelProfile registry + ProtocolAdapter middleware + RouteTarget contract + **STEAL #7** OpenClaude SmartRouter failover). Kimi K2.6 RunPod deployment DEFERRED to Stage 5 entry per Decision 2026-06-12 — `RunPodTarget` ships as offline contract stub; frontier APIs = explicit-flag escape valve, structurally outside the router pool | ⬜ |
+| 4.2 | Intent Router (interim nearest-prototype classifier on specialist-codename labels; ModernBERT-Large CPU classifier = conditional on gate failure, else Stage 5 specialist #1 trained on the RoutingLedger) | ⬜ |
 
-**Pass A → Pass B Gate:** Router achieves ≥80% routing accuracy on a 50-query labeled test set (`tests/router_eval.jsonl`). Failure modes (always-default, always-largest) score ~20%. Cannot advance to 4.3 without a documented Router quality measurement.
+**Pass A → Pass B Gate:** Router achieves ≥80% routing accuracy on a 50-query labeled test set (`js-development/tests/router_eval.jsonl`, frozen). Failure modes (always-default, always-largest) score ~20%. Cannot advance to 4.3 without a documented Router quality measurement.
 
 ### Stage 4.B — Specialists (Pass B)
 | # | Sub-Phase | Status |
 |---|-----------|--------|
-| 4.3 | Dynamic Model Management | ⬜ |
-| 4.4 | Response Aggregation | ⬜ |
-| 4.5 | Epistemic Control | ⬜ |
-| 4.6 | GraphRAG (upgrade flat vectors to knowledge graph) | ⬜ |
+| 4.3 | Dynamic Target Management (rolling stats, budget governor, catalog drift) | ⬜ |
+| 4.4 | Response Aggregation (escalation-only fan-out, attributed synthesis) | ⬜ |
+| 4.5 | Epistemic Control (conflict detection, fail-closed judge, human escalation) | ⬜ |
+| 4.6 | GraphRAG | ⏭ DEFERRED — trigger: first KB-logged multi-hop retrieval failure → `jarvis_core/memory/graph.py` |
 
 ---
 

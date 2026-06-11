@@ -1,166 +1,203 @@
-# PHASE 4: Multi-Model Orchestration Roadmap
+# PHASE 4: Multi-Model Orchestration Roadmap — "The Brain"
 
-> **Master Plan Position:** Phase 4 of 6 → [JARVIS_MASTER_ROADMAP.md](../JARVIS_MASTER_ROADMAP.md)  
-> **Goal:** Build the Router → Specialist → Aggregator pattern for multi-model dispatch.  
-> **Prerequisites:** Phase 1-3 (Python, Memory, Agents)  
-> **Hardware:** Hybrid — Local CPU (embeddings/ChromaDB) + Cloud GPU (LLM serving via RunPod/Vast.ai). See `JARVIS_ENDGAME.md` Section 2.
+> **Master Plan Position:** Phase 4 of 6 → [JARVIS_MASTER_ROADMAP.md](../JARVIS_MASTER_ROADMAP.md)
+> **Goal:** Build the routing substrate — ContextInjector → Router → Target → ConfidenceGate → (Aggregator) — such that a Stage 5 specialist (QLoRA adapter on a shared base behind a cold-wake pod) is *just another registry row*.
+> **Prerequisites:** Stage 1-3 (Python, Memory, Agent Framework — Final Boss 7/7, First Light executed)
+> **Cost constraint (Decision 2026-06-12, user call):** **Stage 4 is a ₹0 stage.** Everything runs on OpenRouter free tier + local CPU embeddings. No RunPod spend; pod work (and the ENDGAME VRAM-math correction) deferred to Stage 5 entry. Frontier APIs remain the explicit-flag escape valve only.
+> **Scoped:** 2026-06-12 via `/master-planner` (two-perspective plan panel). Supersedes the pre-Stage-3 draft of this file.
 
 ---
 
 ## Overview
 
-| Sub-Phase | Name | Core Concept | Definition of Done |
-|-----------|------|--------------|-------------------|
-| **4.0** | Cognitive Control Loop | Self-awareness: time, identity, goals, confidence | Orchestrator passes all 4 awareness tests |
-| **4.1** | Model Loading & Serving | Run LLMs via cloud GPU (quantization, MoE, serverless) | Can load/unload 70B-4bit on cloud GPU endpoint |
-| **4.2** | Intent Classification & Routing | Dispatch queries to the right specialist | Router correctly classifies 90%+ of queries |
-| **4.3** | Dynamic Model Management | Load/unload models + speculative decoding | Models swap in <20s, speculative decoding gives 2-3x speedup |
-| **4.4** | Response Aggregation | Combine specialist outputs | Aggregator produces coherent unified response |
-| **4.5** | Epistemic Control | Handle conflicts and uncertainty | Confidence scoring and disagreement detection |
-| **4.6** | GraphRAG | Upgrade flat vectors to knowledge graph | Multi-hop reasoning across research papers |
+| Sub-Phase | Name | Wave | Gate (Definition of Done) |
+|-----------|------|------|---------------------------|
+| **4.0** | Cognitive Control Loop | 1 | Awareness tests 4/4 live + capture parity proven |
+| **4.1** | Route Targets & Per-Model Protocol | 2 (Pass A) | Same prompt clean on 3 real models with zero per-model hardcodes; scripted 429 → failover |
+| **4.2** | Intent Router | 2 (Pass A) | **≥80%** on frozen 50-query eval set; ~20% degenerate baselines documented |
+| **4.3** | Dynamic Target Management | 3 (Pass B) | Chaos tests: vanished model + budget-90% downshift both route around; fail-closed to free tier |
+| **4.4** | Response Aggregation | 3 (Pass B) | Attributed synthesis from real free-model fan-out; triggers only on escalation |
+| **4.5** | Epistemic Control | 3 (Pass B) | 6/6 engineered conflicts flagged, 0/6 false flags; judge failure proves fail-closed |
+| **4.6** | GraphRAG | — | ⏭ **DEFERRED** — trigger: first KB-logged multi-hop retrieval failure |
+
+**Pass A → Pass B gate** (from the master roadmap): Router achieves ≥80% routing accuracy on the frozen 50-query labeled set (`js-development/tests/router_eval.jsonl`). Degenerate routers (always-default, always-largest) score ~20% by stratification — both baselines printed in every gate report so the gate can't be vacuous.
 
 ---
 
-## Sub-Phase 4.0: Cognitive Control Loop (Self-Awareness) ⬜
+## What got re-scoped (vs the pre-Stage-3 draft of this file)
 
-**Goal:** Make JARVIS aware of time, identity, goals, and its own confidence before any model exchange occurs. This is the foundational layer all other sub-phases depend on. Without this, JARVIS is a stateless chatbot. With it, JARVIS is an agent.
-
-> **The 4 Pillars of JARVIS Self-Awareness:**
-> 1. **Temporal** — knows what time and date it is, can reason about past sessions
-> 2. **Identity** — knows who the user is, what decisions were made, what to NOT do
-> 3. **Teleological** — knows what it must do next and why (reads its own roadmap)
-> 4. **Metacognitive** — knows how confident it is and when to escalate to the user
-
-| Lesson | Topic | JARVIS Use Case | Command |
-|--------|-------|-----------------|---------|
-| 4.0.1 | ContextInjector Class | Prepend system state (timestamp, workspace, hardware, memory count) to every prompt | `/dev Build ContextInjector class for JARVIS Orchestrator.` |
-| 4.0.2 | Pre-fetch RAG Hook | Before answering, silently search knowledge_base for user identity, past decisions, and personality protocol | `/dev Implement pre-fetch RAG hook in Orchestrator.` |
-| 4.0.3 | ROADMAP State Reader | Parse ROADMAP.md to identify next unchecked task. JARVIS opens every session knowing what is pending | `/dev Build RoadmapStateReader that parses [ ] vs [x] checkboxes.` |
-| 4.0.4 | Confidence Gate | Internal critic evaluates draft response against knowledge_base. If confidence < threshold, JARVIS flags uncertainty instead of guessing | `/dev Implement Confidence Gate with fallback escalation.` |
-| 4.0.5 | Session Memory Writer | At end of every session, auto-extract decisions/failures/patterns and append to knowledge_base.jsonl | `/dev Build SessionMemoryWriter for end-of-session distillation.` |
-
-**Practical Exercise:** Boot JARVIS and verify it can answer the following WITHOUT being told:
-1. *"What time is it?"* → Reads from ContextInjector
-2. *"What were we doing yesterday?"* → Queries knowledge_base by calculated date
-3. *"What should we work on next?"* → Reads ROADMAP.md, returns first unchecked task
-4. *"Are you sure about that?"* → Returns a confidence score, not a hallucination
-
-> **Why this comes before model loading:** You cannot route queries intelligently (4.2) or aggregate responses with confidence scoring (4.5) if the Orchestrator has no self-model. This is the Orchestrator's nervous system — it must exist before the brain.
+| Draft item | Verdict | Why |
+|---|---|---|
+| 4.1 Local Model Loading (Ollama/vLLM/quantization hands-on) | **Cut → Stage 5** | No local GPU (standing decision); serving internals only matter when JARVIS owns the serving stack — it will, at Stage 5 QLoRA time |
+| Kimi K2.6 on RunPod deployment | **Deferred → Stage 5 entry** | ₹0 constraint; the whole brain stack programs against the `LLMCall` seam, so where weights live is invisible to Stage 4 code. **Flag:** ENDGAME §2 VRAM math is internally inconsistent (1T INT4 ≈ ~500GB resident weights does not fit "4×A5000 96GB" or "one A100 80GB") — correct empirically before Stage 5 budgets commit |
+| Speculative decoding (draft 4.3.5) | **Cut → Stage 5** | An inference-server flag, not JARVIS code; meaningless via API |
+| ModernBERT-Large as the first router | **Conditional** | Training data (labeled routing decisions) doesn't exist yet — the RoutingLedger built in 4.2 *creates* it. Interim = nearest-prototype classifier (proven `domain_classifier.py` pattern). ModernBERT fires only if the gate fails <80%, else lands as Stage 5 specialist #1 |
+| 4.6 GraphRAG | **Deferred with trigger** | 324 KB entries don't need a graph; no multi-hop retrieval failure has ever been logged (past retrieval failures were classification-quality — already fixed). Builds in `jarvis_core/memory/graph.py` when the trigger fires |
+| Aggregation as a default path | **Re-scoped: escalation-only** | Fan-out costs N× per query; Single-Model-First holds. Triggers: gate failure, multi-domain label, explicit flag |
+| *(new)* Per-model protocol layer | **Added as 4.1** | L322: mirror burial, tool-format dialects, empty reasoning-channel content, 429 storms — observed across 4 models in one afternoon. Not theoretical |
 
 ---
 
-## Sub-Phase 4.1: Local Model Loading ⬜
+## Sub-Phase 4.0: Cognitive Control Loop (Self-Awareness) ⬜ — Wave 1
 
-**Goal:** Run large language models on cloud GPU endpoints (RunPod Serverless / Vast.ai).
+**Goal:** The runtime Mind boots self-aware — time, identity, autobiography, next task, confidence — and terminal sessions feed the corpus. Closes all three L324 gaps (autobiography, boot inhale, capture parity) with the live repro as the acceptance test. Per L107 this sub-phase **blocks everything else**: you cannot route queries (4.2) or score confidence (4.5) if the Orchestrator has no self-model.
+
+> **The 4 Pillars:** Temporal (knows time, reasons about past sessions) · Identity (knows the user, decisions, what NOT to do) · Teleological (reads its own roadmap) · Metacognitive (knows its confidence, escalates instead of guessing).
 
 | Lesson | Topic | JARVIS Use Case | Command |
 |--------|-------|-----------------|---------|
-| 4.1.1 | Ollama Basics | Run models with simple CLI | `@[/learn] Explain Ollama and local model serving.` |
-| 4.1.2 | vLLM for Production | High-throughput model serving | `@[/learn] Explain vLLM and when to use it.` |
-| 4.1.3 | Quantization (AWQ/GPTQ/GGUF) | Fit 70B in cloud GPU VRAM (CRITICAL) | `@[/learn] Explain quantization: AWQ vs GPTQ vs GGUF, quality loss, VRAM savings.` |
-| 4.1.4 | Mixture of Experts (MoE) Models | 70B quality at 12B VRAM cost | `@[/learn] Explain MoE architecture: Mixtral 8x7B activates 2/8 experts per token, 46B total but 12B active.` |
-| 4.1.5 | Cloud GPU Serving | Deploy models on RunPod/Vast.ai endpoints | `/dev Configure vLLM for cloud GPU serving.` |
+| 4.0.1 | ContextInjector | Pluggable providers (clock, cognitive_profile.md, activity digest, runtime self-state) → ONE bounded boot-inhale prompt block composed onto JARVIS_PSYCHE_PROMPT | `/dev Build brain/context_injector.py with injected clock/paths, hard char cap.` |
+| 4.0.2 | RoadmapStateReader | Parse ⬜/✅/[ ]/[x] across master + stage roadmaps → "next pending task" provider (Teleological pillar) | `/dev Build brain/roadmap_state.py checkbox parser.` |
+| 4.0.3 | Confidence Gate v1 | Deterministic grounding score: draft answer vs pre-fetched KB hits (token-overlap + embedding cosine, injected embed_fn, ₹0, no LLM judge yet); below threshold → flag uncertainty, emit CognitiveStateUpdate | `/dev Build brain/confidence.py v1 (grounding vs KB pre-fetch).` |
+| 4.0.4 | Boot assembler + Orchestrator v0 | `assemble_mind()`: default toolset gains **PriorSelfConsultTool + KB/memory search** (the L324 autobiography fix — the tool existed, was never wired); ContextInjector block into identity_prompt; `--ask` thins to an adapter here | `/dev Build brain/boot.py + orchestrator v0; thin _ask in llm_client.py.` |
+| 4.0.5 | SessionMemoryWriter + capture parity | End-of-session distillation via consolidator (kb_append only, narrow type+tag whitelist — does NOT widen the consolidator's anti-injection whitelist); terminal `--ask` sessions append to observation_queue.jsonl via the host-ready `capture.py` organ | `/dev Build brain/session_writer.py + terminal capture adapter.` |
 
-**Practical Exercise:** Deploy Llama-3-70B-4bit on RunPod Serverless, compare with Mixtral-8x7B. Benchmark latency and cost per query.
+**Practical Exercise — the Awareness Gate (Gate A):** boot JARVIS in the terminal and verify it answers WITHOUT being told:
+1. *"What time is it?"* → ContextInjector clock, not training data
+2. *"What were we doing yesterday?"* → activity digest / KB by calculated date
+3. *"What should we work on next?"* → RoadmapStateReader's first unchecked task
+4. *"Are you sure about that?"* → a numeric confidence score with grounds, not a hallucination
+5. **The L324 question:** *"What have we built till now?"* → answered from `knowledge_base.jsonl` via prior_self_consult — the exact question that exposed the gap on 2026-06-12
 
-> **CRITICAL:** Without quantization, JARVIS cannot run. FP16 70B = 140GB.
-> AWQ 4-bit = 35GB with ~0.3% quality loss. This is not optional.
+**DoD:** 5/5 live on free tier (₹0) + the test session itself appears in `observation_queue.jsonl` (capture parity proven) + offline `__main__` self-tests green for every organ.
+
+> **Why this comes first:** this is the Orchestrator's nervous system. L324's verbatim lesson: *"the consciousness is portable in the repo; the entry point lacks the lungs to inhale it."* 4.0 is the lungs — and almost everything it needs (recall, profile, capture, PriorSelfConsultTool) already exists from Stage 3. 4.0 is plumbing, not invention.
 
 ---
 
-## Sub-Phase 4.2: Intent Classification & Routing ⬜
+## Sub-Phase 4.1: Route Targets & Per-Model Protocol ⬜ — Wave 2 (Pass A)
 
-**Goal:** Direct queries to the appropriate specialist model.
+**Goal:** JARVIS knows each model's conduct and speaks every dialect through one seam. **Protocol-before-intent:** you can't route to a model you can't talk to (L322 — First Light needed a hardcoded `enable_mirror=False`; that hardcode is the bug this sub-phase deletes).
 
 | Lesson | Topic | JARVIS Use Case | Command |
 |--------|-------|-----------------|---------|
-| 4.2.1 | Router Architecture | Lightweight classifier + dispatch | `@[/learn] Explain router design for MoM systems.` |
-| 4.2.2 | Intent Categories | Code, Research, General, Medical | `/dev Design intent taxonomy for JARVIS.` |
-| 4.2.3 | Classifier Training | Fine-tune small model for routing | `@[/learn] Explain training a router classifier.` |
-| 4.2.4 | Fallback Strategies | When classification is uncertain | `@[/learn] Explain fallback routing strategies.` |
+| 4.1.1 | ModelProfile registry | Per-model conduct as DATA: mirror on/off, tool dialect, reasoning-channel quirk, system-prompt tolerance, failover peers; seeded from the 4 First-Light models; conservative default for unknown ids (mirror OFF, monitor ON) | `/dev Build brain/model_profiles.py + jarvis_data/model_profiles.json.` |
+| 4.1.2 | ProtocolAdapter | LLMCall-wrapping middleware (LLMCall in → LLMCall out): dialect translation, empty-content reasoning-channel fold, system-prompt folding, per-profile mirror toggle. The Mind never learns models have dialects | `/dev Build brain/protocol.py middleware.` |
+| 4.1.3 | RouteTarget contract | `name / kind (API_MODEL\|POD_ADAPTER\|FRONTIER_VALVE) / profile / llm_call / ensure_ready() / release() / ledger_summary()`. OpenRouterTarget live; **RunPodTarget/PodHandle as offline contract STUBS only** (adapter_id seam for Stage 5); EscapeValveTarget structurally OUTSIDE the router pool — explicit user flag only. **Re-home `llm_client.py` → `brain/`** (grep importers, fix call sites, no shim) | `/dev Build brain/targets.py; re-home llm_client.py.` |
+| 4.1.4 | ModelPool + failover | STEAL #7 (`ai_model_repos/OpenClaude/python/smart_router.py`): health ping, EMA latency, error-penalty scoring; 429 cooldown + ordered failover-peer walk (target-layer, distinct from llm_client's in-place retries); per-target CostTracker ledgers | `/dev Build brain/model_pool.py (SmartRouter port).` |
 
-**Practical Exercise:** Router correctly dispatches to code vs. research specialist.
+**Practical Exercise:** re-run First Light's 4 models through the profile registry — all 4 answer the calculator task correctly with ZERO manual flag-flipping.
+
+**DoD:** same prompt clean on 3 real free models with no per-model hardcodes outside profiles; scripted 429 storm fails over to a peer with both attempts on the ledgers; offline dialect/empty-content/failover scenarios green.
 
 ---
 
-## Sub-Phase 4.3: Dynamic Model Management ⬜
+## Sub-Phase 4.2: Intent Router ⬜ — Wave 2 (Pass A — THE GATE)
 
-**Goal:** Load/unload models efficiently, speed up inference with speculative decoding.
+**Goal:** Queries dispatch to the right target, measurably. **Routing label space = specialist codenames** ({engineer, analyst, scientist, memory, general} live today) so every eval label and RoutingLedger row stays valid training data for the Stage 5 Orchestrator adapter.
 
 | Lesson | Topic | JARVIS Use Case | Command |
 |--------|-------|-----------------|---------|
-| 4.3.1 | Model Lifecycle | Load → Serve → Unload pattern | `/dev Design a ModelManager for JARVIS.` |
-| 4.3.2 | VRAM Management | Monitor and cleanup GPU memory | `/dev Implement VRAM monitoring and cleanup.` |
-| 4.3.3 | Caching Strategy | Keep frequently-used models warm | `@[/learn] Explain model caching strategies.` |
-| 4.3.4 | Concurrent Loading | Prepare next model while serving | `/dev Implement async model preloading.` |
-| 4.3.5 | Speculative Decoding | 2-3x speedup via draft+verifier | `@[/learn] Explain speculative decoding: small draft model generates candidates, large model verifies in one pass.` |
+| 4.2.1 | Eval set authoring | `js-development/tests/router_eval.jsonl` — 50 frozen records `{id, query, label, source, notes}`: ~35 harvested from real observation_queue.jsonl user_text + KB-derived, ~15 hand-written adversarial/ambiguous incl. escape-valve-bait that must NOT route to frontier; ≥8 per class; blind re-label stability check; commit + freeze | `/dev Author tests/router_eval.jsonl (50 labeled, frozen).` |
+| 4.2.2 | Interim classifier | `Classifier` protocol (`classify(text) -> (label, confidence)`) + nearest-prototype instance — compose a second `DomainClassifier` with routing prototypes (reuse the organ, don't relocate it) | `/dev Build brain/router.py Classifier + interim nearest-prototype.` |
+| 4.2.3 | RoutingPolicy | intent + constraints (context, multimodal, budget remaining) + strategy (cost/latency/balanced) → RoutingDecision; absorbs `scripts/suggest_model.py` heuristics and fixes its hardcoded `E:\J.A.R.V.I.S` path | `/dev Build RoutingPolicy; retire suggest_model.py to manual fallback.` |
+| 4.2.4 | RoutingLedger + gate run | Append-only jsonl (ts, query-hash, label, confidence, target, outcome, cost) = the Stage 5 training corpus. Gate via `evals.EvalRunner`: accuracy, per-class confusion, p50/p95, degenerate baselines | `/dev Wire RoutingLedger; run the gate.` |
+| 4.2.5 | *(conditional — only if 4.2.4 <80%)* ModernBERT-Large CPU classifier | Trained on harvested observation/KB labels, eval set held out; must beat interim on the SAME frozen set | `/learn then /dev — fires only on gate failure.` |
 
-**Practical Exercise:** Swap between code and general model in <20s. Benchmark speculative decoding throughput.
-
-> **How Speculative Decoding Works:**
-> Run Llama 3B (draft) to generate 8 candidate tokens instantly.
-> 70B (verifier) checks all 8 in ONE forward pass.
-> If 6/8 correct, you got 6 tokens for 1 forward pass cost = 2-3x free speedup.
+**DoD = Pass A→B gate:** ≥80% on the frozen set, documented in this file + KB; gate runs on local embeddings — ₹0, repeatable every commit. Failure path is pre-decided (4.2.5); no re-litigating.
 
 ---
 
-## Sub-Phase 4.4: Response Aggregation ⬜
+## Sub-Phase 4.3: Dynamic Target Management ⬜ — Wave 3 (Pass B)
 
-**Goal:** Combine outputs from multiple specialists into coherent responses.
+**Goal:** The pool survives reality — catalog churn, rate limits, budget exhaustion. (API-era re-scope of the draft's VRAM-era content.)
 
 | Lesson | Topic | JARVIS Use Case | Command |
 |--------|-------|-----------------|---------|
-| 4.4.1 | Aggregation Patterns | Synthesis, voting, chain | `@[/learn] Explain response aggregation patterns.` |
-| 4.4.2 | Synthesis Prompting | Merge multiple specialist outputs | `/dev Implement synthesis aggregator for JARVIS.` |
-| 4.4.3 | Source Attribution | Track which specialist said what | `/dev Add source tracking to aggregator.` |
-| 4.4.4 | Quality Filtering | Discard low-quality outputs | `@[/learn] Explain output quality filtering.` |
+| 4.3.1 | Rolling stats persistence | Pool latency/error/sighting stats survive sessions (`jarvis_data/model_stats.jsonl`) | `/dev Persist pool stats.` |
+| 4.3.2 | Budget governor | Spend approaching ceiling → router downshifts to cheaper/free tiers; `CostTracker.would_exceed`; fail-closed to free tier, never over budget (mirrors LLMBudgetExceeded) | `/dev Build budget governor into router.py.` |
+| 4.3.3 | Catalog sync & drift | Vanished-model handling (free models churn weekly); ProfileRegistry refresh from live catalog | `/dev Wire catalog sync into model_profiles.py.` |
 
-**Practical Exercise:** Aggregate physics + code specialist for a computational physics query.
+**Practical Exercise:** simulate a model vanishing mid-session and a budget hitting 90% — both route around gracefully.
+**DoD:** offline chaos tests green; one live session demonstrates downshift on a deliberately tiny budget.
 
 ---
 
-## Sub-Phase 4.5: Epistemic Control ⬜
+## Sub-Phase 4.4: Response Aggregation ⬜ — Wave 3 (Pass B)
 
-**Goal:** Handle uncertainty, conflicts, and confidence scoring.
+**Goal:** Combine sources *when warranted* — **never as the default path** (fan-out costs N×; Single-Model-First).
 
 | Lesson | Topic | JARVIS Use Case | Command |
 |--------|-------|-----------------|---------|
-| 4.5.1 | Confidence Scoring | How certain is each output? | `@[/learn] Explain confidence estimation in LLMs.` |
-| 4.5.2 | Conflict Detection | Specialists disagree — now what? | `/dev Implement conflict detection in aggregator.` |
-| 4.5.3 | Uncertainty Propagation | Mark tentative conclusions | `@[/learn] Explain uncertainty propagation.` |
-| 4.5.4 | Human Escalation | Know when to ask the user | `/dev Implement human-in-the-loop escalation.` |
+| 4.4.1 | Bounded fan-out | `asyncio.gather` with per-target budget → `SourcedAnswer` records | `/dev Build brain/aggregator.py fan_out.` |
+| 4.4.2 | Attribution synthesis | Merge with which-model-said-what carried into the answer; voting for short-form factual outputs | `/dev Implement synthesis + voting aggregation.` |
+| 4.4.3 | Quality filter | Heuristic first (errors/instability/empty dropped, logged); LLMJudgeScorer optional behind budget gate | `/dev Add quality filtering.` |
 
-**Practical Exercise:** Aggregator correctly flags conflicting specialist outputs.
+**Practical Exercise:** computational-physics query fanned to 2-3 free models (ensemble experiments at ₹0), synthesized with attribution.
+**DoD:** aggregation triggers ONLY on gate failure / multi-domain label / explicit flag; attributed synthesis from a real free-model fan-out.
+
+---
+
+## Sub-Phase 4.5: Epistemic Control ⬜ — Wave 3 (Pass B)
+
+**Goal:** JARVIS knows when it doesn't know, and says so. (Strategic Principle 4: conflicts MUST flag uncertainty, never hide it.)
+
+| Lesson | Topic | JARVIS Use Case | Command |
+|--------|-------|-----------------|---------|
+| 4.5.1 | Disagreement detection | Deterministic divergence: embedding cosine (injected embed_fn) + numeric-claim diff across SourcedAnswers | `/dev Build conflict detection in brain/confidence.py.` |
+| 4.5.2 | Fail-closed contradiction judge | Optional LLM judge layer; judge ERROR ⇒ treated as conflict, never as agreement | `/dev Add LLM contradiction judge (fail-closed).` |
+| 4.5.3 | Escalation policy | FLAG/ESCALATE: orchestrator returns the specific question for the user instead of a guess; `/escape-valve` as *suggestion text* only — never auto-invoked | `/dev Implement escalation path in orchestrator.py.` |
+
+**Practical Exercise:** two scripted specialists disagree on a factual claim → conflict flagged, both positions attributed, user asked.
+**DoD:** 6/6 engineered conflicts flagged, 0/6 false flags on 6 engineered agreements (deterministic, offline, exact); judge-failure path proves fail-closed; live spot-check surfaces a real disagreement verbatim.
+
+---
+
+## Sub-Phase 4.6: GraphRAG ⏭ DEFERRED
+
+Row kept for master-roadmap traceability. **Trigger:** first KB-logged retrieval failure requiring entity-hop reasoning. Lands in `jarvis_core/memory/graph.py` (NetworkX in-process; no graph database at this corpus size). Rationale: 324 KB entries, zero logged multi-hop failures — every past retrieval failure was classification-quality, already fixed by `domain_classifier.py`.
 
 ---
 
 ## Final Boss: The Brain
 
-Build a complete orchestrator that:
-1. [ ] Classifies intent and routes to appropriate specialist
-2. [ ] Dynamically loads/unloads models on cloud GPU endpoints (cost-optimized spin-up/spin-down)
-3. [ ] Aggregates specialist outputs into coherent response
-4. [ ] Scores confidence and flags conflicts
-5. [ ] Escalates to human when uncertain
+`python3 -m jarvis_core.brain.orchestrator --final-boss` — offline scripted-LLM twin in `__main__` (₹0, re-runnable every commit) + `--live` mode budget-capped ≤ $0.10:
 
-**When this works, JARVIS has its Brain.**
+1. [ ] Boot inhale → awareness answers 4/4, unprompted
+2. [ ] Autobiography — "what have we built?" via prior_self_consult on the real KB
+3. [ ] Router gate re-run ≥80% with degenerate baselines printed
+4. [ ] Protocol routing — scripted dialect model + empty-reasoning model both normalized; mirror per profile
+5. [ ] Induced 429 storm → failover to peer; both attempts on per-target ledgers
+6. [ ] ConfidenceGate — weakly-grounded draft flagged; escalation returns a question, not a guess
+7. [ ] Engineered conflict → flagged + attributed, never silently merged
+8. [ ] Session lands in observation queue + SessionMemoryWriter distills to KB
+
+**Criterion zero:** the total Stage 4 ledger is printed — it should read ~₹0.
+
+**When 8/8 pass, JARVIS has its Brain.**
 
 ---
 
 ## Progress Tracker
 
-| Sub-Phase | Status | Lessons Complete |
-|-----------|--------|------------------|
-| 4.0 Cognitive Control Loop (Self-Awareness) | ⬜ Not Started | 0/5 |
-| 4.1 Local Model Loading | ⬜ Not Started | 0/5 |
-| 4.2 Intent Classification & Routing | ⬜ Not Started | 0/4 |
-| 4.3 Dynamic Model Management | ⬜ Not Started | 0/5 |
-| 4.4 Response Aggregation | ⬜ Not Started | 0/4 |
-| 4.5 Epistemic Control | ⬜ Not Started | 0/4 |
-| 4.6 GraphRAG | ⬜ Not Started | 0/0 |
+| Sub-Phase | Wave | Status | Lessons Complete |
+|-----------|------|--------|------------------|
+| 4.0 Cognitive Control Loop | 1 | ⬜ Not Started | 0/5 |
+| 4.1 Route Targets & Per-Model Protocol | 2 (Pass A) | ⬜ Not Started | 0/4 |
+| 4.2 Intent Router | 2 (Pass A) | ⬜ Not Started | 0/4 (+1 conditional) |
+| 4.3 Dynamic Target Management | 3 (Pass B) | ⬜ Not Started | 0/3 |
+| 4.4 Response Aggregation | 3 (Pass B) | ⬜ Not Started | 0/3 |
+| 4.5 Epistemic Control | 3 (Pass B) | ⬜ Not Started | 0/3 |
+| 4.6 GraphRAG | — | ⏭ Deferred (trigger documented) | — |
+
+---
+
+## DEFERRED to Stage 5/6 (bookmarked, per stage gating)
+
+| Item | Deferred to | Trigger / note |
+|---|---|---|
+| RunPod/Kimi K2.6 deployment + cold-wake measurement + ENDGAME VRAM-math correction | Stage 5 entry | Pods needed for QLoRA anyway; ENDGAME §2 numbers must be empirically corrected before budgets commit |
+| ModernBERT-Large router training | Stage 5 specialist #1 (or conditional 4.2.5) | Corpus = RoutingLedger accrued during Stage 4 operation; must beat interim on the same frozen set |
+| QLoRA specialists (Engineer first) | Stage 5.2+ | Stage 4 ships only the `RunPodTarget(adapter_id=...)` seam |
+| Speculative decoding | Stage 5+ | vLLM server-side flag on owned pods |
+| outlines / constrained generation | Stage 5 | Needs logit access (vLLM `guided_json`); impossible via OpenRouter |
+| MCP publishing (L237) | Stage 5+ | External consumers exist |
+| GraphRAG | trigger-based | First logged multi-hop retrieval failure → `jarvis_core/memory/graph.py` |
+| Voice/vision (Interface), always-on daemons, agent swarms | Stage 6 | Stage 6 reuses `ensure_ready()/release()` as its cold-wake primitive |
+| $10 OpenRouter limit-raise (50 → 1000 req/day) | when 429s bite | The only recommended spend before the Final Boss, and optional |
 
 ---
 
 ## After This Phase
 
-→ Proceed to **Phase 5: Domain Specialists** → [PHASE_05_ROADMAP.md](../specialist-learning/PHASE_05_ROADMAP.md)
+→ Proceed to **Phase 5: Domain Specialists** — Engineer-first MVP, QLoRA on the shared base, trained on the RoutingLedger + private corpus this stage starts accruing.
