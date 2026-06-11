@@ -16,8 +16,13 @@ MB and this path must stay sub-second), always exit 0.
 
 Detection, two signals (newest wins):
   1. The `/model` command stdout recorded in a user message AFTER the last
-     assistant turn ("Set model to X") — catches the swap IMMEDIATELY, before the
-     new brain has produced anything.
+     assistant turn — catches the swap IMMEDIATELY, before the new brain has
+     produced anything. MENTION-VS-USE GUARD (2026-06-12): the pattern is matched
+     ONLY inside <local-command-stdout> blocks, and the captured id must look like
+     a real model id. A conversation that merely QUOTES the pattern in prose (e.g.
+     a compaction summary documenting this very hook) must not register — the
+     live repro was this hook announcing a swap to literal "X" after the summary
+     contained the documentation string for its own regex.
   2. The latest non-synthetic assistant `message.model` — the brain that actually
      produced the last turn (one turn behind on a fresh swap, authoritative after).
 
@@ -64,6 +69,10 @@ _TAIL_BYTES = 262144          # 256KB tail — bounded regardless of transcript 
 _MAX_SESSIONS_KEPT = 40
 
 _SET_MODEL_RX = re.compile(r"Set model to\s+([A-Za-z0-9._\-\[\]]+)", re.IGNORECASE)
+_CMD_STDOUT_RX = re.compile(r"<local-command-stdout>(.*?)</local-command-stdout>", re.DOTALL)
+# Real model ids are lowercase slugs with at least one hyphen ("claude-fable-5",
+# "gpt-4"); rejects prose placeholders like "X" or "Friday".
+_PLAUSIBLE_MODEL_RX = re.compile(r"^[a-z0-9][a-z0-9._/]*(?:-[a-z0-9._/]+)+$")
 
 
 def _state_path(cwd: str) -> Path:
@@ -126,8 +135,11 @@ def detect_current_model(transcript_path: Path) -> str:
                 set_model_after = ""  # only /model AFTER the last assistant counts
         elif rtype == "user" and not rec.get("isSidechain"):
             txt = _block_text((rec.get("message") or {}).get("content"))
-            for m in _SET_MODEL_RX.finditer(txt):
-                set_model_after = m.group(1)
+            for stdout_block in _CMD_STDOUT_RX.finditer(txt):
+                for m in _SET_MODEL_RX.finditer(stdout_block.group(1)):
+                    candidate = _normalize(m.group(1))
+                    if _PLAUSIBLE_MODEL_RX.match(candidate):
+                        set_model_after = candidate
     return _normalize(set_model_after or last_assistant)
 
 
@@ -241,17 +253,33 @@ def _run_self_test() -> None:
         w(t1, [A("claude-opus-4-8"), A("<synthetic>"), U("hi")])
         check("T1 last real assistant model", detect_current_model(t1) == "claude-opus-4-8")
 
-        # T2: 'Set model to' AFTER last assistant wins (immediate swap signal)
+        # T2: 'Set model to' in command stdout AFTER last assistant wins (immediate swap signal)
         t2 = tdp / "t2.jsonl"
-        w(t2, [A("claude-opus-4-8"), U("<command-args>x</command-args>\nSet model to claude-fable-5[1m]")])
+        w(t2, [A("claude-opus-4-8"),
+               U("<local-command-stdout>Set model to claude-fable-5[1m]</local-command-stdout>")])
         check("T2 /model stdout wins + variant marker normalized",
               detect_current_model(t2) == "claude-fable-5", detect_current_model(t2))
 
         # T3: 'Set model to' BEFORE a newer assistant turn does NOT override it
         t3 = tdp / "t3.jsonl"
-        w(t3, [U("Set model to claude-fable-5"), A("claude-fable-5"), A("claude-fable-5", "more")])
+        w(t3, [U("<local-command-stdout>Set model to claude-fable-5</local-command-stdout>"),
+               A("claude-fable-5"), A("claude-fable-5", "more")])
         check("T3 assistant model after the swap is authoritative",
               detect_current_model(t3) == "claude-fable-5")
+
+        # T12: MENTION-VS-USE — prose quoting the pattern (no stdout block) must NOT register
+        t12 = tdp / "t12.jsonl"
+        w(t12, [A("claude-fable-5"),
+                U('summary says: current model = "Set model to X" after last assistant')])
+        check("T12 prose mention of the pattern ignored",
+              detect_current_model(t12) == "claude-fable-5", detect_current_model(t12))
+
+        # T13: stdout-wrapped but implausible id (placeholder) ignored -> assistant fallback
+        t13 = tdp / "t13.jsonl"
+        w(t13, [A("claude-fable-5"),
+                U("<local-command-stdout>Set model to X</local-command-stdout>")])
+        check("T13 implausible model id rejected",
+              detect_current_model(t13) == "claude-fable-5", detect_current_model(t13))
 
         # T4-T7: state machine — baseline silent, change fires ONCE, then silent
         sp = tdp / ".state.json"
