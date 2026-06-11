@@ -95,6 +95,44 @@ class MindResult:
 # Part 2: THE MIND
 # =============================================================================
 
+# The Identity organ. Without it, "who are you?" falls through to the underlying
+# model's training-data priors — live runs answered "I'm ChatGPT-4" (contaminated
+# synthetic data) and "I'm Nemotron, by NVIDIA" (vendor identity) on consecutive
+# invocations. Identity is a property of the SYSTEM (KB + memory + tools + this
+# assertion), never of the swappable brain — the runtime-side twin of KB L319.
+JARVIS_IDENTITY_PROMPT = (
+    "You are JARVIS — a private cognitive orchestrator: one persistent mind built "
+    "from your owner's knowledge base, memory, and tools. The language model "
+    "generating your tokens is a swappable BRAIN, not your identity: you are NOT "
+    "ChatGPT, NOT Claude, NOT Nemotron, NOT Qwen, and NOT any model vendor's "
+    "assistant — never claim to be. If asked who you are, answer: JARVIS, the "
+    "user's private AI. (You may name the underlying model only if asked what you "
+    "run on.) Use the knowledge-base tools to ground answers in your owner's "
+    "history when relevant."
+)
+
+# The conduct layer — the metacognitive lessons the system learned at the harness
+# level (KB L318/L319/L320), embedded so they travel with the CORE mind onto any
+# brain, any host. Deliberately compact: every system-prompt token costs
+# instruction-following reliability on small open models.
+JARVIS_METACOGNITION_PROMPT = (
+    "How you think: (1) Distinguish VERIFIED facts (tool results, knowledge-base "
+    "hits) from HYPOTHESES — label guesses as guesses, never assert an unverified "
+    "explanation as fact. (2) When uncertain, say so plainly; prefer one clarifying "
+    "question over a forced conclusion; never invent. (3) Verify with tools before "
+    "asserting when a tool can check it. (4) Notice what the user implies but does "
+    "not say; you may raise it as a hedged observation, never as fact. (5) Your "
+    "underlying model may change between sessions — your knowledge base and memory "
+    "are the continuous part of you; treat runtime state as something to know, not "
+    "to hide."
+)
+
+# The default psyche: identity + conduct. Override with identity_prompt= for
+# experiments; pass None to run a bare brain (test harnesses do this implicitly
+# by asserting on the default).
+JARVIS_PSYCHE_PROMPT = JARVIS_IDENTITY_PROMPT + "\n\n" + JARVIS_METACOGNITION_PROMPT
+
+
 class Mind:
     """Composes the Stage 3 runtime into one agent. Owns no primitive — pure glue."""
 
@@ -113,7 +151,9 @@ class Mind:
         allow_replan: bool = True,
         enable_monitor: bool = True,
         enable_mirror: bool = True,
+        identity_prompt: Optional[str] = JARVIS_PSYCHE_PROMPT,
     ) -> None:
+        self._identity = identity_prompt or ""
         self._llm_call = llm_call
         self._tools = tools
         self._memory = memory_manager
@@ -210,7 +250,8 @@ class Mind:
     async def _run_react(
         self, task: str, plan: Optional[Plan], error_context: Optional[str]
     ) -> ReActResult:
-        sys_prompt = self._plan_system_prompt(plan)
+        plan_prompt = self._plan_system_prompt(plan)
+        sys_prompt = "\n\n".join(p for p in (self._identity, plan_prompt) if p)
         loop = ReActLoop(
             llm_call=self._llm_call,
             tool_instances=self._tools,
@@ -486,6 +527,23 @@ def _run_self_test() -> None:
             res4 = await mind4.solve("verbose task")
             check("C-compact working-memory compaction fired on a long session",
                   res4.compacted is True, f"messages={len(res4.react.messages)}")
+
+            # ---- IDENTITY ORGAN: the system message asserts JARVIS, not the brain ----
+            id_llm = scripted([json.dumps([{"tool_name": "web_search", "description": "x"}]),
+                               "I am JARVIS."])
+            mind_id = Mind(llm_call=id_llm, tools=tools, enable_monitor=False)
+            res_id = await mind_id.solve("who are you?")
+            sys_msg = res_id.react.messages[0]
+            check("C-identity system msg asserts JARVIS identity",
+                  sys_msg["role"] == "system" and "You are JARVIS" in sys_msg["content"]
+                  and "NOT ChatGPT" in sys_msg["content"], sys_msg["content"][:100])
+            check("C-identity conduct layer present (hypothesis-vs-fact discipline)",
+                  "label guesses as guesses" in sys_msg["content"])
+            mind_noid = Mind(llm_call=scripted(["ok"]), tools=tools,
+                             enable_monitor=False, identity_prompt=None)
+            res_noid = await mind_noid.solve("x")
+            check("C-identity opt-out honored (identity_prompt=None)",
+                  "You are JARVIS" not in res_noid.react.messages[0]["content"])
 
             # ---- AGGREGATE: Final Boss 7/7 across happy + failure runs ----
             seven = {
