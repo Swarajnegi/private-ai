@@ -110,3 +110,4 @@ jarvis_data/observation_queue.jsonl
 jarvis_data/behavioral_state_model.jsonl
 jarvis_data/life_state_feed.jsonl
 jarvis_data/.surfaced_watermark
+jarvis_data/.runtime_state.json
