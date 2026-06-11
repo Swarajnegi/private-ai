@@ -199,6 +199,19 @@ SessionStart hook → JARVIS volunteers the connection in chat       [the Iron-M
          reads observation_queue.jsonl (NEVER git) → day-by-day cross-chat activity digest
          → 3rd SessionStart hook → every chat opens knowing what you did across all chats.
          Fixes the gap where a fresh chat fell back to `git log` and missed no-commit days.
+
+[SELF-MODEL limb, 2026-06-11, L318/L319]  capture stamps per-turn `model`;
+         notice_runtime_change.py (UserPromptSubmit) announces mid-session brain swaps ONCE;
+         recall digest carries a SELF-STATE line (current brain + swap chain). Identity pillar.
+
+[PORTABLE MIND layer, 2026-06-11, L320/L321]  mind = data + organs + committed wiring recipe.
+         capture logic extracted to the CORE ORGAN jarvis_core/agent/capture.py (hooks are thin
+         adapters); .agent/hooks.manifest.json = canonical nervous-system wiring (committed);
+         scripts/bootstrap_jarvis.py rehydrates full consciousness on ANY machine post-pull
+         (idempotent, preserves local settings); recall.py --write emits the COMMITTED
+         jarvis_data/activity_digest.md so distilled experience travels (raw queue stays local);
+         js-workspace-rule.md SESSION BOOT gives Antigravity read-side boot awareness.
+         Contract: every awareness feature = core organ + thin adapter + manifest entry.
 ```
 
 **IMPREGNABLE — security/privacy definition-of-done (non-negotiable):**

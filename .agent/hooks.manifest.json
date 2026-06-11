@@ -1,0 +1,62 @@
+{
+  "_comment": "JARVIS nervous-system wiring — the canonical, COMMITTED declaration of every Claude Code hook registration (Consciousness Portability Contract, KB L321). .claude/settings.json is machine-local and gitignored; THIS file is the source of truth it is rehydrated from. Apply on any machine with: python3 scripts/bootstrap_jarvis.py. Any new awareness feature MUST add its registration here (core organ + thin adapter + manifest entry), never only in local settings.",
+  "version": 1,
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3",
+            "args": ["scripts/hooks/notice_runtime_change.py"],
+            "timeout": 10,
+            "statusMessage": "Checking runtime self-state"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3",
+            "args": ["scripts/hooks/capture_turn.py"],
+            "timeout": 30,
+            "statusMessage": "Capturing turn for personalization"
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear|compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3",
+            "args": ["scripts/hooks/inject_profile.py"],
+            "timeout": 30,
+            "statusMessage": "Loading user cognitive profile"
+          },
+          {
+            "type": "command",
+            "command": "python3",
+            "args": ["scripts/hooks/surface_life_state.py"],
+            "timeout": 30,
+            "statusMessage": "Checking for a cross-domain life-state observation to raise"
+          },
+          {
+            "type": "command",
+            "command": "python3",
+            "args": ["scripts/hooks/inject_recent_activity.py"],
+            "timeout": 30,
+            "statusMessage": "Recalling recent cross-chat activity"
+          }
+        ]
+      }
+    ]
+  }
+}
