@@ -1,6 +1,6 @@
 # Cognitive Profile — Model of the User
 
-> Auto-synthesized by `scripts/profile_synth.py` from `knowledge_base.jsonl` (323 entries). Injected into every chat via the SessionStart hook. Regenerate after KB updates.
+> Auto-synthesized by `scripts/profile_synth.py` from `knowledge_base.jsonl` (324 entries). Injected into every chat via the SessionStart hook. Regenerate after KB updates.
 
 ## Who you are
 - Pattern: personalization_must_be_effortless (2026-06-10). When JARVIS answered what-was-I-up-to from git commits and missed the user heavy June 9 DE-lessons chat, the user pushed back hard: I want jarvis to be alive and living and breathing with me; if I have to constantly check if it is learning from every prompt I wr ...
