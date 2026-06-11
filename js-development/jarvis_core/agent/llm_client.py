@@ -280,6 +280,10 @@ def _run_self_test() -> None:
     passed = 0
     failed: List[str] = []
 
+    # Env isolation: a real OPENROUTER_MODEL (e.g. from ~/.bashrc) would pre-set
+    # the model and silently skip the auto-pick path under test (T9).
+    _saved_model_env = os.environ.pop("OPENROUTER_MODEL", None)
+
     def check(name: str, cond: bool, hint: str = "") -> None:
         nonlocal passed
         if cond:
@@ -410,6 +414,9 @@ def _run_self_test() -> None:
 
     asyncio.run(scenario())
 
+    if _saved_model_env is not None:
+        os.environ["OPENROUTER_MODEL"] = _saved_model_env
+
     total = passed + len(failed)
     print(f"\n  Passed: {passed}/{total}")
     if failed:
@@ -471,17 +478,52 @@ async def _first_thought() -> None:
           f"{' via REAL TOOL CALL' if used_tool else ' (no tool call)'} <<<")
 
 
+async def _ask(question: str) -> None:
+    """Interactive entry point: ask JARVIS anything. The Mind on a real model with
+    the calculator + the user's own knowledge base (semantic search over the KB)."""
+    from jarvis_core.agent.mind import Mind
+    from jarvis_core.agent.tools.calc import CalculatorTool
+    from jarvis_core.agent.tools.memory import MemorySemanticSearchTool
+
+    client = build_llm_call(budget_usd=0.10)
+    if not client.model:
+        await client.pick_free_model()
+    mind = Mind(
+        llm_call=client,
+        tools={"calculator": CalculatorTool(),
+               "memory_semantic_search": MemorySemanticSearchTool()},
+        max_iterations=8,
+        enable_mirror=False,   # free-tier models bury output inside the reflection protocol
+        enable_monitor=True,
+        allow_replan=True,
+    )
+    print(f"  brain   : {client.model}")
+    print(f"  query   : {question}")
+    result = await mind.solve(question)
+    if result.react.tool_calls:
+        for tc, tr in result.react.tool_calls:
+            out = str(tr.output)
+            print(f"  tool    : {tc.name} -> {out[:140]}{'...' if len(out) > 140 else ''}")
+    print(f"\n  JARVIS  : {result.answer.strip()}")
+    print(f"\n  ledger  : {client.ledger_summary()}")
+
+
 def main() -> int:
     p = argparse.ArgumentParser(description="OpenRouter LLM adapter (First Light)")
     p.add_argument("--live", action="store_true", help="Real ping (needs OPENROUTER_API_KEY)")
     p.add_argument("--first-thought", action="store_true",
                    help="Live Final Boss: Mind + real model + calculator tool")
+    p.add_argument("--ask", metavar="QUESTION",
+                   help="Ask JARVIS anything (Mind + real model + calculator + KB search)")
     args = p.parse_args()
     if args.live:
         asyncio.run(_live_ping())
         return 0
     if args.first_thought:
         asyncio.run(_first_thought())
+        return 0
+    if args.ask:
+        asyncio.run(_ask(args.ask))
         return 0
     _run_self_test()
     return 0
