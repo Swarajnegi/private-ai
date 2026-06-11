@@ -537,6 +537,8 @@ def main() -> int:
     p.add_argument("--dry-run", action="store_true", help="Synthesize but do not write KB/feed")
     p.add_argument("--no-reclassify", action="store_true",
                    help="Skip embedding domain reclassification; trust the hook's stored domain_guess")
+    p.add_argument("--llm", action="store_true",
+                   help="Use the real LLM (OPENROUTER_API_KEY) for the epistemic gate + fluent synthesis")
     p.add_argument("--self-test", action="store_true")
     args = p.parse_args()
 
@@ -549,14 +551,18 @@ def main() -> int:
     if not args.no_reclassify:
         from jarvis_core.agent.domain_classifier import DomainClassifier
         classifier = DomainClassifier()  # embedding nearest-prototype (KB L314 fix)
-    engine = CrossDomainCorrelationEngine(domain_classifier=classifier)
+    llm = None
+    if args.llm:
+        from jarvis_core.agent.llm_client import build_llm_call
+        llm = build_llm_call(budget_usd=0.10)  # First Light: gate + synthesis go live
+    engine = CrossDomainCorrelationEngine(llm_call=llm, domain_classifier=classifier)
     if args.dry_run:
         def noop(**kwargs: Any) -> Dict[str, Any]:
             return {"status": "appended", "id": -1}
-        con = Consolidator(engine=engine, append_fn=noop, feed_path=Path("/dev/null"),
-                           confidence_floor=args.floor)
+        con = Consolidator(engine=engine, llm_call=llm, append_fn=noop,
+                           feed_path=Path("/dev/null"), confidence_floor=args.floor)
     else:
-        con = Consolidator(engine=engine, confidence_floor=args.floor)
+        con = Consolidator(engine=engine, llm_call=llm, confidence_floor=args.floor)
     res = asyncio.run(con.consolidate(window_days=args.window_days))
     print(f"[consolidator] {len(res.insights)} insight(s), {res.kb_writes} KB write(s), "
           f"{res.feed_writes} feed write(s), {res.skipped_low_confidence} skipped (low confidence)")

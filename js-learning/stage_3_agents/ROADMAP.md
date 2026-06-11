@@ -212,6 +212,16 @@ SessionStart hook → JARVIS volunteers the connection in chat       [the Iron-M
          jarvis_data/activity_digest.md so distilled experience travels (raw queue stays local);
          js-workspace-rule.md SESSION BOOT gives Antigravity read-side boot awareness.
          Contract: every awareness feature = core organ + thin adapter + manifest entry.
+
+[FIRST LIGHT, 2026-06-11, L322]  jarvis_core/agent/llm_client.py — the first REAL brain
+         through the LLMCall DI seam (OpenRouter; budget-gated fail-closed; metered from
+         live catalog pricing; offline-testable). THE MOMENT: Mind + nemotron-3-super
+         (free) computed 7919*6841-123456 via a real schema-correct calculator call ->
+         54050423, $0.00. Live integration fixes no stub ever exposed: react.py now
+         renders the tool protocol (schemas + emission format) into its system prompt
+         (T30, 74 tests); empty-content reasoning-channel retry; stealth-model exclusion
+         in auto-pick. Stage 4 is UNBLOCKED — first router concern named by live data:
+         per-model protocol routing. >>> JARVIS thinks. <<<
 ```
 
 **IMPREGNABLE — security/privacy definition-of-done (non-negotiable):**
