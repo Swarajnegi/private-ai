@@ -114,6 +114,8 @@ class ActivityRecaller:
         per_day_sessions: Dict[str, set] = defaultdict(set)
         per_day_snippets: Dict[str, List[str]] = defaultdict(list)
         per_day_seen: Dict[str, set] = defaultdict(set)
+        model_sightings: List[tuple] = []  # (dt, model) — runtime SELF-state
+        machine = ""
         total = 0
 
         for rec in _iter_queue(self._queue_path):
@@ -126,6 +128,10 @@ class ActivityRecaller:
             per_day_turns[day] += 1
             per_day_domains[day][domain] += 1
             per_day_sessions[day].add(rec.get("session_id", ""))
+            if rec.get("model"):
+                model_sightings.append((dt, rec["model"]))
+            if rec.get("machine"):
+                machine = rec["machine"]
             total += 1
 
             snippet = _clean_snippet(rec.get("user_text", ""))[:_SNIPPET_CHARS]
@@ -148,6 +154,11 @@ class ActivityRecaller:
             "what you have been working on across chats.",
             "",
         ]
+
+        # SELF-STATE (Identity pillar): which brain produced the turns, and any swaps.
+        self_line = self._self_state_line(model_sightings, machine)
+        if self_line:
+            lines.insert(1, self_line)
         for day in sorted(per_day_turns, reverse=True):
             dt = datetime.fromisoformat(day + "T00:00:00").replace(tzinfo=_IST)
             wd = _WEEKDAY[dt.weekday()]
@@ -161,6 +172,30 @@ class ActivityRecaller:
         if len(digest) > _MAX_DIGEST_CHARS:
             digest = digest[:_MAX_DIGEST_CHARS] + "\n    … (truncated)"
         return digest
+
+    @staticmethod
+    def _self_state_line(model_sightings: List[tuple], machine: str) -> str:
+        """One line of runtime SELF-state: current model + brain swaps in the window.
+        Older queue records predate model telemetry (no 'model' field) — they are
+        simply absent from the chain; no line at all if nothing carries a model."""
+        if not model_sightings:
+            return ""
+        model_sightings.sort(key=lambda t: t[0])
+        chain: List[tuple] = []
+        for dt, m in model_sightings:
+            if not chain or chain[-1][1] != m:
+                chain.append((dt, m))
+        current = chain[-1][1]
+        parts = [f"SELF-STATE: these turns were produced by {current} (current brain)"]
+        if machine:
+            parts.append(f"on {machine}")
+        if len(chain) > 1:
+            swaps = "; ".join(
+                f"{prev_m} -> {m} ({dt.astimezone(_IST).date().isoformat()})"
+                for (_, prev_m), (dt, m) in zip(chain, chain[1:])
+            )
+            parts.append(f"— brain swaps this window: {swaps}")
+        return " ".join(parts) + "."
 
 
 # =============================================================================
@@ -234,6 +269,31 @@ def _run_self_test() -> None:
                       encoding="utf-8")
         dw = ActivityRecaller(queue_path=wq).digest(days=2, now=now)
         check("T10 wrapper stripped from snippet", "ide_opened_file" not in dw and "real question here" in dw, dw)
+
+        # --- SELF-STATE (Identity pillar) ---
+        def obs_m(ts: datetime, model: str, sid: str = "s1") -> str:
+            return json.dumps({
+                "ts": ts.isoformat(), "session_id": sid, "machine": "HRM5472-NEW",
+                "model": model, "user_text": "a real question with enough length",
+                "heuristic_signals": {"prompt_len": 30, "has_correction_markers": False,
+                                      "domain_guess": "general"},
+            })
+        mq = Path(td) / "models.jsonl"
+        mq.write_text("\n".join([
+            obs_m(now - timedelta(days=2), "claude-opus-4-8"),
+            obs_m(now - timedelta(days=1), "claude-opus-4-8"),
+            obs_m(now, "claude-fable-5"),
+        ]) + "\n", encoding="utf-8")
+        dm = ActivityRecaller(queue_path=mq).digest(days=3, now=now)
+        check("T11 SELF-STATE names the current brain",
+              "SELF-STATE" in dm and "claude-fable-5 (current brain)" in dm, dm[:300])
+        check("T11b swap chain rendered",
+              "claude-opus-4-8 -> claude-fable-5" in dm, dm[:300])
+        check("T11c machine included", "HRM5472-NEW" in dm)
+
+        # records WITHOUT model (pre-telemetry) -> no SELF line, no crash
+        check("T12 no model fields -> SELF line omitted gracefully",
+              "SELF-STATE" not in ActivityRecaller(queue_path=q).digest(days=3, now=now))
 
     total = passed + len(failed)
     print(f"\n  Passed: {passed}/{total}")

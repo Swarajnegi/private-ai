@@ -197,18 +197,33 @@ def _extract_turn(transcript_path: str) -> Optional[Dict[str, str]]:
         _block_text((records[last_user_idx].get("message") or {}).get("content"))
     ).strip()
 
-    # Collect assistant text emitted AFTER that user message (this turn).
+    # Collect assistant text emitted AFTER that user message (this turn) AND the
+    # model that produced it — runtime SELF-state, so the queue knows which brain
+    # generated every turn (Identity pillar; the "Friday" probe fix).
     assistant_parts: List[str] = []
+    model = ""
     for rec in records[last_user_idx + 1:]:
         if rec.get("type") == "assistant" and not rec.get("isSidechain"):
             t = _block_text((rec.get("message") or {}).get("content"))
             if t:
                 assistant_parts.append(t)
+            m = (rec.get("message") or {}).get("model") or ""
+            if m and m != "<synthetic>":
+                model = m  # keep the LAST real model of the turn
+    if not model:
+        # Fallback: last non-synthetic assistant model anywhere earlier.
+        for rec in reversed(records[:last_user_idx + 1]):
+            if rec.get("type") == "assistant" and not rec.get("isSidechain"):
+                m = (rec.get("message") or {}).get("model") or ""
+                if m and m != "<synthetic>":
+                    model = m
+                    break
     assistant_summary = "\n".join(assistant_parts)
 
     return {
         "user_text": user_text[:_MAX_USER_CHARS],
         "assistant_summary": assistant_summary[:_MAX_ASSISTANT_CHARS],
+        "model": model,
     }
 
 
@@ -277,6 +292,7 @@ def main() -> int:
             "ts": _ist_now_iso(),
             "session_id": event.get("session_id", ""),
             "machine": os.environ.get("JARVIS_MACHINE", os.uname().nodename if hasattr(os, "uname") else "unknown"),
+            "model": turn.get("model", ""),
             "cwd": cwd,
             "chat_label": chat_label,
             "user_text": user_text,
@@ -352,6 +368,34 @@ def _run_self_test() -> None:
         turn = _extract_turn(str(tp))
         check("T10 extract finds the real question past the trailing wrapper, inline wrapper stripped",
               turn is not None and turn["user_text"].strip() == "explain shuffle partitions", str(turn))
+
+    # --- model stamping (Identity pillar / "Friday" probe fix) ---
+    with tempfile.TemporaryDirectory() as td:
+        tp2 = Path(td) / "t2.jsonl"
+        recs2 = [
+            {"type": "user", "message": {"content": [{"type": "text", "text": "what model are you?"}]}},
+            {"type": "assistant", "message": {"model": "<synthetic>",
+                                              "content": [{"type": "text", "text": "thinking..."}]}},
+            {"type": "assistant", "message": {"model": "claude-fable-5",
+                                              "content": [{"type": "text", "text": "Answer."}]}},
+        ]
+        tp2.write_text("\n".join(json.dumps(r) for r in recs2) + "\n", encoding="utf-8")
+        turn2 = _extract_turn(str(tp2))
+        check("T11 model stamped from assistant record",
+              turn2 is not None and turn2.get("model") == "claude-fable-5", str(turn2))
+
+        tp3 = Path(td) / "t3.jsonl"
+        recs3 = [
+            {"type": "assistant", "message": {"model": "claude-opus-4-8",
+                                              "content": [{"type": "text", "text": "earlier turn"}]}},
+            {"type": "user", "message": {"content": [{"type": "text", "text": "quick q"}]}},
+            {"type": "assistant", "message": {"model": "<synthetic>",
+                                              "content": [{"type": "text", "text": "interim"}]}},
+        ]
+        tp3.write_text("\n".join(json.dumps(r) for r in recs3) + "\n", encoding="utf-8")
+        turn3 = _extract_turn(str(tp3))
+        check("T12 synthetic-only turn falls back to last real model",
+              turn3 is not None and turn3.get("model") == "claude-opus-4-8", str(turn3))
 
     total = passed + len(failed)
     print(f"\n  Passed: {passed}/{total}")
