@@ -242,6 +242,14 @@ class ReActLoop:
         result = ReActResult()
 
         system_text = self._system_prompt or ""
+
+        # Tool protocol: a REAL model cannot guess which tools exist, their input
+        # schemas, or the emission format — scripted test LLMs never needed this,
+        # which hid the gap until First Light (a live model invented its own
+        # argument schema). Tool.schema_for_llm() existed since 3.0 for this.
+        if self._tools:
+            system_text = ((system_text + "\n\n") if system_text else "") + self._render_tool_protocol()
+
         if self._enable_mirror:
             system_text = inject_mirror_lite(system_text)
 
@@ -467,6 +475,27 @@ class ReActLoop:
             await self._fire_teardown(used_tool_names)
 
     # ---- Internals -------------------------------------------------------
+
+    def _render_tool_protocol(self) -> str:
+        """The tool contract a real model needs: what exists, exact input
+        schemas, and the emission format the parser accepts."""
+        lines = [
+            "TOOLS — you may call these. To call a tool, reply with ONLY a JSON "
+            "object: {\"name\": \"<tool_name>\", \"arguments\": {...}} (or a JSON "
+            "array of such objects for multiple calls). The arguments MUST match "
+            "the tool's input schema exactly. After you receive the tool result, "
+            "either call another tool or reply with your final answer as plain "
+            "text (no JSON).",
+        ]
+        for name in sorted(self._tools):
+            try:
+                spec = self._tools[name].schema_for_llm()
+                schema = json.dumps(spec.get("input_schema", {}), ensure_ascii=False)
+                lines.append(f"- {spec.get('name', name)}: {spec.get('description', '')}\n"
+                             f"  input_schema: {schema}")
+            except Exception:
+                lines.append(f"- {name}")
+        return "\n".join(lines)
 
     async def _call_llm(self, messages: List[Dict[str, str]]) -> str:
         out = self._llm_call(list(messages))
@@ -1380,6 +1409,29 @@ if __name__ == "__main__":
               roles_27[:roles_27.index("assistant")].count("system") == 1)
         check("T26 no memory_manager -> default behavior intact",
               r26.terminated_reason == TERMINATED_FINAL_ANSWER)
+
+        # ---- T30: tool protocol rendered into the system message (First Light
+        # fix — a REAL model invented its own argument schema because the loop
+        # never told it the tools' input schemas or the emission format).
+        loop30 = ReActLoop(
+            llm_call=make_scripted_llm(["done"]),
+            tool_instances={"stub_add": StubAdd()},
+            enable_mirror_lite=False, enable_cot_monitor=False,
+        )
+        r30 = await loop30.run("anything")
+        sys30 = r30.messages[0]["content"]
+        check("T30a system msg lists the tool + schema",
+              r30.messages[0]["role"] == "system" and "stub_add" in sys30
+              and "input_schema" in sys30, sys30[:120])
+        check("T30b emission format documented",
+              '"name"' in sys30 and '"arguments"' in sys30)
+        loop30b = ReActLoop(
+            llm_call=make_scripted_llm(["done"]), tool_instances={},
+            enable_mirror_lite=False, enable_cot_monitor=False,
+        )
+        r30b = await loop30b.run("anything")
+        check("T30c no tools -> no protocol block (no system msg)",
+              not r30b.messages or r30b.messages[0]["role"] != "system")
 
         # ---- Report -----------------------------------------------------
         total = passed + len(failed)
