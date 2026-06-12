@@ -215,7 +215,11 @@ class ActivityRecaller:
             if not chain or chain[-1][1] != m:
                 chain.append((dt, m))
         current = chain[-1][1]
-        parts = [f"SELF-STATE: these turns were produced by {current} (current brain)"]
+        # "latest captured", NOT "current brain": the queue spans hosts (Claude
+        # Code + terminal), so the newest sighting is whichever runtime spoke
+        # last anywhere — asserting it as THIS host's brain was live-wrong on
+        # 2026-06-12 (a fable-5 session read "nemotron (current brain)").
+        parts = [f"SELF-STATE: latest captured turn was produced by {current}"]
         if machine:
             parts.append(f"on {machine}")
         if len(chain) > 1:
@@ -314,8 +318,9 @@ def _run_self_test() -> None:
             obs_m(now, "claude-fable-5"),
         ]) + "\n", encoding="utf-8")
         dm = ActivityRecaller(queue_path=mq).digest(days=3, now=now)
-        check("T11 SELF-STATE names the current brain",
-              "SELF-STATE" in dm and "claude-fable-5 (current brain)" in dm, dm[:300])
+        check("T11 SELF-STATE names the latest captured brain",
+              "SELF-STATE" in dm
+              and "latest captured turn was produced by claude-fable-5" in dm, dm[:300])
         check("T11b swap chain rendered",
               "claude-opus-4-8 -> claude-fable-5" in dm, dm[:300])
         check("T11c machine included", "HRM5472-NEW" in dm)
