@@ -96,7 +96,7 @@
 ### Stage 4.A — Orchestration (Pass A)
 | # | Sub-Phase | Status |
 |---|-----------|--------|
-| 4.0 | Cognitive Control Loop (boot inhale, autobiography wiring, RoadmapStateReader, Confidence Gate v1, capture parity — closes L324; blocks all other sub-phases per L107) | ⬜ |
+| 4.0 | Cognitive Control Loop (boot inhale, autobiography wiring, RoadmapStateReader, Confidence Gate v1, capture parity — closes L324; blocks all other sub-phases per L107) | ✅ Complete (2026-06-12, Gate A 5/5 live) |
 | 4.1 | Route Targets & Per-Model Protocol (L322: ModelProfile registry + ProtocolAdapter middleware + RouteTarget contract + **STEAL #7** OpenClaude SmartRouter failover). Kimi K2.6 RunPod deployment DEFERRED to Stage 5 entry per Decision 2026-06-12 — `RunPodTarget` ships as offline contract stub; frontier APIs = explicit-flag escape valve, structurally outside the router pool | ⬜ |
 | 4.2 | Intent Router (interim nearest-prototype classifier on specialist-codename labels; ModernBERT-Large CPU classifier = conditional on gate failure, else Stage 5 specialist #1 trained on the RoutingLedger) | ⬜ |
 

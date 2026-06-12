@@ -38,7 +38,7 @@
 
 ---
 
-## Sub-Phase 4.0: Cognitive Control Loop (Self-Awareness) ⬜ — Wave 1
+## Sub-Phase 4.0: Cognitive Control Loop (Self-Awareness) ✅ — Wave 1 (complete 2026-06-12, Gate A 5/5 live)
 
 **Goal:** The runtime Mind boots self-aware — time, identity, autobiography, next task, confidence — and terminal sessions feed the corpus. Closes all three L324 gaps (autobiography, boot inhale, capture parity) with the live repro as the acceptance test. Per L107 this sub-phase **blocks everything else**: you cannot route queries (4.2) or score confidence (4.5) if the Orchestrator has no self-model.
 
@@ -172,7 +172,7 @@ Row kept for master-roadmap traceability. **Trigger:** first KB-logged retrieval
 
 | Sub-Phase | Wave | Status | Lessons Complete |
 |-----------|------|--------|------------------|
-| 4.0 Cognitive Control Loop | 1 | ⬜ Not Started | 0/5 |
+| 4.0 Cognitive Control Loop | 1 | ✅ Complete (2026-06-12; Gate A 5/5 live on nemotron free tier, ₹0; capture parity + KB distill proven) | 5/5 |
 | 4.1 Route Targets & Per-Model Protocol | 2 (Pass A) | ⬜ Not Started | 0/4 |
 | 4.2 Intent Router | 2 (Pass A) | ⬜ Not Started | 0/4 (+1 conditional) |
 | 4.3 Dynamic Target Management | 3 (Pass B) | ⬜ Not Started | 0/3 |
