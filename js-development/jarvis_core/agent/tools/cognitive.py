@@ -235,24 +235,29 @@ class PriorSelfConsultTool(CognitiveToolBase):
     )
     input_schema = PriorSelfConsultInput
 
-    # Session-distill Episodics contain the asked question VERBATIM, so a
-    # re-asked question retrieves its own echo above real Decisions (observed
-    # live, trap probe 2026-06-12 — a stale answer self-reinforces). Down-weight,
-    # never exclude: "what did I ask you last time?" must still find them.
-    # 0.3, not 0.5: an echo scores ~1.0 raw while real entries cannot match the
-    # question's chat words ("what did we decide about…"), so the weight must
-    # push echoes below any entry covering ≥~30% of the query.
-    _DISTILL_TAG = "session-distill"
-    _DEFAULT_DISTILL_WEIGHT = 0.3
+    # META-ENTRIES — records ABOUT sessions/probes — contain the asked
+    # question's exact vocabulary, so they outrank the entries holding the
+    # actual ANSWER. Observed live twice on 2026-06-12: (1) session distills
+    # echo the question verbatim (a re-asked question retrieves its own echo;
+    # stale answers self-reinforce); (2) the Failure entry DOCUMENTING the trap
+    # probe became the top hit for the trap phrasing, and its truncated head
+    # ends on the wrong-answer quote — the model read a failure description as
+    # policy. Self-observation contaminating the observed. Down-weight, never
+    # exclude ("what did I ask you last time?" must still find distills).
+    # 0.3, not 0.5: a meta-entry scores ~1.0 raw while real entries cannot
+    # match the question's chat words, so the weight must push meta hits below
+    # any entry covering >=~30% of the query.
+    _META_TAGS = frozenset({"session-distill", "trap-probe"})
+    _DEFAULT_META_WEIGHT = 0.3
     # Head-truncate each hit: 5 FULL contents (~2,000 chars each for battle-plan
     # class entries) silently overflowed the ReAct 4,000-char observation cap —
     # ranks 4-5 were never actually seen by the model. 8 bounded hits fit.
     _CONTENT_HEAD_CHARS = 450
 
-    def __init__(self, *args: Any, distill_weight: float = _DEFAULT_DISTILL_WEIGHT,
+    def __init__(self, *args: Any, meta_weight: float = _DEFAULT_META_WEIGHT,
                  **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
-        self._distill_weight = distill_weight
+        self._meta_weight = meta_weight
 
     @property
     def is_concurrency_safe(self) -> bool:
@@ -277,8 +282,8 @@ class PriorSelfConsultTool(CognitiveToolBase):
                     continue
                 content_tokens = _tokenize(entry.get("content", ""))
                 score = _overlap_ratio(query_tokens, content_tokens)
-                if self._DISTILL_TAG in (entry.get("tags") or []):
-                    score *= self._distill_weight
+                if self._META_TAGS & set(entry.get("tags") or []):
+                    score *= self._meta_weight
                 if score > 0:
                     hits.append((score, ts, entry))
         except FileNotFoundError:
@@ -575,6 +580,11 @@ if __name__ == "__main__":
          "tags": ["session-distill", "terminal", "general"],
          "content": "Terminal session distill (brain-x): Q: what did we decide about kimchi cloudpods deploy? | A: deferred | tools: none",
          "expiry": "Permanent"},
+        # Probe-documentation Failure sharing the probed question's vocabulary (PSC8)
+        {"timestamp": _days_ago(0), "type": "Failure",
+         "tags": ["trap-probe", "retrieval"],
+         "content": "Failure: trap probe about the kimchi cloudpods deploy budget decision; system wrongly recited the old deploy as standing.",
+         "expiry": "Permanent"},
     ]
     with tempfile.NamedTemporaryFile("w", suffix=".jsonl", delete=False, encoding="utf-8") as kbf:
         for e in test_entries:
@@ -680,6 +690,17 @@ if __name__ == "__main__":
               r5d.is_success and any("session-distill" in r["tags"]
                                      for r in r5d.output["results"]),
               str(r5d.output["results"][:1]))
+
+        # PSC8: a Failure entry DOCUMENTING a probe (sharing its vocabulary)
+        # must rank below the real Decision — self-observation must not
+        # contaminate the observed (live regression, trap run 3, 2026-06-12)
+        r5f = await safe_invoke(psc, {"query": "kimchi cloudpods deploy budget decision",
+                                      "days_back": 90})
+        check("PSC8 probe-documentation ranks below the real Decision",
+              r5f.is_success and r5f.output["results"][0]["type"] == "Decision"
+              and "trap-probe" not in r5f.output["results"][0]["tags"]
+              and "DEFERRED" in r5f.output["results"][0]["content"],
+              str([(r["type"], r["tags"]) for r in r5f.output["results"][:2]]))
 
         # PSC7: hit contents are head-truncated so top_n results fit the ReAct
         # observation cap (full contents silently overflowed it — trap probe)
