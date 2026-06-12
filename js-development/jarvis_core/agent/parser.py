@@ -158,9 +158,13 @@ def _extract_json_str(raw: str) -> Optional[str]:
     Extract a JSON string from raw LLM output.
 
     EXECUTION FLOW:
-    1. Try markdown fence extraction first (most structured models).
-    2. Fall back to finding the outermost { ... } brace pair.
-    3. Return None if no JSON-like content found.
+    1. Text starting with '{': take the FIRST complete JSON document via
+       raw_decode — reasoning models emit "{call}\\n{call}" or "{call}\\nprose"
+       in one turn (live repro 2026-06-12, Gate A autobiography on nemotron);
+       treating the whole string as one document made real calls vanish.
+    2. Try markdown fence extraction (most structured models).
+    3. Fall back to the first balanced { ... } brace pair anywhere.
+    4. Return None if no JSON-like content found.
 
     Args:
         raw: Raw LLM output text.
@@ -170,9 +174,13 @@ def _extract_json_str(raw: str) -> Optional[str]:
     """
     stripped = raw.strip()
 
-    # Fast path: the entire string is already clean JSON
+    # Fast path: text IS JSON (possibly with a second object / prose after it)
     if stripped.startswith("{"):
-        return stripped
+        try:
+            _obj, end = json.JSONDecoder().raw_decode(stripped)
+            return stripped[:end]
+        except json.JSONDecodeError:
+            pass  # malformed head — fall through to fence/brace strategies
 
     # Try markdown fence: ```json\n{...}\n```
     fence_match = _FENCE_PATTERN.search(stripped)

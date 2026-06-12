@@ -478,78 +478,20 @@ async def _first_thought() -> None:
           f"{' via REAL TOOL CALL' if used_tool else ' (no tool call)'} <<<")
 
 
-async def _ask(question: str) -> None:
-    """Interactive entry point: ask JARVIS anything. The Mind on a real model with
-    the calculator + the user's own knowledge base (semantic search over the KB)."""
-    from jarvis_core.agent.mind import Mind, JARVIS_PSYCHE_PROMPT
-    from jarvis_core.agent.tools.calc import CalculatorTool
-    from jarvis_core.agent.tools.memory import MemorySemanticSearchTool
-
-    # KB grounding: the memory store must be INJECTED and OPENED (it is a context
-    # manager — connection lives in __enter__). Loads ChromaDB + the embedding
-    # model — acceptable on this interactive path.
-    store_ctx = None
-    collections: List[str] = []
-    tools: Dict[str, Any] = {"calculator": CalculatorTool()}
-    try:
-        from jarvis_core.memory.store import JarvisMemoryStore
-        store_ctx = JarvisMemoryStore()
-        store_ctx.__enter__()
-        collections = [c.name for c in store_ctx._client.list_collections()]
-        tools["memory_semantic_search"] = MemorySemanticSearchTool(store=store_ctx)
-    except Exception as e:
-        print(f"  (KB search unavailable: {type(e).__name__}: {e})")
-
-    client = build_llm_call(budget_usd=0.10)
-    if not client.model:
-        await client.pick_free_model()
-    identity = JARVIS_PSYCHE_PROMPT
-    if collections:
-        identity += f"\n\nAvailable memory collections: {collections}"
-    mind = Mind(
-        llm_call=client,
-        tools=tools,
-        max_iterations=8,
-        enable_mirror=False,   # free-tier models bury output inside the reflection protocol
-        enable_monitor=True,
-        allow_replan=True,
-        identity_prompt=identity,
-    )
-    print(f"  brain   : {client.model}")
-    print(f"  query   : {question}")
-    try:
-        result = await mind.solve(question)
-    finally:
-        if store_ctx is not None:
-            try:
-                store_ctx.__exit__(None, None, None)
-            except Exception:
-                pass
-    if result.react.tool_calls:
-        for tc, tr in result.react.tool_calls:
-            out = str(tr.error) if getattr(tr, "error", None) else str(tr.output)
-            tag = "tool!ERR" if getattr(tr, "error", None) else "tool    "
-            print(f"  {tag}: {tc.name} -> {out[:140]}{'...' if len(out) > 140 else ''}")
-    print(f"\n  JARVIS  : {result.answer.strip()}")
-    print(f"\n  ledger  : {client.ledger_summary()}")
-
-
 def main() -> int:
+    # The interactive `--ask` entry point moved to jarvis_core.brain.orchestrator
+    # (Stage 4.0.4): the spine boot-assembles the Mind there; brain composes
+    # agent, never the reverse.
     p = argparse.ArgumentParser(description="OpenRouter LLM adapter (First Light)")
     p.add_argument("--live", action="store_true", help="Real ping (needs OPENROUTER_API_KEY)")
     p.add_argument("--first-thought", action="store_true",
                    help="Live Final Boss: Mind + real model + calculator tool")
-    p.add_argument("--ask", metavar="QUESTION",
-                   help="Ask JARVIS anything (Mind + real model + calculator + KB search)")
     args = p.parse_args()
     if args.live:
         asyncio.run(_live_ping())
         return 0
     if args.first_thought:
         asyncio.run(_first_thought())
-        return 0
-    if args.ask:
-        asyncio.run(_ask(args.ask))
         return 0
     _run_self_test()
     return 0
