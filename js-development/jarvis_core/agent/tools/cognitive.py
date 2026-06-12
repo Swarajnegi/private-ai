@@ -218,7 +218,7 @@ class PriorSelfConsultInput(ToolInput):
         default=None,
         description="Optional KB type filter (e.g., ['Decision', 'Episodic']). None = all types.",
     )
-    top_n: int = Field(default=5, ge=1, le=20, description="Max results to return.")
+    top_n: int = Field(default=8, ge=1, le=20, description="Max results to return.")
 
 
 @Tool.register("prior_self_consult")
@@ -230,9 +230,29 @@ class PriorSelfConsultTool(CognitiveToolBase):
         "Query the KB within a time window (default last 90 days) for entries "
         "relevant to the query string. Use to consult past decisions / episodic "
         "events before making a similar choice now. Defends against drift from "
-        "prior reasoning."
+        "prior reasoning. Results are newest-first within equal relevance — a "
+        "newer Decision supersedes an older one on the same topic."
     )
     input_schema = PriorSelfConsultInput
+
+    # Session-distill Episodics contain the asked question VERBATIM, so a
+    # re-asked question retrieves its own echo above real Decisions (observed
+    # live, trap probe 2026-06-12 — a stale answer self-reinforces). Down-weight,
+    # never exclude: "what did I ask you last time?" must still find them.
+    # 0.3, not 0.5: an echo scores ~1.0 raw while real entries cannot match the
+    # question's chat words ("what did we decide about…"), so the weight must
+    # push echoes below any entry covering ≥~30% of the query.
+    _DISTILL_TAG = "session-distill"
+    _DEFAULT_DISTILL_WEIGHT = 0.3
+    # Head-truncate each hit: 5 FULL contents (~2,000 chars each for battle-plan
+    # class entries) silently overflowed the ReAct 4,000-char observation cap —
+    # ranks 4-5 were never actually seen by the model. 8 bounded hits fit.
+    _CONTENT_HEAD_CHARS = 450
+
+    def __init__(self, *args: Any, distill_weight: float = _DEFAULT_DISTILL_WEIGHT,
+                 **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self._distill_weight = distill_weight
 
     @property
     def is_concurrency_safe(self) -> bool:
@@ -247,7 +267,7 @@ class PriorSelfConsultTool(CognitiveToolBase):
         type_filter = set(tool_input.types) if tool_input.types else None
 
         try:
-            hits: List[tuple[float, Dict[str, Any]]] = []
+            hits: List[tuple[float, datetime, Dict[str, Any]]] = []
             for entry in _iter_kb(self._kb_path):
                 if type_filter and entry.get("type") not in type_filter:
                     continue
@@ -257,25 +277,34 @@ class PriorSelfConsultTool(CognitiveToolBase):
                     continue
                 content_tokens = _tokenize(entry.get("content", ""))
                 score = _overlap_ratio(query_tokens, content_tokens)
+                if self._DISTILL_TAG in (entry.get("tags") or []):
+                    score *= self._distill_weight
                 if score > 0:
-                    hits.append((score, entry))
+                    hits.append((score, ts, entry))
         except FileNotFoundError:
             return ToolResult(error=f"KB not found at {self._kb_path}")
         except OSError as e:
             return ToolResult(error=f"KB read failed: {e}")
 
-        hits.sort(key=lambda pair: pair[0], reverse=True)
+        # Newest-first within equal relevance: an autobiography that breaks ties
+        # oldest-first recites its past as its present (trap probe 2026-06-12 —
+        # a superseded Decision was asserted as "standing").
+        hits.sort(key=lambda t: (t[0], t[1]), reverse=True)
         top = hits[: tool_input.top_n]
+        def _content_head(text: str) -> str:
+            return (text[: self._CONTENT_HEAD_CHARS] + "…"
+                    if len(text) > self._CONTENT_HEAD_CHARS else text)
+
         return ToolResult(output={
             "results": [
                 {
                     "timestamp": e.get("timestamp"),
                     "type": e.get("type"),
                     "tags": e.get("tags", []),
-                    "content": e.get("content", ""),
+                    "content": _content_head(e.get("content", "")),
                     "match_score": round(score, 3),
                 }
-                for score, e in top
+                for score, _, e in top
             ],
             "count": len(top),
             "window_days": tool_input.days_back,
@@ -493,42 +522,71 @@ if __name__ == "__main__":
     print("  cognitive tools — smoke tests (synthetic KB, mock llm_call)")
     print("=" * 70)
 
-    # Build a synthetic KB JSONL with realistic entries
+    # Build a synthetic KB JSONL with realistic entries. Timestamps are RELATIVE
+    # to now — absolute dates time-bombed this suite once (the "recent" Decision
+    # silently aged out of its 30-day window on 2026-06-12).
+    _IST_TZ = timezone(timedelta(hours=5, minutes=30))
+    _NOW = datetime.now(_IST_TZ)
+
+    def _days_ago(n: int) -> str:
+        return (_NOW - timedelta(days=n)).isoformat(timespec="seconds")
+
     test_entries = [
         # DIRECTIVE Cognitive_Patterns
-        {"timestamp": "2026-05-17T07:30:00+05:30", "type": "Cognitive_Pattern",
+        {"timestamp": _days_ago(5), "type": "Cognitive_Pattern",
          "tags": ["identity", "ambition", "DIRECTIVE"],
          "content": "Insufficiency as sin. Greatest sin is to be a fraction of what you could be.",
          "expiry": "Permanent"},
-        {"timestamp": "2026-05-17T08:00:00+05:30", "type": "Cognitive_Pattern",
+        {"timestamp": _days_ago(5), "type": "Cognitive_Pattern",
          "tags": ["compression", "minimalism", "DIRECTIVE"],
          "content": "Aesthetic compression. Same minimalism discipline in poetry and code. No wasted words.",
          "expiry": "Permanent"},
         # Cognitive_Pattern without DIRECTIVE (should be excluded)
-        {"timestamp": "2026-05-17T09:00:00+05:30", "type": "Cognitive_Pattern",
+        {"timestamp": _days_ago(5), "type": "Cognitive_Pattern",
          "tags": ["compression", "background"],
          "content": "Background observation about compression patterns.",
          "expiry": "Permanent"},
-        # Recent Decision (within 90 days from 2026-05-22)
-        {"timestamp": "2026-05-13T08:00:00+05:30", "type": "Decision",
+        # Recent Decision (safely inside the 30-day window)
+        {"timestamp": _days_ago(9), "type": "Decision",
          "tags": ["openclaude", "reversal", "stage-3"],
          "content": "Build agent from scratch in jarvis_core/agent/ instead of OpenClaude delegation.",
          "expiry": "Permanent"},
-        # Old Decision (outside 90-day window)
-        {"timestamp": "2025-12-01T00:00:00+05:30", "type": "Decision",
+        # Old Decision (outside the 30-day window)
+        {"timestamp": _days_ago(180), "type": "Decision",
          "tags": ["legacy"],
          "content": "Some old reversal decision about openclaude scratch agent.",
          "expiry": "Permanent"},
         # Recent Episodic
-        {"timestamp": "2026-05-15T12:00:00+05:30", "type": "Episodic",
+        {"timestamp": _days_ago(7), "type": "Episodic",
          "tags": ["test"],
          "content": "Ran test on openclaude bridge integration. Result was negative.",
+         "expiry": "Permanent"},
+        # Supersession pair: SAME query-token overlap, 40 days apart (PSC4)
+        {"timestamp": _days_ago(41), "type": "Decision",
+         "tags": ["brain", "kimchi-deploy"],
+         "content": "Decision: deploy the kimchi brain on cloudpods as the default route.",
+         "expiry": "Permanent"},
+        {"timestamp": _days_ago(1), "type": "Decision",
+         "tags": ["brain", "kimchi-deploy", "supersedes"],
+         "content": "Decision: deploy of the kimchi brain on cloudpods is DEFERRED; zero-cost route stands.",
+         "expiry": "Permanent"},
+        # Session-distill echoing a likely query verbatim (PSC5/PSC6)
+        {"timestamp": _days_ago(0), "type": "Episodic",
+         "tags": ["session-distill", "terminal", "general"],
+         "content": "Terminal session distill (brain-x): Q: what did we decide about kimchi cloudpods deploy? | A: deferred | tools: none",
          "expiry": "Permanent"},
     ]
     with tempfile.NamedTemporaryFile("w", suffix=".jsonl", delete=False, encoding="utf-8") as kbf:
         for e in test_entries:
             kbf.write(json.dumps(e) + "\n")
         kb_test_path = Path(kbf.name)
+
+    with tempfile.NamedTemporaryFile("w", suffix=".jsonl", delete=False, encoding="utf-8") as kbf2:
+        kbf2.write(json.dumps({
+            "timestamp": _days_ago(1), "type": "Decision", "tags": ["longform"],
+            "content": "longform marker entry " + "x" * 3000, "expiry": "Permanent",
+        }) + "\n")
+        kb_long_path = Path(kbf2.name)
 
     def mock_llm_good(prompt: str) -> str:
         return ('{"bear_case": "Para1: structural mismatch. Para2: timing risk. Para3: '
@@ -593,6 +651,45 @@ if __name__ == "__main__":
         r5 = await safe_invoke(psc, {"query": "totally_unrelated_xyzzy"})
         check("PSC3 unrelated query returns empty",
               r5.is_success and r5.output["count"] == 0)
+
+        # PSC4: newest-first ties — equal-overlap supersession pair must rank
+        # the NEWER Decision first (trap probe 2026-06-12: oldest-first ties
+        # made a superseded decision read as "standing")
+        r5b = await safe_invoke(psc, {"query": "kimchi cloudpods deploy decision",
+                                      "days_back": 90, "types": ["Decision"]})
+        deploy_hits = [r["content"] for r in r5b.output["results"]]
+        check("PSC4 newest-first within equal relevance",
+              r5b.is_success and len(deploy_hits) >= 2
+              and "DEFERRED" in deploy_hits[0],
+              str(deploy_hits[:2]))
+
+        # PSC5: a session-distill echoing the query verbatim must NOT outrank
+        # real Decisions (echo down-weight)
+        r5c = await safe_invoke(psc, {"query": "what did we decide about kimchi cloudpods deploy",
+                                      "days_back": 90})
+        check("PSC5 distill echo ranks below real Decisions",
+              r5c.is_success and r5c.output["results"][0]["type"] == "Decision"
+              and "session-distill" not in r5c.output["results"][0]["tags"],
+              str([(r["type"], r["tags"]) for r in r5c.output["results"][:2]]))
+
+        # PSC6: down-weight is not exclusion — the distill is still retrievable
+        # when it is the only match
+        r5d = await safe_invoke(psc, {"query": "terminal session distill brain-x",
+                                      "days_back": 90})
+        check("PSC6 distill still retrievable when only match",
+              r5d.is_success and any("session-distill" in r["tags"]
+                                     for r in r5d.output["results"]),
+              str(r5d.output["results"][:1]))
+
+        # PSC7: hit contents are head-truncated so top_n results fit the ReAct
+        # observation cap (full contents silently overflowed it — trap probe)
+        psc_long = PriorSelfConsultTool(kb_path=kb_long_path)
+        r5e = await safe_invoke(psc_long, {"query": "longform marker entry"})
+        check("PSC7 hit content head-truncated",
+              r5e.is_success and r5e.output["count"] == 1
+              and len(r5e.output["results"][0]["content"]) <= 460
+              and r5e.output["results"][0]["content"].endswith("…"),
+              str(len(r5e.output["results"][0]["content"]) if r5e.output["results"] else 0))
 
         # -- bear_case_devil ----------------------------------------------
         bcd = BearCaseDevilTool(llm_call=mock_llm_good)
@@ -687,3 +784,4 @@ if __name__ == "__main__":
         asyncio.run(run())
     finally:
         kb_test_path.unlink(missing_ok=True)
+        kb_long_path.unlink(missing_ok=True)
