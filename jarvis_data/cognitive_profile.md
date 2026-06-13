@@ -1,6 +1,6 @@
 # Cognitive Profile — Model of the User
 
-> Auto-synthesized by `scripts/profile_synth.py` from `knowledge_base.jsonl` (348 entries). Injected into every chat via the SessionStart hook. Regenerate after KB updates.
+> Auto-synthesized by `scripts/profile_synth.py` from `knowledge_base.jsonl` (350 entries). Injected into every chat via the SessionStart hook. Regenerate after KB updates.
 
 ## Who you are
 - PATTERN: mechanism_over_performance_verification (2026-06-12). After Stage 4 Wave 1 shipped with Gate A 5/5, the user did not accept the scorecard -- they asked for a question that proves the features are 'actual consciousness... not just working based on prompts or rules.' This is the user's fourth designed probe clas ...
@@ -13,6 +13,7 @@
 - Zero-gap signal + refusal pattern combined. After being presented with 19+ 'tools' for Iron-Man-feel, user immediately caught the conflation: 'these are something automatically called and run, right? These are not callable?' - recognizing that proactive Iron-Man behaviors must be daemons/middleware, not LLM-callable to ...
 
 ## How you work — active directives
+- [Idea] DIRECTIVE: autobiographical retrieval = semantic+lexical blend with a bounded recency prior as STANDARD; a memory system answering 'what did we decide about X' must weight its NEWEST memory of X, not just break ties by it. STILL OPEN: ConfidenceGate v1 anti-correlation (grades best-single-chunk) = 4.5; nemotron repeat- ...
 - [Failure] DIRECTIVE: any KB entry documenting a probe/test MUST carry the trap-probe tag so retrieval self-down-weights it.
 - [Failure] DIRECTIVE: autobiographical retrieval is newest-first-within-relevance with echo down-weight as STANDARD; nemotron repeat-identical-call quirk remains 4.1 ModelProfile scope; also fixed: cognitive.py test fixture time-bomb (absolute timestamps aged out of their own window -- fixtures use relative timestamps now) and re ...
 - [Cognitive_Pattern] DIRECTIVE: when demonstrating any new JARVIS capability, proactively design the divergence test (false premise / ground-truth-checkable / artifact-verifiable: tool lines, gate grounds, queue records) instead of demo questions where confabulation and competence look identical. Expect the user to distrust any demo whose  ...
@@ -20,7 +21,6 @@
 - [Decision] DIRECTIVE: Stage 4 lessons execute against js-learning/stage_4_orchestration/ROADMAP.md (rewritten this date); do not re-litigate the gate failure path (pre-decided: <80% -> conditional 4.2.5 ModernBERT).
 - [Failure] DIRECTIVE: any new brain/host inherits identity from JARVIS_PSYCHE_PROMPT by default; never ship a Mind entry point that leaves identity to the substrate.
 - [Decision] DIRECTIVE: Stage 4 scoping (/master-planner) is UNBLOCKED -- and today's live data names its first concrete router concern: PER-MODEL PROTOCOL ROUTING (mirror on/off, tool-format dialects, reasoning-channel handling, rate-limit failover) is not theoretical, it was observed across 4 models in one afternoon.
-- [System_Protocol] DIRECTIVE: every new awareness feature MUST ship as core-organ (jarvis_core) + thin host-adapter (scripts/hooks or equivalent) + manifest entry -- never as harness-only config. Regenerate cognitive_profile.md AND activity_digest.md together before pushes so the travelling mind stays current. A feature that exists on on ...
 
 ## What you're building
 **Current focus:** STAGE 4 WAVE 1 SHIPPED (2026-06-12): Sub-Phase 4.0 Cognitive Control Loop complete -- Gate A 5/5 LIVE on nemotron-3-super free tier at $0.00, all three L324 gaps closed. Six brain/ organs landed (81 o ...
