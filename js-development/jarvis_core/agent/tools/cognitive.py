@@ -51,11 +51,22 @@ cognitive_mirror:
     STEP 3: Score each candidate by token-overlap ratio with `context`.
     STEP 4: Return top-k by overlap score.
 
-prior_self_consult:
+prior_self_consult (semantic since Wave 1.2, 2026-06-12 — token-overlap alone
+missed vocabulary mismatches live: "deploying" vs "deployment", "zero-rupee"
+vs "budget"; the superseding Decision surfaced in only ~1/3 runs):
     STEP 1: Compute cutoff datetime = now - days_back.
-    STEP 2: Iterate KB; filter by timestamp >= cutoff AND (optional) type whitelist.
-    STEP 3: Score each by token-overlap with `query`.
-    STEP 4: Return top-N (capped at 10) with timestamps + types + tags.
+    STEP 2: Embed-index the whole KB once per (path, embedder) — cached by
+            file mtime+size; ~350 entries ≈ seconds on CPU, MiniLM truncates
+            each entry to its first ~1,000 chars (256-token model limit).
+    STEP 3: Score each in-window entry: 0.6·cosine(query, entry) +
+            0.4·token-overlap; meta-entries (session-distill / trap-probe
+            tags) ×0.3 — records ABOUT probes carry the probed question's
+            vocabulary and must rank below the entries holding the ANSWER.
+    STEP 4: Sort by (score rounded to 0.01, timestamp) DESC — near-ties
+            break NEWEST-first (an autobiography that breaks ties oldest-
+            first recites its past as its present). Return top-N with
+            content heads (450 chars — full contents overflowed the ReAct
+            observation cap).
 
 bear_case_devil:
     STEP 1: Require llm_call DI (else clean error — fail loud).
@@ -76,6 +87,7 @@ writing_voice_check:
 from __future__ import annotations
 
 import json
+import math
 import re
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -84,6 +96,7 @@ from typing import Any, Callable, Dict, List, Optional
 from pydantic import Field
 
 from jarvis_core.agent.tool import Tool, ToolInput, ToolResult
+from jarvis_core.agent.domain_classifier import EmbedFn, _build_default_embed_fn, _dot
 from jarvis_core.config import KB_PATH
 
 
@@ -221,6 +234,47 @@ class PriorSelfConsultInput(ToolInput):
     top_n: int = Field(default=8, ge=1, le=20, description="Max results to return.")
 
 
+_EMBED_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
+_EMBED_HEAD_CHARS = 1000   # MiniLM truncates at 256 tokens — make the cut explicit
+_SEMANTIC_WEIGHT = 0.6     # cosine recall (vocabulary-mismatch-proof)
+_LEXICAL_WEIGHT = 0.4      # token-overlap precision (exact terms, ids, codes)
+# Recency prior — the trap-probe lesson (2026-06-12) made systematic. Pure
+# relevance ranks a SUPERSEDED decision above the one that superseded it,
+# because the old entry is densely on-topic while the superseding entry spreads
+# across many concerns. A memory recalling "what did we decide about X" weights
+# its NEWEST memory of X. Multiplicative + bounded: an irrelevant-but-recent
+# entry (base ~0) stays ~0; a relevant entry gets up to +RECENCY_BOOST, decaying
+# by half every HALFLIFE days. Tie-break newest-first remains as a backstop.
+_RECENCY_BOOST = 0.35
+_RECENCY_HALFLIFE_DAYS = 25.0
+
+# One lazily-built default embedder + one KB embedding index per (path, embedder),
+# invalidated on file mtime/size change — ~350 entries embed in seconds on CPU
+# and then every consult in the process is a dot-product scan.
+_DEFAULT_EMBED: List[Optional[EmbedFn]] = [None]
+_KB_EMBED_CACHE: Dict[Any, Any] = {}
+
+
+def _default_embed_fn() -> EmbedFn:
+    if _DEFAULT_EMBED[0] is None:
+        _DEFAULT_EMBED[0] = _build_default_embed_fn(_EMBED_MODEL)
+    return _DEFAULT_EMBED[0]
+
+
+def _kb_embed_index(kb_path: Path, embed_fn: EmbedFn) -> List[tuple]:
+    """[(ts, entry, unit_vec)] for the whole KB — cached by (path, embedder, mtime, size)."""
+    st = kb_path.stat()
+    key = (str(kb_path), id(embed_fn))
+    cached = _KB_EMBED_CACHE.get(key)
+    if cached and cached[0] == (st.st_mtime_ns, st.st_size):
+        return cached[1]
+    entries = list(_iter_kb(kb_path))
+    vecs = embed_fn([e.get("content", "")[:_EMBED_HEAD_CHARS] for e in entries]) if entries else []
+    index = [(_parse_iso_utc(e.get("timestamp", "")), e, v) for e, v in zip(entries, vecs)]
+    _KB_EMBED_CACHE[key] = ((st.st_mtime_ns, st.st_size), index)
+    return index
+
+
 @Tool.register("prior_self_consult")
 class PriorSelfConsultTool(CognitiveToolBase):
     """Time-windowed KB query — surface past decisions/episodics relevant to current query."""
@@ -228,10 +282,11 @@ class PriorSelfConsultTool(CognitiveToolBase):
     name = "prior_self_consult"
     description = (
         "Query the KB within a time window (default last 90 days) for entries "
-        "relevant to the query string. Use to consult past decisions / episodic "
-        "events before making a similar choice now. Defends against drift from "
-        "prior reasoning. Results are newest-first within equal relevance — a "
-        "newer Decision supersedes an older one on the same topic."
+        "relevant to the query string (semantic + keyword relevance). Use to "
+        "consult past decisions / episodic events before making a similar "
+        "choice now. Defends against drift from prior reasoning. Results are "
+        "newest-first within equal relevance — a newer Decision supersedes an "
+        "older one on the same topic."
     )
     input_schema = PriorSelfConsultInput
 
@@ -255,13 +310,17 @@ class PriorSelfConsultTool(CognitiveToolBase):
     _CONTENT_HEAD_CHARS = 450
 
     def __init__(self, *args: Any, meta_weight: float = _DEFAULT_META_WEIGHT,
-                 **kwargs: Any) -> None:
+                 embed_fn: Optional[EmbedFn] = None, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
         self._meta_weight = meta_weight
+        self._embed_fn = embed_fn
 
     @property
     def is_concurrency_safe(self) -> bool:
         return True
+
+    def _embedder(self) -> EmbedFn:
+        return self._embed_fn or _default_embed_fn()
 
     async def invoke(self, tool_input: PriorSelfConsultInput) -> ToolResult:
         query_tokens = _tokenize(tool_input.query)
@@ -272,29 +331,36 @@ class PriorSelfConsultTool(CognitiveToolBase):
         type_filter = set(tool_input.types) if tool_input.types else None
 
         try:
-            hits: List[tuple[float, datetime, Dict[str, Any]]] = []
-            for entry in _iter_kb(self._kb_path):
-                if type_filter and entry.get("type") not in type_filter:
-                    continue
-                ts_raw = entry.get("timestamp", "")
-                ts = _parse_iso_utc(ts_raw)
-                if ts is None or ts < cutoff:
-                    continue
-                content_tokens = _tokenize(entry.get("content", ""))
-                score = _overlap_ratio(query_tokens, content_tokens)
-                if self._META_TAGS & set(entry.get("tags") or []):
-                    score *= self._meta_weight
-                if score > 0:
-                    hits.append((score, ts, entry))
+            embed = self._embedder()
+            index = _kb_embed_index(self._kb_path, embed)
+            query_vec = embed([tool_input.query])[0]
         except FileNotFoundError:
             return ToolResult(error=f"KB not found at {self._kb_path}")
         except OSError as e:
             return ToolResult(error=f"KB read failed: {e}")
 
-        # Newest-first within equal relevance: an autobiography that breaks ties
-        # oldest-first recites its past as its present (trap probe 2026-06-12 —
-        # a superseded Decision was asserted as "standing").
-        hits.sort(key=lambda t: (t[0], t[1]), reverse=True)
+        now = datetime.now(timezone.utc)
+        hits: List[tuple[float, datetime, Dict[str, Any]]] = []
+        for ts, entry, vec in index:
+            if type_filter and entry.get("type") not in type_filter:
+                continue
+            if ts is None or ts < cutoff:
+                continue
+            semantic = max(0.0, _dot(query_vec, vec))
+            lexical = _overlap_ratio(query_tokens, _tokenize(entry.get("content", "")))
+            score = _SEMANTIC_WEIGHT * semantic + _LEXICAL_WEIGHT * lexical
+            age_days = max(0.0, (now - ts).total_seconds() / 86400.0)
+            score *= 1.0 + _RECENCY_BOOST * math.exp(-age_days / _RECENCY_HALFLIFE_DAYS)
+            if self._META_TAGS & set(entry.get("tags") or []):
+                score *= self._meta_weight
+            if score > 0:
+                hits.append((score, ts, entry))
+
+        # Newest-first within near-equal relevance (0.01 score bands): an
+        # autobiography that breaks ties oldest-first recites its past as its
+        # present (trap probe 2026-06-12 — a superseded Decision was asserted
+        # as "standing").
+        hits.sort(key=lambda t: (round(t[0], 2), t[1]), reverse=True)
         top = hits[: tool_input.top_n]
         def _content_head(text: str) -> str:
             return (text[: self._CONTENT_HEAD_CHARS] + "…"
@@ -598,6 +664,22 @@ if __name__ == "__main__":
         }) + "\n")
         kb_long_path = Path(kbf2.name)
 
+    # Deterministic offline embedder for PSC tests: bag-of-keywords unit vector
+    # over a fixed vocab — cosine then behaves like lexical similarity, so the
+    # ranking logic (blend, ties, weights, filters) is tested without downloads.
+    _FAKE_VOCAB = ["openclaude", "reversal", "scratch", "agent", "kimchi",
+                   "cloudpods", "deploy", "decision", "budget", "terminal",
+                   "distill", "longform", "marker", "entry", "brain", "bridge"]
+
+    def fake_embed(texts: List[str]) -> List[List[float]]:
+        out: List[List[float]] = []
+        for t in texts:
+            tl = t.lower()
+            vec = [1.0 if w in tl else 0.0 for w in _FAKE_VOCAB]
+            norm = sum(x * x for x in vec) ** 0.5
+            out.append([x / norm for x in vec] if norm else vec)
+        return out
+
     def mock_llm_good(prompt: str) -> str:
         return ('{"bear_case": "Para1: structural mismatch. Para2: timing risk. Para3: '
                 'capital constraints.", "kill_switches": ["price <50", "earnings miss '
@@ -641,7 +723,7 @@ if __name__ == "__main__":
               r2.is_success and r2.output["count"] == 0)
 
         # -- prior_self_consult -------------------------------------------
-        psc = PriorSelfConsultTool(kb_path=kb_test_path)
+        psc = PriorSelfConsultTool(kb_path=kb_test_path, embed_fn=fake_embed)
         r3 = await safe_invoke(psc, {"query": "openclaude reversal scratch agent", "days_back": 30})
         check("PSC1 success", r3.is_success)
         check("PSC1 finds recent decision",
@@ -704,7 +786,7 @@ if __name__ == "__main__":
 
         # PSC7: hit contents are head-truncated so top_n results fit the ReAct
         # observation cap (full contents silently overflowed it — trap probe)
-        psc_long = PriorSelfConsultTool(kb_path=kb_long_path)
+        psc_long = PriorSelfConsultTool(kb_path=kb_long_path, embed_fn=fake_embed)
         r5e = await safe_invoke(psc_long, {"query": "longform marker entry"})
         check("PSC7 hit content head-truncated",
               r5e.is_success and r5e.output["count"] == 1
