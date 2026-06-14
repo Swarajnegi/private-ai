@@ -135,6 +135,32 @@ def _evidence_from(mind_result: MindResult) -> List[str]:
     return out
 
 
+def _is_unparsed_answer(text: str) -> bool:
+    """True when the 'answer' is not prose but a raw/empty model artifact.
+
+    The loop is supposed to repair botched tool calls (react.py), but defence in
+    depth: never let a structured fragment reach the user, the KB, or the digest
+    as if it were an answer (live repro 2026-06-12 — raw tool-call JSON printed
+    as JARVIS's reply). Structural test only — NOT the confidence verdict, which
+    is the known-anti-correlated v1 gate and would wrongly suppress good hedged
+    answers (run 5's correct answer scored UNCERTAIN)."""
+    s = (text or "").strip()
+    if not s:
+        return True
+    if s.startswith("["):
+        return True
+    if s.startswith("{") and ('"name"' in s or '"arguments"' in s):
+        return True
+    return False
+
+
+_UNPARSED_FALLBACK = (
+    "I couldn't produce a clean answer this run — the underlying model's output "
+    "didn't parse into a usable reply (a malformed tool call, not a retrieval "
+    "miss). This is a per-model protocol gap (Sub-Phase 4.1), not a memory gap."
+)
+
+
 async def ask(
     question: str,
     llm_call: Optional[Any] = None,
@@ -188,10 +214,23 @@ async def ask(
         tag = "tool!ERR" if getattr(tr, "error", None) else "tool    "
         printer(f"  {tag}: {tc.name} -> {out[:140]}{'...' if len(out) > 140 else ''}")
 
-    active_gate = gate or ConfidenceGate()
-    report: ConfidenceReport = active_gate.grade(result.answer, _evidence_from(result))
+    # Structural safety gate: a degenerate (raw/empty/tool-shaped) emission is
+    # never presented, stored, or distilled as an answer. The honest fallback
+    # — plus whatever evidence WAS retrieved — replaces it everywhere downstream.
+    evidence = _evidence_from(result)
+    if _is_unparsed_answer(result.answer):
+        found = f" Retrieved this session: {evidence[0][:200]}…" if evidence else ""
+        answer = _UNPARSED_FALLBACK + found
+        report = ConfidenceReport(
+            0.0, "ESCALATE",
+            ("answer did not parse into prose — model emitted a malformed/structured "
+             "fragment; suppressed at the orchestrator output gate",))
+    else:
+        answer = result.answer.strip()
+        active_gate = gate or ConfidenceGate()
+        report = active_gate.grade(answer, evidence)
 
-    printer(f"\n  JARVIS  : {result.answer.strip()}")
+    printer(f"\n  JARVIS  : {answer}")
     printer(f"  confidence: {report.verdict} ({report.score:.2f}) — {report.grounds[0]}")
 
     cwd = os.getcwd()
@@ -201,7 +240,7 @@ async def ask(
             obs = build_observation(
                 event={"session_id": _SESSION_ID},
                 turn={"user_text": strip_harness_blocks(question),
-                      "assistant_summary": result.answer,
+                      "assistant_summary": answer,
                       "model": model},
                 cwd=cwd,
             )
@@ -223,11 +262,11 @@ async def ask(
     if distill:
         active_writer = writer or SessionMemoryWriter(kb_path=kb_path)
         out = active_writer.write(SessionRecord(
-            question=question, answer=result.answer, model=model,
+            question=question, answer=answer, model=model,
             tools_used=tuple(tc.name for tc, _tr in result.react.tool_calls),
             spend_usd=float(ledger.get("spend_usd") or 0.0),
             confidence_verdict=report.verdict, confidence_score=report.score,
-            domain=guess_domain(cwd, question + " " + result.answer),
+            domain=guess_domain(cwd, question + " " + answer),
         ))
         distill_status = str(out.get("status", "error"))
 
@@ -235,7 +274,7 @@ async def ask(
         printer(f"  ledger  : {ledger}")
 
     return AskResult(
-        question=question, answer=result.answer,
+        question=question, answer=answer,
         verdict=report.verdict, confidence_score=report.score,
         grounds=report.grounds, ledger=ledger, boot=boot_report, mind=result,
         captured=captured, distill_status=distill_status,
@@ -449,6 +488,45 @@ def _run_self_test() -> None:
             v2, _ = _judge_awareness("temporal", r11, "2026-06-12")
             check("T12 awareness judge: KB-consulting run passes autobiography; "
                   "dateless answer fails temporal", v == "PASS" and v2 == "FAIL")
+
+            # T13: _is_unparsed_answer — structural detector (pure)
+            check("T13a raw tool-call JSON is degenerate",
+                  _is_unparsed_answer('{"name": "x", "arguments": {}}'))
+            check("T13b JSON array is degenerate", _is_unparsed_answer('[{"name": "x"}]'))
+            check("T13c empty is degenerate", _is_unparsed_answer("   "))
+            check("T13d real prose is NOT degenerate",
+                  not _is_unparsed_answer("We built the Cognitive Control Loop."))
+            check("T13e prose mentioning a brace is NOT degenerate",
+                  not _is_unparsed_answer("The config dict {x:1} ships next."))
+
+            # T14: a degenerate model answer is suppressed end-to-end — the user,
+            # the queue, and the KB get the honest fallback, NEVER the raw JSON.
+            # Persistent botched JSON exhausts react repairs (x2) + one mind
+            # replan (decompose+react), so: plan, 3x garbage, plan, 3x garbage.
+            BAD = '{"oops": "not a tool call"}'
+            llm14 = scripted([
+                json.dumps([{"tool_name": "calculator", "description": "x"}]),
+                BAD, BAD, BAD,
+                json.dumps([{"tool_name": "calculator", "description": "x"}]),
+                BAD, BAD, BAD,
+            ])
+            q14: List[str] = []
+            distilled14: List[Dict[str, Any]] = []
+            r14 = await ask(
+                "trigger degenerate", llm_call=llm14, kb_path=kb,
+                queue_path=tdp / "q14.jsonl", store_factory=lambda: None,
+                gate=ConfidenceGate(embed_fn=scripted_embed),
+                writer=SessionMemoryWriter(append_fn=lambda **k: distilled14.append(k) or {"status": "appended", "id": 1}),
+                inhale=False, printer=q14.append,
+            )
+            check("T14a degenerate answer replaced by honest fallback",
+                  "couldn't produce a clean answer" in r14.answer
+                  and "oops" not in r14.answer, r14.answer[:80])
+            check("T14b verdict forced ESCALATE", r14.verdict == "ESCALATE")
+            check("T14c printed answer is NOT raw JSON",
+                  not any('"oops"' in l for l in q14 if "JARVIS" in l))
+            check("T14d distill stored the fallback, never the JSON",
+                  distilled14 and "oops" not in distilled14[0]["content"])
 
     asyncio.run(scenario())
 
