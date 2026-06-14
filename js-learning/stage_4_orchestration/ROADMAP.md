@@ -71,14 +71,17 @@
 
 | Lesson | Topic | JARVIS Use Case | Command |
 |--------|-------|-----------------|---------|
-| 4.1.1 | ModelProfile registry | Per-model conduct as DATA: mirror on/off, tool dialect, reasoning-channel quirk, system-prompt tolerance, failover peers; seeded from the 4 First-Light models; conservative default for unknown ids (mirror OFF, monitor ON) | `/dev Build brain/model_profiles.py + jarvis_data/model_profiles.json.` |
-| 4.1.2 | ProtocolAdapter | LLMCall-wrapping middleware (LLMCall in → LLMCall out): dialect translation, empty-content reasoning-channel fold, system-prompt folding, per-profile mirror toggle. The Mind never learns models have dialects | `/dev Build brain/protocol.py middleware.` |
+| 4.1.0 | **Protocol safety floor ✅ (Wave 1.3, 2026-06-13)** | react.py repairs botched tool-call JSON (never surfaces raw JSON as an answer); orchestrator structural guard. Makes `--ask` SAFE on all models. KB L355 | shipped |
+| 4.1.1 | **ModelProfile registry ✅ (Wave 1, 2026-06-15)** | Per-model conduct as DATA (mirror on/off, monitor, max_iterations, reasoning-channel doc, notes); exact→family→DEFAULT resolution; OVERRIDES-ONLY (no catalog dup); seeded from the 4 First-Light models; conservative DEFAULT (mirror OFF, monitor ON). Resolved in orchestrator (policy), applied in boot (mechanism). The `enable_mirror=False` hardcode is now profile-resolved data. `brain/model_profiles.py` + `jarvis_data/model_profiles.json` | shipped |
+| 4.1.2 | ProtocolAdapter | LLMCall-wrapping middleware: dialect translation, empty-content reasoning-channel fold, system-prompt folding, per-profile mirror toggle. The Mind never learns models have dialects. (Capability-parse of the catalog = here, SUGGEST-only, never auto-apply) | `/dev Build brain/protocol.py middleware.` |
 | 4.1.3 | RouteTarget contract | `name / kind (API_MODEL\|POD_ADAPTER\|FRONTIER_VALVE) / profile / llm_call / ensure_ready() / release() / ledger_summary()`. OpenRouterTarget live; **RunPodTarget/PodHandle as offline contract STUBS only** (adapter_id seam for Stage 5); EscapeValveTarget structurally OUTSIDE the router pool — explicit user flag only. **Re-home `llm_client.py` → `brain/`** (grep importers, fix call sites, no shim) | `/dev Build brain/targets.py; re-home llm_client.py.` |
 | 4.1.4 | ModelPool + failover | STEAL #7 (`ai_model_repos/OpenClaude/python/smart_router.py`): health ping, EMA latency, error-penalty scoring; 429 cooldown + ordered failover-peer walk (target-layer, distinct from llm_client's in-place retries); per-target CostTracker ledgers | `/dev Build brain/model_pool.py (SmartRouter port).` |
 
-**Practical Exercise:** re-run First Light's 4 models through the profile registry — all 4 answer the calculator task correctly with ZERO manual flag-flipping.
+**Wave split:** 4.1.0 + 4.1.1 = **Wave 1 (shipped)** — per-model conduct is data, the mirror-off hardcode is gone, `--ask` is safe + profile-aware on any model. 4.1.2–4.1.4 = **Wave 2** — protocol middleware + RouteTarget + pool/failover (the multi-model machinery 4.2's Router consumes; needs ≥2 routable targets to mean anything).
 
-**DoD:** same prompt clean on 3 real free models with no per-model hardcodes outside profiles; scripted 429 storm fails over to a peer with both attempts on the ledgers; offline dialect/empty-content/failover scenarios green.
+**Practical Exercise:** re-run First Light's models through the profile registry — conduct flips per model with ZERO manual flag-flipping. ✅ (nemotron auto-resolves mirror-off via its profile, live 2026-06-15).
+
+**DoD (Wave 2):** same prompt clean on 3 real free models with no per-model hardcodes outside profiles; scripted 429 storm fails over to a peer with both attempts on the ledgers; offline dialect/empty-content/failover scenarios green.
 
 ---
 
@@ -173,7 +176,7 @@ Row kept for master-roadmap traceability. **Trigger:** first KB-logged retrieval
 | Sub-Phase | Wave | Status | Lessons Complete |
 |-----------|------|--------|------------------|
 | 4.0 Cognitive Control Loop | 1 | ✅ Complete (2026-06-12; Gate A 5/5 live on nemotron free tier, ₹0; capture parity + KB distill proven) | 5/5 |
-| 4.1 Route Targets & Per-Model Protocol | 2 (Pass A) | ⬜ Not Started | 0/4 |
+| 4.1 Route Targets & Per-Model Protocol | 2 (Pass A) | 🔄 Wave 1 shipped (safety floor + ModelProfile); Wave 2 = protocol/targets/pool | 2/5 |
 | 4.2 Intent Router | 2 (Pass A) | ⬜ Not Started | 0/4 (+1 conditional) |
 | 4.3 Dynamic Target Management | 3 (Pass B) | ⬜ Not Started | 0/3 |
 | 4.4 Response Aggregation | 3 (Pass B) | ⬜ Not Started | 0/3 |
