@@ -148,6 +148,13 @@ TERMINATED_MAX_ITERATIONS = "max_iterations_reached"
 TERMINATED_INSTABILITY = "cot_instability_detected"
 TERMINATED_ERROR = "loop_error"
 
+# A model that emits malformed tool-call JSON gets this many repair turns before
+# the loop gives up — instead of silently surfacing the raw JSON as the "answer"
+# (live repro 2026-06-12: nemotron emitted two newline-separated objects, the
+# first missing its closing brace; parse_tool_calls returned a ParseError, the
+# loop read "no tool calls" as "final answer" and printed the JSON to the user).
+_MAX_TOOLCALL_REPAIRS = 2
+
 
 # =============================================================================
 # Part 3: RESULT DATACLASS
@@ -293,6 +300,8 @@ class ReActLoop:
         used_tool_names = set(self._tools.keys())
         await self._fire_setup(used_tool_names)
 
+        repair_attempts = 0  # botched-tool-call repair budget (see _MAX_TOOLCALL_REPAIRS)
+
         try:
             for iteration in range(self._max_iterations):
                 result.iterations_used = iteration + 1
@@ -344,7 +353,51 @@ class ReActLoop:
                 tool_calls = [p for p in parsed if isinstance(p, ToolCall)]
 
                 if not tool_calls:
-                    # No tool calls => final answer reached.
+                    # No PARSED tool calls — but is this a prose final answer, or
+                    # a tool call the model BOTCHED? A prose answer is words; a
+                    # botched call starts with a JSON/array/fence sentinel and the
+                    # parser handed back a ParseError. Never surface raw tool-call
+                    # JSON as the answer (live repro 2026-06-12); repair instead.
+                    stripped = parsable_raw.strip()
+                    attempted_call = (
+                        stripped.startswith("{") or stripped.startswith("[")
+                        or stripped.startswith("```")
+                    ) and any(isinstance(p, ParseError) for p in parsed)
+
+                    if attempted_call and repair_attempts < _MAX_TOOLCALL_REPAIRS:
+                        repair_attempts += 1
+                        why = "; ".join(
+                            p.message for p in parsed if isinstance(p, ParseError)
+                        ) or "unparseable tool call"
+                        await self._publish(StepType.ERROR, {
+                            "reason": "botched_tool_call",
+                            "attempt": repair_attempts,
+                            "detail": why,
+                        })
+                        messages.append({"role": "user", "content": (
+                            f"[PARSE ERROR] Your last message looked like a tool call "
+                            f"but did not parse ({why}). Emit EITHER exactly one tool "
+                            f'call as a single JSON object {{"name": "<tool>", '
+                            f'"arguments": {{...}}}} (one object, valid JSON, nothing '
+                            f"else), OR — if you are done — your final answer as plain "
+                            f"prose with NO JSON.")})
+                        continue
+
+                    if attempted_call:
+                        # Repairs exhausted: refuse to pass raw JSON off as an
+                        # answer. Terminate as an error so solve() can replan and
+                        # the orchestrator can report honestly.
+                        result.final_text = ""
+                        result.terminated_reason = TERMINATED_ERROR
+                        result.error = (
+                            f"model emitted unparseable tool calls "
+                            f"{repair_attempts + 1}x; last: {why}")
+                        await self._publish(StepType.ERROR, {
+                            "reason": "toolcall_repair_exhausted",
+                        })
+                        return result
+
+                    # Genuine prose => final answer reached.
                     result.final_text = self._strip_reflection(raw)
                     result.terminated_reason = TERMINATED_FINAL_ANSWER
                     await self._publish(StepType.PLAN_COMPLETED, {
@@ -1432,6 +1485,54 @@ if __name__ == "__main__":
         r30b = await loop30b.run("anything")
         check("T30c no tools -> no protocol block (no system msg)",
               not r30b.messages or r30b.messages[0]["role"] != "system")
+
+        # ---- T31: botched tool-call JSON must NOT surface as the answer ----
+        # (live repro 2026-06-12 — nemotron emitted malformed tool-call JSON;
+        # the loop read "no parsed tool calls" as "final answer" and printed the
+        # raw JSON to the user). A botched, JSON-shaped emission gets repaired.
+        BOTCHED = '{"oops": "this is not a valid tool call"}'  # starts "{", no "name"
+        # T31a: botched -> repaired -> recovers to a real call -> clean answer.
+        llm31 = make_scripted_llm([
+            BOTCHED,
+            json.dumps({"name": "stub_add", "arguments": {"a": 2, "b": 3}}),
+            "The sum is 5.",
+        ])
+        loop31 = ReActLoop(
+            llm_call=llm31, tool_instances={"stub_add": StubAdd()},
+            enable_mirror_lite=False, enable_cot_monitor=False,
+        )
+        r31 = await loop31.run("add 2 and 3")
+        check("T31a botched call repaired, real call recovers, clean prose answer",
+              r31.terminated_reason == TERMINATED_FINAL_ANSWER
+              and "sum is 5" in r31.final_text
+              and BOTCHED not in r31.final_text, r31.final_text[:80])
+        check("T31b a repair turn was injected into the transcript",
+              any("[PARSE ERROR]" in m.get("content", "") for m in r31.messages))
+
+        # T31c: persistently botched -> repairs exhaust -> ERROR, NOT a final
+        # answer echoing the raw JSON.
+        loop31c = ReActLoop(
+            llm_call=make_scripted_llm([BOTCHED] * 6),
+            tool_instances={"stub_add": StubAdd()},
+            enable_mirror_lite=False, enable_cot_monitor=False, max_iterations=8,
+        )
+        r31c = await loop31c.run("loop on garbage")
+        check("T31c exhausted repairs terminate as ERROR, raw JSON suppressed",
+              r31c.terminated_reason == TERMINATED_ERROR
+              and r31c.final_text == "" and "oops" not in (r31c.error or "").lower()[:5],
+              f"{r31c.terminated_reason} / {r31c.final_text!r}")
+
+        # T31d: genuine prose starting with a non-brace char still terminates
+        # immediately as a final answer (no false-positive repair).
+        loop31d = ReActLoop(
+            llm_call=make_scripted_llm(["Here is my final answer: 5."]),
+            tool_instances={"stub_add": StubAdd()},
+            enable_mirror_lite=False, enable_cot_monitor=False,
+        )
+        r31d = await loop31d.run("x")
+        check("T31d prose answer is not mistaken for a botched call",
+              r31d.terminated_reason == TERMINATED_FINAL_ANSWER
+              and "final answer" in r31d.final_text.lower())
 
         # ---- Report -----------------------------------------------------
         total = passed + len(failed)
