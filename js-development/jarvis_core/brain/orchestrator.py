@@ -71,6 +71,7 @@ from jarvis_core.agent.llm_client import build_llm_call
 from jarvis_core.agent.mind import MindResult
 from jarvis_core.brain.boot import BootReport, assemble_mind
 from jarvis_core.brain.confidence import ConfidenceGate, ConfidenceReport
+from jarvis_core.brain.model_profiles import ProfileRegistry
 from jarvis_core.brain.session_writer import SessionMemoryWriter, SessionRecord
 
 _IST = timezone(timedelta(hours=5, minutes=30))
@@ -176,6 +177,8 @@ async def ask(
     extra_tools: Optional[Dict[str, Any]] = None,
     clock: Optional[Callable[[], datetime]] = None,
     profile_path: Optional[Path] = None,
+    registry: Optional[ProfileRegistry] = None,
+    use_profile: bool = True,
     printer: Callable[[str], None] = print,
 ) -> AskResult:
     """
@@ -196,14 +199,23 @@ async def ask(
         await client.pick_free_model()
     model = str(getattr(client, "model", "") or "")
 
+    # POLICY (resolved here, the host): per-model conduct profile by model id.
+    # Boot is the MECHANISM that applies it — single resolution site, so the
+    # 4.2 Router never competes with a second lookup (it just supplies the id).
+    profile = profile_label = None
+    if use_profile:
+        profile, profile_label = (registry or ProfileRegistry()).get(model)
+
     store = store_factory() if store_factory is not None else _open_store(printer)
     printer(f"  brain   : {model or '<scripted>'}")
+    printer(f"  profile : {profile_label or 'none'}")
     printer(f"  query   : {question}")
     try:
         mind, boot_report = assemble_mind(
             llm_call=client, store=store, kb_path=kb_path, inhale=inhale,
             extra_tools=extra_tools, clock=clock,
             profile_path=profile_path, queue_path=queue_path,
+            profile=profile, profile_label=(profile_label or "none"),
         )
         result = await mind.solve(question)
     finally:
@@ -528,6 +540,49 @@ def _run_self_test() -> None:
             check("T14d distill stored the fallback, never the JSON",
                   distilled14 and "oops" not in distilled14[0]["content"])
 
+            # T15: per-model profile RESOLVED at the host and applied at boot.
+            # The scripted llm reports model "scripted-brain"; a registry maps
+            # the "scripted" family to mirror_ok=True so we can prove the APPLIED
+            # mirror came from the profile DATA, not a hardcode.
+            from jarvis_core.brain.model_profiles import ProfileRegistry
+            reg = ProfileRegistry(profiles={
+                "family": {"scripted": {"mirror_ok": True, "max_iterations": 5,
+                                        "notes": "test family"}}})
+            llm15 = scripted([json.dumps([{"tool_name": "calculator",
+                                           "description": "x"}]), "done"])
+            r15 = await ask("profile applies?", llm_call=llm15, kb_path=kb,
+                            queue_path=tdp / "q15.jsonl", store_factory=lambda: None,
+                            gate=ConfidenceGate(embed_fn=scripted_embed),
+                            writer=SessionMemoryWriter(append_fn=lambda **k: {"status": "appended", "id": 1}),
+                            inhale=False, registry=reg, printer=lines.append)
+            check("T15 profile resolved by family + applied at boot",
+                  r15.boot.profile == "family:scripted"
+                  and r15.boot.mirror is True, f"{r15.boot.profile}/{r15.boot.mirror}")
+
+            # T16: --no-profile (use_profile=False) bypasses resolution -> bare default
+            llm16 = scripted([json.dumps([{"tool_name": "calculator",
+                                           "description": "x"}]), "done"])
+            r16 = await ask("no profile", llm_call=llm16, kb_path=kb,
+                            queue_path=tdp / "q16.jsonl", store_factory=lambda: None,
+                            gate=ConfidenceGate(embed_fn=scripted_embed),
+                            writer=SessionMemoryWriter(append_fn=lambda **k: {"status": "appended", "id": 1}),
+                            inhale=False, use_profile=False, registry=reg, printer=lines.append)
+            check("T16 --no-profile bypasses resolution, bare default conduct",
+                  r16.boot.profile == "none" and r16.boot.mirror is False,
+                  f"{r16.boot.profile}/{r16.boot.mirror}")
+
+            # T17: unknown model -> default profile, mirror stays off (safe floor)
+            llm17 = scripted([json.dumps([{"tool_name": "calculator",
+                                           "description": "x"}]), "done"])
+            r17 = await ask("unknown brain", llm_call=llm17, kb_path=kb,
+                            queue_path=tdp / "q17.jsonl", store_factory=lambda: None,
+                            gate=ConfidenceGate(embed_fn=scripted_embed),
+                            writer=SessionMemoryWriter(append_fn=lambda **k: {"status": "appended", "id": 1}),
+                            inhale=False, registry=ProfileRegistry(profiles={}),
+                            printer=lines.append)
+            check("T17 unknown model -> default profile, mirror off",
+                  r17.boot.profile == "default" and r17.boot.mirror is False)
+
     asyncio.run(scenario())
 
     total = passed + len(failed)
@@ -548,11 +603,14 @@ def main() -> int:
                    help="Gate A: the 5 awareness questions (live)")
     p.add_argument("--no-capture", action="store_true",
                    help="Do not append this session to the observation queue")
+    p.add_argument("--no-profile", action="store_true",
+                   help="Skip per-model ModelProfile resolution (use bare defaults)")
     args = p.parse_args()
     if args.awareness:
         return asyncio.run(_awareness())
     if args.ask:
-        asyncio.run(ask(args.ask, capture=not args.no_capture))
+        asyncio.run(ask(args.ask, capture=not args.no_capture,
+                        use_profile=not args.no_profile))
         return 0
     _run_self_test()
     return 0

@@ -1,0 +1,40 @@
+{
+  "_comment": "Per-model CONDUCT overrides for JARVIS (Stage 4.1). OVERRIDES ONLY — never duplicate catalog fields (context_length/cost/description live in model_catalog.json). Resolution: exact id -> longest family substring -> DEFAULT_PROFILE (mirror off, monitor on). All Wave-1 seeds keep mirror_ok=false; flip to true ONLY for a model live-verified to surface output with MIRROR-lite on. Seeded from the 4 First-Light-observed models (KB L322/L355).",
+  "exact": {
+    "nvidia/nemotron-3-super-120b-a12b:free": {
+      "mirror_ok": false,
+      "enable_monitor": true,
+      "max_iterations": 8,
+      "reasoning_channel": false,
+      "notes": "First Light default brain. Buries output inside MIRROR-lite (mirror must stay off, L322). Emits malformed/multi-object tool-call JSON and repeats identical calls (safety floor repairs; dialect SUCCESS is 4.1 W2). L355."
+    },
+    "openai/gpt-oss-120b": {
+      "mirror_ok": false,
+      "enable_monitor": true,
+      "reasoning_channel": true,
+      "notes": "Returns EMPTY final content under a system prompt — all tokens spent in the reasoning channel; llm_client empty-content retry handles it (L322)."
+    },
+    "stealth/owl-alpha": {
+      "mirror_ok": false,
+      "enable_monitor": true,
+      "notes": "Speaks proprietary tool markup (longcat_tool_call), not our JSON contract. Excluded by pick_free_model _AVOID_SUBSTRINGS; profiled for documentation only (L322)."
+    }
+  },
+  "family": {
+    "nemotron": {
+      "mirror_ok": false,
+      "enable_monitor": true,
+      "notes": "Nemotron family: mirror off (reflection-protocol output burial observed on nemotron-3-super, L322)."
+    },
+    "qwen": {
+      "mirror_ok": false,
+      "enable_monitor": true,
+      "notes": "Free Qwen endpoints 429-saturate under load; conservative conduct, no mirror (L322)."
+    },
+    "llama": {
+      "mirror_ok": false,
+      "enable_monitor": true,
+      "notes": "Free Llama endpoints 429-saturate under load; conservative conduct, no mirror (L322)."
+    }
+  }
+}

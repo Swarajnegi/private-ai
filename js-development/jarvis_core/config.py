@@ -60,6 +60,16 @@ BACKUP_ROOT: Path = DATA_ROOT / "chromadb_backups"
 # The JSONL long-term knowledge base (semantic facts, decisions, patterns).
 KB_PATH: Path = DATA_ROOT / "knowledge_base.jsonl"
 
+# The OpenRouter model catalog (id/vendor/context/pricing/description), refreshed
+# from the live catalog. First code reader arrives in Stage 4.1 Wave 2.
+MODEL_CATALOG_PATH: Path = DATA_ROOT / "model_catalog.json"
+
+# Per-model CONDUCT overrides (mirror on/off, max_iterations, observed quirks),
+# keyed by exact id + family substring. Stores OVERRIDES ONLY — never duplicates
+# catalog fields, so the catalog can be regenerated without desyncing profiles.
+# Resolved per configured model in Stage 4.1 (brain/model_profiles.py).
+MODEL_PROFILES_PATH: Path = DATA_ROOT / "model_profiles.json"
+
 # =============================================================================
 # Part 3: MODEL CONFIGURATION (Embedding model constants)
 # =============================================================================

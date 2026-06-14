@@ -69,6 +69,7 @@ from jarvis_core.agent.tools.memory import MemorySemanticSearchTool
 from jarvis_core.brain.context_injector import (
     ContextInjector, InhaleResult, default_providers,
 )
+from jarvis_core.brain.model_profiles import ModelProfile
 
 
 # =============================================================================
@@ -84,6 +85,8 @@ class BootReport:
     inhale_chars: int
     model: str
     collections: Tuple[str, ...]
+    profile: str = "none"   # resolved ModelProfile source label, or "none"
+    mirror: bool = False    # the enable_mirror actually applied (profile-driven)
 
 
 # =============================================================================
@@ -114,6 +117,8 @@ def assemble_mind(
     clock: Optional[Callable[[], datetime]] = None,
     profile_path: Optional[Path] = None,
     queue_path: Optional[Path] = None,
+    profile: Optional[ModelProfile] = None,
+    profile_label: str = "none",
 ) -> Tuple[Mind, BootReport]:
     """
     Compose a fully-conscious Mind from the standard organs.
@@ -123,11 +128,17 @@ def assemble_mind(
        autobiography, L324 gap 1) + memory_semantic_search when a store is
        open + caller extras (extras win on name collision).
     2. Identity: JARVIS_PSYCHE_PROMPT + collections line + boot inhale block.
-    3. Mind(...) with monitor on, replan on, mirror per arg.
+    3. Conduct: a resolved ModelProfile (Stage 4.1) drives enable_mirror /
+       enable_monitor / max_iterations — per-model DATA, not a hardcode. No
+       profile -> the caller's args stand (back-compat). Mind itself untouched.
 
     Returns:
         (mind, BootReport) — the report says what actually got wired.
     """
+    # Conduct from the profile when present; else the caller's args (back-compat).
+    applied_mirror = profile.mirror_ok if profile else enable_mirror
+    applied_monitor = profile.enable_monitor if profile else True
+    applied_max_iter = profile.max_iterations if profile else max_iterations
     tools: Dict[str, Tool] = {
         "calculator": CalculatorTool(),
         "prior_self_consult": PriorSelfConsultTool(kb_path=kb_path),
@@ -173,9 +184,9 @@ def assemble_mind(
     mind = Mind(
         llm_call=llm_call,
         tools=tools,
-        max_iterations=max_iterations,
-        enable_mirror=enable_mirror,
-        enable_monitor=True,
+        max_iterations=applied_max_iter,
+        enable_mirror=applied_mirror,
+        enable_monitor=applied_monitor,
         allow_replan=True,
         identity_prompt=identity,
     )
@@ -186,6 +197,8 @@ def assemble_mind(
         inhale_chars=len(result.block),
         model=model,
         collections=tuple(collections),
+        profile=profile_label,
+        mirror=applied_mirror,
     )
     return mind, report
 
@@ -310,6 +323,26 @@ def _run_self_test() -> None:
             # to the substrate), even with inhale off and no store
             check("T11 identity never left to the substrate",
                   "You are JARVIS" in res8.react.messages[0]["content"])
+
+            # T12: a ModelProfile drives conduct (Stage 4.1) — mirror/max_iter
+            # come from the profile DATA, recorded honestly in the BootReport.
+            from jarvis_core.brain.model_profiles import ModelProfile
+            prof = ModelProfile(mirror_ok=True, enable_monitor=False,
+                                 max_iterations=5, notes="test")
+            mind12, report12 = assemble_mind(
+                llm_call=scripted(["ok"]), kb_path=kb, inhale=False,
+                profile=prof, profile_label="family:test")
+            check("T12 profile drives conduct + recorded in report",
+                  mind12._enable_mirror is True and mind12._max_iterations == 5
+                  and report12.profile == "family:test" and report12.mirror is True,
+                  f"{report12.profile}/{report12.mirror}")
+
+            # T13: no profile -> caller args stand (back-compat, mirror off default)
+            mind13, report13 = assemble_mind(
+                llm_call=scripted(["ok"]), kb_path=kb, inhale=False)
+            check("T13 no profile -> back-compat defaults (mirror off)",
+                  mind13._enable_mirror is False and report13.profile == "none"
+                  and report13.mirror is False)
 
             # T12: tool guidance names the autobiography organ (Gate A lesson:
             # a wired-but-unlabeled tool still loses to document search)
