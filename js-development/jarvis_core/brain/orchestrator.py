@@ -72,6 +72,10 @@ from jarvis_core.agent.mind import MindResult
 from jarvis_core.brain.boot import BootReport, assemble_mind
 from jarvis_core.brain.confidence import ConfidenceGate, ConfidenceReport
 from jarvis_core.brain.model_profiles import ProfileRegistry
+from jarvis_core.brain.boot import full_toolset
+from jarvis_core.brain.permgate import (
+    build_permission_context, terminal_ask_handler, allow_all_ask_handler,
+)
 from jarvis_core.brain.session_writer import SessionMemoryWriter, SessionRecord
 
 _IST = timezone(timedelta(hours=5, minutes=30))
@@ -179,6 +183,9 @@ async def ask(
     profile_path: Optional[Path] = None,
     registry: Optional[ProfileRegistry] = None,
     use_profile: bool = True,
+    full: bool = False,
+    permission_context: Optional[Any] = None,
+    ask_handler: Optional[Any] = None,
     printer: Callable[[str], None] = print,
 ) -> AskResult:
     """
@@ -207,8 +214,26 @@ async def ask(
         profile, profile_label = (registry or ProfileRegistry()).get(model)
 
     store = store_factory() if store_factory is not None else _open_store(printer)
+
+    # FULL harness (opt-in): the whole built toolset, gated by the permission
+    # engine. Policy is resolved HERE (the host): build the toolset, derive the
+    # permission context from it, attach the interactive [y/N] handler. Boot is
+    # the mechanism that applies them. Minimal (default) path is untouched.
+    prebuilt = None
+    p_ctx, p_handler = permission_context, ask_handler
+    if full:
+        prebuilt = full_toolset(store=store, kb_path=kb_path, llm_call=client)
+        if p_ctx is None:
+            p_ctx = build_permission_context(prebuilt)
+        if p_handler is None:
+            p_handler = terminal_ask_handler
+
     printer(f"  brain   : {model or '<scripted>'}")
     printer(f"  profile : {profile_label or 'none'}")
+    if full:
+        gated = sorted(n for n, t in prebuilt.items()
+                       if getattr(t, "requires_permission", False))
+        printer(f"  tools   : full ({len(prebuilt)}) | gated: {', '.join(gated) or 'none'}")
     printer(f"  query   : {question}")
     try:
         mind, boot_report = assemble_mind(
@@ -216,6 +241,9 @@ async def ask(
             extra_tools=extra_tools, clock=clock,
             profile_path=profile_path, queue_path=queue_path,
             profile=profile, profile_label=(profile_label or "none"),
+            tools_mode=("full" if full else "minimal"),
+            prebuilt_tools=prebuilt,
+            permission_context=p_ctx, ask_handler=p_handler,
         )
         result = await mind.solve(question)
     finally:
@@ -583,6 +611,64 @@ def _run_self_test() -> None:
             check("T17 unknown model -> default profile, mirror off",
                   r17.boot.profile == "default" and r17.boot.mirror is False)
 
+            # T18: --full assembles the whole toolset + a permission context, and a
+            # DANGEROUS tool is gated through the ask_handler. Scripted handler DENIES
+            # shell_run so we prove the gate blocks dispatch (no shell actually runs).
+            from jarvis_core.agent.permissions import PermissionDecision
+            denials: List[str] = []
+            def deny_handler(tool_name, tool_input):
+                denials.append(tool_name)
+                return PermissionDecision.DENY
+            llm18 = scripted([
+                json.dumps([{"tool_name": "shell_run", "description": "list files"}]),
+                json.dumps({"name": "shell_run", "arguments": {"command": "rm -rf /tmp/x"}}),
+                "I was blocked from running that, so here is my plain answer.",
+            ])
+            r18 = await ask("delete something", llm_call=llm18, kb_path=kb,
+                            queue_path=tdp / "q18.jsonl", store_factory=lambda: None,
+                            gate=ConfidenceGate(embed_fn=scripted_embed),
+                            writer=SessionMemoryWriter(append_fn=lambda **k: {"status": "appended", "id": 1}),
+                            inhale=False, use_profile=False, full=True,
+                            ask_handler=deny_handler, printer=lines.append)
+            check("T18 --full assembles whole toolset + gates dangerous tools",
+                  r18.boot.tool_mode == "full"
+                  and {"shell_run", "code_exec"} <= set(r18.boot.gated), str(r18.boot.gated))
+            check("T18b dangerous shell_run routed to ask_handler and DENIED",
+                  "shell_run" in denials
+                  and not any(tc.name == "shell_run" and not getattr(tr, "error", None)
+                              for tc, tr in r18.mind.react.tool_calls),
+                  f"denials={denials}")
+
+            # T19: a SAFE tool under --full dispatches without ever hitting the handler
+            denials19: List[str] = []
+            def watch_handler(tool_name, tool_input):
+                denials19.append(tool_name)
+                return PermissionDecision.DENY
+            llm19 = scripted([
+                json.dumps([{"tool_name": "calculator", "description": "compute"}]),
+                json.dumps({"name": "calculator", "arguments": {"expression": "2+3"}}),
+                "The answer is 5.",
+            ])
+            r19 = await ask("add 2 and 3", llm_call=llm19, kb_path=kb,
+                            queue_path=tdp / "q19.jsonl", store_factory=lambda: None,
+                            gate=ConfidenceGate(embed_fn=scripted_embed),
+                            writer=SessionMemoryWriter(append_fn=lambda **k: {"status": "appended", "id": 1}),
+                            inhale=False, use_profile=False, full=True,
+                            ask_handler=watch_handler, printer=lines.append)
+            check("T19 safe tool under --full dispatches, never gated",
+                  "calculator" not in denials19
+                  and any(tc.name == "calculator" for tc, _ in r19.mind.react.tool_calls))
+
+            # T20: default (full=False) path unchanged — minimal toolset, no gating
+            r20 = await ask("plain", llm_call=scripted([
+                json.dumps([{"tool_name": "calculator", "description": "x"}]), "done"]),
+                kb_path=kb, queue_path=tdp / "q20.jsonl", store_factory=lambda: None,
+                gate=ConfidenceGate(embed_fn=scripted_embed),
+                writer=SessionMemoryWriter(append_fn=lambda **k: {"status": "appended", "id": 1}),
+                inhale=False, use_profile=False, printer=lines.append)
+            check("T20 default path stays minimal (no full toolset, no gating)",
+                  r20.boot.tool_mode == "minimal" and r20.boot.gated == ())
+
     asyncio.run(scenario())
 
     total = passed + len(failed)
@@ -605,12 +691,20 @@ def main() -> int:
                    help="Do not append this session to the observation queue")
     p.add_argument("--no-profile", action="store_true",
                    help="Skip per-model ModelProfile resolution (use bare defaults)")
+    p.add_argument("--full", action="store_true",
+                   help="Full toolset (web/file/exec/shell/memory/finance/cognitive), "
+                        "permission-gated; dangerous tools prompt [y/N]")
+    p.add_argument("--allow-all", action="store_true",
+                   help="With --full: auto-ALLOW every tool (DANGEROUS — a weak model "
+                        "gets ungated shell/exec). Unattended/sandboxed use only.")
     args = p.parse_args()
     if args.awareness:
         return asyncio.run(_awareness())
     if args.ask:
+        handler = allow_all_ask_handler if (args.full and args.allow_all) else None
         asyncio.run(ask(args.ask, capture=not args.no_capture,
-                        use_profile=not args.no_profile))
+                        use_profile=not args.no_profile,
+                        full=args.full, ask_handler=handler))
         return 0
     _run_self_test()
     return 0

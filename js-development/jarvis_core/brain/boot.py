@@ -72,6 +72,66 @@ from jarvis_core.brain.context_injector import (
 from jarvis_core.brain.model_profiles import ModelProfile
 
 
+def full_toolset(
+    store: Optional[Any] = None,
+    kb_path: Path = KB_PATH,
+    llm_call: Optional[Any] = None,
+    strategy_path: Optional[Path] = None,
+) -> Dict[str, Tool]:
+    """Construct the COMPLETE built toolset (Stage 3 + cognitive + finance), each
+    with its real deps. Defensive: a tool whose construction raises is skipped
+    (logged via the returned dict's absence), never aborting the harness.
+
+    DANGEROUS tools (shell_run/code_exec) and the cloud-leak-prone file_read are
+    included here but gated by brain/permgate.py at the orchestrator — assembling
+    them is safe; DISPATCHING them is what the permission context controls."""
+    from jarvis_core.agent.tools.web import WebSearchTool
+    from jarvis_core.agent.tools.fs import FileReadTool
+    from jarvis_core.agent.tools.exec import CodeExecTool
+    from jarvis_core.agent.tools.shell import ShellRunTool
+    from jarvis_core.agent.tools.cognitive import BearCaseDevilTool, WritingVoiceCheckTool
+    from jarvis_core.agent.tools.memory import (
+        MemoryMMRSearchTool, MemoryBM25SearchTool, MemoryHybridSearchTool,
+        MemoryRerankTool, MemoryUnifiedRetrieveTool,
+    )
+    from jarvis_core.agent.tools.finance import (
+        PortfolioStateTool, TriggerMonitorTool, IncentivePlannerTool,
+    )
+
+    # (name, factory) — built lazily so one bad ctor can't sink the rest.
+    specs = [
+        ("calculator", lambda: CalculatorTool()),
+        ("web_search", lambda: WebSearchTool()),
+        ("file_read", lambda: FileReadTool()),
+        ("code_exec", lambda: CodeExecTool()),
+        ("shell_run", lambda: ShellRunTool()),
+        ("prior_self_consult", lambda: PriorSelfConsultTool(kb_path=kb_path)),
+        ("cognitive_mirror", lambda: CognitiveMirrorTool(kb_path=kb_path)),
+        ("writing_voice_check", lambda: WritingVoiceCheckTool(kb_path=kb_path)),
+        ("bear_case_devil", lambda: BearCaseDevilTool(kb_path=kb_path, llm_call=llm_call)),
+        ("portfolio_state", lambda: PortfolioStateTool(strategy_path=strategy_path)),
+        ("trigger_monitor", lambda: TriggerMonitorTool(strategy_path=strategy_path)),
+        ("incentive_planner", lambda: IncentivePlannerTool(strategy_path=strategy_path)),
+    ]
+    if store is not None:
+        specs += [
+            ("memory_semantic_search", lambda: MemorySemanticSearchTool(store=store)),
+            ("memory_mmr_search", lambda: MemoryMMRSearchTool(store=store)),
+            ("memory_bm25_search", lambda: MemoryBM25SearchTool(store=store)),
+            ("memory_hybrid_search", lambda: MemoryHybridSearchTool(store=store)),
+            ("memory_rerank", lambda: MemoryRerankTool(store=store)),  # reranker lazy
+            ("memory_unified_retrieve",
+             lambda: MemoryUnifiedRetrieveTool(store=store, llm_call=llm_call)),
+        ]
+    tools: Dict[str, Tool] = {}
+    for name, factory in specs:
+        try:
+            tools[name] = factory()
+        except Exception:
+            pass  # skip an unconstructable tool; the harness runs with the rest
+    return tools
+
+
 # =============================================================================
 # Part 1: CONTRACT (frozen)
 # =============================================================================
@@ -87,6 +147,8 @@ class BootReport:
     collections: Tuple[str, ...]
     profile: str = "none"   # resolved ModelProfile source label, or "none"
     mirror: bool = False    # the enable_mirror actually applied (profile-driven)
+    tool_mode: str = "minimal"  # "minimal" (awareness) or "full" (whole toolset)
+    gated: Tuple[str, ...] = ()  # tools requiring permission in this assembly
 
 
 # =============================================================================
@@ -119,6 +181,11 @@ def assemble_mind(
     queue_path: Optional[Path] = None,
     profile: Optional[ModelProfile] = None,
     profile_label: str = "none",
+    tools_mode: str = "minimal",
+    permission_context: Optional[Any] = None,
+    ask_handler: Optional[Any] = None,
+    strategy_path: Optional[Path] = None,
+    prebuilt_tools: Optional[Dict[str, Tool]] = None,
 ) -> Tuple[Mind, BootReport]:
     """
     Compose a fully-conscious Mind from the standard organs.
@@ -139,17 +206,24 @@ def assemble_mind(
     applied_mirror = profile.mirror_ok if profile else enable_mirror
     applied_monitor = profile.enable_monitor if profile else True
     applied_max_iter = profile.max_iterations if profile else max_iterations
-    tools: Dict[str, Tool] = {
-        "calculator": CalculatorTool(),
-        "prior_self_consult": PriorSelfConsultTool(kb_path=kb_path),
-        "cognitive_mirror": CognitiveMirrorTool(kb_path=kb_path),
-    }
-    collections: List[str] = []
-    if store is not None:
-        collections = _list_collections(store)
-        tools["memory_semantic_search"] = MemorySemanticSearchTool(store=store)
+    if prebuilt_tools is not None:        # orchestrator (policy) already built them
+        tools = dict(prebuilt_tools)
+    elif tools_mode == "full":
+        tools = full_toolset(store=store, kb_path=kb_path, llm_call=llm_call,
+                             strategy_path=strategy_path)
+    else:
+        tools = {
+            "calculator": CalculatorTool(),
+            "prior_self_consult": PriorSelfConsultTool(kb_path=kb_path),
+            "cognitive_mirror": CognitiveMirrorTool(kb_path=kb_path),
+        }
+        if store is not None:
+            tools["memory_semantic_search"] = MemorySemanticSearchTool(store=store)
+    collections: List[str] = _list_collections(store) if store is not None else []
     if extra_tools:
         tools.update(extra_tools)
+    gated = tuple(sorted(n for n, t in tools.items()
+                         if getattr(t, "requires_permission", False)))
 
     model = str(getattr(llm_call, "model", "") or "")
     identity = JARVIS_PSYCHE_PROMPT
@@ -189,6 +263,8 @@ def assemble_mind(
         enable_monitor=applied_monitor,
         allow_replan=True,
         identity_prompt=identity,
+        permission_context=permission_context,
+        ask_handler=ask_handler,
     )
     report = BootReport(
         tools=tuple(sorted(tools)),
@@ -199,6 +275,8 @@ def assemble_mind(
         collections=tuple(collections),
         profile=profile_label,
         mirror=applied_mirror,
+        tool_mode=tools_mode,
+        gated=gated,
     )
     return mind, report
 
@@ -343,6 +421,39 @@ def _run_self_test() -> None:
             check("T13 no profile -> back-compat defaults (mirror off)",
                   mind13._enable_mirror is False and report13.profile == "none"
                   and report13.mirror is False)
+
+            # T14: tools_mode='full' assembles the whole toolset + records gated set
+            mind14, report14 = assemble_mind(
+                llm_call=scripted(["ok"]), kb_path=kb, inhale=False, tools_mode="full")
+            check("T14 full toolset assembled (web/file/exec/shell/cognitive/finance)",
+                  {"calculator", "web_search", "file_read", "code_exec", "shell_run",
+                   "bear_case_devil", "portfolio_state"} <= set(mind14._tools),
+                  str(sorted(mind14._tools)))
+            check("T14b report flags full mode + gated dangerous tools",
+                  report14.tool_mode == "full"
+                  and set(report14.gated) == {"shell_run", "code_exec"}, str(report14.gated))
+
+            # T15: permission_context + ask_handler reach the Mind (and ReActLoop)
+            sentinel_ctx, sentinel_handler = object(), object()
+            mind15, _ = assemble_mind(
+                llm_call=scripted(["ok"]), kb_path=kb, inhale=False,
+                permission_context=sentinel_ctx, ask_handler=sentinel_handler)
+            check("T15 permission_context + ask_handler wired into Mind",
+                  mind15._perms is sentinel_ctx and mind15._ask_handler is sentinel_handler)
+
+            # T16: prebuilt_tools override used verbatim (orchestrator-built path)
+            from jarvis_core.agent.tools.calc import CalculatorTool as _Calc
+            mind16, report16 = assemble_mind(
+                llm_call=scripted(["ok"]), kb_path=kb, inhale=False,
+                prebuilt_tools={"calculator": _Calc()}, tools_mode="full")
+            check("T16 prebuilt_tools used verbatim",
+                  set(mind16._tools) == {"calculator"} and report16.tool_mode == "full")
+
+            # T17: a tool whose ctor raises is skipped, not fatal (defensive build)
+            full = full_toolset(store=None, kb_path=kb)
+            check("T17 full_toolset builds without a store (memory tools absent, rest present)",
+                  "calculator" in full and "shell_run" in full
+                  and "memory_semantic_search" not in full, str(sorted(full)))
 
             # T12: tool guidance names the autobiography organ (Gate A lesson:
             # a wired-but-unlabeled tool still loses to document search)
