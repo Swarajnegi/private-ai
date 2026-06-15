@@ -73,6 +73,7 @@ from jarvis_core.brain.boot import BootReport, assemble_mind
 from jarvis_core.brain.confidence import ConfidenceGate, ConfidenceReport
 from jarvis_core.brain.model_profiles import ProfileRegistry
 from jarvis_core.brain.boot import full_toolset, default_toolset
+from jarvis_core.brain.conversation import ConversationStore, resolve_terminal_session
 from jarvis_core.brain.permgate import (
     build_permission_context, terminal_ask_handler, allow_all_ask_handler,
 )
@@ -186,6 +187,12 @@ async def ask(
     full: bool = False,
     permission_context: Optional[Any] = None,
     ask_handler: Optional[Any] = None,
+    session: Optional[str] = None,
+    new_session: bool = False,
+    continue_window_hours: float = 2.0,
+    conv_store: Optional[Any] = None,
+    session_state_path: Optional[Path] = None,
+    history: Optional[List[Dict[str, str]]] = None,
     printer: Callable[[str], None] = print,
 ) -> AskResult:
     """
@@ -213,6 +220,17 @@ async def ask(
     if use_profile:
         profile, profile_label = (registry or ProfileRegistry()).get(model)
 
+    # Conversation memory (working memory across --ask): resolve a STABLE session
+    # id (auto-continue the recent terminal thread, or mint fresh), load its recent
+    # turns, and thread them as real prior messages. The resolved id also becomes
+    # the capture session_id, so the observation queue groups terminal turns into
+    # real conversations.
+    cstore = conv_store if conv_store is not None else ConversationStore()
+    sess = resolve_terminal_session(
+        window_hours=continue_window_hours, new=new_session, explicit=session,
+        state_path=session_state_path)
+    hist = history if history is not None else cstore.load_recent(sess.session_id)
+
     store = store_factory() if store_factory is not None else _open_store(printer)
 
     # Policy resolved HERE (the host): build the toolset, derive the permission
@@ -226,8 +244,11 @@ async def ask(
     gated = sorted(n for n, t in prebuilt.items()
                    if getattr(t, "requires_permission", False))
 
+    sess_state = (f"continued, {len(hist)} prior turn(s)" if sess.continued
+                  else "new")
     printer(f"  brain   : {model or '<scripted>'}")
     printer(f"  profile : {profile_label or 'none'}")
+    printer(f"  session : {sess.session_id} ({sess_state})")
     printer(f"  tools   : {'full' if full else 'default'} ({len(prebuilt)})"
             f" | gated: {', '.join(gated) or 'none'}")
     printer(f"  query   : {question}")
@@ -241,7 +262,7 @@ async def ask(
             prebuilt_tools=prebuilt,
             permission_context=p_ctx, ask_handler=p_handler,
         )
-        result = await mind.solve(question)
+        result = await mind.solve(question, history=hist)
     finally:
         _close_store(store)
 
@@ -254,7 +275,8 @@ async def ask(
     # never presented, stored, or distilled as an answer. The honest fallback
     # — plus whatever evidence WAS retrieved — replaces it everywhere downstream.
     evidence = _evidence_from(result)
-    if _is_unparsed_answer(result.answer):
+    degenerate = _is_unparsed_answer(result.answer)
+    if degenerate:
         found = f" Retrieved this session: {evidence[0][:200]}…" if evidence else ""
         answer = _UNPARSED_FALLBACK + found
         report = ConfidenceReport(
@@ -274,7 +296,7 @@ async def ask(
     if capture:
         try:
             obs = build_observation(
-                event={"session_id": _SESSION_ID},
+                event={"session_id": sess.session_id},
                 turn={"user_text": strip_harness_blocks(question),
                       "assistant_summary": answer,
                       "model": model},
@@ -286,6 +308,15 @@ async def ask(
                 captured = True
         except Exception as e:
             printer(f"  (capture skipped: {type(e).__name__}: {e})")
+
+    # Conversation memory: persist this turn ONLY if the answer was real prose.
+    # Gate on the STRUCTURAL degeneracy flag, NOT the confidence verdict — pure
+    # chit-chat ("hi who are you") is ESCALATE-but-fine and MUST be threaded; only
+    # the unparsed honest-fallback is skipped (no dangling half-turn, no feeding
+    # "I couldn't produce a clean answer" back as context).
+    if not degenerate:
+        cstore.append_turn(sess.session_id, "user", strip_harness_blocks(question))
+        cstore.append_turn(sess.session_id, "assistant", answer)
 
     ledger: Dict[str, Any] = {}
     if hasattr(client, "ledger_summary"):
@@ -427,6 +458,11 @@ def _run_self_test() -> None:
         nonlocal passed
         with tempfile.TemporaryDirectory() as td:
             tdp = Path(td)
+            # Isolate conversation memory to the temp dir for the whole scenario, so
+            # tests never touch (or continue) the real terminal session/transcripts.
+            import jarvis_core.brain.conversation as _conv
+            _conv._CONV_DIR = tdp / "conv"
+            _conv._SESSION_STATE = tdp / ".session.json"
             kb = tdp / "kb.jsonl"
             kb.write_text(json.dumps({
                 "id": 1, "timestamp": FIXED.isoformat(), "type": "Decision",
@@ -465,7 +501,7 @@ def _run_self_test() -> None:
             check("T4 capture parity: queue gained the turn", r.captured is True)
             qrec = json.loads(queue.read_text(encoding="utf-8").splitlines()[0])
             check("T5 queue record shape",
-                  qrec["session_id"].startswith("terminal-")
+                  qrec["session_id"].startswith("conv-")
                   and qrec["chat_label"] == "terminal-ask"
                   and qrec["model"] == "scripted-brain"
                   and "what have we built" in qrec["user_text"], str(qrec)[:200])
@@ -684,6 +720,58 @@ def _run_self_test() -> None:
             check("T22b default-mode in-repo file_read auto-allowed",
                   await ctx22.check("file_read", {"path": in_repo}) == _PD.ALLOW)
 
+            # ---- Conversation memory (working memory across --ask) ----
+            cs = _conv.ConversationStore()  # uses the temp-patched _CONV_DIR
+            common = dict(kb_path=kb, queue_path=tdp / "qc.jsonl",
+                          store_factory=lambda: None, inhale=False, use_profile=False,
+                          gate=ConfidenceGate(embed_fn=scripted_embed),
+                          writer=SessionMemoryWriter(append_fn=lambda **k: {"status": "appended", "id": 1}),
+                          printer=lines.append)
+
+            # T23: turn 2 of a thread SEES turn 1 (history reaches the Mind's messages)
+            await ask("remember the marker FOOBAR123",
+                      llm_call=scripted([json.dumps([{"tool_name": "calculator", "description": "x"}]),
+                                         "Noted: FOOBAR123."]),
+                      session="thread-A", **common)
+            r23 = await ask("what was the marker?",
+                            llm_call=scripted([json.dumps([{"tool_name": "calculator", "description": "x"}]),
+                                               "The marker was FOOBAR123."]),
+                            session="thread-A", **common)
+            check("T23 prior turn threaded into the Mind's messages",
+                  any("FOOBAR123" in m.get("content", "") for m in r23.mind.react.messages),
+                  str([m.get("content","")[:40] for m in r23.mind.react.messages]))
+            check("T23b store accrued both turns of both exchanges",
+                  cs.turn_count("thread-A") == 4)
+
+            # T24: threads ISOLATE — a different session sees NONE of thread-A's history
+            # (the essence of what --new buys: a separate id has a separate transcript)
+            r24 = await ask("anything",
+                            llm_call=scripted(["no plan", "Hello, fresh thread."]),
+                            session="thread-B", **common)
+            check("T24 a different thread sees none of thread-A's history",
+                  not any("FOOBAR123" in m.get("content", "") for m in r24.mind.react.messages)
+                  and cs.turn_count("thread-B") == 2)
+
+            # T25: a DEGENERATE answer is NOT persisted (no dangling/poison turn)
+            await ask("trigger degenerate persist",
+                      llm_call=scripted([json.dumps([{"tool_name": "calculator", "description": "x"}]),
+                                         '{"oops": "not a tool call"}', '{"oops": "again"}',
+                                         '{"oops": "still"}', json.dumps([{"tool_name": "calculator", "description": "x"}]),
+                                         '{"oops": "x"}', '{"oops": "y"}', '{"oops": "z"}']),
+                      session="deg-thread", **common)
+            check("T25 degenerate answer NOT persisted to the transcript",
+                  cs.turn_count("deg-thread") == 0, str(cs.turn_count("deg-thread")))
+
+            # T26: a real chit-chat answer that scores ESCALATE (no evidence) IS persisted
+            # — the correction: gate persistence on STRUCTURAL degeneracy, not the verdict.
+            r26 = await ask("hi, who are you?",
+                            llm_call=scripted(["no plan", "I am JARVIS, your private AI."]),
+                            session="chat-thread", **common)
+            check("T26 chit-chat is ESCALATE (no evidence) but real prose",
+                  r26.verdict == "ESCALATE" and "JARVIS" in r26.answer)
+            check("T26b ESCALATE-but-real chit-chat IS persisted (threaded)",
+                  cs.turn_count("chat-thread") == 2, str(cs.turn_count("chat-thread")))
+
     asyncio.run(scenario())
 
     total = passed + len(failed)
@@ -712,6 +800,10 @@ def main() -> int:
     p.add_argument("--allow-all", action="store_true",
                    help="With --full: auto-ALLOW every tool (DANGEROUS — a weak model "
                         "gets ungated shell/exec). Unattended/sandboxed use only.")
+    p.add_argument("--new", action="store_true",
+                   help="Start a fresh conversation thread (don't continue the recent one)")
+    p.add_argument("--session", metavar="NAME",
+                   help="Use/resume a named conversation thread")
     args = p.parse_args()
     if args.awareness:
         return asyncio.run(_awareness())
@@ -719,7 +811,8 @@ def main() -> int:
         handler = allow_all_ask_handler if (args.full and args.allow_all) else None
         asyncio.run(ask(args.ask, capture=not args.no_capture,
                         use_profile=not args.no_profile,
-                        full=args.full, ask_handler=handler))
+                        full=args.full, ask_handler=handler,
+                        new_session=args.new, session=args.session))
         return 0
     _run_self_test()
     return 0
