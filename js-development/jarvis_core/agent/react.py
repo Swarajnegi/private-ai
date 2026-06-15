@@ -244,8 +244,16 @@ class ReActLoop:
 
     # ---- Public API ------------------------------------------------------
 
-    async def run(self, query: str) -> ReActResult:
-        """Drive one user query through the ReAct loop."""
+    async def run(
+        self, query: str, history: Optional[List[Dict[str, str]]] = None
+    ) -> ReActResult:
+        """Drive one user query through the ReAct loop.
+
+        `history` (optional) = prior conversation turns ([{role, content}], clean
+        prose) prepended after the system message and before this query — gives the
+        loop working memory across invocations. Default None = the original
+        single-turn behaviour, unchanged. Only the LATEST emission is ever parsed,
+        so prior assistant turns are inert to tool-call parsing."""
         result = ReActResult()
 
         system_text = self._system_prompt or ""
@@ -293,6 +301,8 @@ class ReActLoop:
         messages: List[Dict[str, str]] = []
         if system_text:
             messages.append({"role": "system", "content": system_text})
+        if history:  # prior conversation turns: working memory across --ask invocations
+            messages.extend({"role": t["role"], "content": t["content"]} for t in history)
         messages.append({"role": "user", "content": query})
         result.messages = messages
 
@@ -1533,6 +1543,27 @@ if __name__ == "__main__":
         check("T31d prose answer is not mistaken for a botched call",
               r31d.terminated_reason == TERMINATED_FINAL_ANSWER
               and "final answer" in r31d.final_text.lower())
+
+        # ---- T32: conversation history prepends between system and query ----
+        loop32 = ReActLoop(
+            llm_call=make_scripted_llm(["The marker was XYZZY42."]),
+            tool_instances={}, enable_mirror_lite=False, enable_cot_monitor=False,
+        )
+        hist = [{"role": "user", "content": "remember XYZZY42"},
+                {"role": "assistant", "content": "Noted: XYZZY42."}]
+        r32 = await loop32.run("what was the marker?", history=hist)
+        roles = [m["role"] for m in r32.messages[:3]]
+        check("T32a history prepended after system/before query (no system here)",
+              roles[0] == "user" and r32.messages[0]["content"] == "remember XYZZY42"
+              and r32.messages[2]["content"] == "what was the marker?", str(roles))
+        check("T32b prior turns visible in the transcript",
+              any("XYZZY42" in m["content"] for m in r32.messages))
+        # T32c: history=None is byte-identical to the original single-turn behavior
+        loop32c = ReActLoop(llm_call=make_scripted_llm(["answer"]), tool_instances={},
+                            enable_mirror_lite=False, enable_cot_monitor=False)
+        r32c = await loop32c.run("q")
+        check("T32c history=None unchanged (query is the first message, nothing prepended)",
+              r32c.messages[0]["role"] == "user" and r32c.messages[0]["content"] == "q")
 
         # ---- Report -----------------------------------------------------
         total = passed + len(failed)

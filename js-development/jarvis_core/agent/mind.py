@@ -170,15 +170,17 @@ class Mind:
 
     # ---- public API ------------------------------------------------------
 
-    async def solve(self, task: str) -> MindResult:
+    async def solve(
+        self, task: str, history: Optional[List[Dict[str, str]]] = None
+    ) -> MindResult:
         plan = await self._decompose(task)
 
-        react = await self._run_react(task, plan, error_context=None)
+        react = await self._run_react(task, plan, error_context=None, history=history)
         replanned = False
         if self._allow_replan and self._is_failure(react):
             err = react.error or react.terminated_reason
             plan = await self._decompose(task, error_context=err)
-            react = await self._run_react(task, plan, error_context=err)
+            react = await self._run_react(task, plan, error_context=err, history=history)
             replanned = True
 
         compacted = await self._maybe_compact(react)
@@ -248,7 +250,8 @@ class Mind:
     # ---- step 2-4: the ReAct loop (criteria 2,3,4) -----------------------
 
     async def _run_react(
-        self, task: str, plan: Optional[Plan], error_context: Optional[str]
+        self, task: str, plan: Optional[Plan], error_context: Optional[str],
+        history: Optional[List[Dict[str, str]]] = None,
     ) -> ReActResult:
         plan_prompt = self._plan_system_prompt(plan)
         sys_prompt = "\n\n".join(p for p in (self._identity, plan_prompt) if p)
@@ -265,7 +268,7 @@ class Mind:
             auto_retrieve_top_k=self._auto_retrieve_top_k,
         )
         try:
-            return await loop.run(task)
+            return await loop.run(task, history=history)
         except Exception as e:
             # Any uncaught loop failure becomes a recoverable ERROR result so
             # solve() can replan rather than crash.
