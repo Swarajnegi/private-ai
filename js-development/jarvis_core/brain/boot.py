@@ -72,6 +72,32 @@ from jarvis_core.brain.context_injector import (
 from jarvis_core.brain.model_profiles import ModelProfile
 
 
+def default_toolset(
+    store: Optional[Any] = None,
+    kb_path: Path = KB_PATH,
+    llm_call: Optional[Any] = None,
+) -> Dict[str, Tool]:
+    """The DEFAULT --ask toolset: awareness + autobiography + EYES ON THE CODE.
+
+    file_read (repo-scoped at the permission layer) + file_search (repo-scoped
+    by construction) ship by default — a JARVIS that cannot see local files is
+    not worth much. Heavy/dangerous tools (web/exec/shell/finance/full memory)
+    stay behind full_toolset()."""
+    from jarvis_core.agent.tools.fs import FileReadTool
+    from jarvis_core.agent.tools.fs_search import FileSearchTool
+
+    tools: Dict[str, Tool] = {
+        "calculator": CalculatorTool(),
+        "prior_self_consult": PriorSelfConsultTool(kb_path=kb_path),
+        "cognitive_mirror": CognitiveMirrorTool(kb_path=kb_path),
+        "file_read": FileReadTool(),
+        "file_search": FileSearchTool(),
+    }
+    if store is not None:
+        tools["memory_semantic_search"] = MemorySemanticSearchTool(store=store)
+    return tools
+
+
 def full_toolset(
     store: Optional[Any] = None,
     kb_path: Path = KB_PATH,
@@ -87,6 +113,7 @@ def full_toolset(
     them is safe; DISPATCHING them is what the permission context controls."""
     from jarvis_core.agent.tools.web import WebSearchTool
     from jarvis_core.agent.tools.fs import FileReadTool
+    from jarvis_core.agent.tools.fs_search import FileSearchTool
     from jarvis_core.agent.tools.exec import CodeExecTool
     from jarvis_core.agent.tools.shell import ShellRunTool
     from jarvis_core.agent.tools.cognitive import BearCaseDevilTool, WritingVoiceCheckTool
@@ -103,6 +130,7 @@ def full_toolset(
         ("calculator", lambda: CalculatorTool()),
         ("web_search", lambda: WebSearchTool()),
         ("file_read", lambda: FileReadTool()),
+        ("file_search", lambda: FileSearchTool()),
         ("code_exec", lambda: CodeExecTool()),
         ("shell_run", lambda: ShellRunTool()),
         ("prior_self_consult", lambda: PriorSelfConsultTool(kb_path=kb_path)),
@@ -212,13 +240,7 @@ def assemble_mind(
         tools = full_toolset(store=store, kb_path=kb_path, llm_call=llm_call,
                              strategy_path=strategy_path)
     else:
-        tools = {
-            "calculator": CalculatorTool(),
-            "prior_self_consult": PriorSelfConsultTool(kb_path=kb_path),
-            "cognitive_mirror": CognitiveMirrorTool(kb_path=kb_path),
-        }
-        if store is not None:
-            tools["memory_semantic_search"] = MemorySemanticSearchTool(store=store)
+        tools = default_toolset(store=store, kb_path=kb_path, llm_call=llm_call)
     collections: List[str] = _list_collections(store) if store is not None else []
     if extra_tools:
         tools.update(extra_tools)

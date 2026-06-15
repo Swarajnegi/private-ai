@@ -72,7 +72,7 @@ from jarvis_core.agent.mind import MindResult
 from jarvis_core.brain.boot import BootReport, assemble_mind
 from jarvis_core.brain.confidence import ConfidenceGate, ConfidenceReport
 from jarvis_core.brain.model_profiles import ProfileRegistry
-from jarvis_core.brain.boot import full_toolset
+from jarvis_core.brain.boot import full_toolset, default_toolset
 from jarvis_core.brain.permgate import (
     build_permission_context, terminal_ask_handler, allow_all_ask_handler,
 )
@@ -215,25 +215,21 @@ async def ask(
 
     store = store_factory() if store_factory is not None else _open_store(printer)
 
-    # FULL harness (opt-in): the whole built toolset, gated by the permission
-    # engine. Policy is resolved HERE (the host): build the toolset, derive the
-    # permission context from it, attach the interactive [y/N] handler. Boot is
-    # the mechanism that applies them. Minimal (default) path is untouched.
-    prebuilt = None
-    p_ctx, p_handler = permission_context, ask_handler
-    if full:
-        prebuilt = full_toolset(store=store, kb_path=kb_path, llm_call=client)
-        if p_ctx is None:
-            p_ctx = build_permission_context(prebuilt)
-        if p_handler is None:
-            p_handler = terminal_ask_handler
+    # Policy resolved HERE (the host): build the toolset, derive the permission
+    # context from it, attach the [y/N] handler — for EVERY mode, so the DEFAULT
+    # toolset's file_read is repo-scope-gated (cloud-leak guard) just as the full
+    # set's shell/exec are. Boot is the mechanism that applies them.
+    prebuilt = (full_toolset(store=store, kb_path=kb_path, llm_call=client)
+                if full else default_toolset(store=store, kb_path=kb_path, llm_call=client))
+    p_ctx = permission_context or build_permission_context(prebuilt)
+    p_handler = ask_handler or terminal_ask_handler
+    gated = sorted(n for n, t in prebuilt.items()
+                   if getattr(t, "requires_permission", False))
 
     printer(f"  brain   : {model or '<scripted>'}")
     printer(f"  profile : {profile_label or 'none'}")
-    if full:
-        gated = sorted(n for n, t in prebuilt.items()
-                       if getattr(t, "requires_permission", False))
-        printer(f"  tools   : full ({len(prebuilt)}) | gated: {', '.join(gated) or 'none'}")
+    printer(f"  tools   : {'full' if full else 'default'} ({len(prebuilt)})"
+            f" | gated: {', '.join(gated) or 'none'}")
     printer(f"  query   : {question}")
     try:
         mind, boot_report = assemble_mind(
@@ -668,6 +664,25 @@ def _run_self_test() -> None:
                 inhale=False, use_profile=False, printer=lines.append)
             check("T20 default path stays minimal (no full toolset, no gating)",
                   r20.boot.tool_mode == "minimal" and r20.boot.gated == ())
+
+            # T21: DEFAULT --ask now has EYES — file_read + file_search ship without
+            # --full, and a permission context is wired (the cloud-leak guard).
+            check("T21 default toolset includes file_read + file_search",
+                  {"file_read", "file_search"} <= set(r20.boot.tools), str(r20.boot.tools))
+            check("T21b default toolset stays lean (no shell/exec/web in default)",
+                  not ({"shell_run", "code_exec", "web_search"} & set(r20.boot.tools)))
+
+            # T22: in DEFAULT mode an OUT-OF-REPO file_read is gated (cloud-leak guard),
+            # in-repo auto-allows. Prove via the permission context the orchestrator builds.
+            from jarvis_core.brain.permgate import build_permission_context
+            from jarvis_core.brain.boot import default_toolset as _dts
+            from jarvis_core.agent.permissions import PermissionDecision as _PD
+            ctx22 = build_permission_context(_dts(store=None, kb_path=kb))
+            in_repo = str(Path(__file__).resolve())  # this orchestrator.py, in-repo
+            check("T22 default-mode out-of-repo file_read gated",
+                  await ctx22.check("file_read", {"path": "/etc/passwd"}) == _PD.ASK)
+            check("T22b default-mode in-repo file_read auto-allowed",
+                  await ctx22.check("file_read", {"path": in_repo}) == _PD.ALLOW)
 
     asyncio.run(scenario())
 
