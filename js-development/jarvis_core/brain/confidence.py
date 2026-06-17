@@ -73,10 +73,17 @@ VERDICT_ESCALATE = "ESCALATE"
 
 @dataclass(frozen=True)
 class ConfidenceReport:
-    """The gate's output: a score in [0,1], a verdict, and WHY."""
+    """The gate's output: a score in [0,1], a verdict, and WHY.
+
+    `had_evidence` distinguishes the TWO opposite reasons grade() returns
+    ESCALATE: False == no evidence was gathered at all (a pure-reasoning answer
+    is ungrounded *by construction*), True == evidence WAS gathered but the
+    draft scored against it (a low score here is the fabrication / contradicts-
+    the-facts signal). Downstream fusion must not conflate them."""
     score: float
     verdict: str
     grounds: Tuple[str, ...]
+    had_evidence: bool = False
 
 
 # =============================================================================
@@ -158,7 +165,7 @@ class ConfidenceGate:
             f"evidence: {len(chunks)} chunk(s); best match: "
             f"\"{chunks[best_i][:80]}{'…' if len(chunks[best_i]) > 80 else ''}\"",
         )
-        return ConfidenceReport(round(score, 4), verdict, grounds)
+        return ConfidenceReport(round(score, 4), verdict, grounds, had_evidence=True)
 
 
 # =============================================================================
