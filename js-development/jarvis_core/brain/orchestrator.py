@@ -84,6 +84,9 @@ from jarvis_core.brain.session_writer import SessionMemoryWriter, SessionRecord
 
 _IST = timezone(timedelta(hours=5, minutes=30))
 _DEFAULT_BUDGET_USD = 0.10
+# An independent critic makes ~1 cheap call; cap it at a fraction of the session
+# budget so enabling it widens the combined ceiling to 1.5x, not 2x.
+_CRITIC_BUDGET_FRACTION = 0.5
 
 # One terminal session per process — every ask in this process shares it, so
 # recall groups them into one chat exactly like a Claude Code session id does.
@@ -187,6 +190,8 @@ async def ask(
     reasoning_gate: Optional[ReasoningGate] = None,
     critic_llm: Optional[Any] = None,
     critic_independent: bool = False,
+    critic_model: Optional[str] = None,
+    critic_factory: Optional[Callable[[str], Any]] = None,
     writer: Optional[SessionMemoryWriter] = None,
     extra_tools: Optional[Dict[str, Any]] = None,
     clock: Optional[Callable[[], datetime]] = None,
@@ -309,16 +314,56 @@ async def ask(
     # falsely-dismissive ESCALATE so wrong is no longer indistinguishable from
     # right. Skipped on degenerate (nothing to audit) and when disabled.
     rreport = ReasoningReport(VERDICT_UNCHECKED, "", "", ("reasoning audit not run",))
+    critic_client = None
+    indep = critic_independent
+    critic_desc = "self-audit"
     audited = reasoning and not degenerate
     if audited:
-        rgate = reasoning_gate or ReasoningGate(critic_llm or client)
+        if reasoning_gate is not None or critic_llm is not None:
+            rgate = reasoning_gate or ReasoningGate(critic_llm)
+            critic_desc = "independent: injected" if indep else "self-audit: injected"
+        else:
+            # Wave 2: a critic on a DIFFERENT model than the answerer does not share
+            # its blind spot, so it is INDEPENDENT (KB L389: a same-model self-audit
+            # is net-noise on the multi-turn reasoning it exists for — it false-flagged
+            # a correct inverted-logic answer live). No critic model configured -> a
+            # conservative same-model self-audit whose SOUND can never lift the verdict.
+            cm = (critic_model or os.environ.get("OPENROUTER_CRITIC_MODEL") or "").strip()
+            am = (model or "").strip()
+            # Fail-closed independence: only TRUST a critic's SOUND to lift when we
+            # can CONFIRM it is a genuinely different model — normalize both sides
+            # (strip + case-fold; OpenRouter slugs are case-insensitive) and require a
+            # known answerer id. A trailing-newline env var or unknown answerer must
+            # never sneak a same-model self-audit through as "independent".
+            distinct = bool(cm) and bool(am) and cm.lower() != am.lower()
+            if distinct:
+                factory = critic_factory or (
+                    lambda m: build_llm_call(
+                        budget_usd=round(budget_usd * _CRITIC_BUDGET_FRACTION, 6), model=m))
+                try:
+                    critic_client = factory(cm)
+                    rgate = ReasoningGate(critic_client)
+                    indep = True
+                    critic_desc = f"independent: {cm}"
+                except Exception as e:
+                    # Building the second client failed (no key, bad id, provider
+                    # lookup) — degrade to a conservative self-audit so the answer
+                    # STANDS rather than crashing the ask (fail-closed, visible).
+                    rgate = ReasoningGate(client)
+                    indep = False
+                    critic_client = None
+                    critic_desc = f"self-audit (critic build failed: {type(e).__name__})"
+            else:
+                rgate = ReasoningGate(client)
+                indep = False
+                critic_desc = f"self-audit: {am or 'scripted'}"
         rreport = await rgate.critique(question, answer, context=hist)
-        report = fuse(report, rreport, critic_independent=critic_independent)
+        report = fuse(report, rreport, critic_independent=indep)
 
     printer(f"\n  JARVIS  : {answer}")
     printer(f"  confidence: {report.verdict} ({report.score:.2f}) — {report.grounds[0]}")
     if audited:
-        printer(f"  reasoning : {rreport.verdict} — {rreport.grounds[0]}")
+        printer(f"  reasoning : {rreport.verdict} [{critic_desc}] — {rreport.grounds[0]}")
 
     cwd = os.getcwd()
     captured = False
@@ -353,6 +398,17 @@ async def ask(
             ledger = client.ledger_summary()
         except Exception:
             ledger = {}
+    critic_ledger: Dict[str, Any] = {}
+    if critic_client is not None and hasattr(critic_client, "ledger_summary"):
+        try:
+            critic_ledger = critic_client.ledger_summary()
+        except Exception:
+            critic_ledger = {}
+
+    # Total session spend = answer + (independent) critic, so the distilled record
+    # and the printed cost tell the truth when a second model audited.
+    total_spend = (float(ledger.get("spend_usd") or 0.0)
+                   + float(critic_ledger.get("spend_usd") or 0.0))
 
     distill_status = "skipped"
     if distill:
@@ -360,7 +416,7 @@ async def ask(
         out = active_writer.write(SessionRecord(
             question=question, answer=answer, model=model,
             tools_used=tuple(tc.name for tc, _tr in result.react.tool_calls),
-            spend_usd=float(ledger.get("spend_usd") or 0.0),
+            spend_usd=total_spend,
             confidence_verdict=report.verdict, confidence_score=report.score,
             reasoning_verdict=rreport.verdict,
             domain=guess_domain(cwd, question + " " + answer),
@@ -369,6 +425,8 @@ async def ask(
 
     if ledger:
         printer(f"  ledger  : {ledger}")
+    if critic_ledger:
+        printer(f"  critic  : {critic_ledger}")
 
     return AskResult(
         question=question, answer=answer,
@@ -888,6 +946,104 @@ def _run_self_test() -> None:
                   critic_hits["n"] == 0 and r31.reasoning_verdict == "UNCHECKED",
                   f"hits={critic_hits['n']} verdict={r31.reasoning_verdict}")
 
+            # --- Wave 2: independent critic (a DIFFERENT model audits) ---
+            # A critic client built from a model id via the injectable factory; it
+            # carries a .model + a ledger so the dual-ledger path is exercised.
+            def make_critic_client(model_id: str, payload: str):
+                calls = [0]
+                def _client(messages):
+                    calls[0] += 1
+                    return payload
+                _client.model = model_id          # type: ignore[attr-defined]
+                _client.ledger_summary = (lambda: {  # type: ignore[attr-defined]
+                    "model": model_id, "calls": calls[0], "spend_usd": 0.0009})
+                return _client
+
+            built = {"models": []}
+            def factory(model_id: str):
+                built["models"].append(model_id)
+                return make_critic_client(
+                    model_id, '{"verdict": "SOUND", "flaw": "", "corrected": ""}')
+
+            # T32: a critic model DIFFERENT from the answerer ('scripted-brain') is
+            # auto-derived INDEPENDENT -> its SOUND lifts an evidence-less ESCALATE to
+            # UNCERTAIN, the factory is called with that model, descriptor shows it.
+            lines32: List[str] = []
+            r32 = await ask("reason, no tools",
+                            llm_call=scripted(["no plan", "An evidence-free deduction."]),
+                            reasoning=True, critic_model="peer/other-model",
+                            critic_factory=factory, session="reason-indep",
+                            **{**common, "printer": lines32.append})
+            check("T32 different critic model -> independent SOUND lifts to UNCERTAIN",
+                  r32.verdict == "UNCERTAIN" and r32.reasoning_verdict == "SOUND",
+                  f"{r32.verdict}/{r32.reasoning_verdict}")
+            check("T32b factory built the critic on the configured model",
+                  built["models"] == ["peer/other-model"], str(built["models"]))
+            check("T32c reasoning line names the independent critic model",
+                  any("independent: peer/other-model" in l for l in lines32),
+                  str([l for l in lines32 if l.startswith('  reasoning')]))
+            check("T32d critic spend surfaced (dual ledger)",
+                  any(l.startswith("  critic  :") for l in lines32), str(lines32[-3:]))
+
+            # T33: a critic model EQUAL to the answerer is NOT independent (same blind
+            # spot) -> self-audit, SOUND does NOT lift (stays ESCALATE), factory unused.
+            # The self-audit uses the main client, so its 3rd scripted reply IS the
+            # critic's SOUND verdict.
+            built2 = {"models": []}
+            r33 = await ask("reason, no tools",
+                            llm_call=scripted(["no plan", "Another evidence-free reply.",
+                                               '{"verdict": "SOUND", "flaw": "", "corrected": ""}']),
+                            reasoning=True, critic_model="scripted-brain",
+                            critic_factory=lambda m: (built2["models"].append(m) or factory(m)),
+                            session="reason-samemodel", **common)
+            check("T33 same critic model == answerer -> self-audit SOUND, no lift (ESCALATE)",
+                  r33.verdict == "ESCALATE" and r33.reasoning_verdict == "SOUND"
+                  and built2["models"] == [],
+                  f"{r33.verdict}/{r33.reasoning_verdict} built={built2['models']}")
+
+            # T34: an independent FLAWED still forces ESCALATE (fail-closed holds with
+            # a real distinct critic, not just the injected-gate path).
+            r34 = await ask("is the earth flat?",
+                            llm_call=scripted(["no plan", "No."]),
+                            reasoning=True, critic_model="peer/other-model",
+                            critic_factory=lambda m: make_critic_client(
+                                m, '{"verdict":"FLAWED","flaw":"dropped inversion","corrected":"Yes"}'),
+                            session="reason-indep-flawed", **common)
+            check("T34 independent FLAWED -> ESCALATE + flaw on result",
+                  r34.verdict == "ESCALATE" and r34.reasoning_verdict == "FLAWED"
+                  and "inversion" in r34.reasoning_flaw, f"{r34.verdict}/{r34.reasoning_flaw}")
+
+            # T35 (HIGH-fix): a critic FACTORY that raises (e.g. no API key) must NOT
+            # crash ask() — it degrades to a self-audit and the answer STANDS.
+            lines35: List[str] = []
+            def exploding_factory(model_id: str):
+                raise RuntimeError("No API key")
+            r35 = await ask("reason, no tools",
+                            llm_call=scripted(["no plan", "An answer that must survive."]),
+                            reasoning=True, critic_model="peer/other-model",
+                            critic_factory=exploding_factory, session="reason-buildfail",
+                            **{**common, "printer": lines35.append})
+            check("T35 critic build failure does not crash; answer stands",
+                  "must survive" in r35.answer and r35.verdict == "ESCALATE",
+                  f"{r35.verdict}/{r35.answer[:40]}")
+            check("T35b degrade is visible (self-audit build-failed note printed)",
+                  any("critic build failed" in l for l in lines35), str(lines35[-3:]))
+
+            # T36 (MEDIUM/LOW-fix): a critic id equal to the answerer modulo case +
+            # whitespace must be treated as SAME-model self-audit (no lift), not
+            # independent. Answerer model is 'scripted-brain'.
+            built36 = {"models": []}
+            r36 = await ask("reason, no tools",
+                            llm_call=scripted(["no plan", "Evidence-free again.",
+                                               '{"verdict": "SOUND", "flaw": "", "corrected": ""}']),
+                            reasoning=True, critic_model="  Scripted-Brain  ",
+                            critic_factory=lambda m: (built36["models"].append(m) or
+                                                      make_critic_client(m, "{}")),
+                            session="reason-normcase", **common)
+            check("T36 same model (case/whitespace) -> self-audit, no lift, factory unused",
+                  r36.verdict == "ESCALATE" and built36["models"] == [],
+                  f"{r36.verdict} built={built36['models']}")
+
     asyncio.run(scenario())
 
     total = passed + len(failed)
@@ -923,6 +1079,13 @@ def main() -> int:
     p.add_argument("--no-reasoning", action="store_true",
                    help="Skip the reasoning audit (the LLM self-critique that grades "
                         "logic, not just evidence-grounding; on by default, ~1 extra call)")
+    p.add_argument("--critic-model", metavar="MODEL",
+                   help="Audit with a DIFFERENT model (independent critic — its SOUND can "
+                        "lift, its FLAWED is trusted). Defaults to OPENROUTER_CRITIC_MODEL; "
+                        "unset -> conservative same-model self-audit. ~1 extra metered call "
+                        "(capped at half the session budget; combined ceiling ~1.5x). NOTE: "
+                        "this sends the conversation to a SECOND model/provider — pick a "
+                        "trusted one.")
     args = p.parse_args()
     if args.awareness:
         return asyncio.run(_awareness())
@@ -932,6 +1095,7 @@ def main() -> int:
                         use_profile=not args.no_profile,
                         full=args.full, ask_handler=handler,
                         reasoning=not args.no_reasoning,
+                        critic_model=args.critic_model,
                         new_session=args.new, session=args.session))
         return 0
     _run_self_test()
