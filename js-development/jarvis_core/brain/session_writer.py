@@ -73,6 +73,7 @@ class SessionRecord:
     spend_usd: float = 0.0
     confidence_verdict: str = ""
     confidence_score: float = 0.0
+    reasoning_verdict: str = ""
     domain: str = "general"
 
 
@@ -117,11 +118,14 @@ class SessionMemoryWriter:
         tools = ", ".join(record.tools_used) or "none"
         confidence = (f"{record.confidence_verdict} {record.confidence_score:.2f}"
                       if record.confidence_verdict else "ungraded")
+        reasoning = (f" | reasoning: {record.reasoning_verdict}"
+                     if record.reasoning_verdict
+                     and record.reasoning_verdict != "UNCHECKED" else "")
         content = (
             f"Terminal session distill ({record.model or 'unknown brain'}): "
             f"Q: {_head(record.question, _HEAD_Q)} | "
             f"A: {_head(record.answer, _HEAD_A)} | "
-            f"tools: {tools} | confidence: {confidence} | "
+            f"tools: {tools} | confidence: {confidence}{reasoning} | "
             f"spend: ${record.spend_usd:.4f}"
         )
         tags = list(_BASE_TAGS) + [_tag_safe(record.domain)]

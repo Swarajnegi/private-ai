@@ -71,6 +71,9 @@ from jarvis_core.agent.llm_client import build_llm_call
 from jarvis_core.agent.mind import MindResult
 from jarvis_core.brain.boot import BootReport, assemble_mind
 from jarvis_core.brain.confidence import ConfidenceGate, ConfidenceReport
+from jarvis_core.brain.reasoning import (
+    ReasoningGate, ReasoningReport, fuse, VERDICT_UNCHECKED,
+)
 from jarvis_core.brain.model_profiles import ProfileRegistry
 from jarvis_core.brain.boot import full_toolset, default_toolset
 from jarvis_core.brain.conversation import ConversationStore, resolve_terminal_session
@@ -104,6 +107,8 @@ class AskResult:
     mind: MindResult
     captured: bool
     distill_status: str
+    reasoning_verdict: str = VERDICT_UNCHECKED
+    reasoning_flaw: str = ""
 
 
 # =============================================================================
@@ -178,6 +183,10 @@ async def ask(
     queue_path: Optional[Path] = None,
     store_factory: Optional[Callable[[], Optional[Any]]] = None,
     gate: Optional[ConfidenceGate] = None,
+    reasoning: bool = False,
+    reasoning_gate: Optional[ReasoningGate] = None,
+    critic_llm: Optional[Any] = None,
+    critic_independent: bool = False,
     writer: Optional[SessionMemoryWriter] = None,
     extra_tools: Optional[Dict[str, Any]] = None,
     clock: Optional[Callable[[], datetime]] = None,
@@ -202,7 +211,9 @@ async def ask(
     1. LLMCall ready (auto-pick free model if unconfigured).
     2. Store opened; Mind assembled via boot (psyche + autobiography + inhale).
     3. solve(); store closed in finally; tool lines printed (errors surfaced).
-    4. ConfidenceGate grades answer vs tool-result evidence; verdict stamped.
+    4. ConfidenceGate grades answer vs evidence ("made it up?"); when reasoning
+       is on, ReasoningGate audits the logic ("is it right?") and fuse() stamps
+       one verdict — a FLAWED audit floors it to ESCALATE (KB L383).
     5. Capture parity append + Episodic distill (both fail-soft). Ledger printed.
 
     Returns:
@@ -288,8 +299,26 @@ async def ask(
         active_gate = gate or ConfidenceGate()
         report = active_gate.grade(answer, evidence)
 
+    # Reasoning audit (Stage 4.5 epistemic control). The grounding gate above
+    # answers "did you make it up?"; this answers "is your logic right?" — the
+    # orthogonal axis it is STRUCTURALLY blind to (KB L383: a confidently-wrong
+    # inverted-logic answer scored the same ESCALATE 0.00 as a right one). The
+    # critic (the same metered client by default; injectable for a stronger
+    # reasoner) re-derives independently against the conversation's rules; fuse()
+    # forces FLAWED -> ESCALATE and lifts a SOUND-but-ungrounded answer out of the
+    # falsely-dismissive ESCALATE so wrong is no longer indistinguishable from
+    # right. Skipped on degenerate (nothing to audit) and when disabled.
+    rreport = ReasoningReport(VERDICT_UNCHECKED, "", "", ("reasoning audit not run",))
+    audited = reasoning and not degenerate
+    if audited:
+        rgate = reasoning_gate or ReasoningGate(critic_llm or client)
+        rreport = await rgate.critique(question, answer, context=hist)
+        report = fuse(report, rreport, critic_independent=critic_independent)
+
     printer(f"\n  JARVIS  : {answer}")
     printer(f"  confidence: {report.verdict} ({report.score:.2f}) — {report.grounds[0]}")
+    if audited:
+        printer(f"  reasoning : {rreport.verdict} — {rreport.grounds[0]}")
 
     cwd = os.getcwd()
     captured = False
@@ -333,6 +362,7 @@ async def ask(
             tools_used=tuple(tc.name for tc, _tr in result.react.tool_calls),
             spend_usd=float(ledger.get("spend_usd") or 0.0),
             confidence_verdict=report.verdict, confidence_score=report.score,
+            reasoning_verdict=rreport.verdict,
             domain=guess_domain(cwd, question + " " + answer),
         ))
         distill_status = str(out.get("status", "error"))
@@ -345,6 +375,7 @@ async def ask(
         verdict=report.verdict, confidence_score=report.score,
         grounds=report.grounds, ledger=ledger, boot=boot_report, mind=result,
         captured=captured, distill_status=distill_status,
+        reasoning_verdict=rreport.verdict, reasoning_flaw=rreport.flaw,
     )
 
 
@@ -772,6 +803,91 @@ def _run_self_test() -> None:
             check("T26b ESCALATE-but-real chit-chat IS persisted (threaded)",
                   cs.turn_count("chat-thread") == 2, str(cs.turn_count("chat-thread")))
 
+            # --- Reasoning audit (Stage 4.5) end-to-end through ask() ---
+            def critic(payload: str):
+                def _c(messages):
+                    return payload
+                return _c
+            sound_critic = critic('{"verdict": "SOUND", "flaw": "", "corrected": ""}')
+            flawed_critic = critic('{"verdict": "FLAWED", '
+                                   '"flaw": "dropped the stated inversion rule", '
+                                   '"corrected": "Yes"}')
+
+            # T27: a FLAWED reasoning audit forces the stamped verdict to ESCALATE
+            # and surfaces the flaw — even though the answer is coherent prose.
+            lines27: List[str] = []
+            r27 = await ask("is earth flat?",
+                            llm_call=scripted(["no plan", "No, the earth is not flat."]),
+                            reasoning=True, reasoning_gate=ReasoningGate(flawed_critic),
+                            session="reason-flawed",
+                            **{**common, "printer": lines27.append})
+            check("T27 FLAWED audit -> stamped ESCALATE",
+                  r27.verdict == "ESCALATE" and r27.reasoning_verdict == "FLAWED",
+                  f"{r27.verdict}/{r27.reasoning_verdict}")
+            check("T27b flaw captured on the result", "inversion" in r27.reasoning_flaw,
+                  r27.reasoning_flaw)
+            check("T27c both signals printed (confidence + reasoning lines)",
+                  any(l.startswith("  confidence:") for l in lines27)
+                  and any(l.startswith("  reasoning :") for l in lines27), str(lines27[-4:]))
+
+            # T28: an INDEPENDENT SOUND audit lifts an evidence-less answer out of
+            # the falsely dismissive ESCALATE-0.00 to UNCERTAIN (logic sound,
+            # ungrounded). Lift is gated on critic independence.
+            r28 = await ask("reason about something with no tools",
+                            llm_call=scripted(["no plan", "A sound, evidence-free deduction."]),
+                            reasoning=True, reasoning_gate=ReasoningGate(sound_critic),
+                            critic_independent=True,
+                            session="reason-sound", **common)
+            check("T28 independent SOUND lifts evidence-less ESCALATE -> UNCERTAIN",
+                  r28.verdict == "UNCERTAIN" and r28.reasoning_verdict == "SOUND",
+                  f"{r28.verdict}/{r28.reasoning_verdict} score={r28.confidence_score}")
+
+            # T28b (HIGH-finding fix, live default): a SELF-audit SOUND
+            # (critic_independent=False — the production default) must NOT upgrade
+            # a wrong/ungrounded answer. No false-SOUND confidence regression.
+            r28b = await ask("reason with a self-audit",
+                             llm_call=scripted(["no plan", "A self-audited deduction."]),
+                             reasoning=True, reasoning_gate=ReasoningGate(sound_critic),
+                             session="reason-selfaudit", **common)
+            check("T28b self-audit SOUND does NOT lift (stays ESCALATE)",
+                  r28b.verdict == "ESCALATE" and r28b.reasoning_verdict == "SOUND",
+                  f"{r28b.verdict}/{r28b.reasoning_verdict}")
+
+            # T29: THE L383 FIX, end-to-end — a confidently-WRONG answer and a RIGHT
+            # evidence-less answer no longer land on the same verdict/score.
+            check("T29 wrong(FLAWED)=ESCALATE 0.00 distinguishable from right(SOUND)=UNCERTAIN",
+                  r27.verdict != r28.verdict
+                  and r27.confidence_score == 0.0 and r28.confidence_score > 0.0,
+                  f"wrong={r27.verdict}/{r27.confidence_score} right={r28.verdict}/{r28.confidence_score}")
+
+            # T30: reasoning OFF (the library default) is a clean no-op — no critic
+            # call, no reasoning line, verdict is grounding-only (pre-4.5 behavior).
+            lines30: List[str] = []
+            r30 = await ask("plain ungrounded answer",
+                            llm_call=scripted(["no plan", "Just a chat reply."]),
+                            session="reason-off",
+                            **{**common, "printer": lines30.append})
+            check("T30 reasoning default-off: UNCHECKED, grounding-only verdict",
+                  r30.reasoning_verdict == "UNCHECKED" and r30.verdict == "ESCALATE"
+                  and not any(l.startswith("  reasoning :") for l in lines30))
+
+            # T31: a degenerate answer is never audited (nothing to critique) — the
+            # critic must not even be reached.
+            critic_hits = {"n": 0}
+            def counting_critic(messages):
+                critic_hits["n"] += 1
+                return '{"verdict": "SOUND"}'
+            r31 = await ask("trigger degenerate",
+                            llm_call=scripted([json.dumps([{"tool_name": "calculator", "description": "x"}]),
+                                               '{"oops": "a"}', '{"oops": "b"}', '{"oops": "c"}',
+                                               json.dumps([{"tool_name": "calculator", "description": "x"}]),
+                                               '{"oops": "d"}', '{"oops": "e"}', '{"oops": "f"}']),
+                            reasoning=True, reasoning_gate=ReasoningGate(counting_critic),
+                            session="reason-degen", **common)
+            check("T31 degenerate answer is not audited (critic never called)",
+                  critic_hits["n"] == 0 and r31.reasoning_verdict == "UNCHECKED",
+                  f"hits={critic_hits['n']} verdict={r31.reasoning_verdict}")
+
     asyncio.run(scenario())
 
     total = passed + len(failed)
@@ -804,6 +920,9 @@ def main() -> int:
                    help="Start a fresh conversation thread (don't continue the recent one)")
     p.add_argument("--session", metavar="NAME",
                    help="Use/resume a named conversation thread")
+    p.add_argument("--no-reasoning", action="store_true",
+                   help="Skip the reasoning audit (the LLM self-critique that grades "
+                        "logic, not just evidence-grounding; on by default, ~1 extra call)")
     args = p.parse_args()
     if args.awareness:
         return asyncio.run(_awareness())
@@ -812,6 +931,7 @@ def main() -> int:
         asyncio.run(ask(args.ask, capture=not args.no_capture,
                         use_profile=not args.no_profile,
                         full=args.full, ask_handler=handler,
+                        reasoning=not args.no_reasoning,
                         new_session=args.new, session=args.session))
         return 0
     _run_self_test()
