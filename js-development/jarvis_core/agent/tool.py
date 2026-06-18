@@ -89,11 +89,12 @@ from __future__ import annotations
 
 import asyncio
 from abc import abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, ClassVar, Dict, List, Optional, Type
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
+from jarvis_core.agent.coercion import coerce_arguments
 from jarvis_core.agent.registry import RegistryBase
 
 
@@ -330,8 +331,13 @@ async def safe_invoke(tool: Tool, raw_input: Dict[str, Any]) -> ToolResult:
     Returns:
         ToolResult — always. Never raises.
     """
+    # STEAL #13: tolerant coercion BEFORE validation — a weak model emits valid
+    # JSON with near-miss field names (file_name vs path); map them onto the
+    # canonical schema fields. Conservative: anything ambiguous is left verbatim
+    # so validation still fails cleanly and the repair layer shows the schema.
+    coerced_input, coercion_notes = coerce_arguments(raw_input, tool.input_schema)
     try:
-        validated = tool.input_schema.model_validate(raw_input)
+        validated = tool.input_schema.model_validate(coerced_input)
     except Exception as e:
         return ToolResult(
             error=f"Input validation failed for '{tool.name}': {e}"
@@ -357,6 +363,13 @@ async def safe_invoke(tool: Tool, raw_input: Dict[str, Any]) -> ToolResult:
     except Exception:
         pass
 
+    # Surface any coercion remaps so the observation isn't a silent operation.
+    if coercion_notes:
+        result = replace(
+            result,
+            metadata={**(result.metadata or {}), "coercion_notes": coercion_notes},
+        )
+
     return result
 
 
@@ -370,7 +383,7 @@ if __name__ == "__main__":
 
     class CalculatorInput(ToolInput):
         """Input schema for the calculator tool."""
-        expression: str
+        expression: str = Field(json_schema_extra={"aliases": ["expr", "formula"]})
 
     @Tool.register("calculator")
     class CalculatorTool(Tool):
@@ -446,10 +459,20 @@ if __name__ == "__main__":
         print(f"  calculator('import os') => {result_err.error}")
         assert result_err.is_error
 
-        # -- Invoke with bad input (validation failure) --------------------
+        # -- STEAL #13 coercion: a DECLARED ALIAS ('expr' -> 'expression') is
+        #    remapped onto the canonical field, so the call reaches invoke and
+        #    surfaces a coercion note. (A semantically-unknown key is NOT guessed
+        #    — see the validation case below.)
+        result_coerced = await safe_invoke(calc, {"expr": "6 * 7"})
+        print(f"  calculator(expr='6 * 7') => {result_coerced.output} "
+              f"(coerced; notes={(result_coerced.metadata or {}).get('coercion_notes')})")
+        assert result_coerced.is_success and result_coerced.output == 42
+        assert (result_coerced.metadata or {}).get("coercion_notes")
 
-        result_bad = await safe_invoke(calc, {"wrong_field": "oops"})
-        print(f"  calculator(wrong_field) => {result_bad.error}")
+        # -- Genuine validation failure coercion CANNOT mask: an extra unknown
+        #    field alongside the correct one (required already filled -> no bind).
+        result_bad = await safe_invoke(calc, {"expression": "1+1", "bogus": "x"})
+        print(f"  calculator(expression + bogus) => {result_bad.error}")
         assert result_bad.is_error
         assert "validation" in result_bad.error.lower()
 

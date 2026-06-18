@@ -65,7 +65,9 @@ class FileReadInput(ToolInput):
     path: str = Field(
         description="Exact path to an EXISTING file (absolute, or relative to the "
                     "repo root). If you do not already know the exact path, call "
-                    "file_search FIRST to find it — never guess a filename.")
+                    "file_search FIRST to find it — never guess a filename.",
+        json_schema_extra={"aliases": [
+            "file_path", "filepath", "file_name", "filename", "file", "fname"]})
     encoding: str = Field(default="utf-8", description="Text encoding (default utf-8).")
     max_bytes: int = Field(
         default=1_000_000, ge=1, le=10_000_000,

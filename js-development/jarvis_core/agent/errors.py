@@ -603,8 +603,12 @@ if __name__ == "__main__":
         print(f"      Hint: {decision4.classified_error.repair_hint}")
 
         # --- Test 5: VALIDATION_FAILED -> RETRY_WITH_HINT ---
+        # NB: an extra UNKNOWN field alongside the correct one — STEAL #13 coercion
+        # cannot mask this (the required field is already filled, so no single-field
+        # bind), so it stays a genuine validation failure. (A lone wrong key like
+        # {"wrong_field": x} is now coerced onto the single required field.)
         handler.reset()
-        tc_bad_args = ToolCall(name="calculator", arguments={"wrong_field": "oops"})
+        tc_bad_args = ToolCall(name="calculator", arguments={"expression": "1+1", "bogus": "x"})
         result_bad = await dispatch(tc_bad_args)
         assert result_bad.is_error
         decision5 = handler.handle(result_bad, attempted_tool_name="calculator")
