@@ -68,7 +68,7 @@ from jarvis_core.config import MODEL_PROFILES_PATH
 # keeps profiles from duplicating, and desyncing from, the catalog.
 _OVERRIDE_KEYS = frozenset({
     "mirror_ok", "enable_monitor", "max_iterations", "reasoning_channel",
-    "notes", "observation_max_chars",
+    "notes", "observation_max_chars", "system_role_ok",
 })
 
 
@@ -86,6 +86,9 @@ class ModelProfile:
                                      # handles this unconditionally; not yet enforced.
     notes: str = ""                  # why this conduct (cite the live observation)
     observation_max_chars: Optional[int] = None  # forward-compat; NOT threaded in Wave 1
+    system_role_ok: bool = True      # 4.1 W2: does this model accept a `system` role?
+                                     # False -> ProtocolAdapter folds system into the
+                                     # first user turn. Default True (the OpenRouter norm).
 
 
 DEFAULT_PROFILE = ModelProfile(

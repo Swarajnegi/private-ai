@@ -553,7 +553,7 @@ def main() -> int:
         classifier = DomainClassifier()  # embedding nearest-prototype (KB L314 fix)
     llm = None
     if args.llm:
-        from jarvis_core.agent.llm_client import build_llm_call
+        from jarvis_core.brain.llm_client import build_llm_call
         llm = build_llm_call(budget_usd=0.10)  # First Light: gate + synthesis go live
     engine = CrossDomainCorrelationEngine(llm_call=llm, domain_classifier=classifier)
     if args.dry_run:
