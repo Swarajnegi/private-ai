@@ -98,6 +98,7 @@ from __future__ import annotations
 
 import asyncio
 import inspect
+import json
 from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable, Dict, List, Optional, Tuple, Union
 
@@ -108,6 +109,7 @@ from jarvis_core.agent.observation import (
     format_observation,
     truncate,
 )
+from jarvis_core.agent.errors import ToolErrorKind, classify_error
 from jarvis_core.agent.parser import ParseError, ToolCall, parse_tool_calls
 from jarvis_core.agent.permissions import PermissionContext, PermissionDecision
 from jarvis_core.agent.plan import Step, StepStatus
@@ -154,6 +156,26 @@ TERMINATED_ERROR = "loop_error"
 # first missing its closing brace; parse_tool_calls returned a ParseError, the
 # loop read "no tool calls" as "final answer" and printed the JSON to the user).
 _MAX_TOOLCALL_REPAIRS = 2
+
+# Placeholder values by JSON type, for synthesizing a concrete example tool call
+# in the protocol (STEAL #13 — few-shot the exact field names so a weak model
+# copies them verbatim instead of inventing file_name/file_path/query).
+_EXAMPLE_BY_TYPE: Dict[str, Any] = {
+    "string": "<value>", "integer": 0, "number": 0,
+    "boolean": True, "array": [], "object": {},
+}
+
+
+def _example_args(input_schema: Dict[str, Any]) -> Dict[str, Any]:
+    """A minimal valid `arguments` example using the schema's REQUIRED field
+    names (falls back to the first property if nothing is required)."""
+    props = input_schema.get("properties", {}) or {}
+    required = input_schema.get("required", []) or list(props.keys())[:1]
+    out: Dict[str, Any] = {}
+    for field in required:
+        ftype = (props.get(field) or {}).get("type")
+        out[field] = _EXAMPLE_BY_TYPE.get(ftype, "<value>")
+    return out
 
 
 # =============================================================================
@@ -310,7 +332,8 @@ class ReActLoop:
         used_tool_names = set(self._tools.keys())
         await self._fire_setup(used_tool_names)
 
-        repair_attempts = 0  # botched-tool-call repair budget (see _MAX_TOOLCALL_REPAIRS)
+        repair_attempts = 0  # botched-tool-call (parse) repair budget (see _MAX_TOOLCALL_REPAIRS)
+        validation_repairs = 0  # consecutive no-progress validation failures (STEAL #13)
 
         try:
             for iteration in range(self._max_iterations):
@@ -507,6 +530,33 @@ class ReActLoop:
                     observations.append(obs_text)
                     result.tool_calls.append((tc, res))
 
+                # STEAL #13 — bound repeated validation flailing. A parsed-but-
+                # un-coercible call that keeps failing Pydantic validation (the
+                # validation side has no equivalent of the parse-side repair budget)
+                # must not burn the full max_iterations on identical zero-progress
+                # failures. Count consecutive turns with a validation error and NO
+                # successful call; bail after _MAX_TOOLCALL_REPAIRS so solve()/the
+                # orchestrator can replan honestly.
+                any_success = any(r.is_success for _t, r in ordered_pairs)
+                any_validation_err = any(
+                    r.is_error and "input validation failed" in (r.error or "").lower()
+                    for _t, r in ordered_pairs)
+                if any_success:
+                    validation_repairs = 0
+                elif any_validation_err:
+                    validation_repairs += 1
+                    if validation_repairs > _MAX_TOOLCALL_REPAIRS:
+                        result.terminated_reason = TERMINATED_ERROR
+                        result.error = (
+                            f"tool arguments failed validation {validation_repairs}x "
+                            f"with no progress; last tool(s): "
+                            f"{', '.join(sorted({t.name for t, _r in ordered_pairs}))}")
+                        await self._publish(StepType.PLAN_FAILED, {
+                            "reason": "validation_repair_exhausted",
+                            "attempts": validation_repairs,
+                        })
+                        return result
+
                 # Append all observations as one user turn so the LLM sees
                 # them coherently in the next iteration. Per-obs budgets above
                 # mean joined length is already bounded; the global cap below
@@ -541,21 +591,28 @@ class ReActLoop:
 
     def _render_tool_protocol(self) -> str:
         """The tool contract a real model needs: what exists, exact input
-        schemas, and the emission format the parser accepts."""
+        schemas, the EXACT field names (a concrete example per tool), and the
+        emission format the parser accepts."""
         lines = [
             "TOOLS — you may call these. To call a tool, reply with ONLY a JSON "
             "object: {\"name\": \"<tool_name>\", \"arguments\": {...}} (or a JSON "
-            "array of such objects for multiple calls). The arguments MUST match "
-            "the tool's input schema exactly. After you receive the tool result, "
-            "either call another tool or reply with your final answer as plain "
-            "text (no JSON).",
+            "array of such objects for multiple calls). The arguments MUST use the "
+            "EXACT field names from each tool's input schema — copy them verbatim "
+            "from the `example` below; do not invent or rename fields. After you "
+            "receive the tool result, either call another tool or reply with your "
+            "final answer as plain text (no JSON).",
         ]
         for name in sorted(self._tools):
             try:
                 spec = self._tools[name].schema_for_llm()
-                schema = json.dumps(spec.get("input_schema", {}), ensure_ascii=False)
+                ischema = spec.get("input_schema", {})
+                schema = json.dumps(ischema, ensure_ascii=False)
+                example = json.dumps(
+                    {"name": spec.get("name", name), "arguments": _example_args(ischema)},
+                    ensure_ascii=False)
                 lines.append(f"- {spec.get('name', name)}: {spec.get('description', '')}\n"
-                             f"  input_schema: {schema}")
+                             f"  input_schema: {schema}\n"
+                             f"  example: {example}")
             except Exception:
                 lines.append(f"- {name}")
         return "\n".join(lines)
@@ -611,7 +668,26 @@ class ReActLoop:
             attempts=1,
         )
         budget = max_chars if max_chars is not None else self._obs_max_chars
-        return format_observation(synthetic, max_chars=budget)
+        base = format_observation(synthetic, max_chars=budget)
+
+        # STEAL #13 — make a recoverable tool failure SELF-CORRECTING: a valid-JSON
+        # call that failed Pydantic validation (wrong/missing field names) or named
+        # an unknown tool gets the schema-bearing repair hint appended, instead of a
+        # raw Pydantic string the model just guesses against. Reuses the 3.1
+        # errors.classify_error machinery (previously unwired for validation).
+        if res.is_error:
+            try:
+                classified = classify_error(res, attempted_tool_name=tc.name)
+                if classified.kind in (ToolErrorKind.VALIDATION_FAILED,
+                                       ToolErrorKind.UNKNOWN_TOOL):
+                    base = f"{base}\n{classified.to_observation()}"
+            except Exception:
+                pass
+        elif res.metadata and res.metadata.get("coercion_notes"):
+            # Surface coercion remaps (no invisible operations) — also reinforces
+            # the canonical field name for the model's next call.
+            base = f"{base}\n[coerced] " + "; ".join(res.metadata["coercion_notes"])
+        return base
 
     def _format_memory_context(self, hits: List[MemoryItem]) -> str:
         """Render auto-retrieved memory hits as a system-prompt suffix.
@@ -723,7 +799,6 @@ class ReActLoop:
 # =============================================================================
 
 if __name__ == "__main__":
-    import json
     from jarvis_core.agent.tool import Tool, ToolInput, ToolResult
     from jarvis_core.agent.permissions import PermissionRule
     from pydantic import Field
@@ -745,8 +820,8 @@ if __name__ == "__main__":
     # -- Stub tools (NOT registered; instance-based so the test is hermetic) --
 
     class _CalcIn(ToolInput):
-        a: int = Field(description="left")
-        b: int = Field(description="right")
+        a: int = Field(description="left", json_schema_extra={"aliases": ["x", "first", "addend_a"]})
+        b: int = Field(description="right", json_schema_extra={"aliases": ["y", "second", "addend_b"]})
 
     class StubAdd(Tool):
         name = "stub_add"
@@ -1564,6 +1639,62 @@ if __name__ == "__main__":
         r32c = await loop32c.run("q")
         check("T32c history=None unchanged (query is the first message, nothing prepended)",
               r32c.messages[0]["role"] == "user" and r32c.messages[0]["content"] == "q")
+
+        # ---- T33: STEAL #13 coercion flows END-TO-END through the loop ----
+        # Model emits DECLARED-ALIAS field names ('x'/'y' instead of 'a'/'b'); the
+        # alias coercion remaps them onto the canonical fields. The call SUCCEEDS
+        # where it used to hard-fail, and the coercion is surfaced. (No unsafe
+        # bind-by-elimination — a semantically-unknown key would NOT be guessed.)
+        llm33 = make_scripted_llm([
+            json.dumps({"name": "stub_add", "arguments": {"x": 2, "y": 3}}),
+            "The sum is 5.",
+        ])
+        loop33 = ReActLoop(llm_call=llm33, tool_instances={"stub_add": StubAdd()},
+                           enable_mirror_lite=False, enable_cot_monitor=False)
+        r33 = await loop33.run("Add 2 and 3.")
+        check("T33a aliased field names coerced -> tool succeeded",
+              len(r33.tool_calls) == 1 and r33.tool_calls[0][1].output == 5,
+              hint=str(r33.tool_calls[0][1]))
+        check("T33b coercion surfaced in result metadata",
+              bool((r33.tool_calls[0][1].metadata or {}).get("coercion_notes")),
+              hint=str(r33.tool_calls[0][1].metadata))
+
+        # ---- T34: an UN-coercible validation error gets a schema-bearing repair
+        # observation (reuse errors.classify_error), not a raw Pydantic string.
+        protocol_loop = ReActLoop(llm_call=make_scripted_llm(["x"]),
+                                  tool_instances={"stub_add": StubAdd()},
+                                  enable_mirror_lite=False, enable_cot_monitor=False)
+        from jarvis_core.agent.tool import safe_invoke as _si
+        bad = await _si(StubAdd(), {"a": 1, "totally_unknown": 9, "also_unknown": 8})
+        obs = protocol_loop._format_tool_observation(
+            ToolCall(name="stub_add", arguments={"a": 1, "totally_unknown": 9}), bad)
+        # (the schema-bearing "Required fields: [...]" variant is covered by
+        # errors.py test 5 with a registered tool; stub_add is unregistered here,
+        # so it gets the generic hint — what matters is the classified hint is APPENDED.)
+        check("T34a validation error observation carries the classified repair hint",
+              "[TOOL ERROR: validation_failed]" in obs, hint=obs[:240])
+
+        # ---- T35: the protocol shows a concrete example with EXACT field names
+        proto = protocol_loop._render_tool_protocol()
+        check("T35a protocol emits an example call per tool with real field names",
+              "example:" in proto and '"a"' in proto and '"b"' in proto, hint=proto[:300])
+        # T35b: the protocol renders in PRODUCTION (module-import) scope — guards the
+        # CRITICAL 'import json only in __main__' regression (the schema/example must
+        # not silently degrade to a bare '- name' line).
+        check("T35b protocol carries input_schema (module-level json import works)",
+              "input_schema:" in proto, hint=proto[:200])
+
+        # ---- T36: validation-repair budget bounds a STUCK model (cost guard) ----
+        # The model repeats an un-coercible validation-failing call; the loop must
+        # bail early (TERMINATED_ERROR) instead of burning the full max_iterations.
+        bad_call = json.dumps({"name": "stub_add", "arguments": {"a": 1, "b": 2, "junk": 3}})
+        loop36 = ReActLoop(llm_call=make_scripted_llm([bad_call] * 12),
+                           tool_instances={"stub_add": StubAdd()}, max_iterations=12,
+                           enable_mirror_lite=False, enable_cot_monitor=False)
+        r36 = await loop36.run("add")
+        check("T36a stuck validation loop bails early, not full max_iterations",
+              r36.terminated_reason == TERMINATED_ERROR and r36.iterations_used <= 5,
+              hint=f"{r36.terminated_reason} iters={r36.iterations_used}")
 
         # ---- Report -----------------------------------------------------
         total = passed + len(failed)

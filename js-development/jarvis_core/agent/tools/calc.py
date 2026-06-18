@@ -90,10 +90,14 @@ if __name__ == "__main__":
         assert r3.is_error, f"expected error, got {r3}"
         print(f"  [OK] import attempt rejected: {r3.error[:60]}")
 
-        # 4. Bad input shape (Pydantic validation)
-        r4 = await safe_invoke(tool, {"wrong_field": "oops"})
+        # 4. Bad input shape (Pydantic validation). Use an EXTRA unknown field
+        #    alongside the correct one — STEAL #13 coercion can't mask this (the
+        #    required field is already filled, so no single-field bind), so it stays
+        #    a genuine validation error. (A lone {"wrong_field": ...} is now coerced
+        #    onto the single required 'expression'.)
+        r4 = await safe_invoke(tool, {"expression": "1", "wrong_field": "oops"})
         assert r4.is_error and "validation" in r4.error.lower(), f"got {r4}"
-        print(f"  [OK] missing field rejected by Pydantic")
+        print(f"  [OK] extra unknown field rejected by Pydantic")
 
         # 5. Concurrency-safe flag
         assert tool.is_concurrency_safe is True

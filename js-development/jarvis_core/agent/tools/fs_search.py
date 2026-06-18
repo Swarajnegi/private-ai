@@ -79,15 +79,19 @@ class FileSearchInput(ToolInput):
     name_glob: Optional[str] = Field(
         default=None,
         description="Filename glob to match, e.g. '*.py' or 'boot.py'. None = match all files.",
+        json_schema_extra={"aliases": [
+            "glob", "name_pattern", "filename_glob", "file_glob", "name"]},
     )
     content_regex: Optional[str] = Field(
         default=None,
         description="Regex to search WITHIN files. None = list filenames only.",
+        json_schema_extra={"aliases": ["regex", "content_pattern", "grep", "content"]},
     )
     subdir: str = Field(
         default=".",
         description="Repo-relative directory to search under (default: whole repo). "
                     "Cannot escape the project root.",
+        json_schema_extra={"aliases": ["dir", "directory", "subdirectory", "search_dir"]},
     )
     max_results: int = Field(
         default=50, ge=1, le=500,
