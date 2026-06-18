@@ -62,7 +62,10 @@ from jarvis_core.agent.tool import Tool, ToolInput, ToolResult
 # =============================================================================
 
 class FileReadInput(ToolInput):
-    path: str = Field(description="Absolute or relative path to the file to read.")
+    path: str = Field(
+        description="Exact path to an EXISTING file (absolute, or relative to the "
+                    "repo root). If you do not already know the exact path, call "
+                    "file_search FIRST to find it — never guess a filename.")
     encoding: str = Field(default="utf-8", description="Text encoding (default utf-8).")
     max_bytes: int = Field(
         default=1_000_000, ge=1, le=10_000_000,
@@ -83,7 +86,9 @@ class FileReadTool(Tool):
         "Read a local file from disk. Returns content as a decoded string "
         "plus the resolved absolute path and bytes actually read. Capped at "
         "max_bytes (default 1MB); larger files are truncated cleanly. "
-        "Read-only — does not modify files."
+        "Read-only — does not modify files. Requires an EXACT path to a file "
+        "that exists; if you don't know it, call file_search FIRST to locate it "
+        "(by filename or content) — do not guess filenames."
     )
     input_schema = FileReadInput
 
@@ -96,7 +101,10 @@ class FileReadTool(Tool):
         try:
             resolved = path.resolve(strict=True)
         except FileNotFoundError:
-            return ToolResult(error=f"File not found: {tool_input.path}")
+            return ToolResult(
+                error=f"File not found: {tool_input.path}. Use file_search to "
+                      f"locate the file (by name or content), then read the exact "
+                      f"path it returns — do not guess another filename.")
         except OSError as e:
             return ToolResult(error=f"OS error resolving path: {e}")
 
@@ -202,11 +210,20 @@ if __name__ == "__main__":
             schema = FileReadTool.schema_for_llm()
             assert "path" in schema["input_schema"]["properties"]
             print(f"  [OK] registered + schema valid")
+
+            # 9. Discover-before-read scaffold: the description, the path field,
+            # AND the not-found error all steer to file_search (so a weak brain
+            # searches instead of guessing a filename — repro 2026-06-18).
+            assert "file_search" in FileReadTool.description.lower()
+            assert "file_search" in schema["input_schema"]["properties"]["path"]["description"].lower()
+            r9 = await safe_invoke(tool, {"path": "workflow_rules.txt"})
+            assert r9.is_error and "file_search" in r9.error.lower()
+            print(f"  [OK] discover-before-read scaffold present (desc/field/error -> file_search)")
         finally:
             os.unlink(tmp_path)
 
         print("=" * 60)
-        print("  All 8 smoke tests passed.")
+        print("  All 9 smoke tests passed.")
         print("=" * 60)
 
     asyncio.run(run())
