@@ -12,7 +12,7 @@ Run with:
 THE BIG PICTURE
 =============================================================================
 
-The terminal entry point used to live inside agent/llm_client.py as `_ask` —
+The terminal entry point used to live inside the LLM client as `_ask` —
 a bare Mind with a calculator, one ChromaDB collection, and no breath of the
 travelling consciousness (KB L324). It moved HERE because the brain layer
 composes the agent layer, never the reverse — and because the spine is where
@@ -67,7 +67,7 @@ from jarvis_core.agent.capture import (
     QUEUE_PATH, append_observation, build_observation, guess_domain,
     strip_harness_blocks,
 )
-from jarvis_core.agent.llm_client import build_llm_call
+from jarvis_core.brain.llm_client import build_llm_call
 from jarvis_core.agent.mind import MindResult
 from jarvis_core.brain.boot import BootReport, assemble_mind
 from jarvis_core.brain.confidence import ConfidenceGate, ConfidenceReport

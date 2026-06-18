@@ -4,9 +4,9 @@ llm_client.py — OpenRouter LLM adapter (First Light: the first real brain wire
 LAYER: Brain (adapter)
 
 Run with:
-    PYTHONPATH=js-development python3 js-development/jarvis_core/agent/llm_client.py            # offline smoke tests
-    PYTHONPATH=js-development python3 js-development/jarvis_core/agent/llm_client.py --live    # real ping (needs OPENROUTER_API_KEY)
-    PYTHONPATH=js-development python3 js-development/jarvis_core/agent/llm_client.py --first-thought
+    PYTHONPATH=js-development python3 js-development/jarvis_core/brain/llm_client.py            # offline smoke tests
+    PYTHONPATH=js-development python3 js-development/jarvis_core/brain/llm_client.py --live    # real ping (needs OPENROUTER_API_KEY)
+    PYTHONPATH=js-development python3 js-development/jarvis_core/brain/llm_client.py --first-thought
                                                                        # live Final Boss: Mind + real model + real tool
 
 =============================================================================
