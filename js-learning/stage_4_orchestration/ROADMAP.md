@@ -65,7 +65,11 @@
 
 ---
 
-## Sub-Phase 4.1: Route Targets & Per-Model Protocol ⬜ — Wave 2 (Pass A)
+## Sub-Phase 4.1: Route Targets & Per-Model Protocol 🔄 — Wave 2 (Pass A)
+<!-- Wave 2 (4.1.2 ProtocolAdapter, 4.1.3 RouteTarget + llm_client re-home to brain/, 4.1.4
+     ModelPool/failover STEAL #7) CODE SHIPPED + offline-verified + adversarially reviewed (5 fixes
+     folded in). The live DoD leg — same prompt clean on 3 real free models + a real 429 failover —
+     is USER-PENDING, so the gate is not yet marked passed. -->
 
 **Goal:** JARVIS knows each model's conduct and speaks every dialect through one seam. **Protocol-before-intent:** you can't route to a model you can't talk to (L322 — First Light needed a hardcoded `enable_mirror=False`; that hardcode is the bug this sub-phase deletes).
 
@@ -176,7 +180,7 @@ Row kept for master-roadmap traceability. **Trigger:** first KB-logged retrieval
 | Sub-Phase | Wave | Status | Lessons Complete |
 |-----------|------|--------|------------------|
 | 4.0 Cognitive Control Loop | 1 | ✅ Complete (2026-06-12; Gate A 5/5 live on nemotron free tier, ₹0; capture parity + KB distill proven) | 5/5 |
-| 4.1 Route Targets & Per-Model Protocol | 2 (Pass A) | 🔄 Wave 1 shipped (safety floor + ModelProfile); Wave 2 = protocol/targets/pool | 2/5 |
+| 4.1 Route Targets & Per-Model Protocol | 2 (Pass A) | 🔄 W1 shipped; W2 code shipped + offline-verified (protocol/targets/pool, STEAL #7, llm_client re-homed) — live 3-model+429 DoD user-pending | 5/5 code (live DoD pending) |
 | 4.2 Intent Router | 2 (Pass A) | ⬜ Not Started | 0/4 (+1 conditional) |
 | 4.3 Dynamic Target Management | 3 (Pass B) | ⬜ Not Started | 0/3 |
 | 4.4 Response Aggregation | 3 (Pass B) | ⬜ Not Started | 0/3 |
