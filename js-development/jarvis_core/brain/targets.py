@@ -60,6 +60,35 @@ from jarvis_core.brain.protocol import adapt
 
 LLMCall = Callable[[List[Dict[str, str]]], Union[str, Awaitable[str]]]
 
+# Module-level catalog cost cache: model_id -> ($/1M in + $/1M out). Loaded once,
+# best-effort. The pool's `cost` route-strategy reads each target's cost_hint; a
+# free model resolves to 0.0 (correct), a paid one to a real penalty. Absent
+# catalog / unknown model -> 0.0 (graceful: cost-strategy degrades to order, never
+# crashes). Catalog is regenerable (scripts/sync_openrouter.py) and gitignored.
+_COST_CACHE: Optional[Dict[str, float]] = None
+
+
+def _catalog_cost(model_id: str) -> float:
+    """Best-effort per-1M total token cost for a model id, from model_catalog.json."""
+    global _COST_CACHE
+    if not model_id:
+        return 0.0
+    if _COST_CACHE is None:
+        _COST_CACHE = {}
+        try:
+            import json
+            from jarvis_core.config import MODEL_CATALOG_PATH
+            rows = json.loads(Path(MODEL_CATALOG_PATH).read_text(encoding="utf-8"))
+            rows = rows if isinstance(rows, list) else (rows.get("models") or rows.get("data") or [])
+            for e in rows:
+                mid = e.get("id")
+                if mid:
+                    _COST_CACHE[mid] = (float(e.get("cost_input_1m", 0) or 0)
+                                        + float(e.get("cost_output_1m", 0) or 0))
+        except Exception:
+            _COST_CACHE = {}  # no catalog -> all 0.0, cost-strategy degrades gracefully
+    return _COST_CACHE.get(model_id, 0.0)
+
 
 class TargetKind(str, Enum):
     API_MODEL = "API_MODEL"
@@ -135,6 +164,10 @@ class OpenRouterTarget(RouteTarget):
             self.profile, self._profile_label = self._registry.get(model_id)
         else:
             self.profile, self._profile_label = DEFAULT_PROFILE, "none"
+        # cost_hint feeds ModelPool's `cost`/`balanced` route-strategy scoring
+        # (best-effort from the catalog; free models -> 0.0, paid -> a real
+        # penalty). Without it the cost strategy would silently route by order.
+        self.cost_hint = _catalog_cost(model_id)
         # Re-wrap the adapter for the (possibly newly resolved) profile.
         self._adapter = adapt(self._client, self.profile, label=self.name)
 
@@ -320,6 +353,23 @@ def _run_self_test() -> None:
 
     # T6: repr is informative
     check("T6 repr", "API_MODEL" in repr(t1) and "vendor/m" in repr(t1), repr(t1))
+
+    # T7 (verify-fix #1): cost_hint is populated (float) so ModelPool's `cost`
+    # strategy can order targets. Best-effort from the catalog; absent/unknown ->
+    # 0.0 (free models legitimately 0). Must NOT be missing (the silent-no-op bug).
+    check("T7 cost_hint present + numeric", isinstance(getattr(t1, "cost_hint", None), float),
+          str(getattr(t1, "cost_hint", None)))
+    # Inject the cache to prove a known paid model yields a real penalty. Target
+    # the module _catalog_cost actually lives in (== '__main__' when run directly,
+    # the package name when imported) — not a re-imported second copy.
+    import sys as _sys
+    _mod = _sys.modules[_catalog_cost.__module__]
+    _mod._COST_CACHE = {"paid/x": 1.5, "free/y": 0.0}
+    tp = OpenRouterTarget(client=FakeClient("paid/x"), registry=reg)
+    tf = OpenRouterTarget(client=FakeClient("free/y"), registry=reg)
+    check("T7b paid model gets a real cost_hint, free model 0.0",
+          tp.cost_hint == 1.5 and tf.cost_hint == 0.0, f"{tp.cost_hint}/{tf.cost_hint}")
+    _mod._COST_CACHE = None  # reset cache for any later use
 
     total = passed + len(failed)
     print(f"\n  Passed: {passed}/{total}")

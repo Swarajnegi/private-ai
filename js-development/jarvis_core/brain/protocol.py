@@ -97,13 +97,23 @@ class ProtocolAdapter:
 
     def __getattr__(self, name: str) -> Any:
         # Forward unknown attribute access (ledger_summary, pick_free_model, ...)
-        # to the wrapped client so the adapter is a faithful stand-in.
-        return getattr(self._inner, name)
+        # to the wrapped client so the adapter is a faithful stand-in. Guarded so
+        # an __init__-bypass path (copy.deepcopy / pickle.loads / __new__) can't
+        # recurse forever probing a missing `_inner`, and dunders fall back to
+        # Python defaults instead of being forwarded.
+        if name.startswith("__") and name.endswith("__"):
+            raise AttributeError(name)
+        inner = self.__dict__.get("_inner")
+        if inner is None:
+            raise AttributeError(name)
+        return getattr(inner, name)
 
     def _transform(self, messages: List[Dict[str, str]]) -> List[Dict[str, str]]:
         if self._fold_system:
             return _fold_system_into_user(messages)
-        return list(messages)
+        # Fresh dicts (not just a new list): a future inner that annotates a
+        # message in place must not leak back into the caller's dicts.
+        return [dict(m) for m in messages]
 
     async def __call__(self, messages: List[Dict[str, str]]) -> str:
         out = self._inner(self._transform(messages))
@@ -250,6 +260,33 @@ def _run_self_test() -> None:
           any("small context" in s for s in sugg) and any("multimodal" in s for s in sugg)
           and entry == {"context_length": 8000, "is_multimodal": True}, str(sugg))
     check("T9b non-dict -> no suggestions", suggest_from_catalog(None) == [])
+
+    # T10 (verify-fix #5): passthrough returns FRESH dicts — a future inner that
+    # mutates a received message must not leak back into the caller's dicts.
+    caller = [{"role": "user", "content": "orig"}]
+    def mutating_inner(messages):
+        messages[0]["content"] = "MUTATED"   # hostile inner
+        return "x"
+    run(ProtocolAdapter(mutating_inner, fold_system=False)(caller))
+    check("T10 passthrough isolates caller dicts", caller[0]["content"] == "orig",
+          str(caller))
+
+    # T11 (verify-fix #4): __getattr__ must NOT infinite-recurse on an __init__-
+    # bypass (deepcopy / pickle / __new__) — it returns/raises cleanly instead.
+    import copy
+    bare = ProtocolAdapter.__new__(ProtocolAdapter)   # no _inner set
+    try:
+        _ = bare.anything                              # would RecursionError pre-fix
+        check("T11 __getattr__ no recursion on missing _inner", False, "expected AttributeError")
+    except AttributeError:
+        check("T11 __getattr__ no recursion on missing _inner", True)
+    except RecursionError:
+        check("T11 __getattr__ no recursion on missing _inner", False, "RecursionError")
+    try:
+        copy.deepcopy(ProtocolAdapter(echo_inner, fold_system=False))
+        check("T11b deepcopy survives (no recursion)", True)
+    except RecursionError:
+        check("T11b deepcopy survives (no recursion)", False, "RecursionError")
 
     total = passed + len(failed)
     print(f"\n  Passed: {passed}/{total}")

@@ -192,6 +192,9 @@ async def ask(
     critic_independent: bool = False,
     critic_model: Optional[str] = None,
     critic_factory: Optional[Callable[[str], Any]] = None,
+    pool: Optional[Any] = None,
+    targets: Optional[List[str]] = None,
+    route_strategy: str = "balanced",
     writer: Optional[SessionMemoryWriter] = None,
     extra_tools: Optional[Dict[str, Any]] = None,
     clock: Optional[Callable[[], datetime]] = None,
@@ -224,17 +227,47 @@ async def ask(
     Returns:
         AskResult — the answer plus every judgement and bookkeeping fact.
     """
-    client = llm_call or build_llm_call(budget_usd=budget_usd)
-    if hasattr(client, "pick_free_model") and not getattr(client, "model", ""):
-        await client.pick_free_model()
-    model = str(getattr(client, "model", "") or "")
+    # Resolve the LLM endpoint (4.1 W2). Priority:
+    #   1. injected llm_call (tests/programmatic) — used directly, no pool.
+    #   2. a ModelPool (injected `pool`, or built from `targets`) — multi-target
+    #      health-scored failover; the spine drives pool.as_llm_call() and takes
+    #      conduct from the PRIMARY (best) target's profile.
+    #   3. default — a single auto-picked OpenRouter client (unchanged behavior).
+    route_pool = pool
+    if route_pool is None and targets and llm_call is None:
+        from jarvis_core.brain.targets import OpenRouterTarget
+        from jarvis_core.brain.model_pool import ModelPool
+        built = [OpenRouterTarget(m.strip(), budget_usd=budget_usd,
+                                  registry=registry, use_profile=use_profile)
+                 for m in targets if m and m.strip()]
+        route_pool = ModelPool(built, strategy=route_strategy) if built else None
 
     # POLICY (resolved here, the host): per-model conduct profile by model id.
     # Boot is the MECHANISM that applies it — single resolution site, so the
     # 4.2 Router never competes with a second lookup (it just supplies the id).
-    profile = profile_label = None
-    if use_profile:
-        profile, profile_label = (registry or ProfileRegistry()).get(model)
+    if route_pool is not None and llm_call is None:
+        primary = route_pool.select()
+        if primary is not None:
+            await primary.ensure_ready()
+        client = route_pool.as_llm_call(strategy=route_strategy)
+        model = str(getattr(primary, "name", "") or route_pool.primary_model)
+        # The pool callable is attribute-less; name it so boot's
+        # getattr(llm_call,'model') (BootReport.model + the self-state inhale line)
+        # reflects the routed primary model instead of '<auto>'.
+        try:
+            client.model = model
+        except (AttributeError, TypeError):
+            pass
+        profile = getattr(primary, "profile", None) if use_profile else None
+        profile_label = getattr(primary, "profile_label", "pooled") if use_profile else None
+    else:
+        client = llm_call or build_llm_call(budget_usd=budget_usd)
+        if hasattr(client, "pick_free_model") and not getattr(client, "model", ""):
+            await client.pick_free_model()
+        model = str(getattr(client, "model", "") or "")
+        profile = profile_label = None
+        if use_profile:
+            profile, profile_label = (registry or ProfileRegistry()).get(model)
 
     # Conversation memory (working memory across --ask): resolve a STABLE session
     # id (auto-continue the recent terminal thread, or mint fresh), load its recent
@@ -263,6 +296,9 @@ async def ask(
     sess_state = (f"continued, {len(hist)} prior turn(s)" if sess.continued
                   else "new")
     printer(f"  brain   : {model or '<scripted>'}")
+    if route_pool is not None and llm_call is None:
+        printer(f"  pool    : {', '.join(route_pool._order)} "
+                f"(strategy={route_strategy}, primary={model})")
     printer(f"  profile : {profile_label or 'none'}")
     printer(f"  session : {sess.session_id} ({sess_state})")
     printer(f"  tools   : {'full' if full else 'default'} ({len(prebuilt)})"
@@ -393,7 +429,14 @@ async def ask(
         cstore.append_turn(sess.session_id, "assistant", answer)
 
     ledger: Dict[str, Any] = {}
-    if hasattr(client, "ledger_summary"):
+    if route_pool is not None and llm_call is None:
+        # Pool mode: aggregate per-target spend; both a failed-then-failed-over
+        # attempt and the success land on their respective target ledgers.
+        try:
+            ledger = route_pool.aggregate_ledger()
+        except Exception:
+            ledger = {}
+    elif hasattr(client, "ledger_summary"):
         try:
             ledger = client.ledger_summary()
         except Exception:
@@ -427,6 +470,17 @@ async def ask(
         printer(f"  ledger  : {ledger}")
     if critic_ledger:
         printer(f"  critic  : {critic_ledger}")
+    if route_pool is not None and llm_call is None:
+        # One ask() drives several internal acalls (plan + ReAct + replan), so
+        # last_events accumulates duplicates; collapse identical events so the
+        # operator reads one failover story per question, not 2x-3x repeats.
+        seen_ev: set = set()
+        for ev in route_pool.last_events:
+            key = str(ev)
+            if key in seen_ev:
+                continue
+            seen_ev.add(key)
+            printer(f"  failover: {ev}")
 
     return AskResult(
         question=question, answer=answer,
@@ -1044,6 +1098,66 @@ def _run_self_test() -> None:
                   r36.verdict == "ESCALATE" and built36["models"] == [],
                   f"{r36.verdict} built={built36['models']}")
 
+            # --- Stage 4.1 W2: ModelPool routing through ask() ---
+            from jarvis_core.brain.targets import RouteTarget, TargetKind
+            from jarvis_core.brain.model_pool import ModelPool
+
+            def pool_target(name, responses, behavior="ok"):
+                """A RouteTarget whose llm_call drives a scripted sequence (so the
+                ReAct loop gets decompose+answer); behavior 'fail' raises."""
+                class _T(RouteTarget):
+                    kind = TargetKind.API_MODEL
+                    def __init__(self):
+                        self.name = name
+                        self.profile = None
+                        self._llm = scripted(responses)
+                        self.calls = 0
+                    @property
+                    def llm_call(self):
+                        def _c(messages):
+                            self.calls += 1
+                            if behavior == "fail":
+                                raise RuntimeError("target down")
+                            return self._llm(messages)
+                        return _c
+                    async def ensure_ready(self): pass
+                    async def release(self): pass
+                    def ledger_summary(self):
+                        return {"model": name, "calls": self.calls, "spend_usd": 0.001 * self.calls}
+                return _T()
+
+            # T37: a pool routes the answer; ledger is the AGGREGATE; pool line printed.
+            lines37: List[str] = []
+            pool37 = ModelPool([pool_target("model-A", ["no plan", "Pooled answer A."])])
+            r37 = await ask("pooled question", pool=pool37,
+                            **{**common, "printer": lines37.append})
+            check("T37 pool routes the answer", "Pooled answer A." in r37.answer, r37.answer)
+            check("T37b ledger is the pool aggregate", r37.ledger.get("targets") == 1, str(r37.ledger))
+            check("T37c pool line printed with primary",
+                  any(l.startswith("  pool    :") and "model-A" in l for l in lines37),
+                  str([l for l in lines37 if l.startswith('  pool')]))
+
+            # T38: primary fails -> pool fails over to a healthy peer; peer answers,
+            # the failed target carries an error on its ledger ("both attempts").
+            pa = pool_target("bad-A", ["x"], behavior="fail")
+            pb = pool_target("good-B", ["no plan", "Peer B answer."])
+            pool38 = ModelPool([pa, pb])
+            r38 = await ask("failover question", pool=pool38, **common)
+            st38 = pool38.status()
+            check("T38 failover to healthy peer", "Peer B answer." in r38.answer, r38.answer)
+            check("T38b failed target recorded an error, peer succeeded",
+                  st38["bad-A"]["errors"] >= 1 and st38["good-B"]["requests"] >= 1
+                  and st38["good-B"]["errors"] == 0, str(st38))
+            check("T38c failover event logged on the pool",
+                  any("failover" in e for e in pool38.last_events), str(pool38.last_events))
+
+            # T39: an injected llm_call STILL bypasses the pool entirely (no regression
+            # — the 56 prior tests rely on this; assert the seam explicitly).
+            r39 = await ask("direct", llm_call=scripted(["no plan", "Direct answer."]),
+                            pool=pool37, session="direct-seam", **common)
+            check("T39 injected llm_call wins over pool (pool path skipped)",
+                  "Direct answer." in r39.answer, r39.answer)
+
     asyncio.run(scenario())
 
     total = passed + len(failed)
@@ -1086,16 +1200,25 @@ def main() -> int:
                         "(capped at half the session budget; combined ceiling ~1.5x). NOTE: "
                         "this sends the conversation to a SECOND model/provider — pick a "
                         "trusted one.")
+    p.add_argument("--targets", metavar="M1,M2,...",
+                   help="Route over a POOL of models (comma-separated ids) with health-scored "
+                        "failover (STEAL #7): the best healthy target answers; a 429/dead "
+                        "endpoint fails over to the next peer. Conduct comes from the primary "
+                        "target's profile. Default (unset) = a single auto-picked model.")
+    p.add_argument("--route-strategy", default="balanced", choices=["balanced", "latency", "cost"],
+                   help="Pool selection strategy (default: balanced).")
     args = p.parse_args()
     if args.awareness:
         return asyncio.run(_awareness())
     if args.ask:
         handler = allow_all_ask_handler if (args.full and args.allow_all) else None
+        tgts = [m.strip() for m in args.targets.split(",")] if args.targets else None
         asyncio.run(ask(args.ask, capture=not args.no_capture,
                         use_profile=not args.no_profile,
                         full=args.full, ask_handler=handler,
                         reasoning=not args.no_reasoning,
                         critic_model=args.critic_model,
+                        targets=tgts, route_strategy=args.route_strategy,
                         new_session=args.new, session=args.session))
         return 0
     _run_self_test()

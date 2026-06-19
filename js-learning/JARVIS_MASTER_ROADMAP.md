@@ -24,14 +24,15 @@
 - **Output:** Production RAG + ChromaDB + hybrid (semantic+BM25) + cross-encoder rerank + KB compactor
 - **Roadmap:** [stage_2_memory/ROADMAP.md](stage_2_memory/ROADMAP.md)
 
-### Stage 3: Agent Framework — The Mind ⬅️ CURRENT
+### Stage 3: Agent Framework — The Mind ✅ COMPLETE
 - **Duration:** 10–14 weeks (2.5–3.5 months; net +8–12 weeks vs. the OpenClaude shortcut, compressed via OpenJarvis STEAL targets)
-- **Output:** `jarvis_core/agent/` — Tool ABC + Registry + Cost accounting + ReAct loop + Planner + MemGPT-style memory paging — JARVIS owns the runtime
+- **Output:** `jarvis_core/agent/` — Tool ABC + Registry + Cost accounting + ReAct loop + Planner + MemGPT-style memory paging + STEAL #13 tolerant tool-call harness — JARVIS owns the runtime
 - **Roadmap:** [stage_3_agents/ROADMAP.md](stage_3_agents/ROADMAP.md) — see also [STAGE_3_OPENCLAUDE_STRATEGY.md](../STAGE_3_OPENCLAUDE_STRATEGY.md) (SUPERSEDED 2026-05-13, kept for historical context)
 
-### Stage 4: Multi-Model Orchestration — The Brain
+### Stage 4: Multi-Model Orchestration — The Brain ⬅️ CURRENT
 - **Duration:** 2-3 months
 - **Output:** Router + Aggregator + GraphRAG (replaces flat vector search)
+- **Status:** 4.0 Cognitive Control Loop ✅ · 4.1 Route Targets & Per-Model Protocol — W1 ✅, W2 (RouteTarget + ProtocolAdapter + ModelPool/failover, STEAL #7) ✅ · 4.5 Reasoning Gate (W1 + independent critic) ✅ (built ahead) · next: 4.2 Intent Router (the Pass A→B gate)
 - **Roadmap:** [stage_4_orchestration/ROADMAP.md](stage_4_orchestration/ROADMAP.md)
 
 ### Stage 5: Domain Specialists — The Experts
@@ -149,8 +150,8 @@
 |-------|------|--------|
 | 1 | Systems Python | ✅ Sufficient |
 | 2 | Memory Layer | ✅ Complete (8/8 sub-phases; Final Boss executed 2026-05-03) |
-| 3 | Agent Framework (`jarvis_core/agent/` from scratch — Decision 2026-05-13) | 🔄 Starting |
-| 4 | Orchestration (Kimi K2.6 brain + 12 QLoRA adapters) | ⬜ 0% |
+| 3 | Agent Framework (`jarvis_core/agent/` from scratch — Decision 2026-05-13) | ✅ Complete (ReAct + tools + errors + STEAL #8/#9/#13) |
+| 4 | Orchestration (Kimi K2.6 brain + 12 QLoRA adapters) | 🔄 In progress (4.0 ✅, 4.1 ✅, 4.5 ✅; next 4.2 Router) |
 | 5 | Specialists (Engineer-first MVP) | ⬜ 0% |
 | 6 | Integration | ⬜ 0% |
 
