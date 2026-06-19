@@ -65,11 +65,18 @@
 
 ---
 
-## Sub-Phase 4.1: Route Targets & Per-Model Protocol 🔄 — Wave 2 (Pass A)
+## Sub-Phase 4.1: Route Targets & Per-Model Protocol ✅ — Wave 2 (Pass A) COMPLETE
 <!-- Wave 2 (4.1.2 ProtocolAdapter, 4.1.3 RouteTarget + llm_client re-home to brain/, 4.1.4
-     ModelPool/failover STEAL #7) CODE SHIPPED + offline-verified + adversarially reviewed (5 fixes
-     folded in). The live DoD leg — same prompt clean on 3 real free models + a real 429 failover —
-     is USER-PENDING, so the gate is not yet marked passed. -->
+     ModelPool/failover STEAL #7) shipped + offline-verified + adversarially reviewed (5 fixes).
+     LIVE DoD met 2026-06-19 (3-target pool: nemotron:free / deepseek-chat / gpt-4o-mini):
+       - clean multi-model routing — nemotron:free primary, profile auto-resolved, ZERO per-model
+         hardcodes, no failover needed;
+       - bounded failover→recover with all attempts on the ledger + deduped events (2 dead targets
+         → recovered on gpt-4o-mini) — LLMCallError stood in for a live 429; the 429 path itself is
+         offline-proven (model_pool T2/T3/T8);
+       - cost route-strategy picks the FREE model over the paid one despite declaration order
+         (the adversarial MED fix, live-confirmed).
+     Note: deepseek-chat sat as a failover peer (not individually primaried); mechanism proven. -->
 
 **Goal:** JARVIS knows each model's conduct and speaks every dialect through one seam. **Protocol-before-intent:** you can't route to a model you can't talk to (L322 — First Light needed a hardcoded `enable_mirror=False`; that hardcode is the bug this sub-phase deletes).
 
@@ -180,7 +187,7 @@ Row kept for master-roadmap traceability. **Trigger:** first KB-logged retrieval
 | Sub-Phase | Wave | Status | Lessons Complete |
 |-----------|------|--------|------------------|
 | 4.0 Cognitive Control Loop | 1 | ✅ Complete (2026-06-12; Gate A 5/5 live on nemotron free tier, ₹0; capture parity + KB distill proven) | 5/5 |
-| 4.1 Route Targets & Per-Model Protocol | 2 (Pass A) | 🔄 W1 shipped; W2 code shipped + offline-verified (protocol/targets/pool, STEAL #7, llm_client re-homed) — live 3-model+429 DoD user-pending | 5/5 code (live DoD pending) |
+| 4.1 Route Targets & Per-Model Protocol | 2 (Pass A) | ✅ Complete (W1 + W2: protocol/targets/pool, STEAL #7, llm_client re-homed; live DoD met 2026-06-19 — clean multi-model routing + failover/recover + cost-routing free-over-paid) | 5/5 |
 | 4.2 Intent Router | 2 (Pass A) | ⬜ Not Started | 0/4 (+1 conditional) |
 | 4.3 Dynamic Target Management | 3 (Pass B) | ⬜ Not Started | 0/3 |
 | 4.4 Response Aggregation | 3 (Pass B) | ⬜ Not Started | 0/3 |
