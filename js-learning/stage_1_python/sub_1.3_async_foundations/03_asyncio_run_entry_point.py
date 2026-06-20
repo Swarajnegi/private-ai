@@ -264,7 +264,7 @@ def demo_mistakes() -> None:
     # ❌ MISTAKE 1: Calling asyncio.run() inside async def
     
     async def handler():
-        asyncio.run(sub_task())
+        await sub_task()
         # RuntimeError: cannot be called from a running event loop!
     
     # ✅ FIX: Use await instead
