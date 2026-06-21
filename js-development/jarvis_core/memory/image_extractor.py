@@ -44,6 +44,7 @@ STEP 6: Yield ExtractedImage with bytes, bbox, extension, page number
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Generator, Optional, Tuple
+import hashlib
 
 import fitz  # PyMuPDF: pip install PyMuPDF
 
@@ -171,6 +172,7 @@ class PdfImageExtractor:
         # FIX 1: XREF deduplication — prevents saving logos 15 times
         # ─────────────────────────────────────────────────────────────────────
         seen_xrefs: set[int] = set()
+        seen_hashes: set[str] = set()
 
         for page_idx in range(len(self._doc)):
             page = self._doc[page_idx]
@@ -195,6 +197,13 @@ class PdfImageExtractor:
                     continue
 
                 raw_bytes: bytes = base_image["image"]
+
+                # Hash the image content to prevent duplicate extraction with different xrefs
+                img_hash = hashlib.md5(raw_bytes).hexdigest()
+                if img_hash in seen_hashes:
+                    seen_xrefs.add(xref)
+                    continue
+                seen_hashes.add(img_hash)
 
                 # Mark as seen before size check so we don't process small noisy images multiple times
                 seen_xrefs.add(xref)
