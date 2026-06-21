@@ -298,7 +298,7 @@ def demo_mistakes() -> None:
     
     asyncio.run(main())  # Runs, but fetch_data() never executed
     
-    # ✅ FIX: Always await
+    # ✅ FIX: Always await async functions
     
     async def main():
         await fetch_data()
