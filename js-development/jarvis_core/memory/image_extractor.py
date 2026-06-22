@@ -41,6 +41,7 @@ STEP 6: Yield ExtractedImage with bytes, bbox, extension, page number
 =============================================================================
 """
 
+import hashlib
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Generator, Optional, Tuple
@@ -171,6 +172,7 @@ class PdfImageExtractor:
         # FIX 1: XREF deduplication — prevents saving logos 15 times
         # ─────────────────────────────────────────────────────────────────────
         seen_xrefs: set[int] = set()
+        seen_hashes: set[str] = set()
 
         for page_idx in range(len(self._doc)):
             page = self._doc[page_idx]
@@ -198,6 +200,12 @@ class PdfImageExtractor:
 
                 # Mark as seen before size check so we don't process small noisy images multiple times
                 seen_xrefs.add(xref)
+
+                image_hash = hashlib.md5(raw_bytes).hexdigest()
+
+                if image_hash in seen_hashes:
+                    continue
+                seen_hashes.add(image_hash)
 
                 # ─────────────────────────────────────────────────────────
                 # FIX 2: Size filter — discard decoration noise (<5KB)
