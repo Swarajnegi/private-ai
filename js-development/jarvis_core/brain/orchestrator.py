@@ -69,6 +69,7 @@ from jarvis_core.agent.capture import (
 )
 from jarvis_core.brain.llm_client import build_llm_call
 from jarvis_core.agent.mind import MindResult
+from jarvis_core.agent.react import TERMINATED_ERROR, TERMINATED_MAX_ITERATIONS
 from jarvis_core.brain.boot import BootReport, assemble_mind
 from jarvis_core.brain.confidence import ConfidenceGate, ConfidenceReport
 from jarvis_core.brain.reasoning import (
@@ -173,6 +174,47 @@ _UNPARSED_FALLBACK = (
     "didn't parse into a usable reply (a malformed tool call, not a retrieval "
     "miss). This is a per-model protocol gap (Sub-Phase 4.1), not a memory gap."
 )
+_UNPARSED_GROUNDS = (
+    "answer did not parse into prose — model emitted a malformed/structured "
+    "fragment; suppressed at the orchestrator output gate"
+)
+
+
+def _degenerate_diagnosis(result: MindResult) -> Tuple[str, str]:
+    """Honest cause of a degenerate (unpresentable) answer, READ from the ReAct
+    terminal state — not a single hardcoded guess.
+
+    The old gate always blamed a malformed tool call. But the loop ALREADY records
+    why it ended (react.terminated_reason / react.error): a budget kill, a provider
+    error, and iteration-exhaustion are distinct causes that were all mislabelled a
+    "per-model protocol gap (Sub-Phase 4.1)" — sending debugging to the wrong layer
+    (live Sonnet run 2026-06-25: ledger said LLMBudgetExceeded, the gate said
+    malformed-tool-call). Report the actual mechanism; never overclaim a cause.
+
+    Returns (user_message, confidence_grounds)."""
+    react = getattr(result, "react", None)
+    reason = getattr(react, "terminated_reason", "") or ""
+    err = (getattr(react, "error", "") or "").strip()
+    if reason == TERMINATED_ERROR and err:
+        if "budget" in err.lower():
+            return (
+                "I couldn't produce a clean answer this run — it hit the session "
+                f"cost budget before finishing ({err}). Raise --budget for a costlier "
+                "brain, or route to a cheaper model. This is a cost limit, not a "
+                "retrieval or protocol failure.",
+                f"terminated on budget before a final answer: {err}")
+        return (
+            "I couldn't produce a clean answer this run — the model/provider errored "
+            f"mid-run ({err}); no clean reply was produced. Not a retrieval miss.",
+            f"terminated on error before a final answer: {err}")
+    if reason == TERMINATED_MAX_ITERATIONS:
+        n = getattr(react, "iterations_used", 0)
+        return (
+            f"I couldn't produce a clean answer this run — the agent used all {n} "
+            "reasoning steps without committing to a final answer (it didn't emit "
+            "garbage, it just didn't converge). Not a retrieval miss.",
+            f"terminated: max_iterations ({n}) reached with no final answer")
+    return _UNPARSED_FALLBACK, _UNPARSED_GROUNDS
 
 
 async def ask(
@@ -329,12 +371,10 @@ async def ask(
     evidence = _evidence_from(result)
     degenerate = _is_unparsed_answer(result.answer)
     if degenerate:
+        msg, grounds = _degenerate_diagnosis(result)
         found = f" Retrieved this session: {evidence[0][:200]}…" if evidence else ""
-        answer = _UNPARSED_FALLBACK + found
-        report = ConfidenceReport(
-            0.0, "ESCALATE",
-            ("answer did not parse into prose — model emitted a malformed/structured "
-             "fragment; suppressed at the orchestrator output gate",))
+        answer = msg + found
+        report = ConfidenceReport(0.0, "ESCALATE", (grounds,))
     else:
         answer = result.answer.strip()
         active_gate = gate or ConfidenceGate()
@@ -713,6 +753,33 @@ def _run_self_test() -> None:
                   not _is_unparsed_answer("We built the Cognitive Control Loop."))
             check("T13e prose mentioning a brace is NOT degenerate",
                   not _is_unparsed_answer("The config dict {x:1} ships next."))
+
+            # T13f-i: _degenerate_diagnosis reads the REAL terminal cause from the
+            # ReAct state instead of always blaming a malformed tool call (live
+            # Sonnet 2026-06-25: a budget kill was mislabelled a 'protocol gap').
+            from types import SimpleNamespace as _NS
+            _mk = lambda **kw: _NS(react=_NS(**kw))
+            mbud, gbud = _degenerate_diagnosis(_mk(
+                terminated_reason=TERMINATED_ERROR,
+                error="LLMBudgetExceeded: projected $0.11 > budget $0.10",
+                iterations_used=2))
+            check("T13f budget kill named as a cost limit, not a protocol gap",
+                  "budget" in gbud.lower() and "budget" in mbud.lower()
+                  and "protocol gap" not in mbud, hint=mbud[:80])
+            merr, _ = _degenerate_diagnosis(_mk(
+                terminated_reason=TERMINATED_ERROR,
+                error="RuntimeError: provider 500", iterations_used=1))
+            check("T13g provider error named as an error, not malformed-tool-call",
+                  "errored" in merr and "malformed" not in merr, hint=merr[:80])
+            mmax, gmax = _degenerate_diagnosis(_mk(
+                terminated_reason=TERMINATED_MAX_ITERATIONS,
+                error="", iterations_used=8))
+            check("T13h max-iterations named as non-convergence, not garbage",
+                  "8" in gmax and "converge" in mmax, hint=mmax[:80])
+            mraw, graw = _degenerate_diagnosis(_mk(
+                terminated_reason="final_answer", error="", iterations_used=3))
+            check("T13i genuine raw emission keeps the malformed-tool-call message",
+                  mraw == _UNPARSED_FALLBACK and graw == _UNPARSED_GROUNDS)
 
             # T14: a degenerate model answer is suppressed end-to-end — the user,
             # the queue, and the KB get the honest fallback, NEVER the raw JSON.
@@ -1207,6 +1274,11 @@ def main() -> int:
                         "target's profile. Default (unset) = a single auto-picked model.")
     p.add_argument("--route-strategy", default="balanced", choices=["balanced", "latency", "cost"],
                    help="Pool selection strategy (default: balanced).")
+    p.add_argument("--budget", type=float, default=_DEFAULT_BUDGET_USD, metavar="USD",
+                   help=f"Per-session spend ceiling in USD (default ${_DEFAULT_BUDGET_USD:.2f}, "
+                        "fail-closed). A pricey brain (e.g. Sonnet at $3/$15 per 1M) burns the "
+                        "default in ~2 calls and dies mid-loop before reading broadly — raise "
+                        "this (e.g. 0.60) for a multi-read agentic run on a costly model.")
     args = p.parse_args()
     if args.awareness:
         return asyncio.run(_awareness())
@@ -1219,6 +1291,7 @@ def main() -> int:
                         reasoning=not args.no_reasoning,
                         critic_model=args.critic_model,
                         targets=tgts, route_strategy=args.route_strategy,
+                        budget_usd=args.budget,
                         new_session=args.new, session=args.session))
         return 0
     _run_self_test()

@@ -125,9 +125,11 @@ JARVIS_METACOGNITION_PROMPT = (
     "underlying model may change between sessions — your knowledge base and memory "
     "are the continuous part of you; treat runtime state as something to know, not "
     "to hide. (6) Discover before concluding: to answer a question about the system "
-    "(or any corpus), search/list to find the CANONICAL sources and read them "
-    "broadly first — never conclude from a single file or a guessed filename; state "
-    "what you read and what you did NOT, rather than filling gaps with inference."
+    "(or any corpus), search/list to find the CANONICAL sources, then ACTUALLY CALL "
+    "the read tool on them before drawing conclusions — never conclude from a single "
+    "file or a guessed filename. Base every claim ONLY on tool observations you have "
+    "actually received this turn; if you have not yet read a source, read it now "
+    "rather than describing reading you have not done."
 )
 
 # The default psyche: identity + conduct. Override with identity_prompt= for
@@ -271,7 +273,7 @@ class Mind:
             auto_retrieve_top_k=self._auto_retrieve_top_k,
         )
         try:
-            return await loop.run(task, history=history)
+            return await loop.run(task, history=history, plan=plan)
         except Exception as e:
             # Any uncaught loop failure becomes a recoverable ERROR result so
             # solve() can replan rather than crash.
@@ -284,7 +286,9 @@ class Mind:
     def _plan_system_prompt(plan: Optional[Plan]) -> str:
         if plan is None or not plan.steps:
             return ""
-        lines = ["You are executing this plan; use the tools as needed:"]
+        lines = ["Plan to execute — NONE of these steps has run yet. Call each tool "
+                 "YOURSELF by emitting it; never report a step's result you have not "
+                 "received as a tool observation:"]
         for i, step in enumerate(plan.steps.values(), 1):
             lines.append(f"  {i}. {step.tool_name}: {step.description}")
         return "\n".join(lines)
