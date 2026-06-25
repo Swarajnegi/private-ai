@@ -113,7 +113,9 @@ class FileSearchTool(Tool):
         "to find files, and/or a content_regex to find matching lines inside files. "
         "Scoped to the project root (cannot read outside it). Returns relative paths "
         "and, for content matches, the line number + line text. Read-only. Use this "
-        "to DISCOVER where code lives, then file_read to read a specific file in full."
+        "to DISCOVER where code/docs live, then file_read to read a specific file in "
+        "full. To LIST a directory's files, pass name_glob='*' (e.g. subdir='.agent/"
+        "rules') with no content_regex."
     )
     input_schema = FileSearchInput
 

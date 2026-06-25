@@ -70,6 +70,14 @@ MODEL_CATALOG_PATH: Path = DATA_ROOT / "model_catalog.json"
 # Resolved per configured model in Stage 4.1 (brain/model_profiles.py).
 MODEL_PROFILES_PATH: Path = DATA_ROOT / "model_profiles.json"
 
+# JARVIS's own "anatomy" — its rules, blueprint, and workflow protocols live here
+# (the .md files Claude Code / Antigravity auto-load). The boot self-map provider
+# (brain/context_injector.py repo_anatomy) lists these so the Mind knows WHERE its
+# own docs are and searches .agent/*.md instead of guessing a filename.
+AGENT_ROOT: Path = JARVIS_ROOT / ".agent"
+AGENT_RULES_DIR: Path = AGENT_ROOT / "rules"
+AGENT_WORKFLOWS_DIR: Path = AGENT_ROOT / "workflows"
+
 # =============================================================================
 # Part 3: MODEL CONFIGURATION (Embedding model constants)
 # =============================================================================
