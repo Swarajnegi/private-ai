@@ -99,6 +99,7 @@ from __future__ import annotations
 import asyncio
 import inspect
 import json
+from collections import Counter
 from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable, Dict, List, Optional, Tuple, Union
 
@@ -112,7 +113,7 @@ from jarvis_core.agent.observation import (
 from jarvis_core.agent.errors import ToolErrorKind, classify_error
 from jarvis_core.agent.parser import ParseError, ToolCall, parse_tool_calls
 from jarvis_core.agent.permissions import PermissionContext, PermissionDecision
-from jarvis_core.agent.plan import Step, StepStatus
+from jarvis_core.agent.plan import Plan, Step, StepStatus
 from jarvis_core.agent.reflection import (
     MirrorReflection,
     extract_mirror_reflection,
@@ -156,6 +157,13 @@ TERMINATED_ERROR = "loop_error"
 # first missing its closing brace; parse_tool_calls returned a ParseError, the
 # loop read "no tool calls" as "final answer" and printed the JSON to the user).
 _MAX_TOOLCALL_REPAIRS = 2
+
+# When a Plan is threaded into the loop, a model that emits a final answer while a
+# planned tool was NEVER called is likely narrating instead of acting (live repro
+# 2026-06-25: Sonnet 4.6 claimed file_read results with ZERO file_read dispatched).
+# Re-prompt it this many times before accepting the prose — today's accept-any-prose
+# behaviour is the FLOOR, so a model that refuses to call the tool can never loop.
+_MAX_FINALANSWER_GUARDS = 2
 
 # Placeholder values by JSON type, for synthesizing a concrete example tool call
 # in the protocol (STEAL #13 — few-shot the exact field names so a weak model
@@ -267,7 +275,8 @@ class ReActLoop:
     # ---- Public API ------------------------------------------------------
 
     async def run(
-        self, query: str, history: Optional[List[Dict[str, str]]] = None
+        self, query: str, history: Optional[List[Dict[str, str]]] = None,
+        plan: Optional[Plan] = None,
     ) -> ReActResult:
         """Drive one user query through the ReAct loop.
 
@@ -275,7 +284,15 @@ class ReActLoop:
         prose) prepended after the system message and before this query — gives the
         loop working memory across invocations. Default None = the original
         single-turn behaviour, unchanged. Only the LATEST emission is ever parsed,
-        so prior assistant turns are inert to tool-call parsing."""
+        so prior assistant turns are inert to tool-call parsing.
+
+        `plan` (optional) = the decomposed Plan whose steps were folded into the
+        system prompt. When present, the loop (a) feeds a live PLAN PROGRESS line
+        after each tool batch so the model can SEE which planned tools have not yet
+        fired, and (b) refuses to accept a final answer while a planned tool was
+        never called (bounded by _MAX_FINALANSWER_GUARDS). Default None = the plan
+        is invisible to the loop and behaviour is exactly as before — this is what
+        keeps every existing scripted test green (KB: plan-confabulation fix)."""
         result = ReActResult()
 
         system_text = self._system_prompt or ""
@@ -334,6 +351,7 @@ class ReActLoop:
 
         repair_attempts = 0  # botched-tool-call (parse) repair budget (see _MAX_TOOLCALL_REPAIRS)
         validation_repairs = 0  # consecutive no-progress validation failures (STEAL #13)
+        finalanswer_guards = 0  # plan-aware "you skipped a tool" re-prompts (see _MAX_FINALANSWER_GUARDS)
 
         try:
             for iteration in range(self._max_iterations):
@@ -354,7 +372,13 @@ class ReActLoop:
                 # Stage 3.4.6: CoT loop detection
                 if self._enable_monitor:
                     report = MetaR1Monitor.from_cot_trace(raw)
-                    result.instability = report
+                    # Sticky toward instability: once a loop is detected, a later
+                    # clean iteration (e.g. a plan-guard re-prompt turn, or any
+                    # multi-turn run where the loop is not in the final emission)
+                    # must NOT mask it. Otherwise keep the latest reading.
+                    if result.instability is None or (
+                        report.is_unstable and not result.instability.is_unstable):
+                        result.instability = report
                     if report.is_unstable and self._abort_on_instability:
                         await self._publish(StepType.ERROR, {
                             "reason": "cot_instability",
@@ -429,6 +453,40 @@ class ReActLoop:
                             "reason": "toolcall_repair_exhausted",
                         })
                         return result
+
+                    # Genuine prose => candidate final answer. BUT if a Plan was
+                    # threaded in and it names a tool the model NEVER called, the
+                    # "answer" may be narration of work it did not do (live repro
+                    # 2026-06-25: Sonnet emitted a summary citing file_read results
+                    # with zero file_read dispatched). Re-prompt with the concrete
+                    # unfired tools; bounded by _MAX_FINALANSWER_GUARDS so a model
+                    # that simply won't call the tool falls through to accept-prose
+                    # (today's behaviour is the FLOOR — never an infinite loop).
+                    # Fire ONLY when the model has demonstrably started executing
+                    # the plan (≥1 tool already called) yet skipped a planned tool —
+                    # the exact confab signature (called file_search, skipped
+                    # file_read). A zero-tool answer is a legitimate "I didn't need
+                    # tools" path (chit-chat, trivial Q, the decompose catch-all
+                    # fail-safe) and must NOT be nagged.
+                    already_acted = bool(result.tool_calls)
+                    unfired = self._unfired_plan_tools(plan, result.tool_calls)
+                    if (already_acted and unfired
+                            and finalanswer_guards < _MAX_FINALANSWER_GUARDS):
+                        finalanswer_guards += 1
+                        names = ", ".join(unfired)
+                        await self._publish(StepType.ERROR, {
+                            "reason": "final_answer_skipped_plan_tools",
+                            "attempt": finalanswer_guards,
+                            "unfired": names,
+                        })
+                        messages.append({"role": "user", "content": (
+                            f"[INCOMPLETE] Your plan calls for tool(s) you have NOT "
+                            f"invoked yet: {names}. You have received no observation "
+                            f"from them, so you cannot report their contents. Call "
+                            f"the tool(s) now. If you genuinely cannot or they are "
+                            f"unnecessary, say so explicitly — never describe a "
+                            f"result you did not receive.")})
+                        continue
 
                     # Genuine prose => final answer reached.
                     result.final_text = self._strip_reflection(raw)
@@ -564,6 +622,14 @@ class ReActLoop:
                 joined = truncate("\n\n".join(observations), self._obs_max_chars)
                 messages.append({"role": "user", "content": joined})
 
+                # Restore the PENDING signal the model is otherwise blind to: the
+                # plan is folded ONCE into the static system prompt, so after a few
+                # turns the model loses track of which planned tools it has actually
+                # run. One deterministic line, recomputed from real dispatched calls.
+                progress = self._render_plan_progress(plan, result.tool_calls)
+                if progress:
+                    messages.append({"role": "user", "content": progress})
+
             # Loop completed without natural termination -> max iterations.
             result.terminated_reason = TERMINATED_MAX_ITERATIONS
             await self._publish(StepType.PLAN_FAILED, {
@@ -588,6 +654,60 @@ class ReActLoop:
             await self._fire_teardown(used_tool_names)
 
     # ---- Internals -------------------------------------------------------
+
+    def _plan_tool_steps(self, plan: Optional[Plan]) -> List[Step]:
+        """Plan steps whose tool_name is a REAL registered tool. Excludes synth /
+        catch-all / "summarize" steps whose tool_name is not a callable tool — the
+        guard must never demand a tool that does not exist."""
+        if plan is None or not plan.steps:
+            return []
+        return [s for s in plan.steps.values() if s.tool_name in self._tools]
+
+    def _unfired_plan_tools(
+        self, plan: Optional[Plan],
+        executed: List[Tuple[ToolCall, ToolResult]],
+    ) -> List[str]:
+        """Distinct planned tool names that were NEVER dispatched (attempted, not
+        merely succeeded — a model that TRIED file_read and got an error is not
+        confabulating). Conservative by design: only flags a tool called zero times,
+        so it never nags about "you read 1 of 3 files"."""
+        steps = self._plan_tool_steps(plan)
+        if not steps:
+            return []
+        fired = {tc.name for tc, _ in executed}
+        out: List[str] = []
+        for s in steps:
+            if s.tool_name not in fired and s.tool_name not in out:
+                out.append(s.tool_name)
+        return out
+
+    def _render_plan_progress(
+        self, plan: Optional[Plan],
+        executed: List[Tuple[ToolCall, ToolResult]],
+    ) -> str:
+        """One deterministic line: tools actually called so far + planned steps not
+        yet executed (multiset-consumed, so the 2nd of three file_read steps shows
+        PENDING until a 2nd file_read fires). Empty when there is no real tool plan
+        to track."""
+        steps = self._plan_tool_steps(plan)
+        if not steps:
+            return ""
+        fired = Counter(tc.name for tc, _ in executed)
+        credit = dict(fired)
+        pending: List[str] = []
+        for s in steps:
+            if credit.get(s.tool_name, 0) > 0:
+                credit[s.tool_name] -= 1
+            else:
+                desc = (s.description or "").strip()[:40]
+                pending.append(f"{s.tool_name}" + (f" ({desc})" if desc else ""))
+        called = ", ".join(f"{n}×{c}" for n, c in sorted(fired.items())) or "none yet"
+        line = f"PLAN PROGRESS — tool calls you have actually made: {called}."
+        if pending:
+            line += (" Plan steps NOT yet executed: " + "; ".join(pending)
+                     + ". Call these tools before answering; do not report a result "
+                       "you have not received as a tool observation.")
+        return line
 
     def _render_tool_protocol(self) -> str:
         """The tool contract a real model needs: what exists, exact input
@@ -1695,6 +1815,71 @@ if __name__ == "__main__":
         check("T36a stuck validation loop bails early, not full max_iterations",
               r36.terminated_reason == TERMINATED_ERROR and r36.iterations_used <= 5,
               hint=f"{r36.terminated_reason} iters={r36.iterations_used}")
+
+        # ---- T37: plan-aware final-answer guard + progress (confab fix) ----
+        # Live repro 2026-06-25: a model ran one tool then emitted prose claiming
+        # results from a planned tool it never called. With a Plan threaded in, the
+        # loop must (a) re-prompt when a planned tool was skipped, (b) inject a
+        # PLAN PROGRESS line, (c) fall through after the guard budget, and
+        # (d) stay EXACTLY as before when plan=None.
+        from jarvis_core.agent.plan import build_plan
+        twostep = build_plan(goal="add then multiply", step_specs=[
+            {"tool_name": "stub_add", "description": "add the inputs"},
+            {"tool_name": "stub_mul", "description": "multiply the inputs"},
+        ])
+        tools_2 = {"stub_add": StubAdd(), "stub_mul": StubMul()}
+
+        # T37a: skip stub_mul, narrate "done" -> guard re-prompts -> model complies.
+        llm37a = make_scripted_llm([
+            json.dumps({"name": "stub_add", "arguments": {"a": 1, "b": 2}}),
+            "All done — the product is 12.",  # stub_mul NEVER called -> must be refused
+            json.dumps({"name": "stub_mul", "arguments": {"a": 3, "b": 4}}),
+            "Final: sum 3, product 12.",
+        ])
+        loop37a = ReActLoop(llm_call=llm37a, tool_instances=tools_2,
+                            enable_mirror_lite=False, enable_cot_monitor=False)
+        r37a = await loop37a.run("add then multiply", plan=twostep)
+        fired_a = {tc.name for tc, _ in r37a.tool_calls}
+        check("T37a skipped plan tool forces a re-prompt, then fires",
+              r37a.terminated_reason == TERMINATED_FINAL_ANSWER
+              and "stub_mul" in fired_a and "Final" in r37a.final_text,
+              hint=f"{r37a.terminated_reason} fired={fired_a} text={r37a.final_text!r}")
+        check("T37a2 the [INCOMPLETE] guard turn was injected",
+              any("[INCOMPLETE]" in m["content"] for m in r37a.messages if m["role"] == "user"))
+
+        # T37c: a PLAN PROGRESS line naming the still-pending tool was injected.
+        check("T37c PLAN PROGRESS line names the pending tool",
+              any("PLAN PROGRESS" in m["content"] and "stub_mul" in m["content"]
+                  for m in r37a.messages if m["role"] == "user"))
+
+        # T37b: model refuses to call stub_mul -> guard budget exhausts -> accept.
+        llm37b = make_scripted_llm([
+            json.dumps({"name": "stub_add", "arguments": {"a": 1, "b": 2}}),
+            "done one", "done two", "done three", "done four",
+        ])
+        loop37b = ReActLoop(llm_call=llm37b, tool_instances=tools_2,
+                            enable_mirror_lite=False, enable_cot_monitor=False)
+        r37b = await loop37b.run("add then multiply", plan=twostep)
+        check("T37b guard budget bounded — prose accepted after the floor, no infinite loop",
+              r37b.terminated_reason == TERMINATED_FINAL_ANSWER
+              and "stub_mul" not in {tc.name for tc, _ in r37b.tool_calls}
+              and r37b.iterations_used == 2 + _MAX_FINALANSWER_GUARDS,
+              hint=f"{r37b.terminated_reason} iters={r37b.iterations_used}")
+
+        # T37d: plan=None -> behaviour UNCHANGED (no guard, no progress line).
+        llm37d = make_scripted_llm([
+            json.dumps({"name": "stub_add", "arguments": {"a": 1, "b": 2}}),
+            "All done — the product is 12.",
+        ])
+        loop37d = ReActLoop(llm_call=llm37d, tool_instances=tools_2,
+                            enable_mirror_lite=False, enable_cot_monitor=False)
+        r37d = await loop37d.run("add then multiply")  # no plan
+        check("T37d plan=None unchanged: prose accepted at iter 2, no guard/progress",
+              r37d.terminated_reason == TERMINATED_FINAL_ANSWER
+              and r37d.iterations_used == 2
+              and not any("[INCOMPLETE]" in m["content"] or "PLAN PROGRESS" in m["content"]
+                          for m in r37d.messages if m["role"] == "user"),
+              hint=f"iters={r37d.iterations_used}")
 
         # ---- Report -----------------------------------------------------
         total = passed + len(failed)
