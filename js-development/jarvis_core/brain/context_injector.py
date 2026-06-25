@@ -54,7 +54,9 @@ from typing import Callable, List, Optional, Tuple
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))  # standalone-run safety
 
-from jarvis_core.config import DATA_ROOT
+from jarvis_core.config import (
+    DATA_ROOT, JARVIS_ROOT, KB_PATH, AGENT_RULES_DIR, AGENT_WORKFLOWS_DIR,
+)
 
 _IST = timezone(timedelta(hours=5, minutes=30))
 
@@ -147,6 +149,54 @@ def _machine_name() -> str:
         "JARVIS_MACHINE", os.uname().nodename if hasattr(os, "uname") else "unknown")
 
 
+# A one-line role hint for the canonical rule files; every other .md is listed by
+# name only (the Mind reads it to learn, the hint just speeds the obvious two).
+_RULE_HINTS = {
+    "JARVIS_ENDGAME.md": "the architecture blueprint",
+    "CLAUDE.md": "operating context / current build state",
+    "js-workspace-rule.md": "workspace protocol",
+}
+
+
+def repo_anatomy(
+    rules_dir: Path = AGENT_RULES_DIR,
+    workflows_dir: Path = AGENT_WORKFLOWS_DIR,
+    kb_path: Path = KB_PATH,
+    root: Path = JARVIS_ROOT,
+) -> Optional[str]:
+    """A DYNAMIC self-map of where JARVIS's own docs live (never stale — lists the
+    real dirs at inhale time). Closes the orientation gap: the Mind knows its rules
+    are .md under .agent/, so it searches there instead of guessing a filename."""
+    lines: List[str] = []
+
+    def _list_md(d: Path) -> List[str]:
+        try:
+            return sorted(p.name for p in d.glob("*.md"))
+        except Exception:
+            return []
+
+    rules = _list_md(rules_dir)
+    if rules:
+        named = ", ".join(
+            f"{n} ({_RULE_HINTS[n]})" if n in _RULE_HINTS else n for n in rules)
+        lines.append(f"- Your rules + blueprint: .agent/rules/ -> {named}")
+    workflows = _list_md(workflows_dir)
+    if workflows:
+        lines.append(f"- Your workflow protocols (slash-commands): .agent/workflows/ -> "
+                     f"{', '.join(workflows)}")
+    try:
+        if Path(kb_path).exists():
+            lines.append(f"- Your long-term knowledge: {Path(kb_path).relative_to(root)}")
+    except Exception:
+        pass
+    lines.append("- Your production code: js-development/jarvis_core/")
+    if not rules and not workflows:
+        return None  # nothing to map — skip the section
+    return ("YOUR ANATOMY (where your own docs live — to answer questions about "
+            "yourself/the system, file_search these and read the .md files; never "
+            "guess a filename):\n" + "\n".join(lines))
+
+
 def default_providers(
     clock: Optional[Clock] = None,
     self_state: Optional[str] = None,
@@ -195,6 +245,7 @@ def default_providers(
         ProviderSpec("Temporal", temporal, max_chars=200),
         ProviderSpec("Runtime self-state", runtime_self_state, max_chars=300),
         ProviderSpec("Next pending task", next_task, max_chars=300),
+        ProviderSpec("Repo self-map (your own anatomy)", repo_anatomy, max_chars=800),
         ProviderSpec("Cognitive profile (standing model of your owner)",
                      profile_head, max_chars=2500),
         ProviderSpec("Recent cross-chat activity", recent_activity, max_chars=2400),
@@ -315,6 +366,25 @@ def _run_self_test() -> None:
         r15 = ContextInjector(specs15).inhale()
         check("T15 empty queue -> activity section absent",
               "Recent cross-chat activity" in r15.skipped)
+
+        # T16: repo_anatomy lists real .md dirs (the orientation fix) — dynamic,
+        # role-hints the canonical files, fails-soft when dirs are absent.
+        rules_d = tdp / "rules"; rules_d.mkdir()
+        (rules_d / "JARVIS_ENDGAME.md").write_text("x", encoding="utf-8")
+        (rules_d / "CLAUDE.md").write_text("y", encoding="utf-8")
+        wf_d = tdp / "workflows"; wf_d.mkdir()
+        (wf_d / "learn.md").write_text("z", encoding="utf-8")
+        anat = repo_anatomy(rules_dir=rules_d, workflows_dir=wf_d,
+                            kb_path=tdp / "kb.jsonl", root=tdp)
+        check("T16 anatomy lists rules + workflows with canonical hint",
+              anat and "JARVIS_ENDGAME.md (the architecture blueprint)" in anat
+              and "learn.md" in anat and ".agent/workflows/" in anat, str(anat))
+        check("T16b anatomy steers to file_search the .md (no guessing)",
+              "file_search" in anat and "never guess" in anat, str(anat)[:120])
+        # T16c: absent dirs -> None (section skipped, no crash)
+        check("T16c missing .agent dirs -> None",
+              repo_anatomy(rules_dir=tdp / "nope", workflows_dir=tdp / "nada",
+                           kb_path=tdp / "kb.jsonl", root=tdp) is None)
 
     total = passed + len(failed)
     print(f"\n  Passed: {passed}/{total}")
