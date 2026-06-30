@@ -237,6 +237,9 @@ async def ask(
     pool: Optional[Any] = None,
     targets: Optional[List[str]] = None,
     route_strategy: str = "balanced",
+    route: bool = False,
+    router: Optional[Any] = None,
+    routing_ledger: Optional[Any] = None,
     writer: Optional[SessionMemoryWriter] = None,
     extra_tools: Optional[Dict[str, Any]] = None,
     clock: Optional[Callable[[], datetime]] = None,
@@ -275,6 +278,23 @@ async def ask(
     #      health-scored failover; the spine drives pool.as_llm_call() and takes
     #      conduct from the PRIMARY (best) target's profile.
     #   3. default — a single auto-picked OpenRouter client (unchanged behavior).
+    # Stage 4.2: intent routing (opt-in). When route=True and the caller has NOT
+    # pinned a pool or explicit targets, the IntentRouter classifies the question ->
+    # specialist codename -> an ordered, frontier-free target list, which feeds the
+    # SAME pool-build path below. Explicit `targets` and an injected `pool` always
+    # win (the guard), so existing flows are untouched. A directly-injected llm_call
+    # still EXECUTES (the pool-build below requires llm_call is None) — routing then
+    # only computes + logs the decision (telemetry); the CLI never injects llm_call.
+    route_decision = None
+    if route and targets is None and pool is None:
+        from jarvis_core.brain.router import IntentRouter, RoutingConstraints
+        active_router = router or IntentRouter()
+        route_decision = active_router.route(
+            question,
+            constraints=RoutingConstraints(remaining_budget_usd=budget_usd),
+            strategy=route_strategy)
+        targets = list(route_decision.targets)
+
     route_pool = pool
     if route_pool is None and targets and llm_call is None:
         from jarvis_core.brain.targets import OpenRouterTarget
@@ -338,6 +358,9 @@ async def ask(
     sess_state = (f"continued, {len(hist)} prior turn(s)" if sess.continued
                   else "new")
     printer(f"  brain   : {model or '<scripted>'}")
+    if route_decision is not None:
+        printer(f"  route   : {route_decision.label} (conf {route_decision.confidence:.2f}) "
+                f"-> {', '.join(route_decision.targets)}")
     if route_pool is not None and llm_call is None:
         printer(f"  pool    : {', '.join(route_pool._order)} "
                 f"(strategy={route_strategy}, primary={model})")
@@ -521,6 +544,25 @@ async def ask(
                 continue
             seen_ev.add(key)
             printer(f"  failover: {ev}")
+
+    # Stage 4.2.4: log the routing decision (append-only, fail-soft) — the Stage-5
+    # Orchestrator-adapter training corpus. Only the query HASH is stored, never the
+    # text. Outcome: error if the answer was degenerate, else ok.
+    if route_decision is not None:
+        try:
+            from jarvis_core.brain.routing_ledger import RoutingLedger, RoutingRecord, query_hash
+            rl = routing_ledger if routing_ledger is not None else RoutingLedger()
+            rl.record(RoutingRecord(
+                ts=datetime.now(_IST).isoformat(),
+                query_hash=query_hash(question),
+                label=route_decision.label,
+                confidence=route_decision.confidence,
+                target=model or (route_decision.targets[0] if route_decision.targets else ""),
+                outcome="error" if degenerate else "ok",
+                cost_usd=total_spend,
+            ))
+        except Exception as e:
+            printer(f"  (routing-ledger skipped: {type(e).__name__}: {e})")
 
     return AskResult(
         question=question, answer=answer,
@@ -1225,6 +1267,63 @@ def _run_self_test() -> None:
             check("T39 injected llm_call wins over pool (pool path skipped)",
                   "Direct answer." in r39.answer, r39.answer)
 
+            # --- Stage 4.2: Intent Router wiring through ask() ---
+            from jarvis_core.brain.router import RoutingDecision
+            from jarvis_core.brain.routing_ledger import RoutingLedger
+
+            class _FakeRouter:
+                def __init__(self, decision):
+                    self.decision = decision
+                    self.calls: List[str] = []
+                def route(self, query, constraints=None, strategy="balanced"):
+                    self.calls.append(query)
+                    return self.decision
+
+            dec40 = RoutingDecision("engineer", 0.77, ("vendor/coder-a", "vendor/coder-b"),
+                                    "balanced", "test")
+
+            # T40: route=True + injected router -> the decision drives targets and a
+            # RoutingRecord lands; the injected llm_call executes (keeps it offline).
+            fr40 = _FakeRouter(dec40)
+            led40 = RoutingLedger(path=tdp / "rl40.jsonl")
+            lines40: List[str] = []
+            r40 = await ask("optimize this spark job", route=True, router=fr40,
+                            routing_ledger=led40,
+                            llm_call=scripted(["no plan", "Routed engineer answer."]),
+                            session="route-40", **{**common, "printer": lines40.append})
+            check("T40 router consulted with the query", fr40.calls == ["optimize this spark job"],
+                  str(fr40.calls))
+            check("T40b answer produced via the executor", "Routed engineer answer." in r40.answer, r40.answer)
+            check("T40c RoutingRecord logged (codename + outcome), query NOT stored raw",
+                  led40.count == 1 and led40._records[0].label == "engineer"
+                  and led40._records[0].outcome == "ok"
+                  and led40._records[0].query_hash != "optimize this spark job", str(led40.summary()))
+            check("T40d route line printed with codename + routed targets",
+                  any(l.startswith("  route   :") and "engineer" in l and "vendor/coder-a" in l
+                      for l in lines40),
+                  str([l for l in lines40 if l.startswith('  route')]))
+
+            # T41: explicit targets WIN — the router is NEVER consulted (no decision, no log).
+            fr41 = _FakeRouter(dec40)
+            led41 = RoutingLedger(path=tdp / "rl41.jsonl")
+            r41 = await ask("explicit pin wins", route=True, router=fr41, routing_ledger=led41,
+                            targets=["vendor/pinned"],
+                            llm_call=scripted(["no plan", "Pinned answer."]),
+                            session="route-41", **common)
+            check("T41 explicit targets bypass the router (not consulted)",
+                  fr41.calls == [] and led41.count == 0 and "Pinned answer." in r41.answer,
+                  f"calls={fr41.calls} count={led41.count}")
+
+            # T42: route=False (default) -> the router is never built or consulted.
+            fr42 = _FakeRouter(dec40)
+            led42 = RoutingLedger(path=tdp / "rl42.jsonl")
+            r42 = await ask("no routing here", route=False, router=fr42, routing_ledger=led42,
+                            llm_call=scripted(["no plan", "Unrouted answer."]),
+                            session="route-42", **common)
+            check("T42 route=False never consults the router",
+                  fr42.calls == [] and led42.count == 0 and "Unrouted answer." in r42.answer,
+                  f"calls={fr42.calls} count={led42.count}")
+
     asyncio.run(scenario())
 
     total = passed + len(failed)
@@ -1279,6 +1378,10 @@ def main() -> int:
                         "fail-closed). A pricey brain (e.g. Sonnet at $3/$15 per 1M) burns the "
                         "default in ~2 calls and dies mid-loop before reading broadly — raise "
                         "this (e.g. 0.60) for a multi-read agentic run on a costly model.")
+    p.add_argument("--route", action="store_true",
+                   help="Stage 4.2: classify the query's intent and route to a "
+                        "specialist-codename-appropriate model pool (frontier-free). "
+                        "Ignored if --targets is given (explicit pins win).")
     args = p.parse_args()
     if args.awareness:
         return asyncio.run(_awareness())
@@ -1291,6 +1394,7 @@ def main() -> int:
                         reasoning=not args.no_reasoning,
                         critic_model=args.critic_model,
                         targets=tgts, route_strategy=args.route_strategy,
+                        route=args.route,
                         budget_usd=args.budget,
                         new_session=args.new, session=args.session))
         return 0

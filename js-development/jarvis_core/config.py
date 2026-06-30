@@ -78,6 +78,12 @@ AGENT_ROOT: Path = JARVIS_ROOT / ".agent"
 AGENT_RULES_DIR: Path = AGENT_ROOT / "rules"
 AGENT_WORKFLOWS_DIR: Path = AGENT_ROOT / "workflows"
 
+# Append-only routing decisions (Stage 4.2 Intent Router): one JSONL row per routed
+# query (ts, query-hash, label, confidence, target, outcome, cost). This IS the
+# Stage-5 Orchestrator-adapter training corpus. Lazy-created on first append; the
+# raw query is NEVER stored (sha1 hash only).
+ROUTING_LEDGER_PATH: Path = DATA_ROOT / "routing_ledger.jsonl"
+
 # =============================================================================
 # Part 3: MODEL CONFIGURATION (Embedding model constants)
 # =============================================================================

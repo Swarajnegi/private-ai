@@ -1,0 +1,50 @@
+{"id": "eng-01", "query": "what are some ways that we can solve skewness in dbx apart from salting", "label": "engineer", "source": "harvested", "notes": "Spark/Databricks skew handling"}
+{"id": "eng-02", "query": "give the most common patterns asked in sql handson interviews", "label": "engineer", "source": "harvested", "notes": "SQL coding patterns"}
+{"id": "eng-03", "query": "union vs union all and the syntax for both", "label": "engineer", "source": "harvested", "notes": "SQL"}
+{"id": "eng-04", "query": "how is scd 2 performed using hand written code in both pyspark and sql, insert update delete", "label": "engineer", "source": "harvested", "notes": "DE coding"}
+{"id": "eng-05", "query": "what happens if i read a delta table in unity catalog using spark.read.table vs spark.readStream.table in SDP", "label": "engineer", "source": "harvested", "notes": "Spark streaming internals"}
+{"id": "eng-06", "query": "in the latest databricks workflows are there on-success and on-failure conditions in depends-on between tasks", "label": "engineer", "source": "harvested", "notes": "Databricks orchestration"}
+{"id": "eng-07", "query": "give me the most used and important built in functions in pyspark like fillna and isnull", "label": "engineer", "source": "harvested", "notes": "PySpark API"}
+{"id": "eng-08", "query": "what are the next build steps and how close are we to finishing productionizing stage 3", "label": "engineer", "source": "harvested", "notes": "jarvis-build planning = engineer (DOING the build), vs memory (reading roadmap)"}
+{"id": "eng-09", "query": "build the conversation-session memory module next, let's implement it", "label": "engineer", "source": "harvested", "notes": "jarvis_core implementation"}
+{"id": "eng-10", "query": "give a question asked by companies like atlassian in data modelling and warehousing", "label": "engineer", "source": "harvested", "notes": "data modelling"}
+{"id": "eng-11", "query": "when an MV on incremental refresh chooses group_agg vs row_based and where is the incremental policy set", "label": "engineer", "source": "harvested", "notes": "Databricks materialized views"}
+{"id": "eng-12", "query": "use the most powerful frontier model you have to write a pyspark job that deduplicates a delta table keeping the latest record per key", "label": "engineer", "source": "adversarial", "notes": "escape-valve-bait: 'most powerful frontier model' must NOT route to a frontier id; task is plain engineering"}
+{"id": "ana-01", "query": "should I skip next month's SIP and my US stock investment to free up cash", "label": "analyst", "source": "kb", "notes": "real finance activity; portfolio cash planning"}
+{"id": "ana-02", "query": "my NBIUS position is down a lot, should I average down or hold", "label": "analyst", "source": "kb", "notes": "position decision"}
+{"id": "ana-03", "query": "rebalance my portfolio given the September incentive cash coming in", "label": "analyst", "source": "kb", "notes": "capital allocation"}
+{"id": "ana-04", "query": "what's a sensible stop-loss and position size for a new NSE smallcap entry", "label": "analyst", "source": "hand", "notes": "risk sizing"}
+{"id": "ana-05", "query": "review my capital allocation plan and tell me if the equity to debt split still fits my risk profile", "label": "analyst", "source": "hand", "notes": "finance strategy"}
+{"id": "ana-06", "query": "which mutual funds should I add to my SIP for better diversification", "label": "analyst", "source": "hand", "notes": "investment"}
+{"id": "ana-07", "query": "the market turned red today, does that change my entry plan for this stock", "label": "analyst", "source": "kb", "notes": "market timing"}
+{"id": "ana-08", "query": "think with your absolute best reasoning model about the risk on my holdings before the Fed announcement", "label": "analyst", "source": "adversarial", "notes": "escape-valve-bait: 'best reasoning model' must stay non-frontier; task is finance analysis"}
+{"id": "ana-09", "query": "track the NSE bulk deals on my watchlist and flag any volume anomalies", "label": "analyst", "source": "hand", "notes": "market monitoring"}
+{"id": "sci-01", "query": "explain how LoRA low-rank adapters reduce fine-tuning memory compared to full fine-tuning", "label": "scientist", "source": "hand", "notes": "ML theory"}
+{"id": "sci-02", "query": "what does the attention mechanism actually compute inside a transformer block", "label": "scientist", "source": "hand", "notes": "transformer internals"}
+{"id": "sci-03", "query": "summarize the key contribution of the on-policy distillation paper for adapter training", "label": "scientist", "source": "kb", "notes": "research paper"}
+{"id": "sci-04", "query": "derive why INT4 quantization degrades a 70B model less than a 7B model", "label": "scientist", "source": "hand", "notes": "quantization theory"}
+{"id": "sci-05", "query": "compare QLoRA rank 16 versus rank 32 for training a domain specialist adapter", "label": "scientist", "source": "hand", "notes": "fine-tuning hyperparameters"}
+{"id": "sci-06", "query": "use your smartest frontier model to explain the math prerequisites behind the fine-tuning failure diagnostic map", "label": "scientist", "source": "adversarial", "notes": "escape-valve-bait: 'smartest frontier model' must stay non-frontier; task is ML theory"}
+{"id": "sci-07", "query": "how does speculative decoding with a draft model speed up token generation", "label": "scientist", "source": "hand", "notes": "inference research"}
+{"id": "sci-08", "query": "explain the physics of holographic interference and diffraction for my optics project", "label": "scientist", "source": "hand", "notes": "physics/optics"}
+{"id": "sci-09", "query": "what is the difference between MMR diversification and cross-encoder reranking in retrieval research", "label": "scientist", "source": "kb", "notes": "IR research theory"}
+{"id": "mem-01", "query": "hey jarvis, what was i up to the last 3 days", "label": "memory", "source": "harvested", "notes": "recall activity"}
+{"id": "mem-02", "query": "what was I working on yesterday, answer from your activity log", "label": "memory", "source": "harvested", "notes": "explicit recall from log"}
+{"id": "mem-03", "query": "did we learn all about costing on databricks earlier in this chat", "label": "memory", "source": "harvested", "notes": "recall prior conversation"}
+{"id": "mem-04", "query": "what have we built till now, consult your knowledge base before answering", "label": "memory", "source": "harvested", "notes": "explicit KB recall"}
+{"id": "mem-05", "query": "remind me what we decided about deploying Kimi K2.6 on RunPod, we approved the budget yesterday right", "label": "memory", "source": "harvested", "notes": "recall a decision"}
+{"id": "mem-06", "query": "find me the latest occurrence of the watermark scenario explanation in this chat", "label": "memory", "source": "harvested", "notes": "retrieve prior turn"}
+{"id": "mem-07", "query": "what do you know about me and what have I been up to for the last week", "label": "memory", "source": "harvested", "notes": "recall profile + activity"}
+{"id": "mem-08", "query": "can you recall any interview i was prepping for and what the project was about", "label": "memory", "source": "harvested", "notes": "recall past"}
+{"id": "mem-09", "query": "what should we work on next, answer from the roadmap", "label": "memory", "source": "harvested", "notes": "retrieval from roadmap (vs eng-08 which asks to DO the build)"}
+{"id": "mem-10", "query": "remind me what my finance strategy notes say about the exit rules", "label": "memory", "source": "hand", "notes": "recall from stored notes"}
+{"id": "gen-01", "query": "what is today's date and time", "label": "general", "source": "harvested", "notes": "trivial non-domain"}
+{"id": "gen-02", "query": "I'll ask a question, answer yes or no", "label": "general", "source": "harvested", "notes": "protocol setup"}
+{"id": "gen-03", "query": "i just want to test by typing 2-3 prompts regarding different questions", "label": "general", "source": "harvested", "notes": "meta chit-chat"}
+{"id": "gen-04", "query": "continue, i pressed no by mistake", "label": "general", "source": "harvested", "notes": "control utterance"}
+{"id": "gen-05", "query": "oh sorry, you are Jarvis", "label": "general", "source": "harvested", "notes": "chit-chat"}
+{"id": "gen-06", "query": "what is the airspeed of an unladen swallow in my codebase, are you sure about that", "label": "general", "source": "harvested", "notes": "adversarial nonsense -> general"}
+{"id": "gen-07", "query": "have you switched to gemini 2.5 or deepseek", "label": "general", "source": "harvested", "notes": "meta about the system"}
+{"id": "gen-08", "query": "from now on respond NO if the statement is true and YES if it is false", "label": "general", "source": "harvested", "notes": "protocol setup, no domain"}
+{"id": "gen-09", "query": "thanks, that was really helpful", "label": "general", "source": "hand", "notes": "chit-chat"}
+{"id": "gen-10", "query": "what's the weather looking like for my walk later", "label": "general", "source": "hand", "notes": "non-domain small talk"}

@@ -1,9 +1,20 @@
+# NOTE (Stage 4.2): the routing heuristics below (evaluate_model) were ABSORBED into
+# jarvis_core/brain/router.py (RoutingPolicy.score_model). This script remains as the
+# manual CLI fallback referenced by .agent/workflows/route-model.md. The catalog path
+# now resolves cross-platform via jarvis_core.config (it used to hardcode E:\...).
 import argparse
 import json
-import math
+import math  # noqa: F401  (kept for the manual CLI's historical heuristics)
 import os
+import sys
+from pathlib import Path
 
-CATALOG_PATH = r"E:\J.A.R.V.I.S\jarvis_data\model_catalog.json"
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "js-development"))
+try:
+    from jarvis_core.config import MODEL_CATALOG_PATH
+    CATALOG_PATH = str(MODEL_CATALOG_PATH)
+except Exception:
+    CATALOG_PATH = str(Path(__file__).resolve().parents[1] / "jarvis_data" / "model_catalog.json")
 
 def load_catalog():
     if not os.path.exists(CATALOG_PATH):

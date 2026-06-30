@@ -62,7 +62,7 @@ import hashlib
 import math
 import sys
 from pathlib import Path
-from typing import Callable, Dict, List, Optional
+from typing import Callable, Dict, List, Optional, Tuple
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))  # standalone-run safety
 
@@ -149,6 +149,7 @@ class DomainClassifier:
         self._prototypes = prototypes or _DEFAULT_PROTOTYPES
         self._seed_vecs: Optional[Dict[str, List[List[float]]]] = None
         self._cache: Dict[str, str] = {}
+        self._score_cache: Dict[str, Tuple[str, float]] = {}
 
     # ---- lazy embedder + centroids --------------------------------------
 
@@ -179,6 +180,23 @@ class DomainClassifier:
     def classify(self, text: str) -> str:
         return self.classify_many([text])[0]
 
+    def classify_scored(self, text: str) -> Tuple[str, float]:
+        """Like classify(), but also returns the winning cosine score — the routing
+        layer (Stage 4.2) needs a (label, confidence) pair, not just the label. A
+        below-threshold result is ("general", <the sub-threshold max>) so callers see
+        HOW close it came; blank text is ("general", 0.0). Non-breaking: classify()
+        and classify_many() are unchanged."""
+        if not (text or "").strip():
+            return "general", 0.0
+        key = self._key(text)
+        if key in self._score_cache:
+            return self._score_cache[key]
+        seed_vecs = self._ensure_seed_vecs()
+        vec = self._embed([text])[0]
+        result = self._nearest_scored(vec, seed_vecs)
+        self._score_cache[key] = result
+        return result
+
     def classify_many(self, texts: List[str]) -> List[str]:
         seed_vecs = self._ensure_seed_vecs()
 
@@ -208,12 +226,22 @@ class DomainClassifier:
 
     def _nearest(self, vec: List[float], seed_vecs: Dict[str, List[List[float]]]) -> str:
         """Nearest-prototype: a domain scores = MAX cosine over its seeds."""
+        return self._nearest_scored(vec, seed_vecs)[0]
+
+    def _nearest_scored(
+        self, vec: List[float], seed_vecs: Dict[str, List[List[float]]]
+    ) -> Tuple[str, float]:
+        """Nearest-prototype with the winning score. Below threshold -> ("general",
+        best_score) — the score is still the closest specific-domain match, so the
+        caller can see the (low) confidence rather than a bare label."""
         best_domain, best_score = "general", -1.0
         for domain, seeds in seed_vecs.items():
             score = max((_dot(vec, s) for s in seeds), default=-1.0)
             if score > best_score:
                 best_domain, best_score = domain, score
-        return best_domain if best_score >= self._threshold else "general"
+        if best_score >= self._threshold:
+            return best_domain, best_score
+        return "general", best_score
 
     @staticmethod
     def _key(text: str) -> str:
@@ -290,6 +318,16 @@ def _run_self_test() -> None:
 
     # mixed-keyword text picks the stronger domain
     check("T13 mixed picks argmax", clf.classify("spark spark sql stock") == "data-engineering")
+
+    # classify_scored: (label, confidence) for the routing layer (Stage 4.2)
+    lbl, sc = clf.classify_scored("explain spark AQE skew")
+    check("T14 classify_scored returns matching label", lbl == "data-engineering", lbl)
+    check("T14b classify_scored returns a float score in [-1,1]",
+          isinstance(sc, float) and -1.0 <= sc <= 1.0001, str(sc))
+    check("T14c classify_scored agrees with classify",
+          clf.classify_scored("rebalance my stock portfolio")[0] == clf.classify("rebalance my stock portfolio"))
+    blbl, bsc = clf.classify_scored("   ")
+    check("T14d blank -> (general, 0.0)", blbl == "general" and bsc == 0.0, f"{blbl},{bsc}")
 
     # --- OPTIONAL: real MiniLM model with the REAL prototypes (tunes the default
     # threshold). Skips gracefully if sentence-transformers can't load. ---
