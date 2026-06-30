@@ -1,6 +1,6 @@
 # Cognitive Profile — Model of the User
 
-> Auto-synthesized by `scripts/profile_synth.py` from `knowledge_base.jsonl` (414 entries). Injected into every chat via the SessionStart hook. Regenerate after KB updates.
+> Auto-synthesized by `scripts/profile_synth.py` from `knowledge_base.jsonl` (415 entries). Injected into every chat via the SessionStart hook. Regenerate after KB updates.
 
 ## Who you are
 - PATTERN: intelligence-vs-mind expectation recalibration (2026-06-15). After Stage 4.1 Wave 1, the user asked 'at what point will I be speaking to ACTUAL jarvis -- tools, consciousness, wisdom, knows me, highly intelligent? after training? then what were we even testing till now?' Two conflations to preempt in future se ...

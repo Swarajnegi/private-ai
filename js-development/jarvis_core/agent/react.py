@@ -150,6 +150,11 @@ TERMINATED_FINAL_ANSWER = "final_answer"
 TERMINATED_MAX_ITERATIONS = "max_iterations_reached"
 TERMINATED_INSTABILITY = "cot_instability_detected"
 TERMINATED_ERROR = "loop_error"
+# The loop ran out of iterations WITH evidence gathered but no answer committed —
+# one tools-disabled synthesis turn closed it out from the observations rather than
+# returning empty-handed (KB: convergence fix). A real answer, flagged distinctly
+# from a clean FINAL_ANSWER so telemetry can see it was a budget-edge close-out.
+TERMINATED_SYNTHESIZED = "synthesized_at_budget"
 
 # A model that emits malformed tool-call JSON gets this many repair turns before
 # the loop gives up — instead of silently surfacing the raw JSON as the "answer"
@@ -626,11 +631,35 @@ class ReActLoop:
                 # plan is folded ONCE into the static system prompt, so after a few
                 # turns the model loses track of which planned tools it has actually
                 # run. One deterministic line, recomputed from real dispatched calls.
-                progress = self._render_plan_progress(plan, result.tool_calls)
+                progress = self._render_plan_progress(
+                    plan, result.tool_calls,
+                    steps_left=self._max_iterations - (iteration + 1))
                 if progress:
                     messages.append({"role": "user", "content": progress})
 
-            # Loop completed without natural termination -> max iterations.
+            # Loop exhausted. If the agent GATHERED evidence (tool observations) but
+            # never committed to a final answer, it spent its whole budget acting and
+            # had no turn left to SPEAK (live 2026-06-26: read 8 files, hit the ceiling,
+            # returned empty -> ESCALATE). Force ONE tools-disabled synthesis turn so
+            # the work is converted into an answer instead of discarded. Bounded: +1
+            # call. Taken AS-IS (not parsed for tool calls) so it is always prose.
+            if result.tool_calls:
+                messages.append({"role": "user", "content": (
+                    "You have used all your reasoning steps. Do NOT call any tool or "
+                    "emit JSON. Write your final answer to the original question NOW, "
+                    "using only the tool observations above. If they are insufficient, "
+                    "say so plainly rather than guessing.")})
+                await self._publish(StepType.REASONING, {
+                    "iteration": self._max_iterations, "synthesis_forced": True})
+                raw = await self._call_llm(messages)
+                messages.append({"role": "assistant", "content": raw})
+                result.final_text = self._strip_reflection(raw)
+                result.terminated_reason = TERMINATED_SYNTHESIZED
+                await self._publish(StepType.PLAN_COMPLETED, {
+                    "iterations": self._max_iterations, "synthesized": True})
+                return result
+
+            # No evidence gathered at all -> honestly "didn't converge", no answer.
             result.terminated_reason = TERMINATED_MAX_ITERATIONS
             await self._publish(StepType.PLAN_FAILED, {
                 "reason": "max_iterations_reached",
@@ -684,11 +713,15 @@ class ReActLoop:
     def _render_plan_progress(
         self, plan: Optional[Plan],
         executed: List[Tuple[ToolCall, ToolResult]],
+        steps_left: Optional[int] = None,
     ) -> str:
         """One deterministic line: tools actually called so far + planned steps not
         yet executed (multiset-consumed, so the 2nd of three file_read steps shows
-        PENDING until a 2nd file_read fires). Empty when there is no real tool plan
-        to track."""
+        PENDING until a 2nd file_read fires). When steps are pending, also surface the
+        remaining iteration budget + that independent reads MAY be batched in ONE turn
+        (the loop runs concurrency-safe tools in parallel) — so a read-heavy plan
+        finishes before the ceiling instead of starving the synthesis turn. Empty when
+        there is no real tool plan to track."""
         steps = self._plan_tool_steps(plan)
         if not steps:
             return ""
@@ -707,6 +740,10 @@ class ReActLoop:
             line += (" Plan steps NOT yet executed: " + "; ".join(pending)
                      + ". Call these tools before answering; do not report a result "
                        "you have not received as a tool observation.")
+            if steps_left is not None:
+                line += (f" You have {steps_left} reasoning step(s) left — you MAY call "
+                         "multiple independent read tools in ONE turn (a JSON array of "
+                         "calls) to finish within budget.")
         return line
 
     def _render_tool_protocol(self) -> str:
@@ -1089,9 +1126,12 @@ if __name__ == "__main__":
             max_iterations=4,
         )
         r5 = await loop5.run("Loop forever.")
-        check("T5a hit max_iterations",
-              r5.terminated_reason == TERMINATED_MAX_ITERATIONS)
-        check("T5b iterations == 4", r5.iterations_used == 4)
+        # The cap still bounds the loop (iterations == 4); evidence was gathered, so
+        # the convergence backstop closes it out with a forced synthesis turn instead
+        # of returning empty (TERMINATED_SYNTHESIZED, not _MAX_ITERATIONS).
+        check("T5a cap fires -> backstop synthesizes (not empty max-iter)",
+              r5.terminated_reason == TERMINATED_SYNTHESIZED, r5.terminated_reason)
+        check("T5b iterations == 4 (cap held)", r5.iterations_used == 4)
 
         # ---- T6: Permission DENY blocks dispatch -------------------------
         perm6 = PermissionContext(
@@ -1880,6 +1920,52 @@ if __name__ == "__main__":
               and not any("[INCOMPLETE]" in m["content"] or "PLAN PROGRESS" in m["content"]
                           for m in r37d.messages if m["role"] == "user"),
               hint=f"iters={r37d.iterations_used}")
+
+        # ---- T38: convergence fix — synthesis-forcing backstop + batch nudge ----
+        # Live repro 2026-06-26: a model read one file per turn, exhausted
+        # max_iterations on reads, and the loop returned EMPTY (no synthesis turn).
+        # The backstop must close it out into a real answer from gathered evidence.
+
+        # T38a: model only ever calls tools -> max-iter with evidence -> ONE forced
+        # synthesis turn produces prose, terminated SYNTHESIZED (not empty).
+        llm38 = make_scripted_llm([
+            json.dumps({"name": "stub_add", "arguments": {"a": 1, "b": 2}}),
+            json.dumps({"name": "stub_add", "arguments": {"a": 3, "b": 4}}),
+        ])  # 2 calls fill iters 0,1; the post-loop synthesis call gets the script-exhausted prose
+        loop38 = ReActLoop(llm_call=llm38, tool_instances={"stub_add": StubAdd()},
+                           max_iterations=2, enable_mirror_lite=False, enable_cot_monitor=False)
+        r38 = await loop38.run("keep adding")
+        check("T38a backstop synthesizes from evidence at the budget ceiling",
+              r38.terminated_reason == TERMINATED_SYNTHESIZED
+              and r38.final_text.strip() != "" and len(r38.tool_calls) == 2,
+              hint=f"{r38.terminated_reason} text={r38.final_text!r} calls={len(r38.tool_calls)}")
+
+        # T38b: a normal early prose answer is STILL a clean FINAL_ANSWER — the
+        # backstop only fires at the ceiling, it never hijacks normal completion.
+        llm38b = make_scripted_llm(["Here is my final answer: 7."])
+        loop38b = ReActLoop(llm_call=llm38b, tool_instances={"stub_add": StubAdd()},
+                            max_iterations=5, enable_mirror_lite=False, enable_cot_monitor=False)
+        r38b = await loop38b.run("just answer")
+        check("T38b normal prose answer stays FINAL_ANSWER (not synthesized)",
+              r38b.terminated_reason == TERMINATED_FINAL_ANSWER and "7" in r38b.final_text,
+              hint=r38b.terminated_reason)
+
+        # T38c: max_iterations=0 -> no evidence gathered -> honest MAX_ITERATIONS,
+        # no spurious synthesis, empty answer (the defensive else branch).
+        loop38c = ReActLoop(llm_call=make_scripted_llm(["x"]), tool_instances={"stub_add": StubAdd()},
+                            max_iterations=0, enable_mirror_lite=False, enable_cot_monitor=False)
+        r38c = await loop38c.run("noop")
+        check("T38c no evidence -> MAX_ITERATIONS, no synthesis, empty",
+              r38c.terminated_reason == TERMINATED_MAX_ITERATIONS
+              and r38c.final_text == "" and len(r38c.tool_calls) == 0,
+              hint=f"{r38c.terminated_reason} text={r38c.final_text!r}")
+
+        # T38d: the PLAN PROGRESS line carries the remaining-budget + batch affordance.
+        loop38d = ReActLoop(llm_call=make_scripted_llm(["x"]), tool_instances=tools_2,
+                            enable_mirror_lite=False, enable_cot_monitor=False)
+        prog38 = loop38d._render_plan_progress(twostep, [], steps_left=3)
+        check("T38d progress nudges remaining steps + one-turn batching",
+              "3 reasoning step(s) left" in prog38 and "ONE turn" in prog38, prog38)
 
         # ---- Report -----------------------------------------------------
         total = passed + len(failed)
