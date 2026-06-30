@@ -96,9 +96,11 @@
 
 ---
 
-## Sub-Phase 4.2: Intent Router ⬜ — Wave 2 (Pass A — THE GATE)
+## Sub-Phase 4.2: Intent Router ✅ COMPLETE (2026-06-29) — Wave 2 (Pass A — THE GATE)
 
 **Goal:** Queries dispatch to the right target, measurably. **Routing label space = specialist codenames** ({engineer, analyst, scientist, memory, general} live today) so every eval label and RoutingLedger row stays valid training data for the Stage 5 Orchestrator adapter.
+
+**GATE PASSED — 84.00% on the frozen 50-query set** (gate ≥80%, local embeddings, ₹0). Per-class: analyst 100%, scientist 100%, engineer 83%, general 70%, memory 70%. Degenerate baselines ~20% (non-vacuous). Reached via ONE principled prototype-enrichment pass (broader domain vocab, NO eval-label changes). 4.2.5 (ModernBERT) NOT needed. Shipped: `brain/router.py` (Classifier + PrototypeClassifier + RoutingPolicy + IntentRouter + `--gate`), `tests/router_eval.jsonl` (frozen), `brain/routing_ledger.py` (Stage-5 corpus), `orchestrator.ask()` `route=`/`--route` wiring (opt-in). KB L416. Convergence gap deferred (KB L415).
 
 | Lesson | Topic | JARVIS Use Case | Command |
 |--------|-------|-----------------|---------|
@@ -188,7 +190,7 @@ Row kept for master-roadmap traceability. **Trigger:** first KB-logged retrieval
 |-----------|------|--------|------------------|
 | 4.0 Cognitive Control Loop | 1 | ✅ Complete (2026-06-12; Gate A 5/5 live on nemotron free tier, ₹0; capture parity + KB distill proven) | 5/5 |
 | 4.1 Route Targets & Per-Model Protocol | 2 (Pass A) | ✅ Complete (W1 + W2: protocol/targets/pool, STEAL #7, llm_client re-homed; live DoD met 2026-06-19 — clean multi-model routing + failover/recover + cost-routing free-over-paid) | 5/5 |
-| 4.2 Intent Router | 2 (Pass A) | ⬜ Not Started | 0/4 (+1 conditional) |
+| 4.2 Intent Router | 2 (Pass A) | ✅ Complete (router.py + frozen eval + RoutingLedger + ask() wiring; **gate PASSED 84%** 2026-06-29; 4.2.5 not needed) | 4/4 |
 | 4.3 Dynamic Target Management | 3 (Pass B) | ⬜ Not Started | 0/3 |
 | 4.4 Response Aggregation | 3 (Pass B) | ⬜ Not Started | 0/3 |
 | 4.5 Epistemic Control | 3 (Pass B) | ⬜ Not Started | 0/3 |
