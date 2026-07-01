@@ -173,16 +173,27 @@ def _render_context(context: Optional[List[Dict[str, str]]]) -> str:
 
 
 def _build_critic_messages(
-    question: str, answer: str, context: Optional[List[Dict[str, str]]]
+    question: str, answer: str, context: Optional[List[Dict[str, str]]],
+    evidence: Optional[str] = None,
 ) -> List[Dict[str, str]]:
     # De-anchoring is STRUCTURAL, not just verbal: derive first, reveal the given
     # answer last. (A single call still sees everything, but order biases the
     # chain-of-thought; a truly blind two-call derive-then-compare is the Wave-2
     # upgrade for the systematic-blind-spot class — see module docstring.)
+    # EVIDENCE (optional): the tool observations the agent actually gathered this
+    # run, so the critic judges against what WAS retrieved instead of blind — it can
+    # then catch "the answer ignores the files it read / only reports process"
+    # rather than falsely claiming the material "was never provided".
+    evidence_block = (
+        ("EVIDENCE THE AGENT GATHERED THIS RUN (tool observations it received — a "
+         "good answer is grounded in and actually USES this):\n"
+         f"{evidence}\n\n") if (evidence or "").strip() else ""
+    )
     user = (
         "CONVERSATION CONTEXT (rules/premises the user established earlier, "
         "oldest first — read for inversions and constraints):\n"
         f"{_render_context(context)}\n\n"
+        f"{evidence_block}"
         f"THE USER'S CURRENT QUESTION:\n{question}\n\n"
         "Work in THREE steps, IN ORDER, before you look at the answer that was "
         "given:\n"
@@ -190,10 +201,14 @@ def _build_critic_messages(
         "(including answer-format inversions like \"say X if true\"). If a "
         "premise is factually false, say so.\n"
         "2. From scratch, DERIVE the correct answer yourself under those rules. "
-        "Write your derived answer out explicitly. Do this WITHOUT regard to any "
-        "answer you are about to be shown.\n"
+        "Write your derived answer out explicitly. If EVIDENCE was gathered above, "
+        "base your derivation on it. Do this WITHOUT regard to any answer you are "
+        "about to be shown.\n"
         "3. ONLY NOW compare your derived answer to the answer that was given "
-        f"below, and judge whether the given answer matches your derivation.\n\n"
+        "below, and judge whether the given answer matches your derivation AND "
+        "actually answers the question — an answer that merely reports process "
+        "(\"steps complete\", \"see above\") or ignores the gathered evidence is "
+        f"FLAWED.\n\n"
         f"THE ANSWER THAT WAS GIVEN (do not read until after step 2):\n{answer}\n\n"
         "Respond with ONLY a JSON object, no prose around it:\n"
         '{"verdict": "SOUND" or "FLAWED", '
@@ -222,6 +237,7 @@ class ReasoningGate:
         question: str,
         answer: str,
         context: Optional[List[Dict[str, str]]] = None,
+        evidence: Optional[str] = None,
     ) -> ReasoningReport:
         """
         Audit ONE answer's reasoning. Returns a ReasoningReport; UNCHECKED is
@@ -244,7 +260,7 @@ class ReasoningGate:
                 VERDICT_UNCHECKED, "", "",
                 ("no critic model wired — reasoning audit disabled",))
 
-        messages = _build_critic_messages(question, answer, context)
+        messages = _build_critic_messages(question, answer, context, evidence)
         try:
             out = self._critic(messages)
             if inspect.isawaitable(out):
@@ -459,6 +475,20 @@ def _run_self_test() -> None:
           "DERIVE the correct answer yourself" in body
           and body.index("DERIVE the correct answer yourself")
           < body.index("THE ANSWER THAT WAS GIVEN"), body[:160])
+
+    # T10e: an EVIDENCE digest is injected and precedes the given answer, so the
+    # critic judges the answer against what was gathered (not blind).
+    msgs_ev = _build_critic_messages(
+        "what is jarvis?", "All plan steps are complete; the answer is above.",
+        None, evidence="[1] CLAUDE.md: JARVIS is a Model-of-Models cognitive orchestrator.")
+    body_ev = msgs_ev[-1]["content"]
+    check("T10e evidence block injected",
+          "EVIDENCE THE AGENT GATHERED" in body_ev
+          and "Model-of-Models cognitive orchestrator" in body_ev, body_ev[:160])
+    check("T10e2 evidence precedes the given answer (still de-anchored)",
+          body_ev.index("EVIDENCE THE AGENT GATHERED") < body_ev.index("THE ANSWER THAT WAS GIVEN"))
+    check("T10f evidence=None -> no evidence block (unchanged blind path)",
+          "EVIDENCE THE AGENT GATHERED" not in body)
 
     # --- fuse() composition ---
     ground_escalate = ConfidenceReport(                       # case A: NO evidence

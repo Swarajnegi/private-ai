@@ -286,7 +286,10 @@ class Mind:
     def _plan_system_prompt(plan: Optional[Plan]) -> str:
         if plan is None or not plan.steps:
             return ""
-        lines = ["Plan to execute — NONE of these steps has run yet. Call each tool "
+        lines = ["Your GOAL is to ANSWER the user's question; the steps below are only "
+                 "the MEANS. When you have gathered enough, reply with the ANSWER ITSELF "
+                 "— never a report of which steps you ran.",
+                 "Plan to execute — NONE of these steps has run yet. Call each tool "
                  "YOURSELF by emitting it; never report a step's result you have not "
                  "received as a tool observation:"]
         for i, step in enumerate(plan.steps.values(), 1):
