@@ -150,6 +150,24 @@ def _evidence_from(mind_result: MindResult) -> List[str]:
     return out
 
 
+def _evidence_digest(items: List[str], per_item: int = 700, total: int = 3500) -> str:
+    """A compact, bounded digest of gathered tool outputs for the reasoning critic
+    so it judges the answer against what WAS retrieved (not blind). Empty when no
+    evidence — critique() then falls back to its blind path unchanged."""
+    if not items:
+        return ""
+    parts: List[str] = []
+    used = 0
+    for i, it in enumerate(items, 1):
+        chunk = f"[{i}] {str(it).strip()[:per_item]}"
+        if used + len(chunk) > total:
+            parts.append(f"… (+{len(items) - i + 1} more observations, truncated)")
+            break
+        parts.append(chunk)
+        used += len(chunk)
+    return "\n".join(parts)
+
+
 def _is_unparsed_answer(text: str) -> bool:
     """True when the 'answer' is not prose but a raw/empty model artifact.
 
@@ -456,7 +474,8 @@ async def ask(
                 rgate = ReasoningGate(client)
                 indep = False
                 critic_desc = f"self-audit: {am or 'scripted'}"
-        rreport = await rgate.critique(question, answer, context=hist)
+        rreport = await rgate.critique(question, answer, context=hist,
+                                       evidence=_evidence_digest(evidence))
         report = fuse(report, rreport, critic_independent=indep)
 
     printer(f"\n  JARVIS  : {answer}")

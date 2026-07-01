@@ -170,6 +170,17 @@ _MAX_TOOLCALL_REPAIRS = 2
 # behaviour is the FLOOR, so a model that refuses to call the tool can never loop.
 _MAX_FINALANSWER_GUARDS = 2
 
+# High-precision tells that a "final answer" is actually a PROCESS/COMPLETION report
+# ("I ran the steps") rather than a substantive answer to the question. Deliberately
+# narrow — phrases a genuine answer to a real question does not contain — so the
+# substantive-answer guard has ~zero false-positives on legitimate replies.
+_PROCESS_REPORT_MARKERS: Tuple[str, ...] = (
+    "the answer is above", "answer is already above", "full answer is above",
+    "the full answer is already", "plan steps are complete", "steps are now complete",
+    "all steps are complete", "have all been called", "all been called and",
+    "nothing new to add", "nothing to add", "already delivered above",
+)
+
 # Placeholder values by JSON type, for synthesizing a concrete example tool call
 # in the protocol (STEAL #13 — few-shot the exact field names so a weak model
 # copies them verbatim instead of inventing file_name/file_path/query).
@@ -357,6 +368,7 @@ class ReActLoop:
         repair_attempts = 0  # botched-tool-call (parse) repair budget (see _MAX_TOOLCALL_REPAIRS)
         validation_repairs = 0  # consecutive no-progress validation failures (STEAL #13)
         finalanswer_guards = 0  # plan-aware "you skipped a tool" re-prompts (see _MAX_FINALANSWER_GUARDS)
+        answer_guards = 0  # "you reported process instead of answering" re-prompts (goal-substitution)
 
         try:
             for iteration in range(self._max_iterations):
@@ -491,6 +503,27 @@ class ReActLoop:
                             f"the tool(s) now. If you genuinely cannot or they are "
                             f"unnecessary, say so explicitly — never describe a "
                             f"result you did not receive.")})
+                        continue
+
+                    # Substantive-answer guard: a final message that REPORTS PROCESS
+                    # ("all plan steps are complete", "the answer is above", "nothing
+                    # to add") instead of ANSWERING the question is goal-substitution
+                    # — the model optimized "did I run the steps?" over "did I answer?"
+                    # (live repro 2026-07-01: read 1 file, ran cognitive_mirror, then
+                    # declared done with no description of the subject). Re-prompt once
+                    # to answer directly; bounded, floor = accept (never loops).
+                    if (self._looks_like_process_report(parsable_raw)
+                            and answer_guards < _MAX_FINALANSWER_GUARDS):
+                        answer_guards += 1
+                        await self._publish(StepType.ERROR, {
+                            "reason": "final_answer_is_process_report",
+                            "attempt": answer_guards,
+                        })
+                        messages.append({"role": "user", "content": (
+                            f"That describes your PROCESS, not the answer. The user "
+                            f"asked: \"{query}\". Answer it DIRECTLY and substantively "
+                            f"NOW using the tool observations above — state the answer "
+                            f"itself, not a summary of which steps you ran.")})
                         continue
 
                     # Genuine prose => final answer reached.
@@ -710,6 +743,14 @@ class ReActLoop:
                 out.append(s.tool_name)
         return out
 
+    @staticmethod
+    def _looks_like_process_report(text: str) -> bool:
+        """True if the prose reports on the agent's PROCESS ('steps complete', 'answer
+        is above') instead of answering — the goal-substitution tell. High-precision
+        substring match; a genuine answer to a real question won't contain these."""
+        low = (text or "").lower()
+        return any(m in low for m in _PROCESS_REPORT_MARKERS)
+
     def _render_plan_progress(
         self, plan: Optional[Plan],
         executed: List[Tuple[ToolCall, ToolResult]],
@@ -744,6 +785,8 @@ class ReActLoop:
                 line += (f" You have {steps_left} reasoning step(s) left — you MAY call "
                          "multiple independent read tools in ONE turn (a JSON array of "
                          "calls) to finish within budget.")
+            line += (" When done, ANSWER THE USER'S QUESTION directly from what you read "
+                     "— state the answer itself, NOT a summary of which steps you ran.")
         return line
 
     def _render_tool_protocol(self) -> str:
@@ -1966,6 +2009,52 @@ if __name__ == "__main__":
         prog38 = loop38d._render_plan_progress(twostep, [], steps_left=3)
         check("T38d progress nudges remaining steps + one-turn batching",
               "3 reasoning step(s) left" in prog38 and "ONE turn" in prog38, prog38)
+
+        # ---- T39: substantive-answer guard (goal-substitution fix) --------------
+        # Live repro 2026-07-01: the model emitted a COMPLETION REPORT ("all plan
+        # steps complete... the answer is above") instead of answering. The guard
+        # must re-prompt for a real answer, not accept the process report.
+
+        # T39a: process-report final message -> re-prompt -> real answer accepted.
+        llm39 = make_scripted_llm([
+            "All plan steps are now complete; the full answer is above. What's next?",
+            "JARVIS is a private Model-of-Models cognitive orchestrator.",
+        ])
+        loop39 = ReActLoop(llm_call=llm39, tool_instances={},
+                           enable_mirror_lite=False, enable_cot_monitor=False)
+        r39 = await loop39.run("what is jarvis about")
+        check("T39a process report re-prompted, real answer then accepted",
+              r39.terminated_reason == TERMINATED_FINAL_ANSWER
+              and "cognitive orchestrator" in r39.final_text
+              and "process report" not in r39.final_text.lower(), r39.final_text)
+        check("T39a2 the re-prompt was injected",
+              any("describes your PROCESS" in m["content"] for m in r39.messages if m["role"] == "user"))
+
+        # T39b: a genuine answer is NOT re-prompted (no false-positive).
+        llm39b = make_scripted_llm(["JARVIS is a cognitive orchestrator with a memory layer."])
+        loop39b = ReActLoop(llm_call=llm39b, tool_instances={},
+                            enable_mirror_lite=False, enable_cot_monitor=False)
+        r39b = await loop39b.run("what is jarvis")
+        check("T39b genuine answer accepted immediately (no false-positive)",
+              r39b.terminated_reason == TERMINATED_FINAL_ANSWER and r39b.iterations_used == 1
+              and not any("describes your PROCESS" in m["content"] for m in r39b.messages), r39b.final_text)
+
+        # T39c: unrelenting process reports -> guard budget exhausts -> accept (floor).
+        llm39c = make_scripted_llm(["the answer is above"] * 6)
+        loop39c = ReActLoop(llm_call=llm39c, tool_instances={}, max_iterations=6,
+                            enable_mirror_lite=False, enable_cot_monitor=False)
+        r39c = await loop39c.run("answer me")
+        check("T39c guard budget bounded — accepted after the floor, no infinite loop",
+              r39c.terminated_reason == TERMINATED_FINAL_ANSWER
+              and r39c.iterations_used == _MAX_FINALANSWER_GUARDS + 1,
+              hint=f"{r39c.terminated_reason} iters={r39c.iterations_used}")
+
+        # T39d: the detector is high-precision (marker vs genuine answer).
+        check("T39d detector flags a process report",
+              loop39._looks_like_process_report("Nothing new to add; the answer is above."))
+        check("T39d2 detector passes a genuine answer",
+              not loop39._looks_like_process_report(
+                  "JARVIS is a Model-of-Models orchestrator with Brain, Memory and Agent layers."))
 
         # ---- Report -----------------------------------------------------
         total = passed + len(failed)
