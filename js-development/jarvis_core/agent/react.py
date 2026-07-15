@@ -103,6 +103,7 @@ from collections import Counter
 from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable, Dict, List, Optional, Tuple, Union
 
+from jarvis_core.config import JARVIS_ROOT
 from jarvis_core.agent.memory_manager import MemoryItem, MemoryManager, TierLevel
 from jarvis_core.agent.monitor import InstabilityReport, MetaR1Monitor
 from jarvis_core.agent.observation import (
@@ -169,6 +170,12 @@ _MAX_TOOLCALL_REPAIRS = 2
 # Re-prompt it this many times before accepting the prose — today's accept-any-prose
 # behaviour is the FLOOR, so a model that refuses to call the tool can never loop.
 _MAX_FINALANSWER_GUARDS = 2
+
+# The discover -> consume tool pair whose relationship the unread-search-results
+# guard checks (below). Named literally: this check is specific to this pair, not
+# a generic mechanism — see _unread_search_paths.
+_SEARCH_TOOL_NAME = "file_search"
+_READ_TOOL_NAME = "file_read"
 
 # High-precision tells that a "final answer" is actually a PROCESS/COMPLETION report
 # ("I ran the steps") rather than a substantive answer to the question. Deliberately
@@ -368,6 +375,7 @@ class ReActLoop:
         repair_attempts = 0  # botched-tool-call (parse) repair budget (see _MAX_TOOLCALL_REPAIRS)
         validation_repairs = 0  # consecutive no-progress validation failures (STEAL #13)
         finalanswer_guards = 0  # plan-aware "you skipped a tool" re-prompts (see _MAX_FINALANSWER_GUARDS)
+        unread_search_guards = 0  # "you found files but read none of them" re-prompts
         answer_guards = 0  # "you reported process instead of answering" re-prompts (goal-substitution)
 
         try:
@@ -503,6 +511,32 @@ class ReActLoop:
                             f"the tool(s) now. If you genuinely cannot or they are "
                             f"unnecessary, say so explicitly — never describe a "
                             f"result you did not receive.")})
+                        continue
+
+                    # Unread-search-results guard: file_search found SPECIFIC paths
+                    # but file_read never opened ANY of them (live repro 2026-07-01:
+                    # found 8 workflow files, then read two UNRELATED files and
+                    # answered from one of those instead — real content, wrong
+                    # source). Unlike the marker-based guards below, this is fully
+                    # MECHANICAL: compare resolved paths, no keyword-guessing.
+                    # Conservative by design (mirrors _unfired_plan_tools): fires
+                    # only on ZERO overlap; the instant one found file is read, it
+                    # never fires again this run.
+                    unread = self._unread_search_paths(result.tool_calls)
+                    if unread and unread_search_guards < _MAX_FINALANSWER_GUARDS:
+                        unread_search_guards += 1
+                        shown = ", ".join(unread[:10])
+                        more = f" (+{len(unread) - 10} more)" if len(unread) > 10 else ""
+                        await self._publish(StepType.ERROR, {
+                            "reason": "final_answer_unread_search_results",
+                            "attempt": unread_search_guards,
+                            "unread_count": len(unread),
+                        })
+                        messages.append({"role": "user", "content": (
+                            f"[INCOMPLETE] file_search found {len(unread)} file(s) you "
+                            f"have NOT read: {shown}{more}. You cannot answer from their "
+                            f"content until you file_read the ones relevant to the "
+                            f"question. Read them now before answering.")})
                         continue
 
                     # Substantive-answer guard: a final message that REPORTS PROCESS
@@ -742,6 +776,56 @@ class ReActLoop:
             if s.tool_name not in fired and s.tool_name not in out:
                 out.append(s.tool_name)
         return out
+
+    @staticmethod
+    def _search_result_paths(executed: List[Tuple[ToolCall, ToolResult]]) -> set[str]:
+        """Absolute, resolved paths returned by every successful file_search call
+        this run (fs_search.py returns paths relative to JARVIS_ROOT). Malformed
+        output is skipped, never raised — a guard must not crash the loop."""
+        found: set[str] = set()
+        for tc, tr in executed:
+            if tc.name != _SEARCH_TOOL_NAME or getattr(tr, "error", None):
+                continue
+            matches = (tr.output or {}).get("matches") if isinstance(tr.output, dict) else None
+            for m in matches or []:
+                rel = m.get("path") if isinstance(m, dict) else None
+                if not rel:
+                    continue
+                try:
+                    found.add(str((JARVIS_ROOT / rel).resolve()))
+                except (OSError, ValueError):
+                    continue
+        return found
+
+    @staticmethod
+    def _read_paths(executed: List[Tuple[ToolCall, ToolResult]]) -> set[str]:
+        """Absolute paths every successful file_read call actually opened this run
+        (fs.py returns the fully resolved path in output["path"])."""
+        read: set[str] = set()
+        for tc, tr in executed:
+            if tc.name != _READ_TOOL_NAME or getattr(tr, "error", None):
+                continue
+            p = (tr.output or {}).get("path") if isinstance(tr.output, dict) else None
+            if p:
+                read.add(str(p))
+        return read
+
+    def _unread_search_paths(
+        self, executed: List[Tuple[ToolCall, ToolResult]],
+    ) -> List[str]:
+        """Sorted list of file_search matches NEVER opened via file_read. Empty
+        (no fire) if no search this run returned a match, OR at least one found
+        path has already been read — deliberately modest (see class docstring in
+        the guard call site): a broad search can return dozens of incidental
+        matches, so this never demands ALL of them be read, only that discovery
+        wasn't entirely ignored."""
+        search_found = self._search_result_paths(executed)
+        if not search_found:
+            return []
+        already_read = self._read_paths(executed)
+        if search_found & already_read:
+            return []
+        return sorted(search_found)
 
     @staticmethod
     def _looks_like_process_report(text: str) -> bool:
@@ -2055,6 +2139,127 @@ if __name__ == "__main__":
         check("T39d2 detector passes a genuine answer",
               not loop39._looks_like_process_report(
                   "JARVIS is a Model-of-Models orchestrator with Brain, Memory and Agent layers."))
+
+        # ---- T40: unread-search-results guard (deterministic, path-level) -------
+        # Live repro 2026-07-01: file_search found 8 workflow files; file_read opened
+        # TWO different files never among the results; the model answered from one
+        # of those instead. This guard is purely mechanical (resolved-path set
+        # comparison) — no keyword-guessing.
+
+        rel_paths = ["fake_workflows/a.md", "fake_workflows/b.md", "fake_workflows/c.md"]
+        abs_paths = [str((JARVIS_ROOT / p).resolve()) for p in rel_paths]
+
+        # --- direct unit tests on the helpers (no LLM loop needed) ---
+        loop40 = ReActLoop(llm_call=make_scripted_llm(["x"]), tool_instances={},
+                           enable_mirror_lite=False, enable_cot_monitor=False)
+
+        def fake_pair(name, output, error=None):
+            return (ToolCall(name=name, arguments={}),
+                    ToolResult(output=output, error=error))
+
+        search_ok = fake_pair("file_search", {"matches": [{"path": p} for p in rel_paths]})
+        read_hit = fake_pair("file_read", {"path": abs_paths[1], "content": "x"})
+        read_miss = fake_pair("file_read", {"path": str((JARVIS_ROOT / "elsewhere.md").resolve()), "content": "x"})
+        search_err = fake_pair("file_search", None, error="boom")
+
+        check("T40a helper: search-with-no-read -> all 3 unread",
+              loop40._unread_search_paths([search_ok]) == sorted(abs_paths),
+              loop40._unread_search_paths([search_ok]))
+        check("T40b helper: search + a matching read -> empty (satisfied)",
+              loop40._unread_search_paths([search_ok, read_hit]) == [])
+        check("T40c helper: search + a NON-matching read -> still unread (the exact repro)",
+              loop40._unread_search_paths([search_ok, read_miss]) == sorted(abs_paths),
+              loop40._unread_search_paths([search_ok, read_miss]))
+        check("T40d helper: no search at all -> empty, guard inapplicable",
+              loop40._unread_search_paths([read_hit]) == [])
+        check("T40e helper: errored search result ignored, no crash",
+              loop40._unread_search_paths([search_err]) == [])
+
+        # --- loop-level: the guard actually fires inside run() ---
+        class _SearchIn(ToolInput):
+            query: str = Field(default="", description="ignored")
+
+        class _ReadIn(ToolInput):
+            path: str = Field(description="path to read")
+
+        class StubFileSearch(Tool):
+            name = "file_search"
+            description = "stub search"
+            input_schema = _SearchIn
+
+            @property
+            def is_concurrency_safe(self) -> bool:
+                return True
+
+            async def invoke(self, tool_input: _SearchIn) -> ToolResult:
+                return ToolResult(output={"matches": [{"path": p} for p in rel_paths]})
+
+        class StubFileRead(Tool):
+            name = "file_read"
+            description = "stub read"
+            input_schema = _ReadIn
+
+            @property
+            def is_concurrency_safe(self) -> bool:
+                return True
+
+            async def invoke(self, tool_input: _ReadIn) -> ToolResult:
+                return ToolResult(output={"path": tool_input.path, "content": "stub content"})
+
+        fs_tools = {"file_search": StubFileSearch(), "file_read": StubFileRead()}
+
+        # T40f: search finds 3, model tries to answer having read NONE -> guard
+        # fires -> re-prompt -> model then reads one of the found paths -> accepted.
+        llm40f = make_scripted_llm([
+            json.dumps({"name": "file_search", "arguments": {"query": "x"}}),
+            "Here is what I found, summarized without reading any of it.",
+            json.dumps({"name": "file_read", "arguments": {"path": abs_paths[0]}}),
+            "Now grounded in what I actually read: the real answer.",
+        ])
+        loop40f = ReActLoop(llm_call=llm40f, tool_instances=fs_tools,
+                            enable_mirror_lite=False, enable_cot_monitor=False)
+        r40f = await loop40f.run("read the fake workflows and tell me about them")
+        check("T40f unread-results guard fires then accepts after a real read",
+              r40f.terminated_reason == TERMINATED_FINAL_ANSWER
+              and "actually read" in r40f.final_text, r40f.final_text)
+        check("T40f2 the [INCOMPLETE] unread-results re-prompt was injected",
+              any("file_search found" in m["content"] and "have NOT" in m["content"]
+                  for m in r40f.messages if m["role"] == "user"))
+
+        # T40g: model reads one of the found paths FIRST -> no false positive,
+        # accepted immediately, guard message never appears.
+        llm40g = make_scripted_llm([
+            json.dumps({"name": "file_search", "arguments": {"query": "x"}}),
+            json.dumps({"name": "file_read", "arguments": {"path": abs_paths[2]}}),
+            "Grounded answer using the file I read.",
+        ])
+        loop40g = ReActLoop(llm_call=llm40g, tool_instances=fs_tools,
+                            enable_mirror_lite=False, enable_cot_monitor=False)
+        r40g = await loop40g.run("read the fake workflows")
+        check("T40g no false-positive when a found path IS read",
+              r40g.terminated_reason == TERMINATED_FINAL_ANSWER
+              and not any("file_search found" in m["content"] for m in r40g.messages if m["role"] == "user"),
+              r40g.final_text)
+
+        # T40h: no file_search call at all -> guard never applies (plain Q&A).
+        llm40h = make_scripted_llm(["Just a direct answer, no search needed."])
+        loop40h = ReActLoop(llm_call=llm40h, tool_instances=fs_tools,
+                            enable_mirror_lite=False, enable_cot_monitor=False)
+        r40h = await loop40h.run("trivial question")
+        check("T40h no search -> guard inapplicable, immediate accept",
+              r40h.terminated_reason == TERMINATED_FINAL_ANSWER and r40h.iterations_used == 1)
+
+        # T40i: unrelenting non-compliance -> guard budget bounded -> floor=accept.
+        llm40i = make_scripted_llm([
+            json.dumps({"name": "file_search", "arguments": {"query": "x"}}),
+        ] + ["Still haven't read anything, here is my summary anyway."] * 5)
+        loop40i = ReActLoop(llm_call=llm40i, tool_instances=fs_tools, max_iterations=6,
+                            enable_mirror_lite=False, enable_cot_monitor=False)
+        r40i = await loop40i.run("read the fake workflows")
+        check("T40i guard budget bounded — accepted after the floor, no infinite loop",
+              r40i.terminated_reason == TERMINATED_FINAL_ANSWER
+              and r40i.iterations_used == 1 + _MAX_FINALANSWER_GUARDS + 1,
+              hint=f"{r40i.terminated_reason} iters={r40i.iterations_used}")
 
         # ---- Report -----------------------------------------------------
         total = passed + len(failed)
