@@ -106,7 +106,7 @@
 ### Stage 4.B — Specialists (Pass B)
 | # | Sub-Phase | Status |
 |---|-----------|--------|
-| 4.3 | Dynamic Target Management (rolling stats, budget governor, catalog drift) | ⬜ |
+| 4.3 | Dynamic Target Management (rolling stats, budget governor, catalog drift) | ✅ Complete (2026-07-16) |
 | 4.4 | Response Aggregation (escalation-only fan-out, attributed synthesis) | ⬜ |
 | 4.5 | Epistemic Control (conflict detection, fail-closed judge, human escalation) | ⬜ |
 | 4.6 | GraphRAG | ⏭ DEFERRED — trigger: first KB-logged multi-hop retrieval failure → `jarvis_core/memory/graph.py` |

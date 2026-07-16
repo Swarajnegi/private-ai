@@ -348,12 +348,13 @@ class CostTracker:
         input_tokens: int,
         output_tokens: int,
         cached_tokens: int = 0,
+        cost_usd: Optional[float] = None,
     ) -> CostRecord:
         """
         Record a single LLM call and accumulate its cost.
 
         EXECUTION FLOW:
-        1. Compute cost via estimate_cost() pure function.
+        1. Cost = the caller-supplied cost_usd if given, else estimate_cost().
         2. Create CostRecord and append to ledger.
         3. Add cost to running total.
         4. Return the record for caller inspection.
@@ -363,11 +364,18 @@ class CostTracker:
             input_tokens:  Total input tokens sent.
             output_tokens: Total output tokens received.
             cached_tokens: How many input tokens were cache hits.
+            cost_usd:      Pre-computed real cost. When a caller already priced
+                           the call against LIVE rates (OpenRouterClient does,
+                           from the /models catalog), pass it so the running
+                           total is accurate rather than re-derived from the
+                           STATIC PRICING dict — which may not know every model
+                           and would silently under-count. None -> estimate.
 
         Returns:
             The CostRecord created for this call.
         """
-        cost = estimate_cost(model, input_tokens, output_tokens, cached_tokens)
+        cost = (cost_usd if cost_usd is not None
+                else estimate_cost(model, input_tokens, output_tokens, cached_tokens))
         rec = CostRecord(
             model=model,
             input_tokens=input_tokens,
@@ -402,6 +410,21 @@ class CostTracker:
             return False
         est_cost = estimate_cost(model, estimated_input, estimated_output)
         return (self._total_usd + est_cost) > self.budget_usd
+
+    def should_downshift(self, threshold: float = 0.9) -> bool:
+        """
+        Whether cumulative spend has crossed a fraction of the budget ceiling —
+        the graduated "approaching the limit, route cheaper" signal (Stage 4.3.2
+        budget governor). Distinct from would_exceed (which pre-checks ONE
+        hypothetical call): this is a running-total soft line the pool reads at
+        target-selection time to bench paid targets before the hard ceiling hits.
+
+        Returns False if no budget is set (unlimited mode — nothing to downshift
+        toward).
+        """
+        if self.budget_usd is None:
+            return False
+        return self._total_usd >= threshold * self.budget_usd
 
     def summary(self) -> Dict[str, Any]:
         """
@@ -557,6 +580,29 @@ if __name__ == "__main__":
     kimi_cost = estimate_cost("kimi-k2.6-local", 10000, 5000)
     assert kimi_cost == 0.0, f"Kimi K2.6 local should cost $0/token, got ${kimi_cost}"
     print(f"\n  [OK] kimi-k2.6-local: 10K input + 5K output = ${kimi_cost:.2f} (GPU-hour costed separately)")
+
+    # -- Stage 4.3.2: should_downshift (graduated budget signal) -----------
+
+    dt = CostTracker(budget_usd=1.0)
+    assert dt.should_downshift() is False, "empty tracker must not downshift"
+    dt.record("m", 0, 0, cost_usd=0.5)
+    assert dt.should_downshift() is False, f"50% spend must not trip 90% threshold (got {dt.total_usd})"
+    dt.record("m", 0, 0, cost_usd=0.45)  # now 0.95 total
+    assert dt.should_downshift() is True, f"95% spend must trip the 90% default (got {dt.total_usd})"
+    assert dt.should_downshift(threshold=0.99) is False, "0.95 < 0.99 threshold must not trip"
+    assert CostTracker(budget_usd=None).should_downshift() is False, "no budget -> never downshift"
+    print("\n  [OK] should_downshift: off<90%, on>=90%, threshold-tunable, no-budget-safe")
+
+    # -- Stage 4.3.2: record(cost_usd=) overrides static PRICING -----------
+
+    ov = CostTracker(budget_usd=None)
+    # A model absent from the static PRICING dict estimates to 0.0, but a caller
+    # with LIVE pricing can force the real cost so the aggregate is accurate.
+    unknown_est = estimate_cost("some-unlisted-live-model", 1000, 500)
+    ov.record("some-unlisted-live-model", 1000, 500, cost_usd=0.0123)
+    assert ov.total_usd == 0.0123, f"cost_usd override must set the real total (got {ov.total_usd})"
+    assert unknown_est != 0.0123, "sanity: the static estimate differs from the live override"
+    print(f"  [OK] record(cost_usd=) override: static est ${unknown_est:.4f} -> live ${ov.total_usd:.4f}")
 
     print("\n" + "=" * 60)
     print("  All smoke tests passed.")

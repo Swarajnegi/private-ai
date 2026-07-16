@@ -35,30 +35,41 @@ In this repo you are **Chief Systems Architect & Strategic Co-Founder** for JARV
   - 2.5.4 ColBERT — concept learned, implementation skipped (storage tradeoff)
   - 2.5.5–2.5.7 ✅ — Evaluation Metrics + RAGAS + LLM-as-Judge & Tracing all in KB Procedurals
   - 2.5.8 ✅ — `scripts/kb_compact.py` shipped + Final Boss `--force` executed (KB 222 → 219)
-- **Stage 3 — Agent Framework: `jarvis_core/agent/` from scratch ⬅️ CURRENT.** Per Decision 2026-05-13 (reverses 2026-05-01 OpenClaude delegation): JARVIS owns its agent runtime.
-  - **3.0 Entry Sprint ✅ COMPLETE (2026-05-16)** — `registry.py` (STEAL #1) + `cost.py` (STEAL #2 + STEAL #11) + `tool.py` (Tool ABC with `is_concurrency_safe` flag preset for STEAL #8).
-  - **3.1 Function Calling & Structured Output ✅ COMPLETE (2026-05-18)** — `parser.py` + `errors.py` + `state.py` (Cognitive_State_Update + UserTelemetryState) + `telemetry.py` (TextTelemetry analyzers) + `scripts/exercise_3_1.py`.
-  - **3.2 Tool Design & Registration ⬅️ ACTIVE** — build 10+ composable tools wrapping `jarvis_core/memory/` primitives + calculator + web search + code exec + file I/O + shell on the 3.0 registry.
-  - Then: 3.3 Planning, 3.4 ReAct + MIRROR-lite + CoT loop detector + STEAL #8/#9/#10, 3.5 MemGPT + heartbeat consolidation + /compact (STEAL #12). Timeline: 10–14 weeks per estimate, currently ~5× ahead of pace. Pre-3.5 dep: `kb_compact.py` exclusion rule for `heartbeat-emitted` tag (already landed in `scripts/kb_compact.py`).
+- **Stage 3 — Agent Framework ✅ COMPLETE** (`jarvis_core/agent/`; Decision 2026-05-13 — JARVIS owns its agent runtime, reverses 2026-05-01 OpenClaude delegation)
+  - 3.0 Entry Sprint ✅ (2026-05-16) — `registry.py` + `cost.py` + `tool.py`
+  - 3.1 Function Calling & Structured Output ✅ (2026-05-18) — `parser.py` + `errors.py` + `state.py` + `telemetry.py`
+  - 3.2 Tool Design & Registration ✅ — 18 tools registered incl. Phase C cognitive substrate
+  - 3.3 Planning & Decomposition ✅ — `plan.py` + `executor.py` (DAG, Kahn)
+  - 3.4 ReAct Pattern ✅ — `react.py` + `trace.py` + `monitor.py` + `reflection.py`
+  - 3.5 MemGPT (heartbeat + sleep-time consolidation) ✅ (2026-06-10) — **Stage 3 Final Boss 7/7** (mind.py), **First Light 2026-06-11** (llm_client.py)
+- **Stage 4 — Multi-Model Orchestration (`jarvis_core/brain/`) ⬅️ CURRENT.** ₹0 stage — OpenRouter free tier + local CPU only, no RunPod spend until Stage 5 entry (Decision 2026-06-12).
+  - 4.0 Cognitive Control Loop ✅ (2026-06-12, Gate A 5/5 live)
+  - 4.1 Route Targets & Per-Model Protocol ✅ (Wave 1 2026-06-15, Wave 2 LIVE DoD 2026-06-19) — `model_profiles.py` + `protocol.py` + `targets.py` + `model_pool.py` (STEAL #7 failover)
+  - 4.2 Intent Router ✅ COMPLETE (2026-06-29) — 84% on frozen 50-query gate, Pass A→B gate cleared — `router.py` + `routing_ledger.py`
+  - 4.5 Reasoning Gate Wave 1 + independent critic ✅ (built ahead of sequence)
+  - ReAct hardening arc (2026-07-13→15, off-roadmap, blocking-priority) — 5 live-probe failures fixed in `agent/react.py`: budget death, plan-confabulation, convergence death, goal-substitution, unread-search-results. 112/112 tests.
+  - **⬅️ NOW: 4.3 Dynamic Target Management** — rolling stats persistence, budget governor (`CostTracker.would_exceed`), catalog sync & drift. Then 4.4 Response Aggregation, 4.5 Wave 2, 4.6 GraphRAG (deferred, trigger-gated).
 - Master roadmap: [js-learning/JARVIS_MASTER_ROADMAP.md](js-learning/JARVIS_MASTER_ROADMAP.md)
-- Production code: [js-development/jarvis_core/memory/](js-development/jarvis_core/memory/) — full memory stack production-grade; Brain (Stage 4 = Kimi K2.6) and Body (Stage 6) are placeholders
+- Production code: [js-development/jarvis_core/memory/](js-development/jarvis_core/memory/), [agent/](js-development/jarvis_core/agent/), [brain/](js-development/jarvis_core/brain/) — Memory + Agent layers production-grade; Brain mid-build; Body (Stage 6) still a placeholder
 
 ---
 
 ## Workflow protocols (Antigravity-native; manually applied here)
 
-The 8 protocols in [.agent/workflows/](.agent/workflows/) are operational documents, not commands in Claude Code. When the user types `/learn`, `/memory`, `/research`, `/dev`, `/architecture-review`, `/route-model`, `/next`, or `/master-planner` and the local command system rejects it, **read the corresponding `.md` file and apply its protocol manually**. Don't push back on the unrecognized command; quietly run the protocol.
+The 8 protocols in [.agent/workflows/](.agent/workflows/) are operational documents, not commands in Claude Code. **Trigger is shape, not spelling:** apply the matching protocol whenever a request fits its "Fires on" column below — whether or not the user typed the literal slash. Read the `.md` file and run its ACTUAL content (STEP 0 gate, numbered response sections, closing `💾 Memory suggestion` line, closing `🧠 Cognitive scan` block) — don't reconstruct it from memory of what the workflow "is about." If the user does type a slash and Claude Code rejects it as unrecognized, don't push back; quietly run the protocol.
 
-| Slash | Workflow file | Purpose |
-|---|---|---|
-| `/learn` | [learn.md](.agent/workflows/learn.md) | Teach a concept in Component / Math-Theory / Systems mode with mandatory cognitive scan |
-| `/memory` | [memory.md](.agent/workflows/memory.md) | Persist Technical Truths + User Cognitive Patterns to knowledge_base.jsonl |
-| `/research` | [research.md](.agent/workflows/research.md) | Extract actionable engineering value from a paper |
-| `/dev` | [dev.md](.agent/workflows/dev.md) | Production-grade code with design review + JARVIS layer alignment |
-| `/architecture-review` | [architecture-review.md](.agent/workflows/architecture-review.md) | Stress-test a design (coupling, state, complexity, latency) |
-| `/route-model` | [route-model.md](.agent/workflows/route-model.md) | Pick optimal LLM from `model_catalog.json` |
-| `/next` | [next.md](.agent/workflows/next.md) | Verify progress through stages — gate hollow advancement |
-| `/master-planner` | [master-planner.md](.agent/workflows/master-planner.md) | Convert vague goal into strict architectural battle plan |
+**Confirmed gap (2026-07-15):** prior wording scoped this to literal `/command` typing only, so dev work done conversationally ("do it", "build the guard") never triggered `dev.md` at all — its Design Review verdict, Stress Test bullets, Debug Hooks, and closing rituals were silently skipped. No discretion carve-out sits on top of shape-matching — each workflow's own stated scope already is the calibration.
+
+| Slash | Workflow file | Purpose | Fires on |
+|---|---|---|---|
+| `/learn` | [learn.md](.agent/workflows/learn.md) | Teach a concept in Component / Math-Theory / Systems mode with mandatory cognitive scan | explaining any AI/ML/Systems/component concept |
+| `/memory` | [memory.md](.agent/workflows/memory.md) | Persist Technical Truths + User Cognitive Patterns to knowledge_base.jsonl | already continuous (see Memory hygiene below) — not a special case |
+| `/research` | [research.md](.agent/workflows/research.md) | Extract actionable engineering value from a paper | reading a paper/article for engineering value |
+| `/dev` | [dev.md](.agent/workflows/dev.md) | Production-grade code with design review + JARVIS layer alignment | writing/generating code destined for `jarvis_core/` or `scripts/` |
+| `/architecture-review` | [architecture-review.md](.agent/workflows/architecture-review.md) | Stress-test a design (coupling, state, complexity, latency) | proposing/evaluating a design or interface shape before implementation |
+| `/route-model` | [route-model.md](.agent/workflows/route-model.md) | Pick optimal LLM from `model_catalog.json` | selecting a model/target for a task or workload |
+| `/next` | [next.md](.agent/workflows/next.md) | Verify progress through stages — gate hollow advancement | any claim that a lesson/sub-phase/stage is complete |
+| `/master-planner` | [master-planner.md](.agent/workflows/master-planner.md) | Convert vague goal into strict architectural battle plan | translating a vague/open-ended goal into concrete steps |
 
 ---
 
