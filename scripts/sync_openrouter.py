@@ -1,9 +1,19 @@
 import urllib.request
 import json
 import os
+import sys
 import time
+from pathlib import Path
 
-CATALOG_PATH = r"E:\J.A.R.V.I.S\jarvis_data\model_catalog.json"
+# NOTE (Stage 4.3.3): catalog path now resolves cross-platform via jarvis_core.config
+# (it used to hardcode E:\...) -- the same fix suggest_model.py got earlier this session.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "js-development"))
+try:
+    from jarvis_core.config import MODEL_CATALOG_PATH
+    CATALOG_PATH = str(MODEL_CATALOG_PATH)
+except Exception:
+    CATALOG_PATH = str(Path(__file__).resolve().parents[1] / "jarvis_data" / "model_catalog.json")
+
 API_URL = "https://openrouter.ai/api/v1/models"
 
 def fetch_models():
@@ -76,13 +86,37 @@ def process_catalog(raw_models):
         
     return processed
 
+def report_vanished(processed_models):
+    """Stage 4.3.3: diff against whatever catalog is already on disk BEFORE the
+    overwrite, and print any model id that existed before but doesn't now. Free
+    OpenRouter models churn weekly; a silent overwrite hides that churn from the
+    operator running this manually. Log-only -- this script stays a manual,
+    human-run tool (no cron), so the fix is visibility, not automation. Runtime
+    vanished-model handling (a model that 404s mid-session) is a SEPARATE,
+    mechanical fix in brain/model_pool.py's failover walk, not this script."""
+    if not os.path.exists(CATALOG_PATH):
+        return  # first run ever -- nothing to diff against
+    try:
+        old = json.loads(Path(CATALOG_PATH).read_text(encoding="utf-8"))
+        old_ids = {m.get("id") for m in old if m.get("id")}
+    except Exception:
+        return  # unreadable/corrupt prior catalog -- diffing it would be noise, not signal
+    new_ids = {m.get("id") for m in processed_models if m.get("id")}
+    vanished = sorted(old_ids - new_ids)
+    if vanished:
+        print(f"[!] {len(vanished)} model(s) vanished from the live catalog since last sync:")
+        for mid in vanished:
+            print(f"      - {mid}")
+
+
 def write_catalog(processed_models):
     """Write the compressed data to the persistent cognitive store."""
+    report_vanished(processed_models)
     os.makedirs(os.path.dirname(CATALOG_PATH), exist_ok=True)
-    
+
     with open(CATALOG_PATH, 'w', encoding='utf-8') as f:
         json.dump(processed_models, f, indent=2)
-    
+
     print(f"[✓] Persisted stripped catalog to {CATALOG_PATH}")
 
 if __name__ == "__main__":

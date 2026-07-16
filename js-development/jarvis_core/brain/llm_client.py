@@ -216,11 +216,20 @@ class OpenRouterClient:
         in_price, out_price = pricing.get(self._model, (0.0, 0.0))
 
         est_in_tokens = sum(len(m.get("content", "")) for m in messages) // _CHARS_PER_TOKEN
-        projected = self._spend_usd + est_in_tokens * in_price + _EST_OUTPUT_TOKENS * out_price
+        # Stage 4.3.2: when a SHARED CostTracker is present (one instance threaded
+        # across every pool target), gate on AGGREGATE spend, not this client's
+        # own. Without it, failover A->B resets B's per-client _spend_usd to 0 and
+        # the sum across peers could quietly exceed budget even though no single
+        # client did. tracker.total_usd already includes this client's prior
+        # recorded calls, so it IS the running aggregate. No tracker -> byte-
+        # identical to the old per-client gate.
+        spent_base = self._tracker.total_usd if self._tracker is not None else self._spend_usd
+        projected = spent_base + est_in_tokens * in_price + _EST_OUTPUT_TOKENS * out_price
         if self._budget is not None and projected > self._budget:
             raise LLMBudgetExceeded(
                 f"projected ${projected:.4f} > budget ${self._budget:.2f} "
-                f"(spent ${self._spend_usd:.4f} over {self._calls} calls)")
+                f"(aggregate spent ${spent_base:.4f}; this client ${self._spend_usd:.4f} "
+                f"over {self._calls} calls)")
 
         payload = {"model": self._model, "messages": list(messages)}
         last_err = ""
@@ -247,11 +256,15 @@ class OpenRouterClient:
                 in_tok = int(usage.get("prompt_tokens", est_in_tokens) or 0)
                 out_tok = int(usage.get("completion_tokens",
                                         len(text) // _CHARS_PER_TOKEN) or 0)
-                self._spend_usd += in_tok * in_price + out_tok * out_price
+                call_cost = in_tok * in_price + out_tok * out_price
+                self._spend_usd += call_cost
                 self._calls += 1
                 if self._tracker is not None:
                     try:
-                        self._tracker.record(self._model, in_tok, out_tok)
+                        # Pass the LIVE-priced cost so a shared tracker's aggregate
+                        # (which the Stage 4.3.2 budget gate reads) is accurate, not
+                        # re-derived from the static PRICING dict.
+                        self._tracker.record(self._model, in_tok, out_tok, cost_usd=call_cost)
                     except Exception:
                         pass  # secondary ledger must never break a call
                 return text
@@ -367,17 +380,48 @@ def _run_self_test() -> None:
         # T7: repr masks the key
         check("T7 repr masks key", "sk-test" not in repr(c1) and "***" in repr(c1))
 
-        # T8: CostTracker pass-through gets token counts
+        # T8: CostTracker pass-through gets token counts + the LIVE-priced cost
         class FakeTracker:
-            def __init__(self): self.recs = []
-            def record(self, model, input_tokens, output_tokens, cached_tokens=0):
-                self.recs.append((model, input_tokens, output_tokens))
+            def __init__(self, total=0.0): self.recs = []; self.total_usd = total
+            def record(self, model, input_tokens, output_tokens, cached_tokens=0, cost_usd=None):
+                self.recs.append((model, input_tokens, output_tokens, cost_usd))
+            def should_downshift(self, threshold=0.9): return False
         ft = FakeTracker()
         t8, _ = make_transport([OK])
         c8 = OpenRouterClient(api_key="sk-test", model="paid/model",
                               cost_tracker=ft, transport=t8)
         await c8([{"role": "user", "content": "hi"}])
-        check("T8 CostTracker fed tokens", ft.recs == [("paid/model", 100, 50)], str(ft.recs))
+        # 100*1e-6 + 50*2e-6 = 0.0002, passed as the live cost_usd (not re-derived).
+        check("T8 CostTracker fed tokens + live cost",
+              len(ft.recs) == 1 and ft.recs[0][:3] == ("paid/model", 100, 50)
+              and abs(ft.recs[0][3] - 0.0002) < 1e-9, str(ft.recs))
+
+        # T8b (Stage 4.3.2): the budget pre-gate reads the SHARED tracker's
+        # aggregate, not this fresh client's own $0 — so a failover client
+        # can't independently re-spend the full budget. Tracker already at
+        # $0.09 of a $0.10 budget; this client has spent nothing yet, but the
+        # gate must still refuse.
+        pre_spent = FakeTracker(total=0.0999)  # paid/model is ~$1/M tok, so 0.09 base
+                                                # + a small call wouldn't cross $0.10;
+                                                # 0.0999 makes the aggregate math bite.
+        t8b, calls8b = make_transport([OK])
+        c8b = OpenRouterClient(api_key="sk-test", model="paid/model",
+                               budget_usd=0.10, cost_tracker=pre_spent, transport=t8b)
+        try:
+            await c8b([{"role": "user", "content": "x" * 8000}])  # ~2000 tok in
+            check("T8b aggregate gate refuses on peers' prior spend", False)
+        except LLMBudgetExceeded:
+            check("T8b aggregate gate refuses on peers' prior spend", True)
+        check("T8b2 refused BEFORE any completion call (fail closed)",
+              not any(u.endswith("/chat/completions") for u in calls8b["urls"]))
+
+        # T8c: WITHOUT a tracker the gate is byte-identical to before (per-client
+        # spend only) — a fresh client with a generous budget still spends fine.
+        t8c, _ = make_transport([OK])
+        c8c = OpenRouterClient(api_key="sk-test", model="paid/model",
+                               budget_usd=0.10, transport=t8c)
+        check("T8c no tracker -> per-client gate unchanged (call succeeds)",
+              await c8c([{"role": "user", "content": "hi"}]) == "Hello from the model.")
 
         # T9: auto-pick prefers mainstream instruct free model; excludes stealth/alpha
         t9, _ = make_transport([OK])

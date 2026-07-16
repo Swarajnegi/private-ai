@@ -148,12 +148,17 @@ class OpenRouterTarget(RouteTarget):
         client: Optional[Any] = None,
         registry: Optional[ProfileRegistry] = None,
         use_profile: bool = True,
+        cost_tracker: Optional[Any] = None,
     ) -> None:
         self._registry = registry or ProfileRegistry()
         self._use_profile = use_profile
         if client is None:
             from jarvis_core.brain.llm_client import build_llm_call
-            client = build_llm_call(budget_usd=budget_usd, model=model)
+            # Stage 4.3.2: a SHARED cost_tracker (one instance across the whole
+            # pool) makes each client's budget pre-gate aggregate-aware — the
+            # per-client budget alone can't see peers' spend across failover.
+            client = build_llm_call(budget_usd=budget_usd, model=model,
+                                    cost_tracker=cost_tracker)
         self._client = client
         self.name = name or (str(getattr(client, "model", "")) or model or "openrouter")
         self._resolve_profile()

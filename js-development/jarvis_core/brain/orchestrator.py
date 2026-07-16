@@ -258,6 +258,8 @@ async def ask(
     route: bool = False,
     router: Optional[Any] = None,
     routing_ledger: Optional[Any] = None,
+    model_stats_store: Optional[Any] = None,
+    cost_tracker: Optional[Any] = None,
     writer: Optional[SessionMemoryWriter] = None,
     extra_tools: Optional[Dict[str, Any]] = None,
     clock: Optional[Callable[[], datetime]] = None,
@@ -314,13 +316,39 @@ async def ask(
         targets = list(route_decision.targets)
 
     route_pool = pool
+    # Stage 4.3.1: resolved ONCE, unconditionally — both the load (only when a
+    # pool is BUILT below) and the flush (fires whenever ANY pool exists, incl.
+    # one passed in directly via `pool=`) must share one instance, exactly like
+    # `routing_ledger` — otherwise a caller-injected override wouldn't reach
+    # both sites, and tests that inject a `pool=` directly would silently fall
+    # through to the real on-disk default at flush time.
+    from jarvis_core.brain.model_stats import ModelStatsStore
+    stats_store = model_stats_store if model_stats_store is not None else ModelStatsStore()
     if route_pool is None and targets and llm_call is None:
         from jarvis_core.brain.targets import OpenRouterTarget
         from jarvis_core.brain.model_pool import ModelPool
+        from jarvis_core.agent.cost import CostTracker
+        # Stage 4.3.2: ONE shared CostTracker across every target + the pool, so
+        # the budget governor sees true AGGREGATE spend (each client records its
+        # live-priced cost into it) — a per-client budget can't see failover
+        # peers' spend. cost_tracker is injectable for test isolation (mirrors
+        # model_stats_store); the CLI path builds it here from --budget.
+        budget_tracker = cost_tracker if cost_tracker is not None else CostTracker(budget_usd=budget_usd)
         built = [OpenRouterTarget(m.strip(), budget_usd=budget_usd,
-                                  registry=registry, use_profile=use_profile)
+                                  registry=registry, use_profile=use_profile,
+                                  cost_tracker=budget_tracker)
                  for m in targets if m and m.strip()]
-        route_pool = ModelPool(built, strategy=route_strategy) if built else None
+        # Seed health from the last ask() call's flush, so a target still
+        # cooling down from a recent 429 doesn't get retried cold just
+        # because this is a fresh process invocation. Fail-soft — a load
+        # error means "start cold," never a crash.
+        try:
+            initial_health = stats_store.load_latest()
+        except Exception:
+            initial_health = {}
+        route_pool = ModelPool(built, strategy=route_strategy,
+                               initial_health=initial_health,
+                               cost_tracker=budget_tracker) if built else None
 
     # POLICY (resolved here, the host): per-model conduct profile by model id.
     # Boot is the MECHANISM that applies it — single resolution site, so the
@@ -555,14 +583,16 @@ async def ask(
     if route_pool is not None and llm_call is None:
         # One ask() drives several internal acalls (plan + ReAct + replan), so
         # last_events accumulates duplicates; collapse identical events so the
-        # operator reads one failover story per question, not 2x-3x repeats.
+        # operator reads one story per question, not 2x-3x repeats. Events now
+        # cover both failover walks AND the Stage-4.3.2 budget downshift, so the
+        # label is generic ("pool ev") — each event string names its own kind.
         seen_ev: set = set()
         for ev in route_pool.last_events:
             key = str(ev)
             if key in seen_ev:
                 continue
             seen_ev.add(key)
-            printer(f"  failover: {ev}")
+            printer(f"  pool ev : {ev}")
 
     # Stage 4.2.4: log the routing decision (append-only, fail-soft) — the Stage-5
     # Orchestrator-adapter training corpus. Only the query HASH is stored, never the
@@ -582,6 +612,15 @@ async def ask(
             ))
         except Exception as e:
             printer(f"  (routing-ledger skipped: {type(e).__name__}: {e})")
+
+    # Stage 4.3.1: flush this call's final health snapshot (fail-soft, mirrors
+    # the routing-ledger write immediately above) so the NEXT ask() call seeds
+    # from here instead of starting every target cold.
+    if route_pool is not None:
+        try:
+            stats_store.flush(datetime.now(_IST).isoformat(), route_pool.snapshot_health())
+        except Exception as e:
+            printer(f"  (model-stats flush skipped: {type(e).__name__}: {e})")
 
     return AskResult(
         question=question, answer=answer,
@@ -1255,22 +1294,32 @@ def _run_self_test() -> None:
                 return _T()
 
             # T37: a pool routes the answer; ledger is the AGGREGATE; pool line printed.
+            # model_stats_store is tempdir-scoped (mirrors led40/41/42 below) so this
+            # test NEVER touches the real jarvis_data/model_stats.jsonl.
+            from jarvis_core.brain.model_stats import ModelStatsStore
             lines37: List[str] = []
             pool37 = ModelPool([pool_target("model-A", ["no plan", "Pooled answer A."])])
             r37 = await ask("pooled question", pool=pool37,
+                            model_stats_store=ModelStatsStore(path=tdp / "stats37.jsonl"),
                             **{**common, "printer": lines37.append})
             check("T37 pool routes the answer", "Pooled answer A." in r37.answer, r37.answer)
             check("T37b ledger is the pool aggregate", r37.ledger.get("targets") == 1, str(r37.ledger))
             check("T37c pool line printed with primary",
                   any(l.startswith("  pool    :") and "model-A" in l for l in lines37),
                   str([l for l in lines37 if l.startswith('  pool')]))
+            check("T37d model_stats_store injection reaches the flush site "
+                  "(Stage 4.3.1 — this is the check that would have caught the "
+                  "real-file-pollution bug: the DEFAULT store must never be hit "
+                  "when an override is given)",
+                  (tdp / "stats37.jsonl").exists())
 
             # T38: primary fails -> pool fails over to a healthy peer; peer answers,
             # the failed target carries an error on its ledger ("both attempts").
             pa = pool_target("bad-A", ["x"], behavior="fail")
             pb = pool_target("good-B", ["no plan", "Peer B answer."])
             pool38 = ModelPool([pa, pb])
-            r38 = await ask("failover question", pool=pool38, **common)
+            r38 = await ask("failover question", pool=pool38,
+                            model_stats_store=ModelStatsStore(path=tdp / "stats38.jsonl"), **common)
             st38 = pool38.status()
             check("T38 failover to healthy peer", "Peer B answer." in r38.answer, r38.answer)
             check("T38b failed target recorded an error, peer succeeded",
@@ -1278,13 +1327,67 @@ def _run_self_test() -> None:
                   and st38["good-B"]["errors"] == 0, str(st38))
             check("T38c failover event logged on the pool",
                   any("failover" in e for e in pool38.last_events), str(pool38.last_events))
+            check("T38d stats flush landed in the injected path", (tdp / "stats38.jsonl").exists())
 
             # T39: an injected llm_call STILL bypasses the pool entirely (no regression
             # — the 56 prior tests rely on this; assert the seam explicitly).
             r39 = await ask("direct", llm_call=scripted(["no plan", "Direct answer."]),
-                            pool=pool37, session="direct-seam", **common)
+                            pool=pool37, model_stats_store=ModelStatsStore(path=tdp / "stats39.jsonl"),
+                            session="direct-seam", **common)
             check("T39 injected llm_call wins over pool (pool path skipped)",
                   "Direct answer." in r39.answer, r39.answer)
+            check("T39b stats flush STILL fires for an injected pool even when "
+                  "llm_call bypasses it for generation (route_pool is non-None "
+                  "either way — this is exactly the condition that leaked into "
+                  "the real file before the override was added)",
+                  (tdp / "stats39.jsonl").exists())
+
+            # T43 (Stage 4.3.1 regression guard): none of T37-T39's fixture target
+            # names ever reached the REAL default path. If this ever fails, the
+            # model_stats_store injection seam has regressed and tests are
+            # writing into the user's actual jarvis_data/model_stats.jsonl again.
+            from jarvis_core.config import MODEL_STATS_PATH
+            real_path = Path(MODEL_STATS_PATH)
+            leaked = False
+            if real_path.exists():
+                real_text = real_path.read_text(encoding="utf-8")
+                leaked = any(name in real_text for name in ("model-A", "bad-A", "good-B"))
+            check("T43 no test-fixture pool ever wrote to the REAL model_stats.jsonl",
+                  not leaked)
+
+            # T44 (Stage 4.3.2): a governor-equipped pool, threaded through ask(),
+            # benches the paid target and answers from the free peer once the
+            # shared CostTracker is near the ceiling — end-to-end, not just at the
+            # pool unit level.
+            from jarvis_core.agent.cost import CostTracker
+            paid44 = pool_target("paid-X", ["no plan", "Paid answer."]); paid44.cost_hint = 5.0
+            free44 = pool_target("free-Y", ["no plan", "Free answer."]); free44.cost_hint = 0.0
+            ct44 = CostTracker(budget_usd=1.0); ct44.record("x", 0, 0, cost_usd=0.95)
+            pool44 = ModelPool([paid44, free44], cost_tracker=ct44)  # paid declared FIRST
+            lines44: List[str] = []
+            r44 = await ask("governed question", pool=pool44,
+                            model_stats_store=ModelStatsStore(path=tdp / "stats44.jsonl"),
+                            session="gov-44", **{**common, "printer": lines44.append})
+            check("T44 near-ceiling pool routes to the FREE peer, benches paid",
+                  "Free answer." in r44.answer and paid44.calls == 0, r44.answer)
+            check("T44b downshift surfaced to the operator (labeled, not as failover)",
+                  any("budget downshift" in l for l in lines44),
+                  str([l for l in lines44 if "downshift" in l]))
+
+            # T45 (Stage 4.3.2): near-ceiling with NO free peer -> the ask fails
+            # closed to a degenerate answer rather than silently overspending
+            # (acall raises AllTargetsExhausted, caught by react's error path).
+            paidA = pool_target("paid-A", ["no plan", "A."]); paidA.cost_hint = 5.0
+            paidB = pool_target("paid-B", ["no plan", "B."]); paidB.cost_hint = 7.0
+            ct45 = CostTracker(budget_usd=1.0); ct45.record("x", 0, 0, cost_usd=0.99)
+            pool45 = ModelPool([paidA, paidB], cost_tracker=ct45)
+            r45 = await ask("over-budget question", pool=pool45,
+                            model_stats_store=ModelStatsStore(path=tdp / "stats45.jsonl"),
+                            session="gov-45", **common)
+            check("T45 no free peer past ceiling -> neither paid target was called "
+                  "(failed closed, never overspent)",
+                  paidA.calls == 0 and paidB.calls == 0,
+                  f"A={paidA.calls} B={paidB.calls}")
 
             # --- Stage 4.2: Intent Router wiring through ask() ---
             from jarvis_core.brain.router import RoutingDecision

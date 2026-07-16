@@ -15,7 +15,7 @@
 | **4.0** | Cognitive Control Loop | 1 | Awareness tests 4/4 live + capture parity proven |
 | **4.1** | Route Targets & Per-Model Protocol | 2 (Pass A) | Same prompt clean on 3 real models with zero per-model hardcodes; scripted 429 → failover |
 | **4.2** | Intent Router | 2 (Pass A) | **≥80%** on frozen 50-query eval set; ~20% degenerate baselines documented |
-| **4.3** | Dynamic Target Management | 3 (Pass B) | Chaos tests: vanished model + budget-90% downshift both route around; fail-closed to free tier |
+| **4.3** | Dynamic Target Management ✅ COMPLETE (2026-07-16) | 3 (Pass B) | Chaos tests: vanished model + budget-90% downshift both route around; fail-closed to free tier |
 | **4.4** | Response Aggregation | 3 (Pass B) | Attributed synthesis from real free-model fan-out; triggers only on escalation |
 | **4.5** | Epistemic Control | 3 (Pass B) | 6/6 engineered conflicts flagged, 0/6 false flags; judge failure proves fail-closed |
 | **4.6** | GraphRAG | — | ⏭ **DEFERRED** — trigger: first KB-logged multi-hop retrieval failure |
@@ -114,18 +114,18 @@
 
 ---
 
-## Sub-Phase 4.3: Dynamic Target Management ⬜ — Wave 3 (Pass B)
+## Sub-Phase 4.3: Dynamic Target Management ✅ COMPLETE (2026-07-16) — Wave 3 (Pass B)
 
 **Goal:** The pool survives reality — catalog churn, rate limits, budget exhaustion. (API-era re-scope of the draft's VRAM-era content.)
 
 | Lesson | Topic | JARVIS Use Case | Command |
 |--------|-------|-----------------|---------|
-| 4.3.1 | Rolling stats persistence | Pool latency/error/sighting stats survive sessions (`jarvis_data/model_stats.jsonl`) | `/dev Persist pool stats.` |
-| 4.3.2 | Budget governor | Spend approaching ceiling → router downshifts to cheaper/free tiers; `CostTracker.would_exceed`; fail-closed to free tier, never over budget (mirrors LLMBudgetExceeded) | `/dev Build budget governor into router.py.` |
-| 4.3.3 | Catalog sync & drift | Vanished-model handling (free models churn weekly); ProfileRegistry refresh from live catalog | `/dev Wire catalog sync into model_profiles.py.` |
+| 4.3.1 | Rolling stats persistence ✅ | Pool latency/error/cooldown stats survive sessions — `brain/model_stats.py` (mirrors `routing_ledger.py`, adds a replay-latest load path) + `ModelPool.initial_health`/`snapshot_health()` + orchestrator wiring | shipped |
+| 4.3.2 | Budget governor ✅ | Spend approaching ceiling → pool downshifts to free tier via `CostTracker.should_downshift`; the existing per-call `LLMBudgetExceeded` gate made AGGREGATE-aware (shared tracker across failover peers) so a failover walk can't quietly exceed budget — fail-closed to `AllTargetsExhausted` if no free peer exists | shipped |
+| 4.3.3 | Catalog sync & drift ✅ | `scripts/sync_openrouter.py` path fixed cross-platform + logs vanished-model diffs; `model_pool.py`'s `_is_not_found()` cools a 404 down on the FIRST occurrence instead of the generic 3-request storm minimum | shipped |
 
-**Practical Exercise:** simulate a model vanishing mid-session and a budget hitting 90% — both route around gracefully.
-**DoD:** offline chaos tests green; one live session demonstrates downshift on a deliberately tiny budget.
+**Practical Exercise:** simulated in offline chaos tests — a vanished (404) model and a budget hitting 90%+ both route around gracefully; a full-exhaustion case (no free peer left) fails closed instead of overspending.
+**DoD:** offline chaos tests green (38/38 `model_pool.py`, 20/20 `llm_client.py`, full regression across `cost`/`targets`/`router`/`model_profiles`/`routing_ledger`/`react`/`orchestrator`). Live one-tiny-budget-session leg is user-run (same precedent as 4.0-4.2) — not executed by the assistant.
 
 ---
 

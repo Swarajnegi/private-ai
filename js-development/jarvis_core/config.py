@@ -84,6 +84,14 @@ AGENT_WORKFLOWS_DIR: Path = AGENT_ROOT / "workflows"
 # raw query is NEVER stored (sha1 hash only).
 ROUTING_LEDGER_PATH: Path = DATA_ROOT / "routing_ledger.jsonl"
 
+# Rolling per-target health snapshots (Stage 4.3.1): one JSONL row appended per
+# ModelPool flush (ts, target, avg_latency_s, request_count, error_count,
+# cooldown_until). Unlike ROUTING_LEDGER_PATH this is a REPLAY-LATEST log, not an
+# immutable event stream — on load, only the last row per target name is kept, so
+# a fresh ModelPool seeds its health from where the last session left off instead
+# of starting cold on every `ask()` call. Lazy-created on first flush.
+MODEL_STATS_PATH: Path = DATA_ROOT / "model_stats.jsonl"
+
 # =============================================================================
 # Part 3: MODEL CONFIGURATION (Embedding model constants)
 # =============================================================================
