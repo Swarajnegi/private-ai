@@ -74,8 +74,16 @@ from jarvis_core.config import DATA_ROOT  # noqa: E402
 _IST = timezone(timedelta(hours=5, minutes=30))
 QUEUE_PATH = Path(DATA_ROOT) / "observation_queue.jsonl"
 
-MAX_USER_CHARS = 2000
-MAX_ASSISTANT_CHARS = 400
+# Raised 2026-08-19 after the capture audit measured real truncation loss against
+# the live queue: at the old caps (2000 / 400) 44 of 466 user turns (9.4%) were cut
+# mid-message and 335 of 466 assistant summaries (72%) hit the ceiling exactly.
+# The user's directive is that every prompt should yield capture-able signal about
+# mind/character/behaviour-change — a 400-char assistant cap cannot preserve WHY a
+# decision was reached, only that one was, so the queue could not reconstruct the
+# reasoning it exists to preserve. User side is the higher-value half (their own
+# words are the voice-corpus signal) and gets the bigger raise.
+MAX_USER_CHARS = 8000
+MAX_ASSISTANT_CHARS = 2000
 
 # --- Secret redaction (same classes as react.py R1/M11 + correlation _scrub) ---
 _REDACTORS = [
