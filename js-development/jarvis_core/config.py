@@ -92,6 +92,16 @@ ROUTING_LEDGER_PATH: Path = DATA_ROOT / "routing_ledger.jsonl"
 # of starting cold on every `ask()` call. Lazy-created on first flush.
 MODEL_STATS_PATH: Path = DATA_ROOT / "model_stats.jsonl"
 
+# Assembled fine-tuning corpora, one JSONL file per specialist (Stage 5.2.2+).
+# Regenerable from source (jarvis_core/, KB, chat-history, DE corpus) — never
+# committed; see .gitignore.
+SPECIALIST_CORPUS_ROOT: Path = DATA_ROOT / "training_corpus"
+
+# Structured cognitive-dimension index over knowledge_base.jsonl (Decision
+# 2026-08-10, KB 463/jarvis_core/memory/cognitive_index.py). Regenerable from
+# the KB — never committed; see .gitignore. KB stays the source of truth.
+COGNITIVE_INDEX_PATH: Path = DATA_ROOT / "cognitive_index.sqlite3"
+
 # =============================================================================
 # Part 3: MODEL CONFIGURATION (Embedding model constants)
 # =============================================================================
