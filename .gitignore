@@ -112,6 +112,21 @@ jarvis_data/life_state_feed.jsonl
 jarvis_data/.surfaced_watermark
 jarvis_data/.runtime_state.json
 
+# Assembled specialist fine-tuning corpora (Stage 5.2.2) — regenerable via
+# jarvis_core/specialists/*_corpus.py from jarvis_core/, KB, chat-history, DE corpus.
+jarvis_data/training_corpus/
+
+# Structured cognitive-dimension index (Decision 2026-08-10) — regenerable via
+# jarvis_core/memory/cognitive_index.py from knowledge_base.jsonl.
+jarvis_data/cognitive_index.sqlite3
+
+# Private life notes (2026-08-15) — NOT regenerable, NOT derived from anything else.
+# Deliberately kept off the public repo: names real third parties (family, partner,
+# friends) who never consented to public visibility. Does not auto-sync to the
+# personal laptop under the current all-public-GitHub model — see KB 452 / Stage 6.7.
+# Do not delete assuming it can be rebuilt. It cannot.
+jarvis_data/personal_life.md
+
 # Terminal conversation memory (machine-local raw transcripts + the current-session
 # pointer; NOT synced — only distilled KB entries migrate, like the capture queue)
 jarvis_data/.terminal_session.json
