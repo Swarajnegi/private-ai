@@ -1,6 +1,6 @@
 # 🚀 PROJECT JARVIS: THE MASTER BLUEPRINT (ENDGAME ARCHITECTURE)
 
-> **Last Updated:** 2026-05-03 (costs verified against RunPod public pricing page)
+> **Last Updated:** 2026-08-10 (§3 roster gated by demand signal per the two-moats split, NOT personal-data availability — corrected same-day after briefly re-deriving and contradicting the 2026-07-18 REVISED decision; costs below still verified against RunPod public pricing page, May 2026)
 > **Referenced by:** `.agent/rules/js-workspace-rule.md` (co-located in rules — auto-loaded every conversation)
 > **Knowledge Base:** `jarvis_data/knowledge_base.jsonl` (entries tagged `specialist_roster`, `embedding_clusters`)
 
@@ -85,20 +85,28 @@ The trade is paid compute in exchange for zero hardware setup overhead. Acceptab
 
 **The moat is personalization, not parameter count.** Each adapter's value comes from being trained on the user's private corpus — code, KB entries, trade journal, research notes, error logs — not from beating Opus 4.7 zero-shot on MMLU. See KB Decision tagged `specialists, personalization, moat`.
 
-| # | Codename | Domain | Adapter Seed (Public Specialist to Distill From) | Personalization Corpus (User's Private Data) |
-|---|----------|--------|------------------------------------------------|----------------------------------------------|
-| 1 | **The Orchestrator** | Intent routing, planning, delegation | Kimi K2.6 base + ModernBERT-Large router classifier (separate, CPU-side) | Past routing decisions + user's escape-valve invocations + chat-history attribution |
-| 2 | **The Engineer** | Software architecture, pipelines, algorithms (code + DE) | Qwen3-Coder-Next 80B/3B-active distilled in | `jarvis_core/` source, KB entries, chat-history with Claude/Antigravity, DE corpus, past error logs |
-| 3 | **The Scientist** | Physics, optics, ArXiv papers, LaTeX math | DeepSeekMath-V2 distilled in for math reasoning | User's hologram-project notes, optics/photonics papers read, /research outputs |
-| 4 | **The Doctor** | Medical research, biology, pharmacology | MedGemma 1.5 distilled in (~91 MedQA) | Trusted medical literature + (optionally) user's own health history |
-| 5 | **The Operator** | Robotics, hardware control, simulation | OpenVLA + Holo3-35B-A3B distilled in for agentic computer-use | User's CAD files, ROS configs, past simulation outputs |
-| 6 | **The Electrician** | Circuit design, EM theory, signal processing, PCB/antenna | Kimi K2.6 base + LoRA on IEEE corpus | User's circuit designs, simulation logs, datasheets read |
-| 7 | **The Mechanic** | CAD, FEA, thermal/structural analysis, materials science | Kimi K2.6 base + LoRA on engineering handbooks + MatSciBERT-distilled signals | User's CAD library, material specs, FEA results, hologram structural notes |
-| 8 | **The Chemist** | Material properties, reactions, nanotechnology, metallurgy | Kimi K2.6 base + LoRA on PubChem + materials DBs | User's metamaterials research, photonics-relevant chemistry notes |
-| 9 | **The Strategist** | Patent analysis, IP landscape, competitive research | SaulLM-141B distilled in for legal reasoning | User's IP filings, prior-art searches, competitive notes |
-| 10 | **The Analyst** | Financial modeling, market analysis, BI (the Financier) | Kimi K2.6 base + Qwen 3-235B reasoning + LoRA on Indian markets | Groww trade history, NSE bulk-deals, trade rationale journal, risk profile |
-| 11 | **The Guardian** | Cybersecurity, vulnerability analysis, threat modeling | Qwen3-Coder-Next + LoRA on security advisories | User's audit logs, past vuln findings, threat model docs |
-| 12 | **The Interface** | Voice input, vision processing, multimodal I/O | Whisper Large-v3 (ASR), Kokoro-82M (TTS), Qwen2.5-VL-7B (vision) — separate models, NOT adapters on Kimi | User's voice recordings (consented), screen/CAD captures |
+**TWO SEPARATE MOATS (Decision 2026-07-18, REVISED — corrected here 2026-08-10 after this doc briefly re-derived and contradicted it):**
+1. **Domain genius** = seed model + PUBLIC corpus (MedGemma, IEEE standards, PubChem, DeepSeekMath-V2, etc. — the Adapter Seed column below). Needs **zero personal data** — a specialist can be genuinely competent from public distillation alone, any time.
+2. **Personalization** = the Orchestrator's context layer (`cognitive_profile.md`, KB, decision history) — a separate, continuously-growing, ₹0 layer that makes the whole system feel personal even for specialists that never saw private data during training.
+
+**This means personal-corpus availability is NOT a build gate.** It briefly became one in this doc (see the reverted table below) — that was the exact "mark specialists provisional until personal corpus exists" premise 2026-07-18 already retracted as wrong. The correct gate is **demand signal** (5.5.2's existing discipline: what justifies training the NEXT adapter, vs. premature roster completionism), not data availability. Personal data, when it happens to be rich (Engineer, plausibly Analyst), is a **bonus layer on top of** domain genius — not a prerequisite for a specialist to exist.
+
+| # | Codename | Domain | Adapter Seed (Public Specialist to Distill From) | Personalization Corpus (User's Private Data) | Build Priority (demand-gated, not corpus-gated — 2026-08-10) |
+|---|----------|--------|------------------------------------------------|----------------------------------------------|------------------------------------------|
+| 1 | **The Orchestrator** | Intent routing, planning, delegation | Kimi K2.6 base + ModernBERT-Large router classifier (separate, CPU-side) | Past routing decisions + user's escape-valve invocations + chat-history attribution | ⏸️ Deferred — role splits in two: routing/delegation intelligence has no signal with only 1 specialist (degenerate 1-choice problem); its personalization half is already served by the free `cognitive_profile.md` context-injection per the two-moats split above, so there's nothing left to train here specifically |
+| 2 | **The Engineer** | Software architecture, pipelines, algorithms (code + DE) | Qwen3-Coder-Next 80B/3B-active distilled in | `jarvis_core/` source, KB entries, chat-history with Claude/Antigravity, DE corpus, past error logs | 🟢 **Active** — real day-to-day demand (this build + client DE work), corpus assembled (Stage 5.2.2); rich personal data is a bonus on top of the demand case, not the reason it's first |
+| 3 | **The Scientist** | Physics, optics, ArXiv papers, LaTeX math | DeepSeekMath-V2 distilled in for math reasoning | User's hologram-project notes, optics/photonics papers read, /research outputs | ⏸️ Deferred — no demand signal evidenced yet; buildable any time on public ArXiv/math corpus alone if that changes, personal hologram notes are a bonus if/when that project resumes |
+| 4 | **The Doctor** | Medical research, biology, pharmacology | MedGemma 1.5 distilled in (~91 MedQA) | Trusted medical literature + (optionally) user's own health history | ⏸️ Deferred — no demand signal; separately, feeding it personal health history is the user's consent call whenever this is revisited, not a default |
+| 5 | **The Operator** | Robotics, hardware control, simulation | OpenVLA + Holo3-35B-A3B distilled in for agentic computer-use | User's CAD files, ROS configs, past simulation outputs | ⏸️ Deferred — no demand signal evidenced |
+| 6 | **The Electrician** | Circuit design, EM theory, signal processing, PCB/antenna | Kimi K2.6 base + LoRA on IEEE corpus | User's circuit designs, simulation logs, datasheets read | ⏸️ Deferred — no demand signal evidenced |
+| 7 | **The Mechanic** | CAD, FEA, thermal/structural analysis, materials science | Kimi K2.6 base + LoRA on engineering handbooks + MatSciBERT-distilled signals | User's CAD library, material specs, FEA results, hologram structural notes | ⏸️ Deferred — no demand signal evidenced |
+| 8 | **The Chemist** | Material properties, reactions, nanotechnology, metallurgy | Kimi K2.6 base + LoRA on PubChem + materials DBs | User's metamaterials research, photonics-relevant chemistry notes | ⏸️ Deferred — no demand signal evidenced |
+| 9 | **The Strategist** | Patent analysis, IP landscape, competitive research | SaulLM-141B distilled in for legal reasoning | User's IP filings, prior-art searches, competitive notes | ⏸️ Deferred — no demand signal evidenced |
+| 10 | **The Analyst** | Financial modeling, market analysis, BI (the Financier) | Kimi K2.6 base + Qwen 3-235B reasoning + LoRA on Indian markets | Groww trade history, NSE bulk-deals, trade rationale journal, risk profile | 🟡 **Plausible** — real demand signal (active personal-finance management); buildable on public Indian-markets distillation regardless, trade-journal corpus is a bonus layer worth confirming but not a prerequisite |
+| 11 | **The Guardian** | Cybersecurity, vulnerability analysis, threat modeling | Qwen3-Coder-Next + LoRA on security advisories | User's audit logs, past vuln findings, threat model docs | ⏸️ Deferred, re-check first if a 3rd slot opens — DE client work increasingly touches access/security questions, so demand may materialize here before the rest |
+| 12 | **The Interface** | Voice input, vision processing, multimodal I/O | Whisper Large-v3 (ASR), Kokoro-82M (TTS), Qwen2.5-VL-7B (vision) — separate models, NOT adapters on Kimi | User's voice recordings (consented), screen/CAD captures | Stage 6 concern, not a Stage-5 QLoRA adapter — doesn't compete for the same training budget at all |
+
+**Personal-data capture, corrected:** client-VDI-sourced work (e.g. BUPA client environments, protected by DLP) reaches the corpus via the user manually distilling it into chat afterward — this is not a permanent unsolved gap, it's an already-working, already-used channel (see the BUPA — Region Migration lessons capture, `Data_Engineering_Lessons.md`). The open engineering question is what happens *downstream* of that manual capture — structuring, indexing, and (for Engineer/Analyst-tier specialists) training-time embedding of what's provided — not the capture step itself. See the Memory-layer structured-index plan (Decision 2026-08-10) for the downstream piece.
 
 
 ### Embedding Model Clusters (Memory Layer — orthogonal to specialists)
@@ -122,7 +130,7 @@ Reranker (Stage 2.5.3): mxbai-rerank-large-v2 (1.5B Apache-2.0, ~150ms CPU for 2
 
 ## 3.5. AGENTIC SPECIALIST INFRASTRUCTURE (Stage 6+)
 
-Specialists are not just models. The valuable ones (Analyst/Financier, Operator, Scientist for hologram R&D) are **always-on agentic systems** layered on top of the model. The model is one piece; the cron + ingestion + trigger + cold-wake pipeline is the bigger engineering project.
+Specialists are not just models. The valuable ones are **always-on agentic systems** layered on top of the model. The model is one piece; the cron + ingestion + trigger + cold-wake pipeline is the bigger engineering project. Of the two worked examples below, Analyst/Financier is the near-term-relevant one (§3's Build Priority: 🟡 Plausible, real demand signal today) — the hologram R&D pattern for Scientist/Operator is preserved as valid future architecture, buildable any time on public corpus per the two-moats split, but has no demand signal driving it yet (§3, Decision 2026-08-10).
 
 ### Pattern (worked example: The Analyst / Financier watching markets)
 
@@ -190,6 +198,8 @@ Same cold-wake + agent infrastructure, different specialists active in parallel.
 
 ### Training Sequence (ROI-Ordered, Spread Across Build Phases)
 
+**Superseded as a blind sequence by Decision 2026-08-10 (see §3's Near-Term Status column) — this table still answers "which is cheapest," but §3 now answers "which has a real corpus to train on," and §3 is the gate that actually applies.** Kept here unedited as the cost reference for whenever each row's status flips to Active.
+
 | Priority | Specialist | When | Cumulative Spend |
 |---|---|---|---|
 | 1 | Orchestrator | Stage 3 start | ₹340 |
@@ -201,7 +211,7 @@ Same cold-wake + agent infrastructure, different specialists active in parallel.
 | 7 | Strategist | Stage 5 | ₹17,040 |
 | 8-12 | Rest | Stage 5-6 | ₹20,540 |
 
-**Stage 3 entry ticket (Orchestrator + Engineer): ₹3,300 total.**
+**Real near-term ticket, per the demand-signal gate (not a corpus gate — see §3's two-moats correction): Engineer alone (₹1,480-2,960), then Analyst once a real build decision is made (+₹1,480-2,590). Everything else waits for a demand signal, not for personal data to materialize — any of rows 3-9/11 could be built on public-corpus domain genius alone whenever there's an actual reason to.**
 
 ### Monthly Usage Cost (Cold-Wake Sessions)
 

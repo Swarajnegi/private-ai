@@ -36,6 +36,17 @@ When answering, adopt the stance of the relevant sub-system:
 
 ---
 
+## CURRENT BUILD STATE
+
+- **Stage 1 — Systems Python:** ✅ Sufficient (generators, async foundations, object model — the language fundamentals the runtime itself is written in).
+- **Stage 2 — Memory Layer:** ✅ Complete (closed 2026-05-03). ChromaDB + BM25 + hybrid search + cross-encoder rerank + KB compaction, all in `jarvis_core/memory/`.
+- **Stage 3 — Agent Framework:** ✅ Complete. Built FROM SCRATCH in `jarvis_core/agent/` — a 2026-05-13 decision explicitly REVERSED an earlier plan to delegate to OpenClaude/MCP. There is no OpenClaude bridge or `mcp_server.py` anywhere in this codebase.
+- **Stage 4 — Multi-Model Orchestration:** ✅ Complete (closed 2026-07-27), in `jarvis_core/brain/`. Intent router (84% frozen-gate accuracy) + model-pool failover + response aggregation + epistemic control (fail-closed contradiction judge) all shipped. **Final Boss** (the 8-leg Stage-4-closing *verification* harness, `orchestrator.py --final-boss`) passed 8/8 offline, ₹0 — this is a test harness, NOT the same thing as the `--ask` terminal interface itself.
+- **Stage 5 — Domain Specialists:** ⬅️ CURRENT. Engineer-first QLoRA MVP on a shared Kimi K2.6 base. Not started yet; next task is 5.1 Fine-Tuning Basics on RunPod.
+- Master roadmap: `js-learning/JARVIS_MASTER_ROADMAP.md`.
+
+---
+
 ## KNOWLEDGE SYSTEM (Critical Paths)
 
 | Asset | Path | Purpose |
@@ -102,11 +113,11 @@ These rules apply to **every response**, not just when workflows are invoked. Th
 ## STRATEGIC PRINCIPLES (The "Iron Man" Constraints)
 
 1.  **Single-Model First:**
-    - Build a working JARVIS with ONE powerful model (Llama 70B or Qwen 72B) before adding specialists.
-    - 80% of value comes from single-model + RAG + tools. Specialists are Phase 4+.
+    - Build a working JARVIS with ONE model before adding specialists (currently: OpenRouter free/low-cost models + Gemini; Stage 5 moves to a shared Kimi K2.6 base for QLoRA specialists).
+    - 80% of value comes from single-model + RAG + tools. Specialists are Stage 5+.
 2.  **Hardware Reality (Cloud-First + Local Retrieval):**
     - Embedding models + ChromaDB run locally on laptop (CPU, ₹0/month).
-    - LLM generation via cloud APIs (Groq/Together.ai Phase 1-3, RunPod Phase 4+).
+    - LLM generation via cloud APIs (OpenRouter free/low-cost tier through Stage 4; RunPod cold-wake pods from Stage 5 entry for QLoRA training + specialist inference).
     - Cannot run all specialists simultaneously. Design for dynamic loading/unloading.
     - Full architecture details: `E:\J.A.R.V.I.S\.agent\rules\JARVIS_ENDGAME.md`
 3.  **Expectation Calibration:**

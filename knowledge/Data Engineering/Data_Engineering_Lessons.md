@@ -356,6 +356,19 @@ Third-party exports (BYOD from ERP systems, CSV dumps from vendor pipelines) can
 When a `custom_expectations` test has expectations with different `on_violation` values (some fail, some warn), some generators stack `@expect_all_or_fail` + `@expect_all` decorators on the same view → Databricks throws `NoSuchElementException` at runtime. Use the same `on_violation` for all expectations within one test action. If you need both, split into separate test actions.
 (Source: `LHP_Reference.md` L4233–L4239)
 
+### DR/Migration Validation: Scope First, Resolve Versions Second, Check Feasibility Third
+When validating a bulk migration/DR clone operation (e.g. Databricks Deep Clone across regions), don't validate the whole catalog — scope to exactly what one `run_id` touched. Three-step pattern:
+1. **Scope**: query the clone operation's own metadata for the exact list of objects (tables/views/volumes) it touched for that `run_id`. Output as a manifest (e.g. CSV to an external location) — everything downstream works from this scope, not from "all tables."
+2. **Resolve versions**: for each scoped table, find the exact source-side version the target was cloned FROM (not just "the current source version") — see the `DESCRIBE HISTORY` lesson in §6.
+3. **Check feasibility before querying**: a resolved source version is a fact, not a guarantee it's still queryable — see the retention-window lesson in §6. Skip (don't error) rows that fail feasibility.
+
+Comparing counts/data only makes sense between resolved-and-feasible version pairs — a naive "compare current state on both sides" test would silently compare mismatched points in time.
+
+Two more details worth building in from the start:
+- **Pin resolved versions, don't re-resolve "latest."** Write the resolved src/tgt versions to their own persisted output (e.g. two CSVs) at resolution time, and have every downstream query read from that pinned value — never re-query "latest CLONE version" mid-run. Otherwise a clone that re-runs while your validation is still executing silently invalidates the version you scoped against.
+- **Report skips, don't just omit them.** A table skipped for retention infeasibility should show up in the final output as a counted, explicit skip — not just be absent, which would look identical to "validated and fine."
+(Source: BUPA — Region Migration project, DeepClone validation framework, 2026-08-08)
+
 ---
 
 ## 5. Spark / PySpark Gotchas
@@ -467,6 +480,24 @@ Practical implication for facts: if **any** link in the upstream chain is SCD2, 
 
 Escape hatches exist (`ignoreChanges` / `ignoreDeletes` reader options) but trade correctness for staying-streaming — they suppress the error at the cost of duplicates or missed deletes. Default to MV instead of patching with these flags.
 (Source: personal experience, 2026-04-30 — fact built as streaming on SCD2 upstream)
+
+### `DESCRIBE HISTORY` + `operationParameters.sourceVersion` Reveals Exact Clone Lineage
+Filtering a table's `DESCRIBE HISTORY` by `operation = 'CLONE'` and taking the latest such row gives you `operationParameters.sourceVersion` — the *exact* source-side version that specific clone was made from. This is the authoritative way to map a cloned target back to its source version; don't assume "latest source version" or try to infer it from timestamps — Delta Lake already records it.
+(Source: BUPA — Region Migration project, DeepClone validation framework, 2026-08-08)
+
+### Time Travel Is Bounded by Retention, Not Just Version Existence
+A version number returned by `DESCRIBE HISTORY` existing doesn't mean you can still query it. Delta's default retention window is 7 days (168 hours) — `VACUUM` removes files older than that, and querying a vacuumed version fails. Before querying any resolved historical version, check `now() - <version commit timestamp> > 168 hours` — if true, that version is gone; skip it rather than let the query fail. This matters most for validation/audit tooling that resolves versions programmatically rather than a human picking a recent one by hand.
+(Source: BUPA — Region Migration project, DeepClone validation framework, 2026-08-08)
+
+### The UC Path and the Direct Delta Path Are Two Different Routes to the Same Table
+`SELECT ... FROM catalog.schema.table` (Unity Catalog path) and `SELECT ... FROM delta.\`abfss://...\`` (direct storage path) can hit different permission models even though they read the same underlying data. Two consequences worth knowing:
+- If a UC grant is missing or a query pattern isn't UC-compatible, the direct delta path is a legitimate fallback — not a hack — as long as you have storage-level access.
+- If storage (e.g. ADLS) is reachable from both regions/workspaces, a script running on ONE side can query BOTH sides' tables via their direct delta paths — you don't need compute co-located with the data for read-only validation.
+(Source: BUPA — Region Migration project, DeepClone validation framework, 2026-08-08)
+
+### UC Row-Filters/Column-Masks Block Time Travel — Bypass via Delta Path on a Non-UC Cluster
+Tables with Unity Catalog row filters or column masks applied can't be time-traveled through the normal UC-enabled query path — the governance layer doesn't have defined behavior for "show me this masked/filtered view as of version N." Workaround: query the table's direct delta path from a cluster that isn't enforcing UC's masking/row-filter policies, which reads the raw data without the policy layer in between. Find which tables need this treatment proactively via Unity Catalog's `information_schema` row-filter and column-mask metadata — don't wait to discover it from a failed query.
+(Source: BUPA — Region Migration project, DeepClone validation framework, 2026-08-08)
 
 ---
 
@@ -780,6 +811,7 @@ A short list to internalize. Each is distilled from a concrete incident document
 | Session — deployment | Set up Databricks Asset Bundle (`databricks.yml`) targeting two workspaces. Established `dbdemos.myschema` as the canonical demo schema. |
 | Session — consolidation pass 1 | Audited 35 legacy learning notebooks across 8 folders. Consolidated to 19 (16 fewer files, zero content lost). Modernized every deprecated API. Added setup data + concept markdown to every notebook. |
 | Session — consolidation pass 2 | Topic-merged Databricks Features (3→1) and Databricks Prof. (2→1). Deleted Spark Read-Write (covered in PySpark §11). User-side: deleted Workflow folder, renamed PySpark → PySpark_Python_for_DE. **Final count: 12 notebooks across 7 folders.** |
+| Session — BUPA Region Migration | Second, distinct BUPA engagement (DeepClone cross-region DR validation, not the original DLT pipeline build). Distilled 5 new lessons into §4 (validation pattern) and §6 (`DESCRIBE HISTORY` clone lineage, retention-window feasibility, UC-path vs delta-path routing, masking/row-filter bypass) from the live validation framework build. |
 
 ### Workspace notebooks (deployed at `/Workspace/Users/swaraj.negi@celebaltech.com/Learning/`)
 
