@@ -184,13 +184,21 @@ def repo_anatomy(
     if workflows:
         lines.append(f"- Your workflow protocols (slash-commands): .agent/workflows/ -> "
                      f"{', '.join(workflows)}")
+    # Portable across ANY host (not just the IDE that happens to auto-load
+    # .agent/rules/CLAUDE.md) -- the roadmap docs are plain project files, read
+    # identically regardless of which coding tool, if any, is running JARVIS.
+    from jarvis_core.brain.roadmap_state import default_roadmap_paths
+    roadmaps = [p for p in default_roadmap_paths(root=root) if p.exists()]
+    if roadmaps:
+        names = ", ".join(str(p.relative_to(root)) for p in roadmaps)
+        lines.append(f"- Your own build-status roadmap (canonical, portable): {names}")
     try:
         if Path(kb_path).exists():
             lines.append(f"- Your long-term knowledge: {Path(kb_path).relative_to(root)}")
     except Exception:
         pass
     lines.append("- Your production code: js-development/jarvis_core/")
-    if not rules and not workflows:
+    if not rules and not workflows and not roadmaps:
         return None  # nothing to map — skip the section
     return ("YOUR ANATOMY (where your own docs live — to answer questions about "
             "yourself/the system, file_search these and read the .md files; never "
@@ -204,14 +212,34 @@ def default_providers(
     queue_path: Optional[Path] = None,
     roadmap_paths: Optional[List[Path]] = None,
     activity_days: int = 7,
+    collections: Optional[List[str]] = None,
 ) -> List[ProviderSpec]:
-    """The standard inhale: temporal, self-state, next task, profile, activity.
+    """The standard inhale: tool guidance, temporal, self-state, next task,
+    profile, activity.
 
     Every source is injectable; every default points at the real artifacts.
     Heavy reads happen inside the provider closures, at inhale time, never here.
     """
     now = clock or (lambda: datetime.now(_IST))
     profile = Path(profile_path) if profile_path else _DEFAULT_PROFILE_PATH
+
+    def tool_guidance() -> str:
+        # The L324 lesson: wiring the autobiography tool is not enough; the
+        # Mind must know WHICH organ holds its history, or it reaches for
+        # document search and finds nothing (observed live, Gate A 2026-06-12).
+        text = (
+            "Tool guidance: prior_self_consult is your AUTOBIOGRAPHY — the "
+            "project's own knowledge base (what was built, decisions, failures, "
+            "history). For any question about what we built/decided/did, call "
+            "prior_self_consult FIRST with a topical query string."
+        )
+        if collections:
+            text += (
+                f" memory_semantic_search searches document collections "
+                f"{collections} — pass one of these collection names explicitly; "
+                f"it holds documents, NOT the project history."
+            )
+        return text
 
     def temporal() -> str:
         t = now()
@@ -242,6 +270,7 @@ def default_providers(
         return None if "no captured turns" in text else text
 
     return [
+        ProviderSpec("Tool routing guidance", tool_guidance, max_chars=600),
         ProviderSpec("Temporal", temporal, max_chars=200),
         ProviderSpec("Runtime self-state", runtime_self_state, max_chars=300),
         ProviderSpec("Next pending task", next_task, max_chars=300),

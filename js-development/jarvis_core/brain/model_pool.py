@@ -320,6 +320,13 @@ class ModelPool:
             }
         return out
 
+    def peers(self) -> List[RouteTarget]:
+        """All targets in stable declaration order (Stage 4.4's fan-out seam —
+        the caller filters out whichever one was already tried as primary).
+        Already valve-free by construction (the constructor refuses
+        FRONTIER_VALVE targets), so no extra filtering is needed here."""
+        return [self._targets[n] for n in self._order]
+
     def snapshot_health(self) -> Dict[str, Dict[str, float]]:
         """Read-only view of current per-target health, in the exact shape
         ModelStatsStore.flush()/ModelPool(initial_health=...) expect (Stage
@@ -593,6 +600,12 @@ def _run_self_test() -> None:
     run(p18e.acall([{"role": "user", "content": "q"}]))
     check("T18e one generic failure does NOT cooldown (needs the storm minimum)",
           p18e.status()["A"]["cooldown_remaining_s"] == 0, str(p18e.status()["A"]))
+
+    # T19 (Stage 4.4 seam): peers() exposes every target in stable order —
+    # the fan-out caller filters out the primary by name.
+    p19 = ModelPool([FakeTarget("A"), FakeTarget("B"), FakeTarget("C")], clock=clock)
+    check("T19 peers() returns all targets in declaration order",
+          [t.name for t in p19.peers()] == ["A", "B", "C"], str([t.name for t in p19.peers()]))
 
     total = passed + len(failed)
     print(f"\n  Passed: {passed}/{total}")

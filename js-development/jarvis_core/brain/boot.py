@@ -222,7 +222,9 @@ def assemble_mind(
     1. Toolset: calculator + prior_self_consult + cognitive_mirror (the KB
        autobiography, L324 gap 1) + memory_semantic_search when a store is
        open + caller extras (extras win on name collision).
-    2. Identity: JARVIS_PSYCHE_PROMPT + collections line + boot inhale block.
+    2. Identity: JARVIS_PSYCHE_PROMPT + boot inhale block (tool guidance,
+       collections line, temporal/profile/activity/roadmap providers — all
+       via ContextInjector, capped and accounted-for in BootReport).
     3. Conduct: a resolved ModelProfile (Stage 4.1) drives enable_mirror /
        enable_monitor / max_iterations — per-model DATA, not a hardcode. No
        profile -> the caller's args stand (back-compat). Mind itself untouched.
@@ -249,22 +251,12 @@ def assemble_mind(
 
     model = str(getattr(llm_call, "model", "") or "")
     identity = JARVIS_PSYCHE_PROMPT
-    # Tool guidance — the L324 lesson: wiring the autobiography tool is not
-    # enough; the Mind must know WHICH organ holds its history, or it reaches
-    # for document search and finds nothing (observed live, Gate A 2026-06-12).
-    identity += (
-        "\n\nTool guidance: prior_self_consult is your AUTOBIOGRAPHY — the "
-        "project's own knowledge base (what was built, decisions, failures, "
-        "history). For any question about what we built/decided/did, call "
-        "prior_self_consult FIRST with a topical query string."
-    )
-    if collections:
-        identity += (
-            f" memory_semantic_search searches document collections "
-            f"{collections} — pass one of these collection names explicitly; "
-            f"it holds documents, NOT the project history."
-        )
 
+    # Tool guidance now lives in the ContextInjector as a proper ProviderSpec
+    # ("Tool routing guidance") — capped, accounted-for in BootReport, testable
+    # like every other organ, instead of an ungoverned append living outside
+    # the inhale abstraction. Only fires when inhale=True (true for every real
+    # --ask call; inhale=False is a test-isolation path, not production).
     result: InhaleResult = InhaleResult(block="", fired=(), skipped=())
     if inhale:
         active = injector or ContextInjector(default_providers(
@@ -272,6 +264,7 @@ def assemble_mind(
             self_state=f"Runtime brain: {model or '<auto>'} | machine: {_machine_name()}",
             profile_path=profile_path,
             queue_path=queue_path,
+            collections=collections,
         ))
         result = active.inhale()
         if result.block:

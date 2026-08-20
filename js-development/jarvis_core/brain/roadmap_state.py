@@ -125,10 +125,11 @@ def _classify_line(line: str) -> Optional[str]:
 # Part 3: PUBLIC API
 # =============================================================================
 
-def default_roadmap_paths() -> List[Path]:
+def default_roadmap_paths(root: Optional[Path] = None) -> List[Path]:
     """Granular stage roadmap first, master second — the next LESSON beats
-    the next STAGE when both are pending."""
-    learning = Path(JARVIS_ROOT) / "js-learning"
+    the next STAGE when both are pending. `root` override lets a caller (e.g.
+    a test fixture) point this at an isolated tree instead of the real repo."""
+    learning = Path(root or JARVIS_ROOT) / "js-learning"
     return [
         learning / "stage_4_orchestration" / "ROADMAP.md",
         learning / "JARVIS_MASTER_ROADMAP.md",

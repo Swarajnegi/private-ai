@@ -73,6 +73,7 @@ _DEFAULT_TIMEOUT_S = 90.0
 _DEFAULT_MAX_RETRIES = 2
 _EST_OUTPUT_TOKENS = 600          # conservative pre-gate assumption
 _CHARS_PER_TOKEN = 4
+_REASONING_EFFORT_LEVELS = frozenset({"low", "medium", "high"})
 
 # Injected transport: (url, headers, json_payload, timeout_s) -> (status, body_dict)
 Transport = Callable[[str, Dict[str, str], Optional[Dict[str, Any]], float],
@@ -115,12 +116,18 @@ class OpenRouterClient:
         cost_tracker: Optional[Any] = None,
         transport: Optional[Transport] = None,
         base_url: str = _BASE_URL,
+        reasoning_effort: Optional[str] = None,
     ) -> None:
         self._api_key = api_key or os.environ.get("OPENROUTER_API_KEY", "")
         if not self._api_key:
             raise LLMCallError(
                 "No API key. Set OPENROUTER_API_KEY in the environment "
                 "(machine-local secret — never commit it).")
+        if reasoning_effort is not None and reasoning_effort not in _REASONING_EFFORT_LEVELS:
+            raise LLMCallError(
+                f"reasoning_effort must be one of {sorted(_REASONING_EFFORT_LEVELS)} "
+                f"or None, got {reasoning_effort!r}.")
+        self._reasoning_effort = reasoning_effort
         self._model = model or os.environ.get("OPENROUTER_MODEL", "")
         self._budget = budget_usd
         self._timeout = float(timeout_s)
@@ -232,6 +239,8 @@ class OpenRouterClient:
                 f"over {self._calls} calls)")
 
         payload = {"model": self._model, "messages": list(messages)}
+        if self._reasoning_effort is not None:
+            payload["reasoning"] = {"effort": self._reasoning_effort}
         last_err = ""
         for attempt in range(self._retries + 1):
             if attempt:
@@ -277,9 +286,11 @@ class OpenRouterClient:
 
 def build_llm_call(budget_usd: Optional[float] = _DEFAULT_BUDGET_USD,
                    model: Optional[str] = None,
-                   cost_tracker: Optional[Any] = None) -> OpenRouterClient:
+                   cost_tracker: Optional[Any] = None,
+                   reasoning_effort: Optional[str] = None) -> OpenRouterClient:
     """The one-line factory every surface uses: a ready LLMCall from env config."""
-    return OpenRouterClient(model=model, budget_usd=budget_usd, cost_tracker=cost_tracker)
+    return OpenRouterClient(model=model, budget_usd=budget_usd, cost_tracker=cost_tracker,
+                            reasoning_effort=reasoning_effort)
 
 
 # =============================================================================
@@ -444,6 +455,38 @@ def _run_self_test() -> None:
         # T11: ledger summary shape
         s = c1.ledger_summary()
         check("T11 ledger summary", s["calls"] == 1 and s["budget_usd"] == _DEFAULT_BUDGET_USD)
+
+        # T13: reasoning_effort threads into the payload's "reasoning" object
+        seen13: Dict[str, Any] = {}
+        async def t13(url, headers, payload, timeout):
+            if url.endswith("/models"):
+                return 200, CATALOG
+            seen13["payload"] = payload
+            return OK
+        c13 = OpenRouterClient(api_key="sk-test", model="paid/model", transport=t13,
+                               reasoning_effort="low")
+        await c13([{"role": "user", "content": "hi"}])
+        check("T13 reasoning_effort sent as {'effort': 'low'}",
+              seen13["payload"].get("reasoning") == {"effort": "low"}, seen13.get("payload"))
+
+        # T13b: unset (default) -> no "reasoning" key at all, byte-identical to old behavior
+        seen13b: Dict[str, Any] = {}
+        async def t13b(url, headers, payload, timeout):
+            if url.endswith("/models"):
+                return 200, CATALOG
+            seen13b["payload"] = payload
+            return OK
+        c13b = OpenRouterClient(api_key="sk-test", model="paid/model", transport=t13b)
+        await c13b([{"role": "user", "content": "hi"}])
+        check("T13b no reasoning_effort -> no 'reasoning' key sent",
+              "reasoning" not in seen13b["payload"], seen13b.get("payload"))
+
+        # T13c: invalid effort value -> fail-closed at construction, not at call time
+        try:
+            OpenRouterClient(api_key="sk-test", reasoning_effort="maximum")
+            check("T13c invalid reasoning_effort raises at construction", False)
+        except LLMCallError:
+            check("T13c invalid reasoning_effort raises at construction", True)
 
     # T12: missing key -> clear construction error
     old = os.environ.pop("OPENROUTER_API_KEY", None)

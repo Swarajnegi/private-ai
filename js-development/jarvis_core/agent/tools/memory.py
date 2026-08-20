@@ -158,7 +158,12 @@ def _chroma_to_hits(chroma_result: Dict[str, Any]) -> List[Dict[str, Any]]:
 # =============================================================================
 
 class MemorySemanticSearchInput(ToolInput):
-    collection: str = Field(default="default", description="ChromaDB collection name.")
+    collection: str = Field(
+        default="research_papers",
+        description="ChromaDB collection name — ingested source documents/papers "
+                    "(scripts/ingest.py), NOT JARVIS's own knowledge base (use "
+                    "prior_self_consult for that). 'research_papers' is the only "
+                    "collection that exists today.")
     query: str = Field(description="Natural-language query text.")
     k: int = Field(default=5, ge=1, le=50, description="Number of top results.")
     filter_metadata: Optional[Dict[str, Any]] = Field(
@@ -201,7 +206,11 @@ class MemorySemanticSearchTool(MemoryToolBase):
 # =============================================================================
 
 class MemoryMMRSearchInput(ToolInput):
-    collection: str = Field(default="default", description="ChromaDB collection name.")
+    collection: str = Field(
+        default="research_papers",
+        description="ChromaDB collection name — ingested source documents/papers, "
+                    "NOT JARVIS's own knowledge base (use prior_self_consult for "
+                    "that). 'research_papers' is the only collection that exists today.")
     query: str = Field(description="Natural-language query text.")
     k: int = Field(default=5, ge=1, le=50, description="Final number of diverse results.")
     fetch_k: int = Field(default=20, ge=1, le=200, description="Candidate pool size for MMR.")
@@ -247,7 +256,12 @@ class MemoryMMRSearchTool(MemoryToolBase):
 # =============================================================================
 
 class MemoryBM25SearchInput(ToolInput):
-    collection: str = Field(default="default", description="Collection to build BM25 over.")
+    collection: str = Field(
+        default="research_papers",
+        description="ChromaDB collection to build BM25 over — ingested source "
+                    "documents/papers, NOT JARVIS's own knowledge base (use "
+                    "prior_self_consult for that). 'research_papers' is the only "
+                    "collection that exists today.")
     query: str = Field(description="Keyword/lexical query string.")
     k: int = Field(default=10, ge=1, le=100, description="Number of top results.")
 
@@ -265,7 +279,7 @@ class MemoryBM25SearchTool(MemoryToolBase):
     input_schema = MemoryBM25SearchInput
 
     # Stage 3.2.3 lifecycle hook: collections to proactively warm on setup().
-    # Override per-instance: tool = MemoryBM25SearchTool(store=s); tool.warm_collections = ["default", "code"]
+    # Override per-instance: tool = MemoryBM25SearchTool(store=s); tool.warm_collections = ["research_papers"]
     warm_collections: List[str] = []
 
     @property
@@ -321,7 +335,11 @@ class MemoryBM25SearchTool(MemoryToolBase):
 # =============================================================================
 
 class MemoryHybridSearchInput(ToolInput):
-    collection: str = Field(default="default", description="ChromaDB collection name.")
+    collection: str = Field(
+        default="research_papers",
+        description="ChromaDB collection name — ingested source documents/papers, "
+                    "NOT JARVIS's own knowledge base (use prior_self_consult for "
+                    "that). 'research_papers' is the only collection that exists today.")
     query: str = Field(description="Natural-language query text.")
     k: int = Field(default=5, ge=1, le=50, description="Final number of results.")
     fetch_k: int = Field(default=20, ge=1, le=200, description="Per-stream candidate pool size.")
