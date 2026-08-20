@@ -4,7 +4,10 @@ reasoning.py — Reasoning Gate (Stage 4.5: Epistemic Control, Wave 1).
 LAYER: Brain (Cognitive Control Loop — epistemic control)
 
 Import with:
-    from jarvis_core.brain.reasoning import ReasoningGate, ReasoningReport, fuse
+    from jarvis_core.brain.reasoning import (
+        ReasoningGate, ReasoningReport, fuse,
+        ContradictionJudge, ContradictionReport, resolve_conflict,
+    )
 
 =============================================================================
 THE BIG PICTURE
@@ -55,6 +58,24 @@ pure-reasoning answer is distinguishable from a flawed one — but never lifts a
 *had-evidence* ESCALATE (that ESCALATE is the grounding gate's fabrication
 signal, not a pure-reasoning case), and never lifts on a self-audit.
 
+Stage 4.5.2 adds a SECOND judge, over a DIFFERENT pair of things: not "is one
+answer's own logic right?" but "do TWO models' answers to the SAME question
+actually contradict?" `confidence.detect_divergence` (4.5.1) already did the
+cheap, ₹0, deterministic triage (semantic cosine + numeric-claim diff) and
+flagged that two answers LOOK different. `ContradictionJudge` is the fine
+judgment layer on top: an LLM asked directly whether that difference is a real
+contradiction or just compatible/complementary phrasing — the class embeddings
+structurally cannot resolve (see confidence.py's docstring: "yes" vs "no" on
+the same claim often embeds as near-identical).
+
+The fail-closed asymmetry is the point, not an oversight: the judge may only
+DOWNGRADE a flagged divergence (a COMPATIBLE verdict clears it); it can NEVER
+be the reason a conflict is raised in the first place (that's 4.5.1's job),
+and a judge that ERRORS or babbles (UNCHECKED) must NEVER be read as
+clearance — an audit that couldn't run is not evidence of agreement.
+`resolve_conflict()` is this exact rule, mirroring how `fuse()` combines
+grounding + reasoning into one stamp.
+
 =============================================================================
 THE FLOW
 =============================================================================
@@ -75,6 +96,16 @@ STEP 4: fuse(grounding, reasoning, critic_independent) → one ConfidenceReport
         ESCALATE→UNCERTAIN *only when the critic is independent*; SOUND otherwise
         only annotates (grounding signal still leads); UNCHECKED→grounding
         unchanged (graceful degradation, no regression).
+        |
+STEP 5 (4.5.2, separate entry point): ContradictionJudge.judge(question,
+        source_a, source_b) → ContradictionReport(verdict ∈ {CONTRADICTION,
+        COMPATIBLE, UNCHECKED}, which, grounds). Empty answer / no judge wired
+        / call error / unparseable → UNCHECKED, never a silent pass.
+        |
+STEP 6: resolve_conflict(divergence, judgment) → (conflict: bool, detail):
+        no divergence → no conflict (judge never even needed). Divergence +
+        COMPATIBLE → cleared. Divergence + CONTRADICTION or UNCHECKED → conflict
+        STANDS (the asymmetric fail-closed rule).
 
 =============================================================================
 """
@@ -93,6 +124,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))  # standalone-run s
 from jarvis_core.agent.parser import _extract_json_str
 from jarvis_core.brain.confidence import (
     ConfidenceReport,
+    DivergenceReport,
     VERDICT_CONFIDENT,
     VERDICT_ESCALATE,
     VERDICT_UNCERTAIN,
@@ -379,6 +411,169 @@ def fuse(
 
 
 # =============================================================================
+# Part 5: CONTRADICTION JUDGE (Stage 4.5.2 — cross-source, fail-closed)
+# =============================================================================
+
+VERDICT_CONTRADICTION = "CONTRADICTION"
+VERDICT_COMPATIBLE = "COMPATIBLE"
+# VERDICT_UNCHECKED (defined above) is shared with ReasoningGate — the same
+# "an audit that couldn't run is not a pass" floor applies to both judges.
+
+
+@dataclass(frozen=True)
+class ContradictionReport:
+    """The contradiction judge's output: a verdict, WHICH claim conflicts (if
+    any), and human-readable grounds."""
+    verdict: str
+    which: str
+    grounds: Tuple[str, ...]
+
+
+_CONTRADICTION_SYSTEM = (
+    "You are a strict conflict judge. You are given ONE question and TWO "
+    "different models' answers to it. Your only job is to decide whether the "
+    "two answers are a genuine CONTRADICTION (both cannot be true at once) or "
+    "merely COMPATIBLE (different wording, complementary detail, one is more "
+    "specific than the other — but nothing actually clashes). Do NOT judge "
+    "which answer is better, more complete, or more confident — only whether "
+    "they conflict. Be skeptical of calling something COMPATIBLE: it is worse "
+    "to wave through a real conflict than to flag two answers that just happen "
+    "to differ in emphasis."
+)
+
+
+def _build_contradiction_messages(
+    question: str, model_a: str, answer_a: str, model_b: str, answer_b: str,
+) -> List[Dict[str, str]]:
+    user = (
+        f"QUESTION:\n{question}\n\n"
+        f"ANSWER FROM {model_a}:\n{answer_a}\n\n"
+        f"ANSWER FROM {model_b}:\n{answer_b}\n\n"
+        "Respond with ONLY a JSON object, no prose around it:\n"
+        '{"verdict": "CONTRADICTION" or "COMPATIBLE", '
+        '"which": "<the specific claim that conflicts, or empty if COMPATIBLE>"}'
+    )
+    return [{"role": "system", "content": _CONTRADICTION_SYSTEM},
+            {"role": "user", "content": user}]
+
+
+class ContradictionJudge:
+    """Judges whether two DIVERGENCE-FLAGGED answers genuinely contradict.
+    Fail-closed to UNCHECKED — a judge that errors or babbles is never read
+    as clearance (see resolve_conflict, which enforces this at the call site)."""
+
+    def __init__(self, judge_llm: Optional[CriticCall] = None) -> None:
+        self._judge = judge_llm
+
+    async def judge(
+        self, question: str,
+        source_a: Tuple[str, str], source_b: Tuple[str, str],
+    ) -> ContradictionReport:
+        """
+        Judge ONE pair of divergent answers to the SAME question.
+
+        EXECUTION FLOW:
+        1. Either answer empty, or no judge wired → UNCHECKED (nothing judged).
+        2. Build judge messages (question + both attributed answers).
+        3. Call judge (sync/async); parse JSON; map verdict.
+        4. Unknown verdict / parse failure / any exception → UNCHECKED.
+        """
+        model_a, answer_a = source_a
+        model_b, answer_b = source_b
+        answer_a, answer_b = (answer_a or "").strip(), (answer_b or "").strip()
+        if not answer_a or not answer_b:
+            return ContradictionReport(
+                VERDICT_UNCHECKED, "",
+                ("one or both answers empty — nothing to judge",))
+        if self._judge is None:
+            return ContradictionReport(
+                VERDICT_UNCHECKED, "",
+                ("no judge model wired — contradiction check disabled",))
+
+        messages = _build_contradiction_messages(question, model_a, answer_a, model_b, answer_b)
+        try:
+            out = self._judge(messages)
+            if inspect.isawaitable(out):
+                out = await out
+            raw = str(out)
+        except Exception as e:  # budget exhausted, HTTP error, anything
+            return ContradictionReport(
+                VERDICT_UNCHECKED, "",
+                (f"judge call failed ({type(e).__name__}) — treated as unresolved, NOT as agreement",))
+
+        return _parse_contradiction(raw)
+
+
+def _parse_contradiction(raw: str) -> ContradictionReport:
+    """Map the judge's raw text to a ContradictionReport. Fail-closed."""
+    json_str = _extract_json_str(raw)
+    if json_str is None:
+        return ContradictionReport(
+            VERDICT_UNCHECKED, "",
+            ("judge emitted no parseable JSON — inconclusive",))
+    try:
+        data = json.loads(json_str)
+    except (json.JSONDecodeError, TypeError):
+        return ContradictionReport(
+            VERDICT_UNCHECKED, "",
+            ("judge JSON did not parse — inconclusive",))
+    if not isinstance(data, dict):
+        return ContradictionReport(
+            VERDICT_UNCHECKED, "",
+            ("judge JSON was not an object — inconclusive",))
+
+    verdict = str(data.get("verdict", "")).strip().upper()
+    which = str(data.get("which", "") or "").strip()
+
+    if verdict == VERDICT_CONTRADICTION:
+        return ContradictionReport(
+            VERDICT_CONTRADICTION, which or "(unspecified)",
+            (f"judge found a contradiction: {which or '(unspecified)'}",))
+    if verdict == VERDICT_COMPATIBLE:
+        return ContradictionReport(
+            VERDICT_COMPATIBLE, "",
+            ("judge found the answers compatible (different wording/complementary, not conflicting)",))
+    return ContradictionReport(
+        VERDICT_UNCHECKED, "",
+        (f"judge returned an unknown verdict {verdict!r} — inconclusive",))
+
+
+# =============================================================================
+# Part 6: CONFLICT RESOLUTION (combining 4.5.1 divergence + 4.5.2 judgment)
+# =============================================================================
+
+def resolve_conflict(
+    divergence: DivergenceReport, judgment: ContradictionReport,
+) -> Tuple[bool, str]:
+    """
+    Combine the deterministic divergence flag (4.5.1) with the LLM judge's
+    verdict (4.5.2) into ONE conflict decision, mirroring how fuse() combines
+    grounding + reasoning.
+
+    RULES (the fail-closed asymmetry is deliberate):
+    - no divergence -> no conflict. The judge is not even consulted for this
+      case in practice (the orchestrator only calls it when 4.5.1 flags).
+    - divergence + COMPATIBLE -> cleared. The judge may DOWNGRADE a flagged
+      divergence to "not actually a conflict" (different wording/complementary).
+    - divergence + CONTRADICTION -> conflict stands, judge NAMES the clash.
+    - divergence + UNCHECKED -> conflict STILL stands. A judge that errored or
+      produced nothing is not evidence of agreement — the deterministic flag
+      from 4.5.1 is the floor, and only a POSITIVE compatibility finding can
+      clear it.
+
+    Returns:
+        (conflict: bool, detail: str) — detail is always human-readable.
+    """
+    if not divergence.diverged:
+        return False, "no divergence detected"
+    if judgment.verdict == VERDICT_COMPATIBLE:
+        return False, (f"divergence flagged but judge cleared it: "
+                       f"{judgment.grounds[0] if judgment.grounds else 'compatible'}")
+    detail = judgment.grounds[0] if judgment.grounds else divergence.grounds[0]
+    return True, detail
+
+
+# =============================================================================
 # MAIN ENTRY POINT  +  SMOKE TESTS (offline — scripted critics, no network)
 # =============================================================================
 
@@ -569,6 +764,96 @@ def _run_self_test() -> None:
     check("T18 independence gate flips the verdict",
           fuse(ground_escalate, sound, critic_independent=False).verdict
           != fuse(ground_escalate, sound, critic_independent=True).verdict)
+
+    # --- ContradictionJudge (4.5.2) ---
+
+    # T19: CONTRADICTION verdict parsed, names the clash
+    cj_contra = ContradictionJudge(scripted(
+        '{"verdict": "CONTRADICTION", "which": "resistor value: 220 ohms vs 330 ohms"}'))
+    r19 = run(cj_contra.judge("what resistor?", ("gpt-4o-mini", "220 ohms"), ("deepseek-chat", "330 ohms")))
+    check("T19 CONTRADICTION parsed", r19.verdict == VERDICT_CONTRADICTION, str(r19))
+    check("T19b which names the clash", "220" in r19.which and "330" in r19.which, r19.which)
+
+    # T20: COMPATIBLE verdict parsed, which is empty
+    cj_compat = ContradictionJudge(scripted('{"verdict": "COMPATIBLE", "which": ""}'))
+    r20 = run(cj_compat.judge("q", ("a", "answer one"), ("b", "answer two, worded differently")))
+    check("T20 COMPATIBLE parsed", r20.verdict == VERDICT_COMPATIBLE, str(r20))
+    check("T20b which empty on COMPATIBLE", r20.which == "", r20.which)
+
+    # T21: babble (no JSON) -> UNCHECKED
+    cj_babble = ContradictionJudge(scripted("these seem fine to me"))
+    r21 = run(cj_babble.judge("q", ("a", "x"), ("b", "y")))
+    check("T21 no-JSON -> UNCHECKED", r21.verdict == VERDICT_UNCHECKED, str(r21))
+
+    # T22: judge raises -> UNCHECKED, never crashes
+    def judge_boom(messages: List[Dict[str, str]]) -> str:
+        raise RuntimeError("budget exhausted")
+    r22 = run(ContradictionJudge(judge_boom).judge("q", ("a", "x"), ("b", "y")))
+    check("T22 judge exception -> UNCHECKED", r22.verdict == VERDICT_UNCHECKED, str(r22))
+    check("T22b grounds explicitly say NOT agreement",
+          "NOT as agreement" in r22.grounds[0], str(r22.grounds))
+
+    # T23: no judge wired -> UNCHECKED (disabled, graceful)
+    r23 = run(ContradictionJudge(None).judge("q", ("a", "x"), ("b", "y")))
+    check("T23 no judge -> UNCHECKED", r23.verdict == VERDICT_UNCHECKED, str(r23))
+
+    # T24: one empty answer -> UNCHECKED without calling the judge
+    called24 = {"n": 0}
+    def counting_judge(messages: List[Dict[str, str]]) -> str:
+        called24["n"] += 1
+        return '{"verdict": "COMPATIBLE"}'
+    r24 = run(ContradictionJudge(counting_judge).judge("q", ("a", "x"), ("b", "   ")))
+    check("T24 empty answer -> UNCHECKED, judge not called",
+          r24.verdict == VERDICT_UNCHECKED and called24["n"] == 0, str((r24, called24)))
+
+    # T25: unknown verdict -> UNCHECKED (never silently COMPATIBLE)
+    cj_unknown = ContradictionJudge(scripted('{"verdict": "MAYBE", "which": ""}'))
+    r25 = run(cj_unknown.judge("q", ("a", "x"), ("b", "y")))
+    check("T25 unknown verdict -> UNCHECKED", r25.verdict == VERDICT_UNCHECKED, str(r25))
+
+    # T26: async judge (awaitable) handled
+    async def ajudge(messages: List[Dict[str, str]]) -> str:
+        return '{"verdict": "CONTRADICTION", "which": "test"}'
+    r26 = run(ContradictionJudge(ajudge).judge("q", ("a", "x"), ("b", "y")))
+    check("T26 async judge", r26.verdict == VERDICT_CONTRADICTION, str(r26))
+
+    # T27: messages carry the question + both attributed answers
+    msgs27 = _build_contradiction_messages("is X true?", "modelA", "yes", "modelB", "no")
+    body27 = msgs27[-1]["content"]
+    check("T27 question + both models + both answers present",
+          "is X true?" in body27 and "modelA" in body27 and "modelB" in body27
+          and "yes" in body27 and "no" in body27, body27[:200])
+
+    # --- resolve_conflict() (4.5.1 + 4.5.2 combination) ---
+
+    no_diverge = DivergenceReport(diverged=False, agreement=1.0, pairwise=(),
+                                  numeric_conflicts=(), grounds=("sources agree",))
+    diverged = DivergenceReport(diverged=True, agreement=0.2, pairwise=(("a", "b", 0.2),),
+                                numeric_conflicts=(), grounds=("semantic divergence: low cosine",))
+
+    contradiction = ContradictionReport(VERDICT_CONTRADICTION, "resistor value",
+                                        ("judge found a contradiction: resistor value",))
+    compatible = ContradictionReport(VERDICT_COMPATIBLE, "",
+                                     ("judge found the answers compatible",))
+    unchecked_j = ContradictionReport(VERDICT_UNCHECKED, "", ("judge call failed",))
+
+    # T28: no divergence -> no conflict regardless of judgment
+    c28, d28 = resolve_conflict(no_diverge, contradiction)
+    check("T28 no divergence -> no conflict even if judge somehow ran",
+          c28 is False and "no divergence" in d28, str((c28, d28)))
+
+    # T29: divergence + CONTRADICTION -> conflict stands, names the clash
+    c29, d29 = resolve_conflict(diverged, contradiction)
+    check("T29 divergence + CONTRADICTION -> conflict", c29 is True and "resistor value" in d29, str((c29, d29)))
+
+    # T30 (the asymmetry): divergence + COMPATIBLE -> cleared
+    c30, d30 = resolve_conflict(diverged, compatible)
+    check("T30 divergence + COMPATIBLE -> cleared", c30 is False and "cleared" in d30, str((c30, d30)))
+
+    # T31 (the fail-closed floor): divergence + UNCHECKED -> conflict STILL stands
+    c31, d31 = resolve_conflict(diverged, unchecked_j)
+    check("T31 divergence + UNCHECKED -> conflict stands (errored judge != agreement)",
+          c31 is True, str((c31, d31)))
 
     total = passed + len(failed)
     print(f"\n  Passed: {passed}/{total}")

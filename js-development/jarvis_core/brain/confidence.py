@@ -4,7 +4,9 @@ confidence.py — Confidence Gate v1 (Stage 4.0.3: the Metacognitive pillar).
 LAYER: Brain (Cognitive Control Loop — epistemic control)
 
 Import with:
-    from jarvis_core.brain.confidence import ConfidenceGate, ConfidenceReport
+    from jarvis_core.brain.confidence import (
+        ConfidenceGate, ConfidenceReport, detect_divergence, DivergenceReport,
+    )
 
 =============================================================================
 THE BIG PICTURE
@@ -29,6 +31,26 @@ knowledge-base hits):
 Fail-closed by construction: no evidence, or an empty draft, is ESCALATE —
 an ungrounded answer is never silently CONFIDENT.
 
+Stage 4.5.1 adds a SECOND, orthogonal gate: `detect_divergence` — given N
+SourcedAnswers to the SAME question (Stage 4.4's fan-out), does deterministic,
+₹0 triage on whether they actually agree. Two independent signals, either one
+trips it:
+  - semantic: min pairwise cosine across answers (injected EmbedFn) below a
+    threshold — the answers are substantively about different things.
+  - numeric: a shared-topic pair (>=2 common content words) that states a
+    DIFFERENT number for the SAME unit — "220 ohms" vs "330 ohms" is a real
+    factual conflict no cosine check reliably catches (embeddings blur exact
+    digits; two numbers in the same sentence shape read as near-identical).
+This is DELIBERATELY NOT a logical-contradiction detector — "yes" vs "no" on
+the same claim can embed as near-identical (same topic, negation blurred) and
+carries no extractable number. That class is reasoning.py's ContradictionJudge
+(4.5.2) — an LLM asked directly "do these actually contradict?" — which
+`detect_divergence` feeds but does not replace. `divergence_eval.jsonl` is the
+frozen fixture proving the honest scope: 4/6 conflicts are numeric (exact,
+same-topic), 2/6 are genuinely different-substance answers (semantic-only);
+0/6 rely on catching a bare logical inversion, because THIS gate structurally
+cannot.
+
 =============================================================================
 THE FLOW
 =============================================================================
@@ -40,12 +62,18 @@ STEP 2: lexical coverage (pure stdlib) + semantic max-cosine (lazy embedder,
         |
 STEP 3: blend -> verdict by thresholds (>=0.55 CONFIDENT, >=0.30 UNCERTAIN,
         else ESCALATE) -> ConfidenceReport(score, verdict, grounds).
+        |
+STEP 4 (4.5.1, separate entry point): detect_divergence(answers): <2 usable
+        -> not measurable, diverged=False. Else pairwise cosine (min across
+        all pairs) + numeric-claim diff (shared-topic gate + unit-normalized
+        number compare) -> diverged if EITHER signal trips.
 
 =============================================================================
 """
 
 from __future__ import annotations
 
+import json
 import re
 import sys
 from dataclasses import dataclass
@@ -169,6 +197,194 @@ class ConfidenceGate:
 
 
 # =============================================================================
+# Part 3: DIVERGENCE DETECTION (Stage 4.5.1 — deterministic, ₹0, cross-source)
+# =============================================================================
+
+@dataclass(frozen=True)
+class DivergenceReport:
+    """Whether N answers to the SAME question actually agree.
+
+    `pairwise` lists every (model_a, model_b, cosine) pair checked, so a
+    caller can see WHICH sources disagreed, not just that "something" did.
+    `numeric_conflicts` are human-readable strings, one per conflicting claim
+    pair found."""
+    diverged: bool
+    agreement: float
+    pairwise: Tuple[Tuple[str, str, float], ...]
+    numeric_conflicts: Tuple[str, ...]
+    grounds: Tuple[str, ...]
+
+
+_DIVERGENCE_MIN_COSINE = 0.60   # below this, two answers read as different substance
+_NUMERIC_REL_TOL = 0.08         # >8% relative gap on the SAME unit = a real conflict
+_NUMERIC_MIN_SHARED_WORDS = 2   # topical-overlap gate before comparing numbers at all
+
+_UNIT_ALIASES = {
+    "ohm": "ohm", "ohms": "ohm",
+    "v": "volt", "volt": "volt", "volts": "volt",
+    "ma": "milliamp", "mah": "milliamp",
+    "amp": "amp", "amps": "amp",
+    "w": "watt", "watt": "watt", "watts": "watt",
+    "hz": "hz", "khz": "khz", "mhz": "mhz", "ghz": "ghz",
+    "%": "percent", "percent": "percent",
+    "ms": "millisecond",
+    "s": "second", "sec": "second", "secs": "second",
+    "second": "second", "seconds": "second",
+    "min": "minute", "mins": "minute", "minute": "minute", "minutes": "minute",
+}
+_NUM_UNIT_RE = re.compile(
+    r"(?P<num>\d+(?:\.\d+)?)\s*(?P<unit>ohms?|mah|ma|amps?|khz|mhz|ghz|hz|"
+    r"volts?|v|watts?|w|percent|%|ms|secs?|seconds?|s|mins?|minutes?|min)\b",
+    re.IGNORECASE)
+
+
+def _extract_numeric_claims(text: str) -> List[Tuple[float, str]]:
+    """Every (number, normalized_unit) pair found in text. Unrecognized units
+    (e.g. 'million', bare counts) are skipped — better to miss a claim than
+    fabricate a comparison across incompatible units."""
+    out: List[Tuple[float, str]] = []
+    for m in _NUM_UNIT_RE.finditer(text):
+        try:
+            num = float(m.group("num"))
+        except ValueError:
+            continue
+        unit = _UNIT_ALIASES.get(m.group("unit").lower())
+        if unit:
+            out.append((num, unit))
+    return out
+
+
+def _numeric_conflicts(name_a: str, text_a: str, name_b: str, text_b: str) -> List[str]:
+    """Shared-topic gate (>=2 common content words) BEFORE comparing any
+    numbers — two answers about unrelated things that happen to both mention
+    a number are not a conflict. Within a shared topic, same unit + different
+    value (beyond _NUMERIC_REL_TOL) IS one, regardless of semantic cosine."""
+    shared = _content_words(text_a) & _content_words(text_b)
+    if len(shared) < _NUMERIC_MIN_SHARED_WORDS:
+        return []
+    claims_a = _extract_numeric_claims(text_a)
+    claims_b = _extract_numeric_claims(text_b)
+    conflicts: List[str] = []
+    seen: set = set()
+    for na, ua in claims_a:
+        for nb, ub in claims_b:
+            if ua != ub:
+                continue
+            denom = max(abs(na), abs(nb), 1e-9)
+            if abs(na - nb) / denom <= _NUMERIC_REL_TOL:
+                continue
+            key = (na, nb, ua)
+            if key in seen:
+                continue
+            seen.add(key)
+            conflicts.append(f"{name_a}: {na:g}{ua} vs {name_b}: {nb:g}{ub}")
+    return conflicts
+
+
+def detect_divergence(
+    answers: List[Tuple[str, str]],
+    embed_fn: Optional[EmbedFn] = None,
+    *,
+    min_cosine: float = _DIVERGENCE_MIN_COSINE,
+    model_name: str = _DEFAULT_MODEL,
+) -> DivergenceReport:
+    """
+    Do N (model, answer) pairs to the SAME question actually agree?
+
+    EXECUTION FLOW:
+    1. Drop blank answers. Fewer than 2 usable -> not measurable, diverged=False
+       (nothing to disagree WITH — an honest floor, not a false pass).
+    2. Embed once; pairwise cosine over every pair -> track the minimum.
+    3. Numeric-claim diff over every pair (shared-topic gated).
+    4. diverged = (min cosine < min_cosine) OR (any numeric conflict).
+
+    Returns:
+        DivergenceReport — never raises; a broken embed_fn propagates its own
+        exception (same contract as ConfidenceGate.grade's embedder call).
+    """
+    usable = [(m, a.strip()) for m, a in answers if a and a.strip()]
+    if len(usable) < 2:
+        return DivergenceReport(
+            diverged=False, agreement=1.0, pairwise=(), numeric_conflicts=(),
+            grounds=("fewer than 2 usable answers — divergence not measurable",))
+
+    active_embed = embed_fn or _build_default_embed_fn(model_name)
+    vecs = active_embed([a for _m, a in usable])
+
+    pairwise: List[Tuple[str, str, float]] = []
+    min_cos = 1.0
+    for i in range(len(usable)):
+        for j in range(i + 1, len(usable)):
+            cos = max(-1.0, min(1.0, _dot(vecs[i], vecs[j])))
+            pairwise.append((usable[i][0], usable[j][0], round(cos, 4)))
+            min_cos = min(min_cos, cos)
+
+    numeric_conflicts: List[str] = []
+    for i in range(len(usable)):
+        for j in range(i + 1, len(usable)):
+            numeric_conflicts.extend(_numeric_conflicts(
+                usable[i][0], usable[i][1], usable[j][0], usable[j][1]))
+
+    semantic_diverged = min_cos < min_cosine
+    diverged = semantic_diverged or bool(numeric_conflicts)
+    agreement = round(max(0.0, min_cos), 4)
+
+    grounds: List[str] = []
+    if semantic_diverged:
+        worst = min(pairwise, key=lambda p: p[2])
+        grounds.append(f"semantic divergence: '{worst[0]}' vs '{worst[1]}' "
+                       f"cosine {worst[2]:.2f} < {min_cosine}")
+    if numeric_conflicts:
+        grounds.append("numeric conflict(s): " + "; ".join(numeric_conflicts))
+    if not grounds:
+        grounds.append(f"sources agree: min pairwise cosine {min_cos:.2f}, no numeric conflicts")
+
+    return DivergenceReport(diverged=diverged, agreement=agreement,
+                            pairwise=tuple(pairwise),
+                            numeric_conflicts=tuple(numeric_conflicts),
+                            grounds=tuple(grounds))
+
+
+# =============================================================================
+# Part 4: FROZEN DIVERGENCE GATE (Stage 4.5.1 DoD — 6/6 conflicts, 0/6 false flags)
+# =============================================================================
+
+_DIVERGENCE_EVAL_PATH = Path(__file__).resolve().parents[2] / "tests" / "divergence_eval.jsonl"
+
+
+def _make_pair_embed(same_topic: bool) -> EmbedFn:
+    """The fixture declares topic-sameness explicitly (`same_topic`) rather
+    than relying on keyword pattern-matching over fixture text — fully
+    deterministic, and it makes each row self-documenting: a same-topic
+    numeric-conflict row proves the numeric path trips even when cosine is
+    forced to 1.0; a different-topic row proves the semantic path alone."""
+    def _embed(texts: List[str]) -> List[List[float]]:
+        if same_topic:
+            return [[1.0, 0.0] for _ in texts]
+        return [[1.0, 0.0]] + [[0.0, 1.0] for _ in texts[1:]]
+    return _embed
+
+
+def _run_divergence_gate(path: Path = _DIVERGENCE_EVAL_PATH) -> Tuple[int, int, List[str]]:
+    """Replay the frozen fixture; returns (correct, total, mismatch descriptions)."""
+    rows = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()
+            if line.strip()]
+    correct = 0
+    mismatches: List[str] = []
+    for row in rows:
+        report = detect_divergence(
+            [(row["model_a"], row["answer_a"]), (row["model_b"], row["answer_b"])],
+            embed_fn=_make_pair_embed(bool(row["same_topic"])))
+        expect = bool(row["expect_diverged"])
+        if report.diverged == expect:
+            correct += 1
+        else:
+            mismatches.append(f"{row['id']}: expected diverged={expect}, "
+                              f"got {report.diverged} ({report.grounds})")
+    return correct, len(rows), mismatches
+
+
+# =============================================================================
 # MAIN ENTRY POINT  +  SMOKE TESTS (offline — scripted embed_fn, no downloads)
 # =============================================================================
 
@@ -265,6 +481,58 @@ def _run_self_test() -> None:
         return [[2.0, 0.0, 0.0] for _ in texts]  # non-unit on purpose
     r11 = ConfidenceGate(embed_fn=weird_embed).grade("spark spark", ["spark spark"])
     check("T11 score clamped", 0.0 <= r11.score <= 1.0, str(r11.score))
+
+    # --- detect_divergence() ---
+
+    # D1: fewer than 2 usable answers -> not measurable, diverged=False
+    d1 = detect_divergence([("solo", "the only answer")])
+    check("D1 single answer -> not measurable, diverged=False",
+          d1.diverged is False and "not measurable" in d1.grounds[0], str(d1))
+
+    # D2: blank answers dropped before the count check
+    d2 = detect_divergence([("a", "real answer"), ("b", "   ")])
+    check("D2 blank answer dropped -> effectively single -> not measurable", d2.diverged is False)
+
+    # D3: same-topic (forced cosine=1.0), numeric claims disagree -> diverged
+    # via the numeric path ALONE (proves it's independent of semantic cosine)
+    d3 = detect_divergence(
+        [("a", "The current-limiting resistor should be about 220 ohms."),
+         ("b", "You need roughly 330 ohms for that current-limiting resistor.")],
+        embed_fn=_make_pair_embed(same_topic=True))
+    check("D3 numeric conflict trips diverged even with forced-identical cosine",
+          d3.diverged is True and any("ohm" in c for c in d3.numeric_conflicts), str(d3))
+
+    # D4: same-topic, numbers agree -> NOT diverged
+    d4 = detect_divergence(
+        [("a", "The resistor should be 220 ohms."), ("b", "Use a 220 ohm resistor.")],
+        embed_fn=_make_pair_embed(same_topic=True))
+    check("D4 matching numbers -> not diverged", d4.diverged is False, str(d4))
+
+    # D5: different-topic (forced cosine=0.0), no numbers -> diverged via semantic path
+    d5 = detect_divergence(
+        [("a", "Salting the join key fixes skew."), ("b", "Skew usually isn't worth fixing.")],
+        embed_fn=_make_pair_embed(same_topic=False))
+    check("D5 semantic-only divergence (no numbers involved)",
+          d5.diverged is True and "semantic divergence" in d5.grounds[0], str(d5))
+
+    # D6: numbers present but NO shared topical words -> gate blocks the
+    # comparison (unrelated coincidental numbers must not read as a conflict)
+    d6 = detect_divergence(
+        [("a", "The resistor is 220 ohms."), ("b", "The invoice total is 330 dollars.")],
+        embed_fn=_make_pair_embed(same_topic=True))
+    check("D6 no shared topic words -> numeric path stays silent",
+          d6.numeric_conflicts == (), str(d6.numeric_conflicts))
+
+    # D7: pairwise tuple names both models for a 2-source check
+    check("D7 pairwise names both sources",
+          len(d3.pairwise) == 1 and d3.pairwise[0][0] == "a" and d3.pairwise[0][1] == "b",
+          str(d3.pairwise))
+
+    # D8 (Stage 4.5.1 DoD): the frozen 12-fixture gate — 6/6 conflicts flagged,
+    # 0/6 false flags, exact.
+    correct, total_g, mismatches = _run_divergence_gate()
+    check(f"D8 divergence gate: {correct}/{total_g} on frozen fixture (6/6 conflict, 6/6 agree)",
+          correct == total_g, "; ".join(mismatches))
 
     total = passed + len(failed)
     print(f"\n  Passed: {passed}/{total}")
