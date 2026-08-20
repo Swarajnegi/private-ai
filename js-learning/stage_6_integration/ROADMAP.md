@@ -17,6 +17,17 @@
 | **6.4** | Conversation Memory | Remember context across sessions | Multi-turn conversations with history |
 | **6.5** | Context Caching (Cloud) | Optional cloud-assisted code understanding | Full codebase in context via API KV caching |
 | **6.6** | JARVIS MVP | The complete system | End-to-end: Voice → Think → Respond |
+| **6.7** | Always-Reachable Memory Backend | Replace git-sync with a continuously-reachable memory layer | Any device reads/writes current state without a manual pull |
+| **6.8** | Universal Capture Adapter | Awareness capture that isn't tied to one specific host/IDE | A new host gets full capture parity by implementing one adapter contract |
+
+> **Honest note (added 2026-08-01):** this file (6.1-6.6) is the ORIGINAL pre-Stage-3 draft and
+> has never been re-scoped the way `stage_4_orchestration/ROADMAP.md` was — it still assumes a
+> "local Llama 70B" (6.5's constraint note, line 97) that was never actually built; the real
+> stack is OpenRouter + Gemini today, Kimi K2.6 target base from Stage 5. Re-scoping 6.1-6.6
+> against the real stack is a separate, larger task, not done here. 6.7 and 6.8 are new additions
+> from a live architecture discussion, not part of the original draft, and describe real,
+> concrete gaps identified against the CURRENT design (git-sync between two known machines;
+> host-specific capture) — not aspirational voice/vision features.
 
 ---
 
@@ -115,6 +126,47 @@ and refactor a module with full dependency awareness.
 
 ---
 
+## Sub-Phase 6.7: Always-Reachable Memory Backend ⬜
+
+**Goal:** Today, "portable across machines" means git push/pull between exactly two known
+laptops, with an explicit single-user-at-a-time constraint. That's a real, working mechanism for
+a solo project, but it isn't "always aware on any system" — it requires a manual sync step, and
+it doesn't generalize past the two machines it was designed for. This sub-phase replaces the
+git-synced files with a continuously-reachable memory/data layer any client (a third laptop, a
+phone, a machine you've never used before) can read and write against in real time.
+
+| Lesson | Topic | JARVIS Use Case | Command |
+|--------|-------|-----------------|---------|
+| 6.7.1 | Self-hosted vs. cloud-hosted backend tradeoffs | A small server you run vs. a hosted DB/vector store — cost, control, uptime | `@[/learn] Explain self-hosted vs. managed backend tradeoffs for a personal memory layer.` |
+| 6.7.2 | Network-reachable KB + vector store | Replace local ChromaDB with a server-reachable instance (or a thin sync daemon in front of it) | `/dev Design a network-reachable memory backend for jarvis_data/.` |
+| 6.7.3 | Multi-client consistency | What changes once "single-user-at-a-time" is no longer guaranteed — two devices reading/writing close together | `@[/learn] Explain consistency models for a low-concurrency personal data store.` |
+| 6.7.4 | Security/auth for a now-exposed memory layer | Local git-synced files were never network-exposed; a reachable backend is a new attack surface | `/dev Add auth to the memory backend; threat-model what changed.` |
+
+**Practical Exercise:** From a machine that has never had this repo cloned, ask JARVIS something
+that depends on yesterday's conversation — no manual sync step first.
+
+---
+
+## Sub-Phase 6.8: Universal Capture Adapter ⬜
+
+**Goal:** Awareness capture — the mechanism that makes JARVIS actually know what you did — is
+host-specific today: automatic via hooks on Claude Code, manual via `/memory` on Antigravity (no
+hook system there). The underlying organ (`jarvis_core/agent/capture.py`) is already built to be
+host-independent per its own design; what's missing is a defined, minimal adapter contract so a
+brand-new host gets full capture parity without bespoke, one-off wiring each time.
+
+| Lesson | Topic | JARVIS Use Case | Command |
+|--------|-------|-----------------|---------|
+| 6.8.1 | Audit the existing capture organ | Separate what's genuinely host-independent in `capture.py` from what's currently Claude-Code-hook-specific glue | `@[/learn] Trace capture.py's host-independent core vs. its Claude Code hook adapter.` |
+| 6.8.2 | Define the adapter contract | The minimal interface any new host must implement to trigger a capture event | `/dev Draft the capture adapter contract (interface, not implementation).` |
+| 6.8.3 | Build a second reference adapter | Prove the contract actually generalizes by wiring it into ONE new host type (e.g. a plain terminal wrapper) | `/dev Build a second capture adapter against the contract from 6.8.2.` |
+| 6.8.4 | Explicit degraded mode | A host with no adapter yet must fail visibly (no capture, flagged as such) — never silently lose turns pretending capture happened | `/dev Add an explicit "capture unavailable" state instead of silent no-ops.` |
+
+**Practical Exercise:** Use JARVIS from a host that's never been wired up before; confirm it
+either captures via the new adapter, or clearly tells you it isn't capturing — never silence.
+
+---
+
 ## Final Boss: JARVIS Operational
 
 The complete system that:
@@ -139,6 +191,8 @@ The complete system that:
 | 6.4 Conversation Memory | ⬜ Not Started | 0/4 |
 | 6.5 Context Caching (Cloud) | ⬜ Not Started | 0/4 |
 | 6.6 JARVIS MVP | ⬜ Not Started | 0/4 |
+| 6.7 Always-Reachable Memory Backend | ⬜ Not Started | 0/4 |
+| 6.8 Universal Capture Adapter | ⬜ Not Started | 0/4 |
 
 ---
 

@@ -29,20 +29,21 @@
 - **Output:** `jarvis_core/agent/` — Tool ABC + Registry + Cost accounting + ReAct loop + Planner + MemGPT-style memory paging + STEAL #13 tolerant tool-call harness — JARVIS owns the runtime
 - **Roadmap:** [stage_3_agents/ROADMAP.md](stage_3_agents/ROADMAP.md) — see also [STAGE_3_OPENCLAUDE_STRATEGY.md](../STAGE_3_OPENCLAUDE_STRATEGY.md) (SUPERSEDED 2026-05-13, kept for historical context)
 
-### Stage 4: Multi-Model Orchestration — The Brain ⬅️ CURRENT
+### Stage 4: Multi-Model Orchestration — The Brain ✅ COMPLETE (2026-07-27)
 - **Duration:** 2-3 months
 - **Output:** Router + Aggregator + GraphRAG (replaces flat vector search)
-- **Status:** 4.0 Cognitive Control Loop ✅ · 4.1 Route Targets & Per-Model Protocol — W1 ✅, W2 (RouteTarget + ProtocolAdapter + ModelPool/failover, STEAL #7) ✅ · 4.5 Reasoning Gate (W1 + independent critic) ✅ (built ahead) · next: 4.2 Intent Router (the Pass A→B gate)
+- **Status:** 4.0-4.5 all ✅, 4.6 GraphRAG ⏭ deferred (trigger documented) · **Final Boss 8/8 PASS (offline, ₹0)** closes the stage 2026-07-27 — see [stage_4_orchestration/ROADMAP.md](stage_4_orchestration/ROADMAP.md) for the full leg-by-leg breakdown
 - **Roadmap:** [stage_4_orchestration/ROADMAP.md](stage_4_orchestration/ROADMAP.md)
 
-### Stage 5: Domain Specialists — The Experts
+### Stage 5: Domain Specialists — The Experts ⬅️ CURRENT
 - **Duration:** 2-3 months
-- **Output:** Fine-tuned code/science/medical models
+- **Output:** The Engineer — a QLoRA adapter on the shared Kimi K2.6 base (Engineer-first MVP; rest of the roster templates only after this ships)
 - **Roadmap:** [stage_5_specialists/ROADMAP.md](stage_5_specialists/ROADMAP.md)
 
 ### Stage 6: Integration & Interface — The Voice
 - **Duration:** 1-2 months
-- **Output:** Voice + Vision + Context Caching (cloud) + JARVIS MVP
+- **Output:** Voice + Vision + Context Caching (cloud) + JARVIS MVP + always-reachable memory
+  backend (replaces git-sync) + a universal, host-independent capture adapter contract
 - **Roadmap:** [stage_6_integration/ROADMAP.md](stage_6_integration/ROADMAP.md)
 
 ---
@@ -98,8 +99,8 @@
 | # | Sub-Phase | Status |
 |---|-----------|--------|
 | 4.0 | Cognitive Control Loop (boot inhale, autobiography wiring, RoadmapStateReader, Confidence Gate v1, capture parity — closes L324; blocks all other sub-phases per L107) | ✅ Complete (2026-06-12, Gate A 5/5 live) |
-| 4.1 | Route Targets & Per-Model Protocol (L322: ModelProfile registry + ProtocolAdapter middleware + RouteTarget contract + **STEAL #7** OpenClaude SmartRouter failover). Kimi K2.6 RunPod deployment DEFERRED to Stage 5 entry per Decision 2026-06-12 — `RunPodTarget` ships as offline contract stub; frontier APIs = explicit-flag escape valve, structurally outside the router pool | ⬜ |
-| 4.2 | Intent Router (interim nearest-prototype classifier on specialist-codename labels; ModernBERT-Large CPU classifier = conditional on gate failure, else Stage 5 specialist #1 trained on the RoutingLedger) | ⬜ |
+| 4.1 | Route Targets & Per-Model Protocol (L322: ModelProfile registry + ProtocolAdapter middleware + RouteTarget contract + **STEAL #7** OpenClaude SmartRouter failover). Kimi K2.6 RunPod deployment DEFERRED to Stage 5 entry per Decision 2026-06-12 — `RunPodTarget` ships as offline contract stub; frontier APIs = explicit-flag escape valve, structurally outside the router pool | ✅ Complete (live DoD 2026-06-19) |
+| 4.2 | Intent Router (interim nearest-prototype classifier on specialist-codename labels; ModernBERT-Large CPU classifier = conditional on gate failure, else Stage 5 specialist #1 trained on the RoutingLedger) | ✅ Complete (gate 84% 2026-06-29) |
 
 **Pass A → Pass B Gate:** Router achieves ≥80% routing accuracy on a 50-query labeled test set (`js-development/tests/router_eval.jsonl`, frozen). Failure modes (always-default, always-largest) score ~20%. Cannot advance to 4.3 without a documented Router quality measurement.
 
@@ -107,9 +108,10 @@
 | # | Sub-Phase | Status |
 |---|-----------|--------|
 | 4.3 | Dynamic Target Management (rolling stats, budget governor, catalog drift) | ✅ Complete (2026-07-16) |
-| 4.4 | Response Aggregation (escalation-only fan-out, attributed synthesis) | ⬜ |
-| 4.5 | Epistemic Control (conflict detection, fail-closed judge, human escalation) | ⬜ |
+| 4.4 | Response Aggregation (escalation-only fan-out, attributed synthesis) | ✅ Complete (2026-07-20) |
+| 4.5 | Epistemic Control (conflict detection, fail-closed judge, human escalation) | ✅ Complete (2026-07-20) |
 | 4.6 | GraphRAG | ⏭ DEFERRED — trigger: first KB-logged multi-hop retrieval failure → `jarvis_core/memory/graph.py` |
+| Final Boss | Stage-4-closing ritual, 8 legs, offline scripted twin | ✅ Complete (2026-07-27; 8/8 PASS, ₹0; `--live` variant built, user-run) |
 
 ---
 
@@ -141,6 +143,8 @@
 | 6.4 | Conversation Memory | ⬜ |
 | 6.5 | Context Caching (optional cloud-assisted code) | ⬜ |
 | 6.6 | JARVIS MVP | ⬜ |
+| 6.7 | Always-Reachable Memory Backend (replaces git-sync; any device, no manual pull) | ⬜ |
+| 6.8 | Universal Capture Adapter (host-independent awareness capture, not per-IDE bespoke) | ⬜ |
 
 ---
 
@@ -151,15 +155,15 @@
 | 1 | Systems Python | ✅ Sufficient |
 | 2 | Memory Layer | ✅ Complete (8/8 sub-phases; Final Boss executed 2026-05-03) |
 | 3 | Agent Framework (`jarvis_core/agent/` from scratch — Decision 2026-05-13) | ✅ Complete (ReAct + tools + errors + STEAL #8/#9/#13) |
-| 4 | Orchestration (Kimi K2.6 brain + 12 QLoRA adapters) | 🔄 In progress (4.0 ✅, 4.1 ✅, 4.5 ✅; next 4.2 Router) |
-| 5 | Specialists (Engineer-first MVP) | ⬜ 0% |
+| 4 | Orchestration (Kimi K2.6 brain + 12 QLoRA adapters) | ✅ Complete (4.0-4.5 all shipped; Final Boss 8/8 PASS 2026-07-27; 4.6 GraphRAG deferred, trigger documented) |
+| 5 | Specialists (Engineer-first MVP) | ⬜ 0% ⬅️ CURRENT |
 | 6 | Integration | ⬜ 0% |
 
 ---
 
 ## Next Action
 
-**Start:** Stage 3.1 -- Function Calling & Structured Output.
-**First Lesson:** 3.1.1 -- Function Calling Basics (`@[/learn] Explain function calling in LLMs.`)
-**Files:** `js-development/jarvis_core/agent/` (3.0 foundations already landed).
-**References:** [stage_3_agents/ROADMAP.md](stage_3_agents/ROADMAP.md)
+**Start:** Stage 5.1 -- Fine-Tuning Basics (QLoRA on RunPod, Kimi K2.6 base). Stage 4 closed 2026-07-27 (Final Boss 8/8 PASS); this is the roadmap's own stated next step.
+**First Lesson:** 5.1 -- QLoRA fundamentals, then 5.2 The Engineer adapter (MVP, sub-domain isolation).
+**Files:** `js-development/jarvis_core/brain/` (Stage 4 substrate, done) → Stage 5 work lands in a new `jarvis_core/specialists/` (not yet created).
+**References:** [stage_5_specialists/ROADMAP.md](stage_5_specialists/ROADMAP.md)

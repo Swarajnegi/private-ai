@@ -14,19 +14,9 @@ In this repo you are **Chief Systems Architect & Strategic Co-Founder** for JARV
 
 ---
 
-## Dual-runtime topology
-
-| Machine | OS | Runtime | When | Role |
-|---|---|---|---|---|
-| Work laptop (this one) | Linux | Claude Code (Opus 4.7) | Daytime | Heavy lifting; scratchpad |
-| Personal laptop | Windows | Antigravity | Evenings | Learning + brainstorming via slash-command workflows; canonical machine |
-
-**Sync:** GitHub at https://github.com/Swarajnegi/private-ai (public repo). Standard `git pull` / `git push` flow. Push from work laptop requires a fine-grained PAT in `$GH_TOKEN` env var (Contents: Read and write scope). Pull is auth-free since the repo is public. **Single-user-at-a-time** — no concurrent edits, so `merge=union` on `*.jsonl` (set in `.gitattributes`) handles the rare append-from-both-sides case automatically.
-
----
-
 ## Current build state
 
+- **Stage 1 — Systems Python ✅ Sufficient** (generators/data pipelines, async foundations, object model — the language fundamentals JARVIS's own runtime is written in; 1.4 Concurrent Patterns and 1.5 Type Safety deliberately deferred, not skipped by accident)
 - **Stage 2 — Memory Layer ✅ COMPLETE** (closed 2026-05-03; 8/8 sub-phases shipped + Final Boss executed)
   - 2.1-2.4 ✅ — embeddings, ChromaDB, ingestion, retrieval (top-k, MMR, query expansion, compression) all in `jarvis_core/memory/`
   - 2.5.1 BM25 ✅ — `jarvis_core/memory/bm25.py`
@@ -35,22 +25,37 @@ In this repo you are **Chief Systems Architect & Strategic Co-Founder** for JARV
   - 2.5.4 ColBERT — concept learned, implementation skipped (storage tradeoff)
   - 2.5.5–2.5.7 ✅ — Evaluation Metrics + RAGAS + LLM-as-Judge & Tracing all in KB Procedurals
   - 2.5.8 ✅ — `scripts/kb_compact.py` shipped + Final Boss `--force` executed (KB 222 → 219)
-- **Stage 3 — Agent Framework ✅ COMPLETE** (`jarvis_core/agent/`; Decision 2026-05-13 — JARVIS owns its agent runtime, reverses 2026-05-01 OpenClaude delegation)
+- **Stage 3 — Agent Framework ✅ COMPLETE** (JARVIS's agent runtime is built FROM SCRATCH in `jarvis_core/agent/` — Decision 2026-05-13 explicitly REVERSED an earlier plan to delegate to OpenClaude/MCP; there is no OpenClaude bridge or `mcp_server.py` anywhere in this codebase)
   - 3.0 Entry Sprint ✅ (2026-05-16) — `registry.py` + `cost.py` + `tool.py`
   - 3.1 Function Calling & Structured Output ✅ (2026-05-18) — `parser.py` + `errors.py` + `state.py` + `telemetry.py`
   - 3.2 Tool Design & Registration ✅ — 18 tools registered incl. Phase C cognitive substrate
   - 3.3 Planning & Decomposition ✅ — `plan.py` + `executor.py` (DAG, Kahn)
   - 3.4 ReAct Pattern ✅ — `react.py` + `trace.py` + `monitor.py` + `reflection.py`
   - 3.5 MemGPT (heartbeat + sleep-time consolidation) ✅ (2026-06-10) — **Stage 3 Final Boss 7/7** (mind.py), **First Light 2026-06-11** (llm_client.py)
-- **Stage 4 — Multi-Model Orchestration (`jarvis_core/brain/`) ⬅️ CURRENT.** ₹0 stage — OpenRouter free tier + local CPU only, no RunPod spend until Stage 5 entry (Decision 2026-06-12).
-  - 4.0 Cognitive Control Loop ✅ (2026-06-12, Gate A 5/5 live)
+- **Stage 4 — Multi-Model Orchestration (`jarvis_core/brain/`) ✅ COMPLETE** (closed 2026-07-27). ₹0 stage — OpenRouter free tier + local CPU only, no RunPod spend until Stage 5 entry (Decision 2026-06-12).
+  - 4.0 Cognitive Control Loop ✅ (2026-06-12, Gate A 5/5 live) — boot-time self-awareness + per-session personalization capture (`observation_queue.jsonl`, `profile_synth.py`, `cognitive_mirror`); NOT a separate stage
   - 4.1 Route Targets & Per-Model Protocol ✅ (Wave 1 2026-06-15, Wave 2 LIVE DoD 2026-06-19) — `model_profiles.py` + `protocol.py` + `targets.py` + `model_pool.py` (STEAL #7 failover)
   - 4.2 Intent Router ✅ COMPLETE (2026-06-29) — 84% on frozen 50-query gate, Pass A→B gate cleared — `router.py` + `routing_ledger.py`
-  - 4.5 Reasoning Gate Wave 1 + independent critic ✅ (built ahead of sequence)
+  - 4.3 Dynamic Target Management ✅ (2026-07-16) — rolling stats persistence, budget governor, catalog sync & drift
+  - 4.4 Response Aggregation ✅ (2026-07-20) — bounded fan-out + attributed synthesis — `aggregator.py`
+  - 4.5 Epistemic Control ✅ (2026-07-20) — divergence detection + fail-closed contradiction judge — `confidence.py` + `reasoning.py`
+  - 4.6 GraphRAG ⏭ DEFERRED (trigger-gated: first KB-logged multi-hop retrieval failure)
+  - **Final Boss ✅ 8/8 PASS (2026-07-27)** — offline scripted twin, ₹0, `orchestrator.py --final-boss`; `--live` variant built, user-run
   - ReAct hardening arc (2026-07-13→15, off-roadmap, blocking-priority) — 5 live-probe failures fixed in `agent/react.py`: budget death, plan-confabulation, convergence death, goal-substitution, unread-search-results. 112/112 tests.
-  - **⬅️ NOW: 4.3 Dynamic Target Management** — rolling stats persistence, budget governor (`CostTracker.would_exceed`), catalog sync & drift. Then 4.4 Response Aggregation, 4.5 Wave 2, 4.6 GraphRAG (deferred, trigger-gated).
+- **Stage 5 — Domain Specialists ⬅️ NOW.** Engineer-first QLoRA MVP on the shared Kimi K2.6 base. Next: 5.1 Fine-Tuning Basics (RunPod). Not started.
 - Master roadmap: [js-learning/JARVIS_MASTER_ROADMAP.md](js-learning/JARVIS_MASTER_ROADMAP.md)
-- Production code: [js-development/jarvis_core/memory/](js-development/jarvis_core/memory/), [agent/](js-development/jarvis_core/agent/), [brain/](js-development/jarvis_core/brain/) — Memory + Agent layers production-grade; Brain mid-build; Body (Stage 6) still a placeholder
+- Production code: [js-development/jarvis_core/memory/](js-development/jarvis_core/memory/), [agent/](js-development/jarvis_core/agent/), [brain/](js-development/jarvis_core/brain/) — Memory + Agent + Brain layers production-grade; Body (Stage 6) still a placeholder
+
+---
+
+## Dual-runtime topology
+
+| Machine | OS | Runtime | When | Role |
+|---|---|---|---|---|
+| Work laptop (this one) | Linux | Claude Code (Opus 4.7) | Daytime | Heavy lifting; scratchpad |
+| Personal laptop | Windows | Antigravity | Evenings | Learning + brainstorming via slash-command workflows; canonical machine |
+
+**Sync:** GitHub at https://github.com/Swarajnegi/private-ai (public repo). Standard `git pull` / `git push` flow. Push from work laptop requires a fine-grained PAT in `$GH_TOKEN` env var (Contents: Read and write scope). Pull is auth-free since the repo is public. **Single-user-at-a-time** — no concurrent edits, so `merge=union` on `*.jsonl` (set in `.gitattributes`) handles the rare append-from-both-sides case automatically.
 
 ---
 
