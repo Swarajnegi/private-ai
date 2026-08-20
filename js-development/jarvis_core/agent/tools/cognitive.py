@@ -171,7 +171,11 @@ class CognitiveMirrorTool(CognitiveToolBase):
         "Search the KB for Cognitive_Pattern entries tagged DIRECTIVE that are "
         "relevant to the given context. Use BEFORE responding to a user request "
         "to load user-specific behavioral rules (compression style, no fluff, "
-        "ambition framing, visceral imagery, etc.) into the prompt frame."
+        "ambition framing, visceral imagery, etc.) into the prompt frame. "
+        "This is about the USER's own behavior/preferences -- for questions "
+        "about JARVIS's OWN history/decisions/what-was-built, use "
+        "prior_self_consult instead; both read the same KB file but surface "
+        "different entry types."
     )
     input_schema = CognitiveMirrorInput
 
@@ -229,7 +233,11 @@ class PriorSelfConsultInput(ToolInput):
     )
     types: Optional[List[str]] = Field(
         default=None,
-        description="Optional KB type filter (e.g., ['Decision', 'Episodic']). None = all types.",
+        description="Optional KB type filter (e.g., ['Decision', 'Episodic']). None = all types. "
+                    "For 'what have we built' / project-status / milestone-style questions, PASS "
+                    "types=['Decision', 'Idea'] explicitly -- unfiltered ranking tends to surface "
+                    "Cognitive_Pattern entries (behavioral/psychological observations) over the "
+                    "entries that actually record shipped work.",
     )
     top_n: int = Field(default=8, ge=1, le=20, description="Max results to return.")
 
@@ -286,7 +294,12 @@ class PriorSelfConsultTool(CognitiveToolBase):
         "consult past decisions / episodic events before making a similar "
         "choice now. Defends against drift from prior reasoning. Results are "
         "newest-first within equal relevance — a newer Decision supersedes an "
-        "older one on the same topic."
+        "older one on the same topic. "
+        "For 'what is this project' / 'what have we built' / status-summary "
+        "questions specifically: pass types=['Decision', 'Idea'] (see the types "
+        "field) rather than leaving it unfiltered, or the ranking may surface "
+        "behavioral/psychological KB entries instead of the entries that "
+        "actually record shipped milestones."
     )
     input_schema = PriorSelfConsultInput
 

@@ -62,7 +62,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))  # standalone-run safety
 
-from jarvis_core.config import KB_PATH
+from jarvis_core.config import KB_PATH, JARVIS_ROOT
 from jarvis_core.agent.capture import (
     QUEUE_PATH, append_observation, build_observation, guess_domain,
     strip_harness_blocks,
@@ -71,9 +71,15 @@ from jarvis_core.brain.llm_client import build_llm_call
 from jarvis_core.agent.mind import MindResult
 from jarvis_core.agent.react import TERMINATED_ERROR, TERMINATED_MAX_ITERATIONS
 from jarvis_core.brain.boot import BootReport, assemble_mind
-from jarvis_core.brain.confidence import ConfidenceGate, ConfidenceReport
+from jarvis_core.brain.confidence import (
+    ConfidenceGate, ConfidenceReport, detect_divergence,
+)
 from jarvis_core.brain.reasoning import (
     ReasoningGate, ReasoningReport, fuse, VERDICT_UNCHECKED,
+    ContradictionJudge, ContradictionReport, resolve_conflict,
+)
+from jarvis_core.brain.aggregator import (
+    fan_out, aggregate as run_aggregation, SourcedAnswer,
 )
 from jarvis_core.brain.model_profiles import ProfileRegistry
 from jarvis_core.brain.boot import full_toolset, default_toolset
@@ -88,6 +94,15 @@ _DEFAULT_BUDGET_USD = 0.10
 # An independent critic makes ~1 cheap call; cap it at a fraction of the session
 # budget so enabling it widens the combined ceiling to 1.5x, not 2x.
 _CRITIC_BUDGET_FRACTION = 0.5
+
+# Stage 4.4/4.5: how low a route decision's confidence has to be before it
+# alone triggers fan-out. NOT the roadmap's literal "multi-domain label" (no
+# such field exists on RoutingDecision today) -- this is the honest stand-in:
+# a route decision that barely cleared the router's own general-fallback
+# threshold (router.ROUTE_THRESHOLD == 0.28) is exactly the "not sure which
+# specialist this is" case aggregation exists for. Revisit if RoutingDecision
+# ever gains a real multi-label field.
+_AGG_ROUTE_CONF = 0.35
 
 # One terminal session per process — every ask in this process shares it, so
 # recall groups them into one chat exactly like a Claude Code session id does.
@@ -113,6 +128,9 @@ class AskResult:
     distill_status: str
     reasoning_verdict: str = VERDICT_UNCHECKED
     reasoning_flaw: str = ""
+    conflict_detected: bool = False
+    conflict_detail: str = ""
+    escalation_question: str = ""
 
 
 # =============================================================================
@@ -235,10 +253,53 @@ def _degenerate_diagnosis(result: MindResult) -> Tuple[str, str]:
     return _UNPARSED_FALLBACK, _UNPARSED_GROUNDS
 
 
+# Tier 3 (tool-selection reliability): a cheap, stdlib-only heuristic for the
+# one query class that's repeatedly failed to self-direct its own evidence-
+# gathering -- "what is this project / what have we built" style questions.
+# NOT the IntentRouter: that lazily loads sentence-transformers fresh per
+# ask() call unless a router is shared, so using it as a silent pre-check
+# would tax every single --ask invocation, not just the ones needing this.
+_STATUS_QUESTION_KEYWORDS = (
+    "what have we built", "what is this project", "what is jarvis",
+    "what have you built", "what's jarvis", "current stage", "what stage",
+    "project status", "what has been built", "what we've built", "what we built",
+)
+
+
+def _looks_like_status_question(query: str) -> bool:
+    hay = query.lower()
+    return any(kw in hay for kw in _STATUS_QUESTION_KEYWORDS)
+
+
+def _read_roadmap_status_summary(root: Optional[Path] = None) -> str:
+    """Deterministic file read (never an embedding/semantic search) of the
+    portable, IDE-agnostic ground truth for 'what stage are we on' --
+    js-learning/JARVIS_MASTER_ROADMAP.md's own Progress Overview table.
+    Deliberately NEVER .agent/rules/CLAUDE.md: that file is Claude-Code-
+    specific (auto-loaded via a root /CLAUDE.md shim) and explicitly not
+    loaded by Antigravity on the other machine -- JARVIS's own runtime must
+    not depend on it."""
+    path = (Path(root) if root else JARVIS_ROOT) / "js-learning" / "JARVIS_MASTER_ROADMAP.md"
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError:
+        return ""
+    marker = "## Progress Overview"
+    start = text.find(marker)
+    if start == -1:
+        return ""
+    end = text.find("\n---", start)
+    section = text[start: end if end != -1 else start + 1500]
+    return section.strip()
+
+
 async def ask(
     question: str,
     llm_call: Optional[Any] = None,
     budget_usd: float = _DEFAULT_BUDGET_USD,
+    reasoning_effort: Optional[str] = None,
+    status_prefetch: bool = False,
+    roadmap_root: Optional[Path] = None,
     capture: bool = True,
     distill: bool = True,
     inhale: bool = True,
@@ -260,6 +321,12 @@ async def ask(
     routing_ledger: Optional[Any] = None,
     model_stats_store: Optional[Any] = None,
     cost_tracker: Optional[Any] = None,
+    aggregate: bool = False,
+    aggregate_gate: str = "off",
+    synthesizer: Optional[Any] = None,
+    contradiction_judge: Optional[ContradictionJudge] = None,
+    contradiction_judge_llm: Optional[Any] = None,
+    divergence_embed_fn: Optional[Any] = None,
     writer: Optional[SessionMemoryWriter] = None,
     extra_tools: Optional[Dict[str, Any]] = None,
     clock: Optional[Callable[[], datetime]] = None,
@@ -283,14 +350,30 @@ async def ask(
     EXECUTION FLOW:
     1. LLMCall ready (auto-pick free model if unconfigured).
     2. Store opened; Mind assembled via boot (psyche + autobiography + inhale).
+    2b. Tier 3 (opt-in, off by default at this layer -- CLI defaults it ON):
+        a cheap stdlib heuristic on the question text; for "what have we
+        built" style questions, deterministically reads the portable
+        js-learning/JARVIS_MASTER_ROADMAP.md (never an IDE-specific rule
+        file) and prepends a clearly-labeled synthetic exchange to `hist`.
     3. solve(); store closed in finally; tool lines printed (errors surfaced).
     4. ConfidenceGate grades answer vs evidence ("made it up?"); when reasoning
        is on, ReasoningGate audits the logic ("is it right?") and fuse() stamps
        one verdict — a FLAWED audit floors it to ESCALATE (KB L383).
+    4b. Stage 4.4/4.5 (opt-in, escalation-only): if the stamp is ESCALATE, the
+        route confidence was low, or `aggregate=True`, fan out to the pool's
+        OTHER targets, synthesize an attributed answer, and re-check divergence
+        + a fail-closed contradiction judge — a confirmed conflict rewrites the
+        answer into an attributed question instead of a guess (never the
+        default path; Single-Model-First holds otherwise).
     5. Capture parity append + Episodic distill (both fail-soft). Ledger printed.
 
     Returns:
         AskResult — the answer plus every judgement and bookkeeping fact.
+
+    Scope note: `reasoning_effort` only reaches the single-model default path
+    (`build_llm_call`/`OpenRouterClient`). A `pool`/`targets`/`route` run builds
+    its own `OpenRouterTarget`s (targets.py) and does not thread this through —
+    unfixed in this pass.
     """
     # Resolve the LLM endpoint (4.1 W2). Priority:
     #   1. injected llm_call (tests/programmatic) — used directly, no pool.
@@ -369,7 +452,8 @@ async def ask(
         profile = getattr(primary, "profile", None) if use_profile else None
         profile_label = getattr(primary, "profile_label", "pooled") if use_profile else None
     else:
-        client = llm_call or build_llm_call(budget_usd=budget_usd)
+        client = llm_call or build_llm_call(budget_usd=budget_usd,
+                                            reasoning_effort=reasoning_effort)
         if hasattr(client, "pick_free_model") and not getattr(client, "model", ""):
             await client.pick_free_model()
         model = str(getattr(client, "model", "") or "")
@@ -415,6 +499,27 @@ async def ask(
     printer(f"  tools   : {'full' if full else 'default'} ({len(prebuilt)})"
             f" | gated: {', '.join(gated) or 'none'}")
     printer(f"  query   : {question}")
+
+    # Tier 3: forced pre-fetch for "what have we built" style questions --
+    # mutate the ALREADY-RESOLVED hist (never replace it: replacing would
+    # silently drop real prior-turn continuity for this session), inserted
+    # AFTER sess_state's turn-count was computed above so this synthetic
+    # addition never inflates the printed "N prior turn(s)" figure. Never
+    # persisted: cstore.append_turn() (below, on the exhale path) writes the
+    # real question/answer, never this `hist` list, so the synthetic prefix
+    # cannot leak into a future turn or the conversation store.
+    if status_prefetch and _looks_like_status_question(question):
+        summary = _read_roadmap_status_summary(roadmap_root)
+        if summary:
+            printer("  prefetch: status-question heuristic fired -- roadmap summary prepended")
+            hist = [
+                {"role": "user",
+                 "content": "[boot pre-fetch] What does the project roadmap currently say about status?"},
+                {"role": "assistant",
+                 "content": f"[SYSTEM PRE-FETCH -- not a real prior turn] Per "
+                            f"js-learning/JARVIS_MASTER_ROADMAP.md:\n{summary}"},
+            ] + hist
+
     try:
         mind, boot_report = assemble_mind(
             llm_call=client, store=store, kb_path=kb_path, inhale=inhale,
@@ -505,6 +610,83 @@ async def ask(
         rreport = await rgate.critique(question, answer, context=hist,
                                        evidence=_evidence_digest(evidence))
         report = fuse(report, rreport, critic_independent=indep)
+
+    # Stage 4.4/4.5 (opt-in, escalation-only — Single-Model-First still holds
+    # for every OTHER path through this function). Guarded identically to
+    # every other pool-mode-only block above: a directly-injected llm_call or
+    # a degenerate answer never reaches here, so `aggregate=True` passed by
+    # mistake on a non-pool call is a clean no-op, not a crash.
+    conflict_detected = False
+    conflict_detail = ""
+    escalation_question = ""
+    agg_trigger = "off"
+    if route_pool is not None and llm_call is None and not degenerate and (
+        aggregate or aggregate_gate != "off"
+    ):
+        if aggregate:
+            agg_trigger = "explicit"
+        elif report.verdict == "ESCALATE":
+            agg_trigger = "escalate"
+        elif (route_decision is not None
+              and route_decision.confidence < _AGG_ROUTE_CONF):
+            agg_trigger = "low-route-confidence"
+
+    if agg_trigger != "off":
+        peers = [t for t in route_pool.peers() if t.name != model]
+        if not peers:
+            printer(f"  aggregate : skipped (trigger={agg_trigger}, no peer targets in the pool)")
+        else:
+            agg_messages = [{"role": "user", "content": question + (
+                "\n\nEvidence gathered this session:\n" + _evidence_digest(evidence)
+                if evidence else "")}]
+            # fan_out() bypasses ModelPool.acall()/record_result() by design (it
+            # needs EVERY answer, not failover semantics) -- a peer that fails
+            # here does NOT cool down or affect health/stats persistence. Spend
+            # still lands on the target's own ledger (aggregate_ledger() below
+            # sees it); only health-tracking is out of scope for this escalation
+            # path. Acceptable: fan-out is rare, and coupling aggregator.py to
+            # the pool's private health bookkeeping is not worth the wiring.
+            sourced = await fan_out(peers, agg_messages)
+            primary_source = SourcedAnswer(model=model or "primary", answer=answer, ok=not degenerate)
+            ok_sources = [primary_source] + [s for s in sourced if s.ok]
+            div = detect_divergence([(s.model, s.answer) for s in ok_sources],
+                                    embed_fn=divergence_embed_fn)
+
+            agg = await run_aggregation(question, primary_source, sourced,
+                                        synthesizer=synthesizer, agreement=div.agreement,
+                                        logger=lambda m: printer(f"  {m}"))
+            printer(f"  aggregate : trigger={agg_trigger} method={agg.method} "
+                    f"({len(agg.sources)} source(s)) — {agg.attribution}")
+
+            cjudgment = ContradictionReport(VERDICT_UNCHECKED, "", ("divergence not flagged — judge not consulted",))
+            if div.diverged and div.pairwise:
+                cj = contradiction_judge or ContradictionJudge(contradiction_judge_llm)
+                worst = min(div.pairwise, key=lambda p: p[2])
+                by_model = {s.model: s.answer for s in ok_sources}
+                cjudgment = await cj.judge(question, (worst[0], by_model.get(worst[0], "")),
+                                          (worst[1], by_model.get(worst[1], "")))
+                conflict_detected, conflict_detail = resolve_conflict(div, cjudgment)
+                printer(f"  conflict  : {cjudgment.verdict} "
+                        f"({'CONFLICT' if conflict_detected else 'clear'}) — {conflict_detail}")
+
+            if conflict_detected:
+                disagreement = "; ".join(f"{s.model} says: {s.answer.strip()[:200]}"
+                                         for s in ok_sources)
+                escalation_question = conflict_detail
+                answer = (
+                    f"I found a conflict I can't resolve on my own: {disagreement}. "
+                    f"Specifically: {conflict_detail}. I'd rather ask than guess — "
+                    f"which is right, or would you like a stronger opinion via /escape-valve?")
+                report = ConfidenceReport(
+                    0.0, "ESCALATE",
+                    (f"cross-model conflict: {conflict_detail}",) + report.grounds,
+                    had_evidence=report.had_evidence)
+            elif agg.answer.strip() != answer.strip():
+                # The answer text actually changed (synthesis merged peers in) —
+                # re-grade it against the fullest evidence available: the
+                # session's tool evidence PLUS what the peers themselves said.
+                answer = agg.answer
+                report = active_gate.grade(answer, evidence + [s.answer for s in sourced if s.ok])
 
     printer(f"\n  JARVIS  : {answer}")
     printer(f"  confidence: {report.verdict} ({report.score:.2f}) — {report.grounds[0]}")
@@ -628,6 +810,8 @@ async def ask(
         grounds=report.grounds, ledger=ledger, boot=boot_report, mind=result,
         captured=captured, distill_status=distill_status,
         reasoning_verdict=rreport.verdict, reasoning_flaw=rreport.flaw,
+        conflict_detected=conflict_detected, conflict_detail=conflict_detail,
+        escalation_question=escalation_question,
     )
 
 
@@ -697,6 +881,292 @@ async def _awareness() -> int:
     print(f"\n  session : {_SESSION_ID} (check observation_queue.jsonl for capture parity)")
     print(f"  result  : {len(rows) - failures}/{len(rows)} "
           f"{'— GATE A HOLDS' if failures == 0 else '— GATE A FAILED'}")
+    return 1 if failures else 0
+
+
+# =============================================================================
+# Part 4: FINAL BOSS — Stage 4 Closing Ritual (8 legs, ROADMAP.md's own spec)
+# =============================================================================
+# Every leg below composes an ALREADY-SHIPPED organ through a fresh minimal
+# fixture -- no new subsystem, integration only. Per this file's own
+# established convention (every self-test defines its own local scripted
+# fixtures rather than sharing a test-utils module), each leg's fixture is
+# self-contained here too.
+
+async def _final_boss_offline() -> Tuple[List[Tuple[int, str, bool, str]], int]:
+    """All 8 legs against scripted/offline fixtures only -- ₹0, deterministic,
+    re-runnable every commit. Returns (rows, live_api_calls_made)."""
+    import json
+    import tempfile
+
+    rows: List[Tuple[int, str, bool, str]] = []
+    live_api_calls_made = 0  # stays 0 -- every leg below is scripted, no network ever fires
+
+    def scripted(responses: List[str]):
+        idx = [0]
+        def llm(messages: List[Dict[str, str]]) -> str:
+            i = idx[0]
+            if i >= len(responses):
+                return "DONE."
+            idx[0] += 1
+            return responses[i]
+        llm.model = "scripted-brain"  # type: ignore[attr-defined]
+        return llm
+
+    def scripted_embed(texts: List[str]) -> List[List[float]]:
+        return [[1.0, 0.0] for _ in texts]  # everything maximally similar
+
+    with tempfile.TemporaryDirectory() as td:
+        tdp = Path(td)
+        import jarvis_core.brain.conversation as _conv
+        _conv._CONV_DIR = tdp / "conv"
+        _conv._SESSION_STATE = tdp / ".session.json"
+        kb = tdp / "kb.jsonl"
+        kb.write_text(json.dumps({
+            "id": 1, "timestamp": "2026-07-27T12:00:00+05:30", "type": "Decision",
+            "tags": ["stage-4"], "expiry": "Permanent",
+            "content": "Decision: Stage 4 ships the Brain's routing substrate.",
+        }) + "\n", encoding="utf-8")
+        queue = tdp / "queue.jsonl"
+        distilled: List[Dict[str, Any]] = []
+
+        def fake_append(**kw: Any) -> Dict[str, Any]:
+            distilled.append(kw)
+            return {"status": "appended", "id": 900}
+
+        # --- Legs 1, 2, 8: one scripted spine pass proves boot-inhale,
+        # autobiography (prior_self_consult), capture parity, and KB distill
+        # together -- the same fixture shape _run_self_test's own T1-T9 already
+        # trusts (confidence.py/session_writer.py/capture.py each independently
+        # prove the organs beneath it; this proves them wired end-to-end).
+        llm_boot = scripted([
+            json.dumps([{"tool_name": "prior_self_consult", "description": "consult"}]),
+            json.dumps({"name": "prior_self_consult",
+                        "arguments": {"query": "Stage 4 routing substrate"}}),
+            "We built the Brain's routing substrate in Stage 4.",
+        ])
+        r_boot = await ask(
+            "what have we built till now, JARVIS?", llm_call=llm_boot, kb_path=kb,
+            queue_path=queue, store_factory=lambda: None,
+            gate=ConfidenceGate(embed_fn=scripted_embed),
+            writer=SessionMemoryWriter(append_fn=fake_append),
+            session="final-boss-boot",
+        )
+        used_tools = {tc.name for tc, _tr in r_boot.mind.react.tool_calls}
+        leg1_ok = "Temporal" in r_boot.boot.providers_fired
+        rows.append((1, "Boot inhale -> awareness providers fired, unprompted",
+                     leg1_ok, f"providers_fired={r_boot.boot.providers_fired}"))
+        leg2_ok = "prior_self_consult" in used_tools
+        rows.append((2, "Autobiography answered via prior_self_consult on the KB",
+                     leg2_ok, f"tools_used={sorted(used_tools)}"))
+        leg8_ok = (r_boot.captured is True and r_boot.distill_status == "appended"
+                   and len(distilled) == 1 and queue.exists()
+                   and len(queue.read_text(encoding="utf-8").splitlines()) == 1)
+        rows.append((8, "Session lands in observation queue + distills to KB",
+                     leg8_ok, f"captured={r_boot.captured} distill={r_boot.distill_status}"))
+
+        # --- Leg 3: router gate re-run, >=80%, degenerate baselines printed ---
+        # _gate() calls asyncio.run() internally; since this coroutine is already
+        # inside a running loop, hand it to a thread so it gets its own fresh loop.
+        from jarvis_core.brain.router import _gate as _router_gate
+        gate_rc = await asyncio.get_event_loop().run_in_executor(None, _router_gate)
+        rows.append((3, "Router gate re-run >=80% with degenerate baselines printed",
+                     gate_rc == 0, f"exit={gate_rc}"))
+
+        # --- Leg 4: protocol routing -- dialect fold + data-driven mirror
+        # resolution. "Empty reasoning-channel content" (the other half of the
+        # roadmap's leg-4 wording) is already retried unconditionally in
+        # llm_client, not profile-gated -- honest scope note, not re-tested here.
+        from jarvis_core.brain.protocol import adapt
+        registry4 = ProfileRegistry(profiles={"exact": {
+            "dialect-model": {"system_role_ok": False},
+            "mirror-model": {"mirror_ok": False},
+        }})
+        prof_d, _src_d = registry4.get("dialect-model")
+        prof_m, src_m = registry4.get("mirror-model")
+        seen4: Dict[str, Any] = {}
+
+        def echo4(messages: List[Dict[str, str]]) -> str:
+            seen4["messages"] = messages
+            return "OK"
+
+        await adapt(echo4, prof_d)(
+            [{"role": "system", "content": "SYS-RULES"}, {"role": "user", "content": "Q"}])
+        dialect_ok = all(m["role"] != "system" for m in seen4["messages"])
+        mirror_ok = prof_m.mirror_ok is False and src_m == "mirror-model"
+        rows.append((4, "Protocol routing -- dialect folded + mirror resolved from data",
+                     dialect_ok and mirror_ok,
+                     f"dialect_ok={dialect_ok} mirror_src={src_m}"))
+
+        # --- Leg 5: induced 429 storm -> cooldown -> failover to peer; both
+        # attempts land on their own per-target ledgers ---
+        from jarvis_core.brain.targets import RouteTarget, TargetKind
+        from jarvis_core.brain.model_pool import ModelPool
+
+        class _Fake429Target(RouteTarget):
+            kind = TargetKind.API_MODEL
+
+            def __init__(self, name: str, behavior: str = "ok") -> None:
+                self.name = name
+                self.profile = None
+                self._behavior = behavior
+                self.calls = 0
+
+            @property
+            def llm_call(self):
+                def _c(messages: List[Dict[str, str]]) -> str:
+                    self.calls += 1
+                    if self._behavior == "429":
+                        raise RuntimeError("HTTP 429 Too Many Requests")
+                    return f"{self.name}:ANSWER"
+                return _c
+
+            async def ensure_ready(self) -> None:
+                pass
+
+            async def release(self) -> None:
+                pass
+
+            def ledger_summary(self) -> Dict[str, Any]:
+                return {"model": self.name, "calls": self.calls, "spend_usd": 0.0}
+
+        clk5 = {"t": 0.0}
+        a5 = _Fake429Target("A5", behavior="429")
+        b5 = _Fake429Target("B5", behavior="ok")
+        pool5 = ModelPool([a5, b5], clock=lambda: clk5["t"], cooldown_s=60.0)
+        await pool5.acall([{"role": "user", "content": "q"}])
+        st5 = pool5.status()
+        leg5_ok = (st5["A5"]["cooldown_remaining_s"] > 0
+                   and pool5.select().name == "B5"
+                   and st5["A5"]["ledger"]["calls"] == 1
+                   and st5["B5"]["ledger"]["calls"] == 1)
+        rows.append((5, "429 storm -> failover to peer, both attempts on the ledgers",
+                     leg5_ok, str(st5)))
+
+        # --- Leg 6: ConfidenceGate -- weakly-grounded draft flagged, never
+        # silently passed as confident (the fail-closed floor: no evidence). ---
+        gate6 = ConfidenceGate(embed_fn=scripted_embed)
+        report6 = gate6.grade("draft with zero supporting evidence", [])
+        leg6_ok = report6.verdict == "ESCALATE"
+        rows.append((6, "ConfidenceGate flags a weakly-grounded draft (fail-closed, "
+                     "never silently confident)", leg6_ok, f"verdict={report6.verdict}"))
+
+        # --- Leg 7: engineered cross-model conflict -> flagged + attributed.
+        # Same 220-vs-330-ohm fixture as _run_self_test's own T48. ---
+        def pool_target(name: str, responses: List[str]):
+            class _T(RouteTarget):
+                kind = TargetKind.API_MODEL
+
+                def __init__(self) -> None:
+                    self.name = name
+                    self.profile = None
+                    self._llm = scripted(responses)
+                    self.calls = 0
+
+                @property
+                def llm_call(self):
+                    def _c(messages: List[Dict[str, str]]) -> str:
+                        self.calls += 1
+                        return self._llm(messages)
+                    return _c
+
+                async def ensure_ready(self) -> None:
+                    pass
+
+                async def release(self) -> None:
+                    pass
+
+                def ledger_summary(self) -> Dict[str, Any]:
+                    return {"model": name, "calls": self.calls, "spend_usd": 0.0}
+            return _T()
+
+        def div_embed(texts: List[str]) -> List[List[float]]:
+            return [[1.0, 0.0] for _ in texts]  # force cosine=1.0 -- isolate the numeric path
+
+        peer7 = pool_target("peer-fb", ["You need roughly 330 ohms for that LED's resistor."])
+        pool7 = ModelPool([pool_target("primary-fb", ["no plan",
+                           "The resistor should be about 220 ohms for the LED."]), peer7])
+        from jarvis_core.brain.model_stats import ModelStatsStore
+        r7 = await ask(
+            "what resistor value?", pool=pool7, aggregate_gate="on",
+            divergence_embed_fn=div_embed, kb_path=kb, queue_path=tdp / "qc7.jsonl",
+            store_factory=lambda: None, inhale=False, use_profile=False,
+            gate=ConfidenceGate(embed_fn=scripted_embed),
+            writer=SessionMemoryWriter(append_fn=lambda **k: {"status": "appended", "id": 1}),
+            model_stats_store=ModelStatsStore(path=tdp / "stats_fb.jsonl"),
+            session="final-boss-conflict",
+        )
+        leg7_ok = (r7.conflict_detected is True and "220" in r7.answer and "330" in r7.answer
+                   and "/escape-valve" in r7.answer)
+        rows.append((7, "Engineered conflict -> flagged + attributed, never silently merged",
+                     leg7_ok, f"conflict={r7.conflict_detected}"))
+
+    return rows, live_api_calls_made
+
+
+async def _final_boss_live(budget_usd: float = _DEFAULT_BUDGET_USD,
+                            targets: Optional[List[str]] = None) -> int:
+    """LIVE variant -- real models, real (budget-capped) spend. Per the
+    precedent set by every prior Stage 4 sub-phase ('the live DoD leg is
+    user-run'), this is built for the user to invoke by hand; it is not
+    executed by the assistant. Legs 5/6 are NOT independently forced live in
+    one budget-capped call -- honest scope note, they stay proven offline only."""
+    print("=" * 70)
+    print("  FINAL BOSS -- LIVE mode (budget-capped, real spend)")
+    print("=" * 70)
+    failures = 0
+
+    rc = await _awareness()
+    failures += rc != 0
+    print(f"  legs 1-2 (boot inhale + autobiography): {'PASS' if rc == 0 else 'FAIL'} (via --awareness)")
+
+    from jarvis_core.brain.router import _gate as _router_gate
+    gate_rc = await asyncio.get_event_loop().run_in_executor(None, _router_gate)
+    failures += gate_rc != 0
+    print(f"  leg 3   (router gate): {'PASS' if gate_rc == 0 else 'FAIL'}")
+
+    r = await ask(
+        "Give me the current-limiting resistor value for a standard 5mm LED "
+        "on a 5V supply, and say how confident you are.",
+        targets=targets or None, route=not targets, aggregate=True, aggregate_gate="on",
+        budget_usd=budget_usd, session="final-boss-live",
+    )
+    legs478_ok = r.answer.strip() != ""
+    failures += not legs478_ok
+    print(f"  legs 4/7/8 (protocol + aggregation/conflict + capture/distill via one "
+          f"real routed call): {'PASS' if legs478_ok else 'FAIL'}")
+    print(f"    conflict_detected={r.conflict_detected} ledger={r.ledger}")
+
+    print("  legs 5/6 (429 storm, weak-grounding escalate): NOT independently forced "
+          "live this run -- verified offline only (see ROADMAP.md honest scope note).")
+    print("-" * 70)
+    print(f"  result: {'FINAL BOSS (live) HOLDS' if failures == 0 else 'FINAL BOSS (live) FAILED'}")
+    print("=" * 70)
+    return 1 if failures else 0
+
+
+async def _final_boss(live: bool = False, budget_usd: float = _DEFAULT_BUDGET_USD,
+                       targets: Optional[List[str]] = None) -> int:
+    if live:
+        return await _final_boss_live(budget_usd=budget_usd, targets=targets)
+
+    print("=" * 70)
+    print("  FINAL BOSS -- Stage 4 Closing Ritual (offline scripted twin, ₹0)")
+    print("=" * 70)
+    rows, live_calls = await _final_boss_offline()
+    rows.sort(key=lambda r: r[0])
+    failures = 0
+    for num, name, ok, detail in rows:
+        mark = "[PASS]" if ok else "[FAIL]"
+        failures += not ok
+        print(f"  {mark} leg {num}/8: {name}")
+        if not ok:
+            print(f"          -> {detail}")
+    print("-" * 70)
+    print(f"  Criterion zero: {live_calls} live API calls this run -> ₹0 (offline scripted twin)")
+    print(f"  result: {len(rows) - failures}/{len(rows)} "
+          f"{'-- FINAL BOSS HOLDS, Stage 4 CLOSED' if failures == 0 else '-- FINAL BOSS FAILED'}")
+    print("=" * 70)
     return 1 if failures else 0
 
 
@@ -1389,6 +1859,85 @@ def _run_self_test() -> None:
                   paidA.calls == 0 and paidB.calls == 0,
                   f"A={paidA.calls} B={paidB.calls}")
 
+            # --- Stage 4.4/4.5: fan-out, synthesis, cross-model conflict escalation ---
+
+            def div_embed(texts: List[str]) -> List[List[float]]:
+                return [[1.0, 0.0] for _ in texts]  # force cosine=1.0 -- isolate the numeric path
+
+            # T46 (regression guard): ask()'s OWN defaults (aggregate=False,
+            # aggregate_gate="off") must hold even under the EXACT condition that
+            # would auto-trigger it (an ESCALATE verdict with >=2 pool targets).
+            # If this ever fails, aggregation silently became the default path --
+            # exactly what Single-Model-First forbids.
+            peer46 = pool_target("peer-46", ["330 ohms for that LED."])
+            pool46 = ModelPool([pool_target("primary-46", ["no plan", "220 ohms for the LED."]), peer46])
+            r46 = await ask("what resistor?", pool=pool46,
+                            model_stats_store=ModelStatsStore(path=tdp / "stats46.jsonl"),
+                            session="agg-46", **common)
+            check("T46 ESCALATE verdict reached (the trigger condition is real)",
+                  r46.verdict == "ESCALATE", r46.verdict)
+            check("T46b default config -> peer NEVER called, no aggregation",
+                  peer46.calls == 0 and r46.conflict_detected is False, peer46.calls)
+
+            # T47: aggregate=True (explicit) wins regardless of aggregate_gate
+            # (left at its default "off") -- unanimous short-form peers -> a
+            # clean ₹0 vote, no conflict.
+            peer47 = pool_target("peer-47", ["42"])
+            pool47 = ModelPool([pool_target("primary-47", ["no plan", "42"]), peer47])
+            r47 = await ask("what is the answer?", pool=pool47, aggregate=True,
+                            divergence_embed_fn=div_embed,
+                            model_stats_store=ModelStatsStore(path=tdp / "stats47.jsonl"),
+                            session="agg-47", **common)
+            check("T47 explicit aggregate=True fans out despite aggregate_gate=off default",
+                  peer47.calls >= 1, peer47.calls)
+            check("T47b unanimous short-form -> vote, answer unchanged, no conflict",
+                  "42" in r47.answer and r47.conflict_detected is False, r47.answer)
+
+            # T48: aggregate_gate="on" auto-fires on ESCALATE; peers give a REAL
+            # numeric conflict (220 vs 330 ohms); NO judge configured -> UNCHECKED
+            # -> the fail-closed floor holds -- conflict STANDS, answer becomes an
+            # attributed question, never a silent guess.
+            lines48: List[str] = []
+            peer48 = pool_target("peer-48", ["You need roughly 330 ohms for that LED's resistor."])
+            pool48 = ModelPool([pool_target("primary-48", ["no plan",
+                                            "The resistor should be about 220 ohms for the LED."]), peer48])
+            r48 = await ask("what resistor value?", pool=pool48, aggregate_gate="on",
+                            divergence_embed_fn=div_embed,
+                            model_stats_store=ModelStatsStore(path=tdp / "stats48.jsonl"),
+                            session="agg-48", **{**common, "printer": lines48.append})
+            check("T48 auto-triggered on ESCALATE (no explicit flag needed)", peer48.calls >= 1)
+            check("T48b unjudged conflict STANDS (fail-closed: UNCHECKED != agreement)",
+                  r48.conflict_detected is True and r48.escalation_question != "", r48)
+            check("T48c answer attributes both sources, never silently picks one",
+                  "220" in r48.answer and "330" in r48.answer, r48.answer)
+            check("T48d escape-valve offered as SUGGESTION text, not auto-invoked",
+                  "/escape-valve" in r48.answer, r48.answer)
+            check("T48e aggregate + conflict lines printed for the operator",
+                  any(l.startswith("  aggregate :") for l in lines48)
+                  and any(l.startswith("  conflict  :") for l in lines48),
+                  [l for l in lines48 if "aggregate" in l or "conflict" in l])
+
+            # T49: SAME numeric conflict as T48, but a scripted judge finds the
+            # answers COMPATIBLE -- the asymmetric rule's OTHER half: a judge may
+            # DOWNGRADE a flagged divergence. Conflict clears; synthesis proceeds.
+            def compatible_judge(messages: List[Dict[str, str]]) -> str:
+                return json.dumps({"verdict": "COMPATIBLE", "which": ""})
+            def scripted_synth(messages: List[Dict[str, str]]) -> str:
+                return ("Sources differ on the exact value (220 vs 330 ohms) -- use a "
+                        "resistor in that range depending on your LED and supply voltage.")
+            peer49 = pool_target("peer-49", ["You need roughly 330 ohms for that LED's resistor."])
+            pool49 = ModelPool([pool_target("primary-49", ["no plan",
+                                            "The resistor should be about 220 ohms for the LED."]), peer49])
+            r49 = await ask("what resistor value?", pool=pool49, aggregate_gate="on",
+                            divergence_embed_fn=div_embed,
+                            contradiction_judge_llm=compatible_judge, synthesizer=scripted_synth,
+                            model_stats_store=ModelStatsStore(path=tdp / "stats49.jsonl"),
+                            session="agg-49", **common)
+            check("T49 judge clears the flagged divergence -> no conflict",
+                  r49.conflict_detected is False, r49)
+            check("T49b synthesized answer replaces the primary's raw answer",
+                  "220 vs 330" in r49.answer, r49.answer)
+
             # --- Stage 4.2: Intent Router wiring through ask() ---
             from jarvis_core.brain.router import RoutingDecision
             from jarvis_core.brain.routing_ledger import RoutingLedger
@@ -1446,6 +1995,79 @@ def _run_self_test() -> None:
                   fr42.calls == [] and led42.count == 0 and "Unrouted answer." in r42.answer,
                   f"calls={fr42.calls} count={led42.count}")
 
+            # --- Tier 3: forced pre-fetch for status-shaped questions ---
+            fake_roadmap_dir = tdp / "js-learning"
+            fake_roadmap_dir.mkdir(parents=True, exist_ok=True)
+            (fake_roadmap_dir / "JARVIS_MASTER_ROADMAP.md").write_text(
+                "# Fake Roadmap\n\n## Progress Overview\n\n"
+                "| Stage | Name | Status |\n|---|---|---|\n"
+                "| 4 | Orchestration | DONE-FIXTURE-MARKER |\n\n---\n\nOther stuff.",
+                encoding="utf-8")
+
+            def scripted_capture(responses: List[str]):
+                idx = [0]
+                seen_calls: List[List[Dict[str, str]]] = []
+                def llm(messages: List[Dict[str, str]]) -> str:
+                    seen_calls.append([dict(m) for m in messages])
+                    i = idx[0]
+                    if i >= len(responses):
+                        return "DONE."
+                    idx[0] += 1
+                    return responses[i]
+                llm.model = "scripted-brain"  # type: ignore[attr-defined]
+                llm.seen_calls = seen_calls  # type: ignore[attr-defined]
+                return llm
+
+            def _joined(messages: List[Dict[str, str]]) -> str:
+                return " ".join(m.get("content", "") for m in messages)
+
+            def _all_seen(llm) -> str:
+                # ReAct's first call is a separate decompose step with its own
+                # message shape; the synthetic history only threads into the
+                # main loop's calls. Scan every call this LLM ever received,
+                # not just the first, so the test reflects "did the injected
+                # text reach the model at all" rather than assuming call order.
+                return " ".join(_joined(msgs) for msgs in llm.seen_calls)
+
+            # T50: status-shaped query + status_prefetch=True -> synthetic
+            # exchange injected, clearly labeled, sourced from the portable
+            # roadmap doc (never an IDE-specific rule file).
+            lines50: List[str] = []
+            llm50 = scripted_capture(["no plan", "We have built the Brain layer."])
+            r50 = await ask("what have we built so far?", llm_call=llm50,
+                            status_prefetch=True, roadmap_root=tdp,
+                            session="prefetch-50", **{**common, "printer": lines50.append})
+            seen50 = _all_seen(llm50)
+            check("T50 status question -> roadmap prefetch injected",
+                  "DONE-FIXTURE-MARKER" in seen50 and "SYSTEM PRE-FETCH" in seen50,
+                  seen50[:300])
+            check("T50b prefetch line printed for the operator",
+                  any(l.startswith("  prefetch:") for l in lines50), lines50[:10])
+            check("T50c real answer still flows through", "Brain layer" in r50.answer, r50.answer)
+
+            # T50d: non-status query, same flag ON -> NOT injected (a math
+            # question has no business getting roadmap text prepended).
+            llm50d = scripted_capture(["no plan", "42."])
+            await ask("what is 6 times 7?", llm_call=llm50d,
+                     status_prefetch=True, roadmap_root=tdp,
+                     session="prefetch-50d", **common)
+            seen50d = _all_seen(llm50d)
+            check("T50d non-status query -> NOT injected",
+                  "DONE-FIXTURE-MARKER" not in seen50d, seen50d[:300])
+
+            # T50e: status_prefetch defaults OFF at the library level -- a
+            # status-shaped query with the flag simply NOT passed must never
+            # get the injection. Same discipline as T46's aggregate_gate
+            # off-by-default guard (KB L435: new auto-triggers must default
+            # OFF in ask()'s own signature, never rely on the CLI default alone).
+            llm50e = scripted_capture(["no plan", "We built things."])
+            await ask("what have we built so far?", llm_call=llm50e,
+                     roadmap_root=tdp,  # status_prefetch NOT passed -> library default False
+                     session="prefetch-50e", **common)
+            seen50e = _all_seen(llm50e)
+            check("T50e status_prefetch defaults OFF at the library level",
+                  "DONE-FIXTURE-MARKER" not in seen50e, seen50e[:300])
+
     asyncio.run(scenario())
 
     total = passed + len(failed)
@@ -1488,6 +2110,21 @@ def main() -> int:
                         "(capped at half the session budget; combined ceiling ~1.5x). NOTE: "
                         "this sends the conversation to a SECOND model/provider — pick a "
                         "trusted one.")
+    p.add_argument("--reasoning-effort", choices=["low", "medium", "high"], default=None,
+                   help="Request a THINKING-BUDGET level from the brain itself (OpenRouter's "
+                        "unified 'reasoning' param — supported by Gemini 3.x and others, "
+                        "ignored by models that don't support it). Unrelated to --no-reasoning: "
+                        "that flag toggles JARVIS's own post-hoc self-critique of an answer; "
+                        "this one tunes how hard the underlying model thinks WHILE answering. "
+                        "Unset = provider default.")
+    p.add_argument("--no-status-prefetch", action="store_true",
+                   help="Disable the 'what have we built' pre-fetch (on by default): a cheap "
+                        "stdlib keyword heuristic that, for self-referential project-status "
+                        "questions, deterministically reads js-learning/JARVIS_MASTER_ROADMAP.md's "
+                        "Progress Overview table and prepends it as clearly-labeled synthetic "
+                        "context -- instead of leaving evidence-gathering entirely to the "
+                        "model's own tool choice, which repeatedly fabricated content for this "
+                        "exact query class.")
     p.add_argument("--targets", metavar="M1,M2,...",
                    help="Route over a POOL of models (comma-separated ids) with health-scored "
                         "failover (STEAL #7): the best healthy target answers; a 429/dead "
@@ -1504,7 +2141,25 @@ def main() -> int:
                    help="Stage 4.2: classify the query's intent and route to a "
                         "specialist-codename-appropriate model pool (frontier-free). "
                         "Ignored if --targets is given (explicit pins win).")
+    p.add_argument("--aggregate", action="store_true",
+                   help="Stage 4.4: force fan-out to the pool's OTHER targets and "
+                        "synthesize an attributed answer, regardless of confidence. "
+                        "Off by default -- normally fan-out only fires automatically "
+                        "on an ESCALATE verdict or low route confidence (needs --targets "
+                        "or --route with >=2 targets to have any peer to fan out to).")
+    p.add_argument("--no-aggregate-auto", action="store_true",
+                   help="Disable the AUTOMATIC fan-out triggers (escalate / low route "
+                        "confidence). --aggregate still forces it manually.")
+    p.add_argument("--final-boss", action="store_true", dest="final_boss",
+                   help="Run the Stage 4 closing ritual: 8 legs, offline scripted "
+                        "twin, ₹0, re-runnable every commit.")
+    p.add_argument("--live", action="store_true",
+                   help="With --final-boss: run the LIVE variant (real models, "
+                        "budget-capped) instead of the offline twin.")
     args = p.parse_args()
+    if args.final_boss:
+        tgts = [m.strip() for m in args.targets.split(",")] if args.targets else None
+        return asyncio.run(_final_boss(live=args.live, budget_usd=args.budget, targets=tgts))
     if args.awareness:
         return asyncio.run(_awareness())
     if args.ask:
@@ -1514,9 +2169,13 @@ def main() -> int:
                         use_profile=not args.no_profile,
                         full=args.full, ask_handler=handler,
                         reasoning=not args.no_reasoning,
+                        reasoning_effort=args.reasoning_effort,
+                        status_prefetch=not args.no_status_prefetch,
                         critic_model=args.critic_model,
                         targets=tgts, route_strategy=args.route_strategy,
                         route=args.route,
+                        aggregate=args.aggregate,
+                        aggregate_gate="off" if args.no_aggregate_auto else "on",
                         budget_usd=args.budget,
                         new_session=args.new, session=args.session))
         return 0
