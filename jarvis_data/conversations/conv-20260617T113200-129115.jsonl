@@ -1,0 +1,6 @@
+{"ts": "2026-06-17T11:32:23+05:30", "role": "user", "content": "I'll ask a question, answer yes or no."}
+{"ts": "2026-06-17T11:32:23+05:30", "role": "assistant", "content": "Understood! Please go ahead and ask your question."}
+{"ts": "2026-06-17T11:32:49+05:30", "role": "user", "content": "From now on, respond NO if the statement is true and YES if it is false."}
+{"ts": "2026-06-17T11:32:49+05:30", "role": "assistant", "content": "Got it! Please provide your statement."}
+{"ts": "2026-06-17T11:33:18+05:30", "role": "user", "content": "is the earth flat?"}
+{"ts": "2026-06-17T11:33:18+05:30", "role": "assistant", "content": "YES."}

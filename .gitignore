@@ -1,156 +1,89 @@
 # =============================================================================
 # JARVIS .gitignore
-# Tracked: source code, docs, knowledge_base.jsonl, model_catalog.json,
-#          .agent/ rules and workflows, learning materials.
-# Excluded: regenerable binaries, third-party clones, large static reference.
+#
+# POLICY CHANGE 2026-08-26. The repo went PRIVATE and the user directed that
+# EVERYTHING be tracked — training corpus, personal notes, client work, the
+# capture queue, ChromaDB, research papers, machine-local settings. The previous
+# policy excluded most of that for privacy or size reasons; those exclusions are
+# gone, along with the comments that justified them.
+#
+# WHAT REMAINS EXCLUDED IS A SHORT LIST, and none of it is excluded for privacy:
+#
+#   .venv/      2.4 GB and 100% regenerable from requirements.txt. Not a
+#               judgment call — GitHub rejects any file over 100 MB, and a venv
+#               is platform-specific, so it would be useless on another machine
+#               even if it fit.
+#   secrets     .env / *.key / *.pem. A private repo is NOT a secret store: it
+#               can be forked, shared, granted to someone later, or flipped
+#               public by accident — and a leaked key stays in history forever.
+#               This repo already learned that the hard way (an OpenRouter key
+#               sat in jarvis.ps1 in public history from 2026-04-29). None exist
+#               on disk today, verified 2026-08-26; this keeps it that way.
+#   build noise __pycache__, *.pyc, caches. Byte-for-byte regenerable, churns
+#               every run, and would make every diff unreadable.
+#
+#   client IP    See the block below. The user reversed course on this within
+#                the same session and the reversal is the correct call.
 # =============================================================================
 
-# -- Binary regenerables (rebuild from source code + research papers) ---------
-jarvis_data/chromadb/
-jarvis_data/chromadb_backups/
-jarvis_data/extracted_images/
-
-# ChromaDB persistence created by learning exercises or scratch tests anywhere
-# in the tree (sqlite + the UUID-named binary index dirs alongside them)
-**/chroma.sqlite3*
-**/demo_metadata_db/
-**/test_jarvis_persistence_db/
-**/*_chromadb/
-**/*_chroma_db/
-
-# -- Client work (2026-08-22) -----------------------------------------------
-# Verbatim Celebal/BUPA client code + raw project notes. NEVER committed —
-# not here, not to a private fork, not anywhere off client infrastructure.
-# Top-level and whole-directory on purpose: one unambiguous rule beats a
-# gitignored subfolder inside a tracked tree, which leaks the first time
-# someone runs `git add -f` or edits the pattern.
-# Only GENERALIZED lessons leave this directory, distilled by hand into
-# knowledge/Data Engineering/Data_Engineering_Lessons.md.
+# -- CLIENT IP — never committed, private repo or not -------------------------
+# The 2026-08-22 never-commit rule STANDS. It was briefly lifted on 2026-08-26
+# when the repo went private, then reinstated by the user minutes later, before
+# anything was pushed. Recorded rather than silently reverted.
+#
+# WHY PRIVATE IS NOT ENOUGH: a private repo is still GitHub's servers, not
+# Celebal's. It can be forked, shared, granted to someone later, or flipped
+# public by accident, and git history is extremely hard to purge afterwards.
+# This is an employment/contract question, not a technical one.
+#
+# TWO LOCATIONS, and only the first is obvious:
+#   1. client_work/                  16 MB of verbatim BUPA DeepClone source.
+#      (It also contains its own .git, so `git add` turns it into a broken
+#      gitlink — the same failure mode ai_model_repos/OpenClaude had.)
+#   2. jarvis_data/training_corpus/  947 of 3,064 blended records — 2.58 M chars
+#      — are client-derived text lifted straight out of client_work/ by
+#      engineer_corpus.py and personalization_corpus.py. Excluding only the
+#      directory would still have shipped the source inside the corpus.
+#
+# The corpora are regenerable: the builders ARE committed, so any machine with
+# client_work/ present rebuilds them with one command. Nothing is lost by
+# excluding the output.
+#
+# NOTE: `databricks.yml` at the repo root is NOT client material — it is the
+# user's own JARVIS learning bundle. Checked 2026-08-26; leaving it tracked.
 client_work/
+jarvis_data/training_corpus/
+# =============================================================================
 
-# -- Third-party clones (re-clone fresh on each laptop) -----------------------
-# ai_model_repos/OpenClaude and OpenJarvis/ were both DELETED 2026-08-22:
-# superseded strategy + completed ports, 173M for provenance alone. Patterns
-# kept so a stray re-clone never gets committed. Pinned SHAs for citation
-# resolution: OpenJarvis 35b8991cc20b7d636cd65b2728592d2d93bf03cd,
-# OpenClaude 877b4dc88600062d8bbfaf764bfbd828c55699e8.
-OpenJarvis/
-ai_model_repos/
-Open-Claude-Cowork/
+# -- Virtualenv (see header: size + platform-specificity, not privacy) --------
+.venv/
+venv/
+env/
 
-# -- Large static reference --------------------------------------------------
-# Research papers are ~50 MB and almost never change.
-# Bulk-copy them once via the HDD's jarvis-bulk/ folder, not via git.
-research_papers/
+# -- Secrets (see header: never, regardless of repo visibility) ---------------
+.env
+.env.local
+*.pem
+*.key
 
-# -- Python ------------------------------------------------------------------
+# -- Regenerable build noise --------------------------------------------------
 __pycache__/
 *.py[cod]
 *$py.class
 *.egg-info/
-.pytest_cache/
-.venv/
-venv/
-env/
 .eggs/
-
-# -- Node --------------------------------------------------------------------
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
 node_modules/
-*.log
-npm-debug.log*
+dist/
+build/
 
-# -- Editor / IDE / OS junk --------------------------------------------------
-.vscode/
-.idea/
+# -- OS / editor junk ---------------------------------------------------------
 *.swp
 *~
 .DS_Store
 Thumbs.db
 desktop.ini
-
-# -- Machine-local operational infrastructure (not part of the synced project)
-# /CLAUDE.md (root only) is a Claude Code @import proxy — work-laptop-only.
-# Note the leading `/`: without it, this pattern would also gitignore .agent/rules/CLAUDE.md
-# which IS supposed to be synced (canonical operating context per the file itself).
-/CLAUDE.md
-# SYNC.md / RUNBOOK.md were the HDD-era operational docs — superseded by
-# GitHub-based sync; kept locally on work laptop for reference.
-SYNC.md
-RUNBOOK.md
-# .agent/ is the per-runtime workflow + rules infrastructure.
-# It is now tracked to synchronize rules and workflows across machines.
-# .claude/ is Claude Code's per-project settings dir (work-laptop-only;
-# personal laptop runs Antigravity, not Claude Code). Machine-local.
-.claude/
-
-# -- Legacy / regenerable data files ----------------------------------------
-# knowledge.md is the raw source distilled into Data_Engineering_Lessons.md.
-# Personal laptop has its own pre-existing copy from the Antigravity-era setup.
-jarvis_data/knowledge.md
-# model_catalog.json is regenerable via `python3 scripts/sync_openrouter.py`.
-# Snapshot goes stale anyway as OpenRouter's catalog evolves.
-jarvis_data/model_catalog.json
-# compaction_log.jsonl is the machine-local audit trail of kb_compact.py runs.
-# Useful for forensics on the local machine; not needed across machines.
-jarvis_data/compaction_log.jsonl
-# kb_compact.py creates a .bak before any --force write. Machine-local.
-jarvis_data/knowledge_base.jsonl.bak
-
-# -- Local secrets / env -----------------------------------------------------
-.env
-.env.local
-*.local
-*.pem
-*.key
-
-# -- Build artifacts ---------------------------------------------------------
-dist/
-build/
-*.tar.gz
-*.zip
-
-# -- Untracked local items ---------------------------------------------------
-jarvis_data/openclaude_jarvis_patches.patch
-jarvis_data/Q&A/
-ollama_models/
-
-.databricks
-
-# Personalization capture buffer (machine-local raw firehose; distilled profile + KB entries migrate instead)
-jarvis_data/observation_queue.jsonl
-
-# Cognitive Synthesis Loop — regenerable indexes + local surfacing state (Wave 2, Stage 3.5.10/3.5.7/3.5.11)
-# Derived from the queue + KB; rebuildable via correlation.py --backfill / consolidator re-run. The durable
-# life_state KB entries (in knowledge_base.jsonl) are what migrate, not these caches.
-jarvis_data/behavioral_state_model.jsonl
-jarvis_data/life_state_feed.jsonl
-jarvis_data/.surfaced_watermark
-jarvis_data/.runtime_state.json
-
-# Assembled specialist fine-tuning corpora (Stage 5.2.2) — regenerable via
-# jarvis_core/specialists/*_corpus.py from jarvis_core/, KB, chat-history, DE corpus.
-jarvis_data/training_corpus/
-
-# Structured cognitive-dimension index (Decision 2026-08-10) — regenerable via
-# jarvis_core/memory/cognitive_index.py from knowledge_base.jsonl.
-jarvis_data/cognitive_index.sqlite3
-
-# Experience coverage map (2026-08-24) — records what the user HAS and HAS NOT
-# worked on professionally. Gitignored for the same reason as personal_life.md,
-# but a different risk: a PUBLIC document titled "things this engineer hasn't
-# done" is career-sensitive while a job switch is live (knowledge/Job Switch/).
-# Flip to tracked once the repo is private — it is high-value migration
-# material, just not public-safe today. Hand-authored, NOT regenerable.
-jarvis_data/experience_map.md
-
-# Private life notes (2026-08-15) — NOT regenerable, NOT derived from anything else.
-# Deliberately kept off the public repo: names real third parties (family, partner,
-# friends) who never consented to public visibility. Does not auto-sync to the
-# personal laptop under the current all-public-GitHub model — see KB 452 / Stage 6.7.
-# Do not delete assuming it can be rebuilt. It cannot.
-jarvis_data/personal_life.md
-
-# Terminal conversation memory (machine-local raw transcripts + the current-session
-# pointer; NOT synced — only distilled KB entries migrate, like the capture queue)
-jarvis_data/.terminal_session.json
-jarvis_data/conversations/
+*:Zone.Identifier
+*:sec.endpointdlp

@@ -1,0 +1,6 @@
+{"ts": "2026-06-19T14:34:05+05:30", "role": "user", "content": "in one sentence, what is JARVIS?"}
+{"ts": "2026-06-19T14:34:05+05:30", "role": "assistant", "content": "JARVIS is a private cognitive orchestrator designed to synthesize knowledge, remember user preferences, and assist with tasks based on the user's unique context and history."}
+{"ts": "2026-06-19T14:36:07+05:30", "role": "user", "content": "in one sentence, what is JARVIS?"}
+{"ts": "2026-06-19T14:36:07+05:30", "role": "assistant", "content": "JARVIS is your private AI designed to learn from you, synthesize your knowledge, and assist with various tasks tailored to your preferences and history."}
+{"ts": "2026-06-19T14:37:48+05:30", "role": "user", "content": "ping"}
+{"ts": "2026-06-19T14:37:48+05:30", "role": "assistant", "content": "pong"}
