@@ -1,0 +1,10 @@
+{"ts": "2026-06-18T12:15:52+05:30", "role": "user", "content": "I'll ask a question, answer yes or no."}
+{"ts": "2026-06-18T12:15:52+05:30", "role": "assistant", "content": "Understood. Please go ahead with your question."}
+{"ts": "2026-06-18T12:16:19+05:30", "role": "user", "content": "From now on, respond NO if the statement is true and YES if it is false."}
+{"ts": "2026-06-18T12:16:19+05:30", "role": "assistant", "content": "Got it. Please provide the statement."}
+{"ts": "2026-06-18T12:17:08+05:30", "role": "user", "content": "is the earth flat?"}
+{"ts": "2026-06-18T12:17:08+05:30", "role": "assistant", "content": "NO."}
+{"ts": "2026-06-18T12:21:05+05:30", "role": "user", "content": "tell me what jarvis is about by reading the workflow rules"}
+{"ts": "2026-06-18T12:21:05+05:30", "role": "assistant", "content": "It appears that the file containing the workflow rules is not accessible or does not exist. I may not have direct access to that specific information. If there are particular aspects or features of JARVIS you'd like to know about, please let me know, and I can provide information based on what I have in my knowledge base."}
+{"ts": "2026-06-18T13:36:04+05:30", "role": "user", "content": "tell me what jarvis is about by reading the workflow rules, /home/swara_unix/work/JARVIS/.agent/rules/JARVIS_ENDGAME.md"}
+{"ts": "2026-06-18T13:36:04+05:30", "role": "assistant", "content": "It seems I'm unable to access the specified file due to input validation errors. If you can provide the content or key points from the \"JARVIS_ENDGAME.md\" file, I can help summarize or explain it based on the information you provide. Alternatively, if there's another way to access it or a different document you'd like me to refer to, please let me know!"}

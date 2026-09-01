@@ -1,0 +1,203 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3 scripts/search_memory.py \"bm25 rank_bm25 lucene IDF formula divergence\")",
+      "Bash(python3 scripts/search_memory.py \"audit before implement gotcha forward simulation pre-build review\")",
+      "Bash(git -C /home/swara_unix/work/JARVIS status --short)",
+      "Bash(git -C /home/swara_unix/work/JARVIS diff --stat)",
+      "Bash(git -C /home/swara_unix/work/JARVIS diff jarvis_data/Data_Engineering_Lessons.md)",
+      "Bash(git -C /home/swara_unix/work/JARVIS check-ignore -v .claude/settings.json)",
+      "Bash(git -C /home/swara_unix/work/JARVIS add .gitignore jarvis_data/knowledge_base.jsonl js-development/jarvis_core/memory/__init__.py js-development/jarvis_core/memory/bm25.py js-learning/JARVIS_MASTER_ROADMAP.md js-learning/stage_2_memory/ROADMAP.md requirements.txt)",
+      "Bash(git -C /home/swara_unix/work/JARVIS commit -m ' *)",
+      "WebSearch",
+      "WebFetch(domain:benchlm.ai)",
+      "WebFetch(domain:nirmitee.io)",
+      "WebFetch(domain:exploreai.tools)",
+      "WebFetch(domain:awesomeagents.ai)",
+      "WebFetch(domain:docs.bswen.com)",
+      "Bash(python3 scripts/search_memory.py \"self-hosted brain Kimi K2.6 RunPod\")",
+      "Bash(curl -sf \"https://api.github.com/repos/Swarajnegi/private-ai/pulls/1/files\")",
+      "Bash(python3 -c ' *)",
+      "Bash(curl -sf \"https://raw.githubusercontent.com/Swarajnegi/private-ai/jarvis-analysis-doc-15971303465749137734/JARVIS_ANALYSIS.md\")",
+      "Bash(curl -sf \"https://api.github.com/repos/Swarajnegi/private-ai/pulls/3\")",
+      "Bash(curl -sf \"https://api.github.com/repos/Swarajnegi/private-ai/pulls/14\")",
+      "Bash(git -C /home/swara_unix/work/JARVIS rm prompt.txt)",
+      "Bash(git -C /home/swara_unix/work/JARVIS fetch --all --prune)",
+      "Bash(/home/swara_unix/work/JARVIS/.venv/bin/python /home/swara_unix/work/JARVIS/scripts/kb_compact.py --force)",
+      "Bash(git -C /home/swara_unix/work/JARVIS pull --ff-only origin main)",
+      "Bash(git -C /home/swara_unix/work/JARVIS fetch origin)",
+      "Bash(git -C /home/swara_unix/work/JARVIS log --oneline HEAD..origin/main)",
+      "Bash(git -C /home/swara_unix/work/JARVIS show --stat 90bc404)",
+      "Bash(git -C /home/swara_unix/work/JARVIS show --stat d560652)",
+      "Bash(git -C /home/swara_unix/work/JARVIS show 90bc404 -- jarvis_data/knowledge_base.jsonl)",
+      "Bash(grep -E \"\\\\.\\(ts|tsx\\)$\")",
+      "Bash(git fetch *)",
+      "Bash(curl -s \"https://api.github.com/repos/Swarajnegi/private-ai/pulls?state=open\")",
+      "Bash(git pull *)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)",
+      "Bash(python3 scripts/search_memory.py \"tool architecture callable middleware daemon taxonomy\")",
+      "Bash(python3 scripts/search_memory.py \"ambient daemon scheduler tick proactive notification\")",
+      "Bash(python3 scripts/search_memory.py \"temporal grounding causal inference git correlation resolver\")",
+      "Bash(python3 scripts/search_memory.py \"temporal grounding middleware\")",
+      "Bash(PYTHONPATH=js-development python3 js-development/jarvis_core/agent/tool.py)",
+      "Bash(python3 -c \"import dateparser; import rapidfuzz; print\\('deps OK:', dateparser.__version__, rapidfuzz.__version__\\)\")",
+      "Bash(PYTHONPATH=js-development python3 js-development/jarvis_core/agent/temporal.py)",
+      "Bash(PYTHONPATH=js-development python3 js-development/jarvis_core/agent/tools/calc.py)",
+      "Bash(PYTHONPATH=js-development python3 js-development/jarvis_core/agent/tools/memory.py)",
+      "Bash(PYTHONPATH=js-development python3 -c ' *)",
+      "Bash(chmod +x /tmp/git-askpass.sh)",
+      "Bash(GH_TOKEN=\"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\" GIT_ASKPASS=/tmp/git-askpass.sh git push origin main)",
+      "Bash(python3 -c \"import duckduckgo_search; print\\('ddg version:', duckduckgo_search.__version__\\)\")",
+      "Bash(python3 scripts/search_memory.py \"data engineering Databricks Spark skills\")",
+      "Bash(python3 scripts/search_memory.py \"user identity career background\")",
+      "Bash(PYTHONPATH=js-development python3 js-development/jarvis_core/agent/tools/web.py)",
+      "Bash(PYTHONPATH=js-development python3 js-development/jarvis_core/agent/tools/fs.py)",
+      "Bash(PYTHONPATH=js-development python3 js-development/jarvis_core/agent/tools/exec.py)",
+      "Bash(PYTHONPATH=js-development python3 js-development/jarvis_core/agent/tools/shell.py)",
+      "Bash(awk '{print $5, $9}')",
+      "Bash(git rm *)",
+      "Bash(rm -f jarvis_data/knowledge_base.jsonl.bak)",
+      "Bash(python3 scripts/search_memory.py \"auto push learning artifacts cross laptop sync directive\")",
+      "Bash(python3 scripts/search_memory.py \"auto push learning artifacts\")",
+      "Bash(python3 scripts/search_memory.py \"auto push learning artifacts cross laptop\")",
+      "Bash(python3 scripts/search_memory.py \"auto push learnings cross laptop sync\")",
+      "Bash(awk '{print $9}')",
+      "Bash(PYTHONPATH=js-development python3 js-development/jarvis_core/agent/tools/cognitive.py)",
+      "Bash(PYTHONPATH=js-development python3 js-development/jarvis_core/agent/tools/finance.py)",
+      "Bash(python3 scripts/search_memory.py \"Stage 3.2.2 closure 18 callable tools phase transition\")",
+      "Bash(python3 scripts/search_memory.py \"Stage 3.2.2 18 callable tools Phase A B C\")",
+      "Bash(python3 scripts/search_memory.py \"Stage 3.2.2 closure 18 callable tools Phase C cognitive finance\")",
+      "Bash(python3)",
+      "Bash(git -C /home/swara_unix/work/JARVIS diff --numstat HEAD)",
+      "Bash(sort -k1 -n -r)",
+      "Bash(git -C /home/swara_unix/work/JARVIS diff jarvis_data/knowledge_base.jsonl)",
+      "Bash(git -C /home/swara_unix/work/JARVIS status --porcelain)",
+      "Bash(git -C /home/swara_unix/work/JARVIS add -A)",
+      "Bash(git -C /home/swara_unix/work/JARVIS status)",
+      "Bash(git -C /home/swara_unix/work/JARVIS log --oneline -3)",
+      "Bash(git -C /home/swara_unix/work/JARVIS push origin main)",
+      "Bash(python3 scripts/search_memory.py \"conceptual vs practical learning material taxonomy\")",
+      "Bash(python3 scripts/search_memory.py \"DDIA distributed systems vocabulary\")",
+      "Bash(find /home/swara_unix/work/JARVIS -name \".venv\" -type d 2>/dev/null | head -5 && echo \"---\" && find /home/swara_unix -maxdepth 4 -name \".venv\" -type d 2>/dev/null | head -5)",
+      "Read(//home/swara_unix/**)",
+      "Bash(/home/swara_unix/work/JARVIS/.venv/bin/pip install *)",
+      "Bash(python3 -c \"print\\(repr\\(f'{None:.2f}'\\)\\)\")",
+      "Bash(python3 jarvis_core/agent/reflection.py)",
+      "Bash(python3 -c \"import json; d={1:'a','b':2}; print\\(json.dumps\\(d, sort_keys=True, default=str\\)\\)\")",
+      "Bash(python3 -c \"print\\(repr\\(f'{\\\\\"0.91\\\\\":.2f}'\\)\\)\")",
+      "WebFetch(domain:memgraph.com)",
+      "WebFetch(domain:docs.databricks.com)",
+      "WebFetch(domain:www.databricks.com)",
+      "WebFetch(domain:arxiv.org)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:www.microsoft.com)",
+      "WebFetch(domain:www.puppygraph.com)",
+      "Bash(databricks workspace *)",
+      "Bash(PYTHONPATH=/home/swara_unix/work/JARVIS/js-development python3 /home/swara_unix/work/JARVIS/js-development/jarvis_core/agent/memory_manager.py)",
+      "Bash(PYTHONPATH=/home/swara_unix/work/JARVIS/js-development python3 /home/swara_unix/work/JARVIS/js-development/jarvis_core/agent/react.py)",
+      "Bash(databricks current-user *)",
+      "Read(//usr/lib/**)",
+      "Bash(find / -name \"java\" -type f)",
+      "Bash(apt-cache policy *)",
+      "Bash(python3 -c \"import pyspark; print\\('pyspark', pyspark.__version__\\)\")",
+      "Bash(java -version)",
+      "Bash(python3 -c \"import duckdb; print\\('duckdb', duckdb.__version__\\)\")",
+      "Bash(python3 -c \"import sqlite3; print\\('sqlite3 ok', sqlite3.sqlite_version\\)\")",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('hooks:', json.dumps\\(d.get\\('hooks', {}\\), indent=2\\)\\) if d.get\\('hooks'\\) else print\\('NO hooks key'\\)\")",
+      "Bash(python3 -m json.tool)",
+      "Bash(python3 -c \"import sys, json; data = json.load\\(sys.stdin\\); print\\(json.dumps\\(data, indent=2\\)\\)\")",
+      "Bash(python3 -c \"import sys, json; [print\\(json.dumps\\(json.loads\\(line\\), indent=2\\), '\\\\n---\\\\n'\\) for line in sys.stdin]\")",
+      "Bash(git check-ignore *)",
+      "Bash(python3 scripts/kb_append.py --self-test)",
+      "Bash(python3 scripts/profile_synth.py --self-test)",
+      "WebFetch(domain:www.pump.co)",
+      "WebFetch(domain:milescole.dev)",
+      "WebFetch(domain:azure.microsoft.com)",
+      "WebFetch(domain:docs.azure.cn)",
+      "Bash(PYTHONPATH=js-development python3 js-development/jarvis_core/agent/react.py)",
+      "WebFetch(domain:web.archive.org)"
+    ],
+    "additionalDirectories": [
+      "/tmp"
+    ]
+  },
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3",
+            "args": [
+              "scripts/hooks/notice_runtime_change.py"
+            ],
+            "timeout": 10,
+            "statusMessage": "Checking runtime self-state"
+          },
+          {
+            "type": "command",
+            "command": "python3",
+            "args": [
+              "scripts/hooks/capture_gap_nudge.py"
+            ],
+            "timeout": 10,
+            "statusMessage": "Checking personalization capture gap"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3",
+            "args": [
+              "scripts/hooks/capture_turn.py"
+            ],
+            "timeout": 30,
+            "statusMessage": "Capturing turn for personalization"
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear|compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3",
+            "args": [
+              "scripts/hooks/inject_profile.py"
+            ],
+            "timeout": 30,
+            "statusMessage": "Loading user cognitive profile"
+          },
+          {
+            "type": "command",
+            "command": "python3",
+            "args": [
+              "scripts/hooks/surface_life_state.py"
+            ],
+            "timeout": 30,
+            "statusMessage": "Checking for a cross-domain life-state observation to raise"
+          },
+          {
+            "type": "command",
+            "command": "python3",
+            "args": [
+              "scripts/hooks/inject_recent_activity.py"
+            ],
+            "timeout": 30,
+            "statusMessage": "Recalling recent cross-chat activity"
+          }
+        ]
+      }
+    ]
+  }
+}
