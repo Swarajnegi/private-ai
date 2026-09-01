@@ -9,9 +9,20 @@
           {
             "type": "command",
             "command": "python3",
-            "args": ["scripts/hooks/notice_runtime_change.py"],
+            "args": [
+              "scripts/hooks/notice_runtime_change.py"
+            ],
             "timeout": 10,
             "statusMessage": "Checking runtime self-state"
+          },
+          {
+            "type": "command",
+            "command": "python3",
+            "args": [
+              "scripts/hooks/capture_gap_nudge.py"
+            ],
+            "timeout": 10,
+            "statusMessage": "Checking personalization capture gap"
           }
         ]
       }
@@ -23,7 +34,9 @@
           {
             "type": "command",
             "command": "python3",
-            "args": ["scripts/hooks/capture_turn.py"],
+            "args": [
+              "scripts/hooks/capture_turn.py"
+            ],
             "timeout": 30,
             "statusMessage": "Capturing turn for personalization"
           }
@@ -37,21 +50,27 @@
           {
             "type": "command",
             "command": "python3",
-            "args": ["scripts/hooks/inject_profile.py"],
+            "args": [
+              "scripts/hooks/inject_profile.py"
+            ],
             "timeout": 30,
             "statusMessage": "Loading user cognitive profile"
           },
           {
             "type": "command",
             "command": "python3",
-            "args": ["scripts/hooks/surface_life_state.py"],
+            "args": [
+              "scripts/hooks/surface_life_state.py"
+            ],
             "timeout": 30,
             "statusMessage": "Checking for a cross-domain life-state observation to raise"
           },
           {
             "type": "command",
             "command": "python3",
-            "args": ["scripts/hooks/inject_recent_activity.py"],
+            "args": [
+              "scripts/hooks/inject_recent_activity.py"
+            ],
             "timeout": 30,
             "statusMessage": "Recalling recent cross-chat activity"
           }
