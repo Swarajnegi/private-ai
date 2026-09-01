@@ -31,6 +31,28 @@ from jarvis_core.config import KB_PATH
 EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"  # 384-dim, fast
 SIMILARITY_THRESHOLD = 0.3  # Lower = more results
 
+# CHUNK BEFORE EMBEDDING — this is not an optimization, it is a correctness fix.
+#
+# all-MiniLM-L6-v2 has max_seq_length = 256 tokens and sentence-transformers
+# TRUNCATES PAST IT SILENTLY: no exception, no warning, just a vector computed
+# from the first 256 tokens as though the rest of the text did not exist.
+#
+# Measured 2026-08-26, before this fix: 152 of 505 KB entries (30%) exceeded the
+# ceiling, and 15 of the 15 entries written since id 490 did — 100%. KB 504
+# (3,220 chars) had only its first ~35% embedded, so every distinctive term in it
+# ("phone app", "ambient", "camera", "Tier 0") sat in the discarded tail and the
+# entry was unreachable by any query naming them.
+#
+# Proof it was truncation rather than a ranking quirk: two strings sharing a long
+# head but with completely unrelated tails embedded to cosine 1.000000.
+#
+# 900 chars is DEFAULT_CHUNK_CHAR_LIMIT from jarvis_core.config — it exists in
+# this repo precisely to fit MiniLM's 256-token ceiling, and memory/store.py
+# already chunks before embedding for the ChromaDB path. This script was the
+# outlier that bypassed machinery already written for exactly this problem.
+_CHUNK_CHAR_LIMIT = 900
+_CHUNK_OVERLAP = 180
+
 # ============================================================================
 # PART 2: Data Models
 # ============================================================================
@@ -96,23 +118,54 @@ class KnowledgeBaseIndex:
                     self.entries.append(KnowledgeEntry.from_jsonl_line(line))
         
         print(f"Loaded {len(self.entries)} entries")
-        
-        # Compute embeddings (batch for speed)
-        print("Computing embeddings...")
-        contents = [entry.content for entry in self.entries]
+
+        # Chunk first — see _CHUNK_CHAR_LIMIT for why this is mandatory.
+        # chunk_owner maps every embedding row back to the entry it came from,
+        # so search() can reduce chunk scores to one score per entry.
+        chunks: List[str] = []
+        self.chunk_owner = []
+        for i, entry in enumerate(self.entries):
+            for chunk in self._chunk(entry.content):
+                chunks.append(chunk)
+                self.chunk_owner.append(i)
+        self.chunk_owner = np.array(self.chunk_owner)
+
+        print(f"Computing embeddings over {len(chunks)} chunks...")
         self.embeddings = self.model.encode(
-            contents,
+            chunks,
             batch_size=32,
             show_progress_bar=True,
             convert_to_numpy=True,
             normalize_embeddings=True,
         )
-        
-        # Store embeddings in entries
-        for entry, emb in zip(self.entries, self.embeddings):
-            entry.embedding = emb
-            
-        print(f"Index ready. Embedding dim: {self.embeddings.shape[1]}")
+
+        oversized = sum(1 for e in self.entries if len(e.content) > _CHUNK_CHAR_LIMIT)
+        print(f"Index ready. Embedding dim: {self.embeddings.shape[1]} | "
+              f"{oversized} entr{'y' if oversized == 1 else 'ies'} needed splitting "
+              f"(would have been silently truncated before)")
+
+    @staticmethod
+    def _chunk(text: str) -> List[str]:
+        """Split on word boundaries at _CHUNK_CHAR_LIMIT with overlap.
+
+        Overlap matters: a claim spanning a boundary would otherwise be split
+        across two chunks and match neither well.
+        """
+        text = text.strip()
+        if len(text) <= _CHUNK_CHAR_LIMIT:
+            return [text] if text else [""]
+        out, start = [], 0
+        while start < len(text):
+            end = start + _CHUNK_CHAR_LIMIT
+            if end < len(text):
+                space = text.rfind(" ", start, end)
+                if space > start:
+                    end = space
+            out.append(text[start:end].strip())
+            if end >= len(text):
+                break
+            start = max(end - _CHUNK_OVERLAP, start + 1)
+        return [c for c in out if c]
     
     def search(
         self,
@@ -137,10 +190,16 @@ class KnowledgeBaseIndex:
         """
         # Embed query
         query_emb = self.model.encode([query], convert_to_numpy=True, normalize_embeddings=True)[0]
-        
-        # Compute similarities
-        similarities = np.dot(self.embeddings, query_emb)
-        
+
+        # Score every CHUNK, then reduce to one score per ENTRY by taking the
+        # MAX across that entry's chunks. Max, not mean: a long entry usually has
+        # one passage that answers the query and several that don't, and
+        # averaging would penalize exactly the detailed entries most worth
+        # finding. An entry is relevant if ANY part of it is.
+        chunk_sims = np.dot(self.embeddings, query_emb)
+        similarities = np.full(len(self.entries), -np.inf, dtype=chunk_sims.dtype)
+        np.maximum.at(similarities, self.chunk_owner, chunk_sims)
+
         # Filter by type
         if type_filter:
             mask = np.array([e.type == type_filter for e in self.entries])
