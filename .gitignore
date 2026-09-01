@@ -36,23 +36,31 @@
 # public by accident, and git history is extremely hard to purge afterwards.
 # This is an employment/contract question, not a technical one.
 #
-# TWO LOCATIONS, and only the first is obvious:
-#   1. client_work/                  16 MB of verbatim BUPA DeepClone source.
-#      (It also contains its own .git, so `git add` turns it into a broken
-#      gitlink — the same failure mode ai_model_repos/OpenClaude had.)
-#   2. jarvis_data/training_corpus/  947 of 3,064 blended records — 2.58 M chars
-#      — are client-derived text lifted straight out of client_work/ by
-#      engineer_corpus.py and personalization_corpus.py. Excluding only the
-#      directory would still have shipped the source inside the corpus.
+# SCOPE, decided by the user 2026-08-26 after being shown both locations:
+# exclude the raw repo, KEEP the corpus. Their words: "don't push the deepclone
+# code, but remove nothing from the corpus data."
 #
-# The corpora are regenerable: the builders ARE committed, so any machine with
-# client_work/ present rebuilds them with one command. Nothing is lost by
-# excluding the output.
+#   1. client_work/  EXCLUDED. 16 MB of verbatim BUPA DeepClone source — the
+#      framework itself, its git history, its CI config. It also carries its own
+#      .git, so a plain `git add` turns it into a broken gitlink, the same
+#      failure ai_model_repos/OpenClaude had.
+#
+#   2. jarvis_data/training_corpus/  TRACKED, deliberately and with the tradeoff
+#      understood. 947 of its 3,064 blended records — ~2.58 M chars — ARE client
+#      text: engineer_corpus.py and personalization_corpus.py lift source files
+#      out of client_work/ and chunk them, so these records are the source text
+#      itself, not summaries of it. Roughly 60% of the raw client volume travels
+#      this way even though the repo above does not.
+#
+#      This was raised twice and confirmed twice. It is the user's call as the
+#      employee. Do not silently re-exclude it, and do not re-argue it — but if
+#      a future reader is deciding whether to widen the corpus sources further,
+#      this is the constraint they should know exists.
 #
 # NOTE: `databricks.yml` at the repo root is NOT client material — it is the
-# user's own JARVIS learning bundle. Checked 2026-08-26; leaving it tracked.
+# user's own JARVIS learning bundle (bundle name "JARVIS", personal workspace).
+# The user guessed it was the client file; checked 2026-08-26, it is not.
 client_work/
-jarvis_data/training_corpus/
 # =============================================================================
 
 # -- Virtualenv (see header: size + platform-specificity, not privacy) --------
