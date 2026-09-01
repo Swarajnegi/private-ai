@@ -19,6 +19,8 @@
 | **6.6** | JARVIS MVP | The complete system | End-to-end: Voice → Think → Respond |
 | **6.7** | Always-Reachable Memory Backend | Replace git-sync with a continuously-reachable memory layer | Any device reads/writes current state without a manual pull |
 | **6.8** | Universal Capture Adapter | Awareness capture that isn't tied to one specific host/IDE | A new host gets full capture parity by implementing one adapter contract |
+| **6.9** | Client Shells | JARVIS on the surfaces the user actually lives on | Phone, desktop and web clients all reach the same JARVIS with the same state |
+| **6.10** | Ambient Presence Tier | Always-on without an always-on GPU bill | Wake word → local intent → cloud escalation, with Tier 0 never sleeping |
 
 > **Honest note (added 2026-08-01):** this file (6.1-6.6) is the ORIGINAL pre-Stage-3 draft and
 > has never been re-scoped the way `stage_4_orchestration/ROADMAP.md` was — it still assumes a
@@ -28,6 +30,15 @@
 > from a live architecture discussion, not part of the original draft, and describe real,
 > concrete gaps identified against the CURRENT design (git-sync between two known machines;
 > host-specific capture) — not aspirational voice/vision features.
+>
+> **Extended 2026-08-26:** 6.1-6.6 predates the stated ENDGAME as well as the stated stack. The
+> user's actual deliverable — *"deployed on my phone as an app, in my computer as an app and a
+> web-app ... connects to my phone camera, laptop camera and mics on both ... can really live with
+> me"* — appeared **nowhere in this repo** until it was written into `JARVIS_ENDGAME.md` §1.1 on
+> that date. A grep of the whole canon returned zero hits for phone/desktop/web app, android, ios,
+> electron, or "ambient". 6.1-6.6 build the *capabilities* (hear, see, serve an API); they never
+> built the *delivered form*. **6.9 and 6.10 are that gap**, and they are the two sub-phases
+> closest to what "done" means to the user.
 
 ---
 
@@ -164,6 +175,83 @@ brand-new host gets full capture parity without bespoke, one-off wiring each tim
 
 **Practical Exercise:** Use JARVIS from a host that's never been wired up before; confirm it
 either captures via the new adapter, or clearly tells you it isn't capturing — never silence.
+
+---
+
+## Sub-Phase 6.9: Client Shells ⬜
+
+**Goal:** Put JARVIS on the surfaces the user actually lives on. Today JARVIS is reachable only
+from a terminal inside this repo — `orchestrator.py --ask` on one laptop. The stated endgame is a
+phone app, a desktop app, and a web app, all reaching the same JARVIS with the same state
+(`JARVIS_ENDGAME.md` §1.1). This sub-phase is the delivered *form*; 6.1–6.3 built the capabilities
+it exposes.
+
+**Hard constraint, stated up front:** Kimi K2.6 is 1T params (INT4 ≈ 200–400 GB). **Every client is
+a thin client.** Nothing here hosts a model — they capture input, render output, and hold session
+state. Inference lives in Tier 2 (§6.10). Depends on 6.3 (unified API) and 6.7 (reachable memory
+backend) — without 6.7 the clients cannot share state at all.
+
+| Lesson | Topic | JARVIS Use Case | Command |
+|--------|-------|-----------------|---------|
+| 6.9.1 | Thin-client architecture | What lives on-device vs. server-side, and why the split is forced rather than chosen | `@[/learn] Explain thin-client design for a cloud-hosted personal assistant.` |
+| 6.9.2 | Web app first | The cheapest surface to ship and the one that proves the API contract | `/dev Build the JARVIS web client against the 6.3 API.` |
+| 6.9.3 | Desktop app | Screen capture and local-filesystem access are desktop-only powers worth having | `/dev Package the JARVIS desktop client.` |
+| 6.9.4 | Phone app | Camera, mic, and always-with-you presence — the surface that makes it ambient | `/dev Build the JARVIS mobile client.` |
+| 6.9.5 | One identity, many clients | Auth + session continuity so a conversation started on the phone continues on the laptop | `/dev Implement cross-client session continuity.` |
+
+**Practical Exercise:** Start a conversation on the phone, finish it on the laptop, without
+repeating yourself once.
+
+---
+
+## Sub-Phase 6.10: Ambient Presence Tier ⬜
+
+**Goal:** Make JARVIS continuously present without a continuously-running GPU. This sub-phase
+exists because *"can really live with me"* and ENDGAME §2's *"cold-wake only"* are in direct
+conflict — continuous 4× A5000 hosting is **~₹8.0 lakh/year** against a Year-1 envelope of
+₹21.6K–50.3K, i.e. 16–38× over. The resolution is tiering, so that only the free tier never sleeps.
+
+| Tier | Where | Cost | Sleeps? |
+|---|---|---|---|
+| 0 | Device CPU (phone + laptop) | ₹0 | **Never** |
+| 1 | Device | ~₹0 | Never |
+| 2 | RunPod cold-wake | ₹91/hr | Aggressively |
+
+| Lesson | Topic | JARVIS Use Case | Command |
+|--------|-------|-----------------|---------|
+| 6.10.1 | Tier 0 — the always-on ear | Wake word + VAD + small-Whisper on CPU. Must be cheap enough to run forever and private enough to run locally | `/dev Build the always-on Tier 0 listener.` |
+| 6.10.2 | Tier 1 — local intent triage | Answer trivia locally, escalate real intent. Reuses the CPU-side ModernBERT router already specified for the Orchestrator | `/dev Implement local intent triage and the escalation boundary.` |
+| 6.10.3 | Escalation policy + cost ceiling | What justifies a ₹91/hr wake-up, and a hard monthly ceiling that fails closed | `/dev Implement wake-up policy with a fail-closed budget cap.` |
+| 6.10.4 | Camera frame gating | A camera feed that wakes nothing 99.9% of the time — motion//scene-change gating before any model sees a frame | `/dev Build camera frame gating for Tier 0.` |
+| 6.10.5 | Privacy boundary | What Tier 0 may retain, what leaves the device, and what is never recorded. Ambient sensing is the largest privacy surface in the project | `@[/learn] Threat-model an always-on camera and mic in a personal assistant.` |
+
+**Practical Exercise:** Leave it running for a full day. Confirm the month's projected spend from
+real wake-up counts, and confirm the ceiling actually stops it.
+
+---
+
+## Distance to Goal
+
+> **The scoreboard.** Progress is reported against *this*, not against corpus statistics. Corpus
+> depth, blend ratios and record counts are instrumentation for row 2 only — the user's directive,
+> 2026-08-26 (KB 504). Update the state column; do not add rows to make it look fuller.
+
+| # | Requirement (ENDGAME §1.1) | State |
+|---|---|---|
+| 1 | Reasoning core reachable end-to-end | ✅ Stage 4 closed, Final Boss 8/8 |
+| 2 | Corpus assembled for the trained adapter | ✅ 2,143 engineer + 921 personalization records |
+| 3 | **Adapter actually trained** | ⛔ **BLOCKED — no RunPod account (zero `RUNPOD_*` env vars)** |
+| 4 | Adapter deployed and serving | ⬜ Stage 5.4 |
+| 5 | Voice in / voice out | ⬜ 6.1 |
+| 6 | Vision in | ⬜ 6.2 |
+| 7 | Unified API | ⬜ 6.3 |
+| 8 | Memory reachable from any device | ⬜ 6.7 |
+| 9 | Web / desktop / phone clients | ⬜ 6.9 |
+| 10 | Ambient — always-on tier, cameras + mics live | ⬜ 6.10 |
+
+**Row 3 is the whole critical path.** Rows 4–10 are all downstream of it, and it is not blocked on
+engineering — it is blocked on a signup. Every hour spent deepening the corpus improves row 2, which
+is already green.
 
 ---
 
