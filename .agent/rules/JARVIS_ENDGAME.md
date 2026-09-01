@@ -12,6 +12,33 @@ JARVIS is not a monolithic chatbot or a wrapper around a commercial API. It is a
 
 Its purpose is to act as an intellectual exoskeleton for the user, capable of autonomously executing cross-domain research, writing complex software, and controlling physical hardware (e.g., hologram tech, robotics). It leverages the user's private, highly specific historical data (`knowledge_base.jsonl`) and their unique Cognitive Profile to communicate and problem-solve on the user's exact wavelength.
 
+### 1.1 THE DELIVERED FORM (what "done" actually looks like)
+
+> **Added 2026-08-26.** Everything above describes what JARVIS can **DO**. Nothing described what
+> JARVIS **IS TO THE USER**, and that omission was load-bearing: a grep of the entire canon
+> (`.agent/rules/`, `JARVIS_MASTER_ROADMAP.md`, `stage_6_integration/ROADMAP.md`) returned **zero
+> hits** for phone app, desktop app, web app, android, ios, electron, or "ambient" — the only
+> adjacent line anywhere was `6.1.4 Wake Word Detection`. The goal existed solely in the user's
+> head. Work therefore drifted toward what the docs *did* measure — corpus statistics — which the
+> user corrected directly: *"All we're doing now, having conversations on different topics etc must
+> not blind you from the goal."* Written down here so it can anchor the roadmap instead.
+
+The finished system is **a trained model that is present**, not a context-injected assistant that is
+summoned. In the user's own framing:
+
+1. **Trained, not injected.** The `cognitive_profile.md` → SessionStart injection path is explicitly
+   accepted as good-for-now and explicitly **not** the goal. The deliverable is the QLoRA adapter of
+   Stage 5, actually trained and actually deployed.
+2. **Deployed on every surface the user lives on** — phone app, desktop app, web app. Not a
+   terminal `--ask` and not a chat window in someone else's IDE.
+3. **Wired to the senses** — phone camera, laptop camera, and microphones on both.
+4. **Ambient.** *"can really live with me, like jarvis in iron man."* Present continuously rather
+   than invoked per-question.
+
+**Progress is measured as distance to this, not as corpus depth.** Corpus statistics (record counts,
+blend ratios, char share) are *instrumentation for step 1* and must always be framed as such — see
+§7's Distance to Goal and `stage_6_integration/ROADMAP.md`.
+
 ---
 
 ## 2. THE HARDWARE TOPOLOGY (Cloud-First, Edge-Augmented)
@@ -69,6 +96,36 @@ The trade is paid compute in exchange for zero hardware setup overhead. Acceptab
 ### The Brain Base Model (Phase 4+)
 
 **Default:** Kimi K2.6 (1T total / 32B active MoE, MIT license, INT4 native, 384 experts, native agent-swarm pattern). Hosted on RunPod Cloud Pods. Cold-wake only — no always-on GPU. Cost at 4× A5000: ₹91/hr; at 15 sessions/month averaging 1 hr: **~₹1,365/month**.
+
+#### ⚠️ Cold-wake vs. §1.1's ambient presence — the conflict, and the resolution
+
+"Cold-wake only" and *"can really live with me"* are in **direct contradiction**, and the gap is not
+marginal. Stated here rather than left implicit, because the two claims previously sat in different
+sections and were never read against each other:
+
+| Mode | Cost | vs. Year-1 envelope (₹21.6K–50.3K) |
+|---|---|---|
+| Cold-wake, 15 sessions/mo | ₹1,365/mo ≈ **₹16K/yr** | within budget |
+| Agentic wake-ups, ~10/day (§3.5) | ₹4.5K–9K/mo ≈ **₹54K–108K/yr** | already 1–2× over |
+| Continuous 4× A5000, 24/7 | ₹91/hr × 8,760 ≈ **₹8.0 lakh/yr** | **16–38× over** |
+
+**Ambient presence cannot be delivered by a single-tier architecture at any acceptable cost.** And
+Kimi K2.6 at 1T params (INT4 ≈ 200–400 GB) does not run on a handset — **the phone is a client, not
+a host.** Anyone planning on-device inference of the base model is planning something impossible.
+
+**RESOLUTION — tiered presence.** Always-on and expensive-reasoning are separated so that only the
+cheap tier never sleeps:
+
+| Tier | Where | Cost | What it does | Sleeps? |
+|---|---|---|---|---|
+| **0** | Device (phone + laptop CPU) | **₹0** | Wake word, VAD, small-Whisper ASR, camera frame gating | **Never** |
+| **1** | Device | ~₹0 | Intent routing + trivial queries answered locally. The ModernBERT-Large router already specified for the Orchestrator (§3, row 1) is the existing primitive — it was scoped CPU-side for exactly this reason | Never |
+| **2** | RunPod cold-wake | ₹91/hr | Kimi K2.6 + adapter. Woken **only** on intent Tier 1 cannot serve | Aggressively |
+
+This preserves the cold-wake economics of the table above *while* delivering continuous presence,
+and it is how the Iron Man metaphor actually decomposes: the house always hears you; the heavy
+reasoning happens elsewhere and only when summoned. Build targets live at
+`stage_6_integration/ROADMAP.md` §6.10.
 
 **Why Kimi K2.6 over alternatives:**
 - vs. DeepSeek V4-Pro (1.6T/49B-active): smaller, fits 4×H100 INT4 instead of needing 8×H100. Same MIT license. ~30% cheaper inference.
