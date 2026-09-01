@@ -139,6 +139,35 @@ _WRITTEN_REASONING_PATHS = (
     Path(DATA_ROOT).parent / "knowledge" / "Finance" / "strategy.md",
 )
 
+# --- Source 7: PUBLISHED LITERATURE (added 2026-08-26) ----------------------
+# The user's own long-form published writing: three Substack essays (2024-2025)
+# and two poems posted to X. This is the PUREST voice material in the entire
+# corpus and it sat unused for months.
+#
+# WHY IT WAS MISSED, worth recording so the same class of miss does not repeat:
+# the files were image-only PDFs and .webp/.jpg screenshots. A grep for
+# "unseen graves" scoped to *.md and *.txt returned nothing, and I concluded
+# "nowhere in this repository" — a false negative produced by searching only the
+# formats I expected. The material had been sitting in knowledge/literature/
+# since May. Text was recovered 2026-08-26 from the live Substack posts (the
+# local PDF exports clip the right margin, so transcribing them would have
+# meant guessing words in a corpus whose whole purpose is fidelity to the
+# user's voice) and from visual reading for the two poems.
+#
+# WHY THIS RANKS ABOVE CONVERSATION CAPTURE: it is unmediated. No question of
+# mine shaped it, no assistant turn is interleaved, nothing was summarized. It
+# is also the PRIMARY SOURCE for KB patterns previously recorded only as my
+# observations -- "Are you able to give yourself goosebumps via your
+# imagination?" (visceral_imagination_test) and "Cowardice, in its truest form
+# is to not be what you are. Greatest sin? To be a fraction of what you could
+# be." (insufficiency_as_sin) are both verbatim from the Napoleon essay,
+# written October 2024.
+#
+# Purity tag "authored" distinguishes it from written_reasoning's "mixed"
+# (strategy.md carries generic tax/platform reference alongside the personal
+# reasoning); every line here is the user's.
+_LITERATURE_DIR = Path(DATA_ROOT).parent / "knowledge" / "literature"
+
 # --- Source 6: PROFESSIONAL REASONING (added 2026-08-24) --------------------
 # WHY THIS EXISTS, and why the previous classification was wrong.
 #
@@ -367,6 +396,39 @@ def iter_written_reasoning_records() -> Generator[CorpusRecord, None, None]:
             )
 
 
+def iter_literature_records() -> Generator[CorpusRecord, None, None]:
+    """
+    LAYER: Specialists (Corpus Assembly)
+
+    The user's published essays and poems — see _LITERATURE_DIR for why this is
+    the highest-purity voice source available and why it went unnoticed.
+
+    Reads only the .md transcriptions, not the source PDFs/images they were
+    recovered from; those stay in place as provenance.
+    """
+    if not _LITERATURE_DIR.is_dir():
+        return
+    chunker = _chunker()
+    for path in sorted(_LITERATURE_DIR.glob("*.md")):
+        try:
+            text = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+        if not text.strip():
+            continue
+        for i, chunk in enumerate(chunker.chunk(text)):
+            yield CorpusRecord(
+                source_type="literature",
+                source_path=f"{path.name}#chunk{i}",
+                text=chunk,
+                metadata={
+                    "file": path.name,
+                    "purity": "authored",
+                    "form": "poetry" if "poem" in path.name.lower() else "essay",
+                },
+            )
+
+
 def _extract_prose_blocks(text: str, suffix: str) -> Generator[str, None, None]:
     """
     Consecutive comment lines, grouped into blocks and stripped of markers.
@@ -556,6 +618,7 @@ _SOURCE_ITERATORS = (
     ("kb_identity", lambda dropped: iter_kb_identity_records()),
     ("kb_judgment", lambda dropped: iter_kb_judgment_records()),
     ("written_reasoning", lambda dropped: iter_written_reasoning_records()),
+    ("literature", lambda dropped: iter_literature_records()),
     ("professional_reasoning", lambda dropped: iter_professional_reasoning_records()),
     ("user_voice", lambda dropped: iter_user_voice_records(dropped=dropped)),
 )
