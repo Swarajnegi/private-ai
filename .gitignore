@@ -18,9 +18,24 @@ jarvis_data/extracted_images/
 **/*_chromadb/
 **/*_chroma_db/
 
+# -- Client work (2026-08-22) -----------------------------------------------
+# Verbatim Celebal/BUPA client code + raw project notes. NEVER committed —
+# not here, not to a private fork, not anywhere off client infrastructure.
+# Top-level and whole-directory on purpose: one unambiguous rule beats a
+# gitignored subfolder inside a tracked tree, which leaks the first time
+# someone runs `git add -f` or edits the pattern.
+# Only GENERALIZED lessons leave this directory, distilled by hand into
+# knowledge/Data Engineering/Data_Engineering_Lessons.md.
+client_work/
+
 # -- Third-party clones (re-clone fresh on each laptop) -----------------------
-# OpenClaude/ (Tracking explicitly for personal-laptop sync)
+# ai_model_repos/OpenClaude and OpenJarvis/ were both DELETED 2026-08-22:
+# superseded strategy + completed ports, 173M for provenance alone. Patterns
+# kept so a stray re-clone never gets committed. Pinned SHAs for citation
+# resolution: OpenJarvis 35b8991cc20b7d636cd65b2728592d2d93bf03cd,
+# OpenClaude 877b4dc88600062d8bbfaf764bfbd828c55699e8.
 OpenJarvis/
+ai_model_repos/
 Open-Claude-Cowork/
 
 # -- Large static reference --------------------------------------------------
@@ -119,6 +134,14 @@ jarvis_data/training_corpus/
 # Structured cognitive-dimension index (Decision 2026-08-10) — regenerable via
 # jarvis_core/memory/cognitive_index.py from knowledge_base.jsonl.
 jarvis_data/cognitive_index.sqlite3
+
+# Experience coverage map (2026-08-24) — records what the user HAS and HAS NOT
+# worked on professionally. Gitignored for the same reason as personal_life.md,
+# but a different risk: a PUBLIC document titled "things this engineer hasn't
+# done" is career-sensitive while a job switch is live (knowledge/Job Switch/).
+# Flip to tracked once the repo is private — it is high-value migration
+# material, just not public-safe today. Hand-authored, NOT regenerable.
+jarvis_data/experience_map.md
 
 # Private life notes (2026-08-15) — NOT regenerable, NOT derived from anything else.
 # Deliberately kept off the public repo: names real third parties (family, partner,

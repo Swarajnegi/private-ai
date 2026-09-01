@@ -55,7 +55,9 @@ In this repo you are **Chief Systems Architect & Strategic Co-Founder** for JARV
 | Work laptop (this one) | Linux | Claude Code (Opus 4.7) | Daytime | Heavy lifting; scratchpad |
 | Personal laptop | Windows | Antigravity | Evenings | Learning + brainstorming via slash-command workflows; canonical machine |
 
-**Sync:** GitHub at https://github.com/Swarajnegi/private-ai (public repo). Standard `git pull` / `git push` flow. Push from work laptop requires a fine-grained PAT in `$GH_TOKEN` env var (Contents: Read and write scope). Pull is auth-free since the repo is public. **Single-user-at-a-time** — no concurrent edits, so `merge=union` on `*.jsonl` (set in `.gitattributes`) handles the rare append-from-both-sides case automatically.
+**Sync:** GitHub at https://github.com/Swarajnegi/private-ai — **PRIVATE since 2026-08-26** (it was public until then; the earlier "pull is auth-free" note no longer holds). Standard `git pull` / `git push` flow, and **both** now require a fine-grained PAT in `$GH_TOKEN` (Contents: Read and write). **Single-user-at-a-time** — no concurrent edits, so `merge=union` on `*.jsonl` (set in `.gitattributes`) handles the rare append-from-both-sides case automatically.
+
+> Going private does **not** retroactively protect anything already pushed while it was public — most importantly the plaintext OpenRouter key committed in `jarvis.ps1` on 2026-04-29 and removed 2026-08-22. Deleting the file does not remove it from history; that key must be revoked at the provider. Privacy also does not relax the `client_work/` rule below: client IP stays out of this repo regardless of who can read it.
 
 ---
 
@@ -163,7 +165,8 @@ These derive from `Cognitive_Pattern` entries — apply on every response, not j
 ## What NOT to do
 
 - Don't write generic boilerplate when production primitives exist — read [js-development/jarvis_core/memory/store.py](js-development/jarvis_core/memory/store.py) first.
-- Don't `git add jarvis_data/chromadb/` or any binary in `jarvis_data/` other than `knowledge_base.jsonl`, `*.md`, `model_catalog.json`, `ingestion_manifest.jsonl`.
+- Don't `git add jarvis_data/chromadb/` or any binary in `jarvis_data/` other than `knowledge_base.jsonl`, `*.md`, `model_catalog.json`.
+- **Never commit anything under `client_work/`** — not to this repo, not to a private fork, not anywhere. It holds verbatim Celebal/BUPA client code and notes. Only *generalized* lessons leave it, distilled into [knowledge/Data Engineering/Data_Engineering_Lessons.md](knowledge/Data%20Engineering/Data_Engineering_Lessons.md). Never reproduce client source, connection strings, workspace URLs, or table names from it into a tracked file.
 - The current sync transport is GitHub at https://github.com/Swarajnegi/private-ai. The "GitHub-blocked" claim from earlier turns out to be wrong — github.com is reachable from this work laptop. Push uses a fine-grained PAT with Contents: Read/write scope.
 - Don't merge `knowledge_base.jsonl` with manual editor copy-paste — use [scripts/jsonl_merge.py](scripts/jsonl_merge.py).
 - Don't create new docs/markdown files unless explicitly asked — append to existing where possible. The user has limited migration budget.
@@ -184,11 +187,10 @@ No fluff. Depth over brevity. Be direct. When the user is wrong, say so with rea
 |---|---|
 | Endgame architecture | [.agent/rules/JARVIS_ENDGAME.md](.agent/rules/JARVIS_ENDGAME.md) |
 | Antigravity always-on protocol | [.agent/rules/js-workspace-rule.md](.agent/rules/js-workspace-rule.md) |
-| OpenClaude integration plan (SUPERSEDED 2026-05-13) | [archive/STAGE_3_OPENCLAUDE_STRATEGY.md](archive/STAGE_3_OPENCLAUDE_STRATEGY.md) — kept for historical context |
 | GitHub remote | https://github.com/Swarajnegi/private-ai |
 | Master roadmap | [js-learning/JARVIS_MASTER_ROADMAP.md](js-learning/JARVIS_MASTER_ROADMAP.md) |
 | Knowledge base | [jarvis_data/knowledge_base.jsonl](jarvis_data/knowledge_base.jsonl) |
-| Ingestion manifest | [jarvis_data/ingestion_manifest.jsonl](jarvis_data/ingestion_manifest.jsonl) |
+| Raw client-work material (gitignored, never committed) | `client_work/<project>/` — see "Client work" below |
 | Production memory layer | [js-development/jarvis_core/memory/](js-development/jarvis_core/memory/) |
 | Path config | [js-development/jarvis_core/config.py](js-development/jarvis_core/config.py) |
 | CLI tools | [scripts/](scripts/) |
