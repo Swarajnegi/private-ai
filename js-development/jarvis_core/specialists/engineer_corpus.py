@@ -35,10 +35,14 @@ With this module:
 THE FLOW
 =============================================================================
 
-STEP 1: Five source iterators, one per corpus source named in
-        JARVIS_MASTER_ROADMAP.md Sec 5.2 (jarvis_core/ code, KB entries,
-        chat-history, DE corpus, error logs). Each is a generator — no
-        source is ever fully materialized in memory.
+STEP 1: Six source iterators, one per corpus source (jarvis_core/ code, KB
+        entries, chat-history, DE corpus, client production work, error
+        logs). Five are the set named in JARVIS_MASTER_ROADMAP.md Sec 5.2;
+        client_work was added 2026-08-22 when real client material first
+        landed on disk, and it is the only source carrying production data
+        engineering the user was PAID to write rather than notes about it.
+        Each is a generator — no source is ever fully materialized in
+        memory.
         ↓
 STEP 2: kb_entry and chat_history are capped for near-duplicates first
         (verified 2026-08-03: the same question gets asked repeatedly
@@ -82,6 +86,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, Generator, Optional
 
+from jarvis_core.agent.capture import redact
 from jarvis_core.config import DATA_ROOT, JARVIS_ROOT, KB_PATH, SPECIALIST_CORPUS_ROOT
 from jarvis_core.memory.chunking import RecursiveWordChunker
 
@@ -113,6 +118,45 @@ _DE_CORPUS_FILES = (
     "DE_Interview_Prep.md",
     "Databricks_Costing.md",
     "SDP_Syntax.md",
+)
+
+# --- Source 6: real client production work (added 2026-08-22) ----------------
+# Gitignored quarantine (see client_work/README.md). Read from here, never
+# committed. Before this source the whole corpus held ZERO production data
+# engineering the user was paid to write: de_corpus contributed 125 of 1,356
+# records and every one was notes ABOUT the work, not the work.
+_CLIENT_WORK_ROOT = JARVIS_ROOT / "client_work"
+
+_CLIENT_WORK_EXTENSIONS = (".py", ".yml", ".yaml", ".sql", ".md")
+
+# The client repo arrived via a VDI export, which litters it with Windows
+# download markers and DLP sidecar files -- 615 of them, more files than the
+# real content. Substring match, not suffix: the marker is appended after the
+# real extension ("settings.json:Zone.Identifier"), so an extension allowlist
+# alone does not catch them.
+_CLIENT_WORK_JUNK_MARKERS = (":Zone.Identifier", ":sec.endpointdlp")
+_CLIENT_WORK_SKIP_DIRS = frozenset({
+    ".git", "__pycache__", ".pytest_cache", ".vscode", ".idea", "node_modules",
+})
+
+# ATTRIBUTION TIER, recorded per record rather than resolved by including or
+# excluding. The client repo is a TEAM repo: `git log` on it shows 48/39/19/13/12
+# commits across six authors, and only the paths below are the user's own slice
+# (17 commits, split between their two git identities -- the client VDI labels
+# them differently from this machine, which is itself mislabelled).
+#
+# Why tier instead of filter: the team-authored `src/` is ~324K tokens of
+# genuinely excellent production DE -- the clone engine, failover strategies,
+# recon, grant replication -- and it is real context for what the user's own
+# test framework validates. But it is NOT their voice, and the Engineer adapter
+# is supposed to learn their voice (KB 492). Those two facts pull opposite ways
+# and the right weighting is not knowable until a training run exists. So both
+# go in, tagged, and the decision stays reversible at training time instead of
+# being burned in here by an include/exclude call made blind.
+_CLIENT_WORK_AUTHORED_MARKERS = (
+    "gld_deepclone/test_cases/",
+    "test_cases_orchestrator_job.yml",
+    "SESSION_LEARNINGS.md",
 )
 
 _DEFAULT_OUTPUT_PATH = SPECIALIST_CORPUS_ROOT / "engineer_corpus.jsonl"
@@ -407,6 +451,72 @@ def iter_de_corpus_records(root: Optional[Path] = None) -> Generator[CorpusRecor
 
 
 # =============================================================================
+# Part 6b: SOURCE 6 — REAL CLIENT PRODUCTION WORK
+# =============================================================================
+
+def iter_client_work_records(root: Optional[Path] = None) -> Generator[CorpusRecord, None, None]:
+    """
+    LAYER: Specialists (Corpus Assembly)
+
+    Production data engineering from client_work/ — the gitignored quarantine
+    holding verbatim client repos and raw project notes.
+
+    This is the only source carrying code the user was PAID to write, on an
+    estate of 20k+ tables, against constraints (Unity Catalog masking, Azure
+    vCPU quota, cross-region auth, spot eviction) that no amount of personal-
+    project work produces. Every other source is either JARVIS's own code or
+    notes about work done elsewhere.
+
+    Records carry `attribution`: "authored" for the user's own slice, "team"
+    for the surrounding repo. See _CLIENT_WORK_AUTHORED_MARKERS for why that
+    is a tag rather than a filter.
+
+    Every record is redacted through agent.capture.redact() before it is
+    yielded — this corpus is uploaded to RunPod for training, so it is the
+    last point at which anything leaves the machine under our control. The
+    quarantine is trusted not to be committed; it is NOT trusted to be free
+    of a credential someone pasted into a notebook.
+    """
+    base = root or _CLIENT_WORK_ROOT
+    if not base.is_dir():
+        return
+    chunker = _chunker()
+    for path in sorted(base.rglob("*")):
+        if not path.is_file():
+            continue
+        if _CLIENT_WORK_SKIP_DIRS & set(path.parts):
+            continue
+        name = path.name
+        if any(marker in name for marker in _CLIENT_WORK_JUNK_MARKERS):
+            continue
+        if path.suffix.lower() not in _CLIENT_WORK_EXTENSIONS:
+            continue
+        try:
+            text = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+        if not text.strip():
+            continue
+        rel = path.relative_to(base).as_posix()
+        attribution = (
+            "authored"
+            if any(m in rel for m in _CLIENT_WORK_AUTHORED_MARKERS)
+            else "team"
+        )
+        for i, chunk in enumerate(chunker.chunk(redact(text))):
+            yield CorpusRecord(
+                source_type="client_work",
+                source_path=f"{rel}#chunk{i}",
+                text=chunk,
+                metadata={
+                    "file": rel,
+                    "attribution": attribution,
+                    "language": path.suffix.lstrip("."),
+                },
+            )
+
+
+# =============================================================================
 # Part 7: SOURCE 5 — PAST ERROR LOGS (does not exist yet)
 # =============================================================================
 
@@ -435,6 +545,7 @@ _SOURCE_ITERATORS = (
     ("kb_entry", lambda dropped: iter_kb_records(dropped=dropped)),
     ("chat_history", lambda dropped: iter_chat_history_records(dropped=dropped)),
     ("de_corpus", lambda dropped: iter_de_corpus_records()),
+    ("client_work", lambda dropped: iter_client_work_records()),
     ("error_log", lambda dropped: iter_error_log_records()),
 )
 

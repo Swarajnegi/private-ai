@@ -78,13 +78,16 @@ LAYER: Specialists (Corpus Assembly)
 """
 
 import json
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, Generator, Optional
 
+from jarvis_core.agent.capture import redact
 from jarvis_core.config import DATA_ROOT, SPECIALIST_CORPUS_ROOT
 from jarvis_core.memory.chunking import RecursiveWordChunker
 from jarvis_core.memory.cognitive_index import (
+    query_all,
     query_by_dimension,
     query_by_tag,
     rebuild_index,
@@ -106,6 +109,97 @@ _OBSERVATION_QUEUE_PATH = Path(DATA_ROOT) / "observation_queue.jsonl"
 # already covered by the personality dimension. Heavy overlap is expected and
 # handled by id-dedup in _iter_kb_identity_records.
 _IDENTITY_TAGS = ("identity", "philosophy", "legacy", "motivation-architecture")
+
+# Entries OUTSIDE the personality dimension that still encode how the user
+# decides. Measured 2026-08-20 against the real KB: of 370 non-identity entries,
+# 105 carry these markers (~41K tokens), 3 are pure build-log prose, 262 are
+# technical facts belonging to the Engineer corpus rather than here. A Decision
+# recording that the user rejected an approach and why IS personality data --
+# it shows their reasoning, not just a project outcome.
+_USER_SIGNAL = re.compile(
+    r"user (pushed back|corrected|rejected|chose|said|asked|explicitly|overrode"
+    r"|flagged|wants|framed)|user's own|per the user|DIRECTIVE",
+    re.IGNORECASE,
+)
+
+# Build-log openers: my prose about my own work. Excluded explicitly -- training
+# on these teaches the adapter to imitate build summaries, not the user.
+_BUILD_LOG = re.compile(
+    r"^(Built|Shipped|Added|Wired|Fixed|Created|Implemented|Verified)", re.IGNORECASE
+)
+
+# First-person reasoning the user owns, written down outside the KB.
+# strategy.md qualifies because Sec1 (profile/constraints/strategic identity),
+# Sec5.6 (guardrails they set against their own impulses) and Sec8 (discipline
+# notes) are genuinely about them. DELIBERATELY EXCLUDED: knowledge/Job Switch/
+# (my teaching roadmaps written FOR them, not their reasoning) and
+# Data_Engineering_Lessons.md (already ingested by engineer_corpus as de_corpus --
+# including it here would double-count it across the blend).
+_WRITTEN_REASONING_PATHS = (
+    Path(DATA_ROOT).parent / "knowledge" / "Finance" / "strategy.md",
+)
+
+# --- Source 6: PROFESSIONAL REASONING (added 2026-08-24) --------------------
+# WHY THIS EXISTS, and why the previous classification was wrong.
+#
+# Until now the client work went ONLY to engineer_corpus, on the theory that
+# technical content belongs to the technical adapter. The user rejected the
+# premise the whole split rested on (KB 495):
+#
+#   "no one writes code on their own these days when every company is giving
+#    out claude codes and codex's. So it isn't about gathering data where I've
+#    handwritten code, It's all about how I understand code, how I actually
+#    understand better, how I architect stuff ... my experience and what kind
+#    of problems i've faced and resolved"
+#
+# They are right, and it invalidates the metric I had been scoring the corpus
+# with. Keystroke authorship is a pre-agentic-coding proxy: it measures who
+# operated the tool, not who held the judgment. What makes text personalization
+# material is whether the REASONING is the user's -- and a decision recorded
+# with its rejected alternatives attached is theirs regardless of what emitted
+# the surrounding YAML.
+#
+# So the reasoning prose is extracted separately, here. Measured:
+#   test_cases_orchestrator_job.yml   930 of 1,493 lines are comment (62%)
+#   test_cases/*.py (20 files)      2,879 of 9,456 lines (30%)
+#   SESSION_LEARNINGS.md              917 lines, ~all of it
+# ~4,700 lines of architectural decision-making from two client projects.
+#
+# DELIBERATE OVERLAP, not an oversight: these comment lines ALSO remain inside
+# engineer_corpus's client_work records, because a comment stripped from the
+# code it explains loses the thing it refers to. So the model sees this slice
+# twice -- once in context as project material, once alone as voice material.
+# That is intentional weighting of the highest-value ~28% of the client corpus,
+# and it is reported in the stats table so the double-count stays visible
+# rather than silently inflating a total.
+#
+# AUTHORED PATHS ONLY. The surrounding repo has six committers; team-authored
+# comments are good engineering but they are not this user's voice, and the
+# whole point of this source is voice. Markers mirror
+# engineer_corpus._CLIENT_WORK_AUTHORED_MARKERS -- keep them in sync.
+_CLIENT_WORK_ROOT = Path(DATA_ROOT).parent / "client_work"
+_PROF_REASONING_MARKERS = (
+    "gld_deepclone/test_cases/",
+    "test_cases_orchestrator_job.yml",
+    "SESSION_LEARNINGS.md",
+)
+_PROF_REASONING_EXTENSIONS = (".py", ".yml", ".yaml", ".md")
+_CLIENT_WORK_JUNK_MARKERS = (":Zone.Identifier", ":sec.endpointdlp")
+
+# Comment lines that carry no reasoning. Notebook cell separators, linter
+# pragmas, and section banners are structure, not thought.
+_PROSE_NOISE = re.compile(
+    r"^(COMMAND -+|MAGIC\s*$|DBTITLE|Databricks notebook source|-{3,}|={3,}|#+\s*$)"
+    r"|^noqa|^type:\s*ignore|^pylint|^fmt:\s*(on|off)$",
+    re.IGNORECASE,
+)
+
+# A reasoning block has to be long enough to contain a reason. Tuned against
+# the real files: 200 chars keeps the decision records ("AT_LEAST_ONE_SUCCESS
+# is the only choice that is both reachable AND halts on failure...") and drops
+# one-line labels. Raising it starts losing real content; lowering it lets in
+# "# tables-only" and "# see below".
+_MIN_PROSE_BLOCK_CHARS = 200
 
 # Same near-duplicate capping proven against real data in engineer_corpus.py:
 # the user asks the same question across separate debugging sessions, and none
@@ -209,6 +303,164 @@ def iter_kb_identity_records() -> Generator[CorpusRecord, None, None]:
             yield from emit(entry, f"tag:{tag}")
 
 
+def iter_kb_judgment_records() -> Generator[CorpusRecord, None, None]:
+    """
+    LAYER: Specialists (Corpus Assembly)
+
+    Entries outside the personality dimension that still record the user's
+    OWN choices, pushbacks and corrections. Tagged as its own source_type
+    (not folded into kb_identity) so a training run can weight or ablate
+    "how they reason" separately from "who they are" -- the two teach
+    different things and shouldn't be silently averaged.
+
+    Skips anything kb_identity already takes, and skips build-log prose.
+    """
+    chunker = _chunker()
+    for entry in query_all():
+        if entry.cognitive_dimension == "personality":
+            continue
+        if any(t in entry.tags for t in _IDENTITY_TAGS):
+            continue
+        content = entry.content
+        if not content.strip() or not _USER_SIGNAL.search(content):
+            continue
+        if _BUILD_LOG.match(content.strip()):
+            continue
+        for i, chunk in enumerate(chunker.chunk(content)):
+            yield CorpusRecord(
+                source_type="kb_judgment",
+                source_path=f"kb#{entry.id}#chunk{i}",
+                text=chunk,
+                metadata={
+                    "kb_type": entry.type,
+                    "dimension": entry.cognitive_dimension,
+                    "tags": list(entry.tags),
+                    "timestamp": entry.timestamp,
+                },
+            )
+
+
+def iter_written_reasoning_records() -> Generator[CorpusRecord, None, None]:
+    """
+    LAYER: Specialists (Corpus Assembly)
+
+    Long-form documents holding the user's own reasoning about their life
+    and constraints (see _WRITTEN_REASONING_PATHS for what's included and,
+    more importantly, what's excluded and why). Mixed-purity by nature --
+    strategy.md also contains generic tax/platform reference material --
+    so it gets its own source_type rather than being blended in silently.
+    """
+    chunker = _chunker()
+    for path in _WRITTEN_REASONING_PATHS:
+        try:
+            text = path.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        if not text.strip():
+            continue
+        for i, chunk in enumerate(chunker.chunk(text)):
+            yield CorpusRecord(
+                source_type="written_reasoning",
+                source_path=f"{path.name}#chunk{i}",
+                text=chunk,
+                metadata={"file": path.name, "purity": "mixed"},
+            )
+
+
+def _extract_prose_blocks(text: str, suffix: str) -> Generator[str, None, None]:
+    """
+    Consecutive comment lines, grouped into blocks and stripped of markers.
+
+    Groups rather than yielding per line because a reasoning block is the unit
+    that carries an argument — a single line out of the middle of one ("# only
+    reached on the TGT leg now") is unintelligible alone. Blank lines and any
+    line of actual code end the current block.
+
+    .md files are already prose and pass through whole.
+    """
+    if suffix == ".md":
+        if text.strip():
+            yield text
+        return
+
+    block: list[str] = []
+    for raw in text.splitlines():
+        line = raw.strip()
+        if line.startswith("#"):
+            body = line.lstrip("#").strip()
+            # Databricks notebooks prefix markdown cells with "MAGIC %md" and
+            # "MAGIC" per line; strip both so the prose reads as prose.
+            if body.startswith("MAGIC"):
+                body = body[len("MAGIC"):].strip()
+                if body.startswith("%md"):
+                    body = body[len("%md"):].strip()
+            if body and not _PROSE_NOISE.match(body):
+                block.append(body)
+            continue
+        # A blank line inside a comment run is a paragraph break, not an end.
+        if not line and block:
+            block.append("")
+            continue
+        if block:
+            joined = "\n".join(block).strip()
+            if len(joined) >= _MIN_PROSE_BLOCK_CHARS:
+                yield joined
+            block = []
+    if block:
+        joined = "\n".join(block).strip()
+        if len(joined) >= _MIN_PROSE_BLOCK_CHARS:
+            yield joined
+
+
+def iter_professional_reasoning_records() -> Generator[CorpusRecord, None, None]:
+    """
+    LAYER: Specialists (Corpus Assembly)
+
+    The user's architectural reasoning, extracted from the client work they
+    authored — comment blocks out of code and YAML, plus their hand-written
+    learnings file whole.
+
+    This is the source that answers "how do I architect, and what problems
+    have I faced and resolved" (KB 495). It is deliberately NOT the code
+    itself: engineer_corpus already carries that, and the code is the artifact
+    while the comment is the judgment.
+
+    Every record is redacted before it is yielded — same reason as
+    engineer_corpus.iter_client_work_records: this corpus is uploaded for
+    training, and the client_work quarantine is trusted not to be committed,
+    not trusted to be secret-free.
+    """
+    base = _CLIENT_WORK_ROOT
+    if not base.is_dir():
+        return
+    chunker = _chunker()
+    for path in sorted(base.rglob("*")):
+        if not path.is_file():
+            continue
+        if path.suffix.lower() not in _PROF_REASONING_EXTENSIONS:
+            continue
+        if any(m in path.name for m in _CLIENT_WORK_JUNK_MARKERS):
+            continue
+        rel = path.relative_to(base).as_posix()
+        if not any(m in rel for m in _PROF_REASONING_MARKERS):
+            continue
+        try:
+            text = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+        for b, block in enumerate(_extract_prose_blocks(text, path.suffix.lower())):
+            for i, chunk in enumerate(chunker.chunk(redact(block))):
+                yield CorpusRecord(
+                    source_type="professional_reasoning",
+                    source_path=f"{rel}#block{b}.chunk{i}",
+                    text=chunk,
+                    metadata={
+                        "file": rel,
+                        "kind": "prose" if path.suffix.lower() == ".md" else "comment_block",
+                    },
+                )
+
+
 # =============================================================================
 # Part 4: VOICE — HOW THE OWNER ACTUALLY WRITES
 # =============================================================================
@@ -302,6 +554,9 @@ def iter_user_voice_records(
 _SOURCE_ITERATORS = (
     ("personal_life", lambda dropped: iter_personal_life_records()),
     ("kb_identity", lambda dropped: iter_kb_identity_records()),
+    ("kb_judgment", lambda dropped: iter_kb_judgment_records()),
+    ("written_reasoning", lambda dropped: iter_written_reasoning_records()),
+    ("professional_reasoning", lambda dropped: iter_professional_reasoning_records()),
     ("user_voice", lambda dropped: iter_user_voice_records(dropped=dropped)),
 )
 
@@ -357,14 +612,26 @@ def main() -> None:
 
     stats = assemble_corpus()
 
-    print(f"\n  {'Source':<16} {'Records':>10} {'Chars':>12} {'Dropped (dup)':>14}")
-    print("  " + "-" * 56)
+    print(f"\n  {'Source':<24} {'Records':>9} {'Chars':>12} {'~Tokens':>10} {'Dropped':>9}")
+    print("  " + "-" * 67)
     for name, counts in stats.per_source.items():
         dropped = stats.dropped_near_duplicates.get(name, 0)
         note = "  (source missing)" if counts["records"] == 0 else ""
-        print(f"  {name:<16} {counts['records']:>10,} {counts['chars']:>12,} {dropped:>14,}{note}")
-    print("  " + "-" * 56)
-    print(f"  {'TOTAL':<16} {stats.total_records:>10,}")
+        print(f"  {name:<24} {counts['records']:>9,} {counts['chars']:>12,} "
+              f"{counts['chars'] // 4:>10,} {dropped:>9,}{note}")
+    print("  " + "-" * 67)
+    total_chars = sum(c["chars"] for c in stats.per_source.values())
+    print(f"  {'TOTAL':<24} {stats.total_records:>9,} {total_chars:>12,} {total_chars // 4:>10,}")
+
+    # professional_reasoning is deliberately ALSO present inside
+    # engineer_corpus's client_work records (the comment lives with the code it
+    # explains). Say so here rather than let a reader treat these totals as
+    # disjoint from the Engineer corpus — see _PROF_REASONING_MARKERS.
+    pr = stats.per_source.get("professional_reasoning", {}).get("chars", 0)
+    if pr:
+        print(f"\n  NOTE: professional_reasoning ({pr:,} chars) is intentionally "
+              f"double-counted —\n  the same comment blocks also remain in "
+              f"engineer_corpus's client_work records.")
 
     size = stats.output_path.stat().st_size
     print(f"\n  Output: {stats.output_path} ({size:,} bytes)")
