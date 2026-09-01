@@ -1,6 +1,6 @@
 # Cognitive Profile — Model of the User
 
-> Auto-synthesized by `scripts/profile_synth.py` from `knowledge_base.jsonl` (506 entries). Injected into every chat via the SessionStart hook. Regenerate after KB updates.
+> Auto-synthesized by `scripts/profile_synth.py` from `knowledge_base.jsonl` (507 entries). Injected into every chat via the SessionStart hook. Regenerate after KB updates.
 
 ## Who you are
 - PATTERN: preempts_the_known_answer (2026-08-26, RSA_PS_prep opening turn). Asking three Databricks fundamentals, the user fenced off the surface answer INSIDE the question: 'what makes serverless different than other computes? don't give me answers i already know, like it has faster startup etc etc.' This is a stronger ...
@@ -13,6 +13,7 @@
 - PATTERN: prepare_ground_before_delivering (2026-08-22). About to hand over the two most valuable corpus inputs they have (the BUPA DeepClone framework repo + a learnings.md written from a real large-scale project), the user STOPPED and required two things first: (1) clean the workspace of dead folders, (2) tell me wher ...
 
 ## How you work — active directives
+- [Decision] DIRECTIVE: do not lift the client_work exclusion again on the grounds that the repo is private. Privacy was already tried as a justification and rejected by the user themselves.
 - [Cognitive_Pattern] DIRECTIVE: on any topic where the user has prior study or production exposure, skip the definitional layer entirely and open at mechanism; treat the surface answer as already spent. Where the surface answer is genuinely load-bearing (e.g. serverless fast-startup), do not restate it -- re-derive WHY it is true and show  ...
 - [Decision] DIRECTIVE: report progress as distance-to-deployed-JARVIS, never as corpus statistics. Corpus metrics are instrumentation and must be framed as such.
 - [Idea] DIRECTIVE: raise this again before the RunPod training run, not after. The failure mode is silent and slow -- in three years the only voice the user fully trusts would be one trained on themselves.
@@ -20,7 +21,6 @@
 - [Cognitive_Pattern] DIRECTIVE: before raising an objection to this user, test it against a nearby counterfactual first. An objection that cannot discriminate between two cases will be dismantled, correctly, and costs credibility.
 - [Cognitive_Pattern] DIRECTIVE: when they invoke authenticity or being-true-to-self, do not treat it as vague. It is a specific and consistently-applied criterion, and it outranks both external validation and being-correct in their decision-making.
 - [Cognitive_Pattern] DIRECTIVE: do not motivate, frame, or advise this user in terms of external outcomes -- titles, recognition, market validation, what will look good. Those are not their currency and framing things that way will read as missing the point. Frame in terms of what the work will FEEL like to do and to have done. Corollary f ...
-- [Cognitive_Pattern] DIRECTIVE: stop scoring corpus value by authorship. Score it by whether the JUDGMENT is theirs -- a decision with its rejected alternatives attached is their material even if an agent emitted the surrounding code, and conversely a file they typed with no reasoning in it is close to worthless for personalization. Commen ...
 
 ## What you're building
 **Current focus:** GOAL RE-STATEMENT + COURSE CORRECTION FROM THE USER (2026-08-26), issued as a warning to me specifically. VERBATIM: 'the current injection profile that loads all context into each chat is good. but th ...
