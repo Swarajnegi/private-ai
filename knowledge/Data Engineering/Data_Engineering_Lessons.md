@@ -77,6 +77,19 @@ When your framework can't do something, don't fight it — design around it. Exa
 If multiple engineers share a dev environment and each needs their own tables, the `{developer_name}` suffix must propagate through every reference: table names, event log tables, view names in SQL, table references in Python functions, infrastructure config. Missing the suffix in ONE place causes `TABLE_NOT_FOUND` or `TABLE_ALREADY_EXISTS`.
 (Source: `knowledge.md` L486–L489)
 
+### Scope Handles: Pass One Token, Not the Payload
+Instead of passing 22,000 table names between jobs, regions and notebooks, pass **one opaque token** and let each consumer re-derive the same working set from a shared audit table. Cheap to pass, precise, and it survives the set being large. **Recognising when a token can replace a payload is the reusable idea.**
+
+But the enabling condition has to be stated plainly: **"give me a run_id and I'll tell you every table that run touched" is NOT a built-in platform capability.** It worked here only because the clone framework writes its **own** audit table — one row per object per run, carrying `run_id`, catalog/schema/object, `run_ts`, `status`, `error_message`, a size signal, and stream name. That table is application code someone chose to write. **Do not assume the capability exists on a platform where nobody built it.**
+
+- **Match the handle to the question's shape.** A `run_id` answers *"which objects did **this run** touch."* It cannot answer *"which objects have been incrementally cloned **since some point in time**"* — that spans many runs and needs a **timestamp** as the handle, filtering the same audit table on `run_ts > T`. Same table, different handle, because the questions have different shapes. Reaching for run_id when the question is temporal is how you end up with an unanswerable scope.
+- **The platform *does* record provenance, just table-first rather than run-first.** Delta's `DESCRIBE HISTORY` identifies the job and notebook behind each commit, so per table you can ask "which run wrote this." The limitation is *direction*: you must already have candidate tables to inspect. Going run → tables needs either your audit table or UC lineage/system tables (`system.access.*`), and the latter is subject to enablement and retention. **Verify what your workspace actually exposes before designing on it.**
+- **The audit table earns its keep by carrying what lineage cannot.** Per-object `status` and `error_message` distinguish *"the process never produced this object"* from *"it produced a bad copy"* — a distinction lineage has no concept of, and the one that makes a downstream comparison report meaningful rather than just a list of mismatches.
+- **Carry a size or cost signal in the audit row.** A `copied_file_size` recorded at write time became the input for size-tiering the downstream validation clusters — the only size signal available early enough to route work, because the obvious alternative is computed by the very task the routing decides. **Audit rows are a good place to stash cheap facts a later stage will need before it can afford to measure them itself.**
+- **If you will ever need to ask "what did run X touch", design that table before the first run.** Retrofitting it from history or lineage is possible, lossy, and slow — and the data you most want (*why* a given object failed) was never captured by anything but the writer at the time.
+
+(Source: BUPA — Region Migration project, `SESSION_LEARNINGS.md`, 2026-08-22)
+
 ---
 
 ## 2. Schema, Types, and Data Integrity
@@ -369,6 +382,64 @@ Two more details worth building in from the start:
 - **Report skips, don't just omit them.** A table skipped for retention infeasibility should show up in the final output as a counted, explicit skip — not just be absent, which would look identical to "validated and fine."
 (Source: BUPA — Region Migration project, DeepClone validation framework, 2026-08-08)
 
+### Three Verdicts, Not Two: PASS / FAIL / NOT MEASURED
+A binary pass/fail hides the difference between **"wrong"** and **"couldn't tell."** A target extract that hit `PERMISSION_DENIED` on 10 of 19 columns reports as "FAIL 35/35", which reads as *the clone lost all the data* when the truth is *we were not allowed to look*. Those are opposite conclusions and must never collapse into the same alarming number.
+
+The rule that makes it work: **NOT MEASURED is never folded into FAIL.** Permission errors, extractor bugs and unsafe time-travel windows all produce it. And note the related trap — an extractor that collapses "denied" into a plain `false` is indistinguishable from a real absence when read in isolation, so any object with a permission error on *any* column should be marked extraction-blocked wholesale, with its boolean-false checks reported NOT MEASURED rather than FAIL. Always show the blocked count; never hide it.
+(Source: BUPA — Region Migration project, DeepClone validation framework, 2026-08-22)
+
+### A Failure Count Is Not a Finding — Group Before You Report
+A recovered validation run showed 465 passes and **88 failures**, which read as a serious clone defect. The breakdown changed the story completely: all 88 were **source-side** (three storage accounts, all in the source region), **zero** were row-count mismatches, and the causes were 52 `FAILED_READ_FILE.DBR_FILE_NOT_EXIST` plus 35 `FileNotFoundException` 404s — source files vacuumed away between clone time and validation time. Not one said anything about the clone.
+
+**Forward rule:** group by side, by error class, and by object *before* reporting. The grouping usually **is** the diagnosis, and an ungrouped count sends people to debug the wrong component.
+(Source: BUPA — Region Migration project, `SESSION_LEARNINGS.md`, 2026-08-22)
+
+### Guard Against "Confident Wrong Answer" Harder Than Against "Crash"
+A function that returns `0` or `{}` on an edge case it cannot actually handle is **worse** than one that raises. The caller can route an exception to NOT MEASURED; a silently-wrong zero looks exactly like a real, passing measurement. Same failure shape as unpopulated `operationMetrics` (§6) and as a mis-split fan-out (§10) — in every case the system produced a number nobody could tell was meaningless.
+(Source: BUPA — Region Migration project, 2026-08-22)
+
+### Comparing an Evolving Source Against a Frozen Target Is Not a Fair Test
+No comparator is good enough to fix this. The remedy belongs at the **measurement** layer — pin both sides to the same version — not in how differences are reported afterward. Any live-only read (`DESCRIBE DETAIL`, `SHOW TBLPROPERTIES`, anything in UC) paired against a version-pinned counterpart has this defect built in.
+(Source: BUPA — Region Migration project, 2026-08-22)
+
+### A Mode Switch Beats a Parallel Implementation — With One Condition
+Adding a second family of checks as an `inc=true/false` mode on the existing notebooks, rather than duplicating them, avoided copying ~1,800 lines of renderer and comparator logic that would then have drifted. **The condition for this being safe is that the two modes are genuinely mutually exclusive** — if both could run at once you are building a flag, not a mode.
+
+Four things that made it work, all reusable:
+- **Put the mode gate at the single point every path already passes through.** One four-line guard inside the function every check card renders through beat wrapping twenty-odd call sites — and it cannot be forgotten when a new card is added later. *Finding that convergence point is usually the whole design.*
+- **Derive the output shape from one named set, never a second list.** Column ordering, the extractor loop and the written schema all deriving from a single `ACTIVE_CHECKS` list means a mode switch changes one line. An earlier version iterated a *different* dict for column headers and would have emitted nine all-NaN columns that look exactly like measurements nobody took.
+- **Prove the old path is unchanged; don't assert it.** Executing the registry cells from the pre-change commit and from HEAD, then diffing the resulting check lists element-by-element, turns "I only added an else branch" into evidence — and catches the reordering a set comprehension or dict-iteration change silently introduces.
+- **Choose deliberately what the new mode does *not* fold in, and record why.** Excluding a 22-hour full diff from the incremental report was a design decision, not an omission: including it would have serialised a four-hour report behind it. Write the reasoning next to the exclusion or someone "fixes" it later.
+
+(Source: BUPA — Region Migration project, `SESSION_LEARNINGS.md`, 2026-08-22)
+
+### An Absolute Threshold Is an Absolute Answer to a Relative Question
+A fixed 50 GB tier boundary was applied to an estate whose largest table was under 50 GB, so **every** table classified "small": the large-tier cluster started, found zero tables and exited after eight minutes while the small tier ran past twelve hours.
+
+Switching to a population statistic is the right instinct — but the *median* was also degenerate here, because most tables reported zero size, and the median of a zero-heavy population is zero, which routes the entire estate the other way. The **mean over non-zero values** was the workable choice.
+
+**Forward rule:** derive split points from the data, but inspect the distribution first — count the zeros and nulls before choosing a statistic, and keep a sanity check that raises when a computed threshold would put every item on one side.
+(Source: BUPA — Region Migration project, `SESSION_LEARNINGS.md`, 2026-08-22)
+
+### Verify Your Tiering Key Correlates With Cost Before Tiering On It
+Tables were split into tiers by **bytes**, assuming bigger tables cost more to validate. The measurements disagreed: an **18:1** split by table count produced only a **5:1** split in runtime — meaning the extractor's cost was *per-table* (Delta log reads, metadata calls) and almost independent of table size. The estate was being load-balanced on a variable that barely predicted the thing being optimised.
+
+**Forward rule:** ratio your candidate key against observed runtime before committing to it. If the ratios don't track, you're balancing on the wrong axis — and the right lever changes with it: **per-item cost wants more workers (more chunks); per-byte cost wants bigger ones.**
+(Source: BUPA — Region Migration project, `SESSION_LEARNINGS.md`, 2026-08-22)
+
+### Know Your Recovery-Source Hierarchy Before You Need It — the Friendliest Artifact Is Often the Lossy One
+A 12-hour run was cancelled before writing output. The results still existed in two places and they were **not** equally good:
+
+| Source | Recovered | Integrity |
+|---|---|---|
+| Notebook HTML export | 452 of 547 | **Silently truncated** — `*** WARNING` marker, visible gaps |
+| Driver stdout | 553 (171 + 169 + 213) | Complete, zero gaps |
+
+The polished, shareable artifact lost **17%** of the data; the raw log lost none.
+
+**Forward rule:** when reconstructing from logs, prefer the rawest source available and **verify completeness independently**. A sequence counter or expected total in the output is what turns "looks complete" into "is complete" — design it in deliberately. It costs one integer, and here it was the only reason the truncation was detectable at all.
+(Source: BUPA — Region Migration project, `SESSION_LEARNINGS.md`, 2026-08-22)
+
 ---
 
 ## 5. Spark / PySpark Gotchas
@@ -411,6 +482,35 @@ FROM source
 ```
 Keeps SQL concise and robust to source schema changes.
 (Source: `knowledge.md` L441–L449)
+
+### `exceptAll` Is a Full Shuffle of Every Column on Both Sides
+Spark rewrites it to a `GROUP BY` over all columns with a ±1 sentinel — deductive and exact, but the cost is proportional to **total row bytes moved across the network**, not to how different the tables actually are. Two near-identical billion-row tables cost the same as two completely different ones.
+
+Three consequences worth holding together:
+- **Row counts are usually free; set differences never are.** Delta answers `COUNT(*)` from log statistics in most cases; there is no equivalent shortcut for an exact multiset comparison.
+- **A checksum/hash comparison is a different kind of claim, not a faster version of the same claim.** `exceptAll` is deductive — mathematically complete. Summing per-row hashes is probabilistic: overwhelmingly reliable, but not "we compared every row." Surface that distinction *before* it goes into a sign-off.
+- **One-sided set difference can prove full equality**, given a side condition: if `|A| = |B|` and `B \ A = ∅` then `A = B`. A two-sided guarantee from the cheaper one-sided computation.
+
+(Source: BUPA — Region Migration project, 2026-08-22)
+
+### `spark.conf.set` Is Session-Global, Which Breaks "Tune Per Workload" Thinking
+You cannot safely give different threads different shuffle-partition counts inside one SparkSession. The fix is **phased or tiered execution** — all the giants together under one setting, then all the small tables under another — not per-thread config.
+
+Relatedly, **"just set shuffle partitions high" has a real cost on the small end.** AQE coalesces partitions only *after* the shuffle write, so a 10-file table still pays for planning against 2,048 partitions even though most collapse away. `spark.sql.shuffle.partitions = "auto"` lets AQE size it per query from actual input statistics instead of one static guess applied to every table.
+(Source: BUPA — Region Migration project, 2026-08-22)
+
+### PySpark / pandas Gotchas Worth Recognizing On Sight
+- **`dict(a_spark_row)` doesn't do what it looks like.** `Row` iterates over its *values*, not `(key, value)` pairs, so `dict()` misreads it. Use `.asDict()`.
+- **`spark.read.json()` infers any nested JSON object as a STRUCT, never a true `MapType`** — even for a field that is logically `map<string,string>`. Code expecting a dict must normalize explicitly regardless of source.
+- **CSV round-trips between pandas and Spark need explicit escape handling.** `pandas.to_csv()` doubles embedded quotes (RFC 4180); Spark's reader defaults to backslash-escaping. Without `.option("escape", '"')`, a quoted value with an internal comma **silently shifts every later column** — no error, just corrupted rows. Add `.option("multiLine", "true")` too when the reader rewrites the file in place, or a cell with an embedded newline becomes phantom rows.
+- **A pandas CSV round-trip silently converts an integer column containing any blank into float.** A version written as `836` returns as `836.0`, and `"836.0" != "836"` fails every downstream string comparison — on *every* row, so it reads as a total mismatch rather than a formatting artifact. One NA promotes the whole column, because pandas has no default integer dtype with missing values. Normalise through `int(float(x))` at every read boundary or use nullable `Int64`. **Be suspicious of any comparison that fails 100% rather than partially — that pattern is nearly always a type or format issue, not a data issue.**
+- **`~col.isin([...])` silently drops NULLs**, because SQL's `NOT IN` is three-valued: `NULL != 'X'` is NULL, not true, so rows with a null in the filtered column vanish from scope. In a scope-building filter that is silent data loss at the very first step. Decide explicitly what NULL should mean, and **count the nulls you drop**.
+- **`groupBy().agg(F.max(col))` doesn't guarantee other columns come from that same max row.** For several columns tied to "the latest row", use `row_number() over partitionBy(...).orderBy(... desc())` — an aggregate can silently mix values from different rows.
+- **Multi-statement `%sql` cells only display the last statement's result.** The earlier ones ran; their output just isn't rendered. Easy to misread as "didn't execute."
+- **Serverless / Spark Connect blocks reading certain Spark confs outright**, which is distinct from "the value isn't set." The error looks like a runtime failure but is a compute-tier restriction.
+- **Databricks notebooks compile each cell independently, so control flow cannot span cells.** An `if` opened in one cell does not indent the next — the result is `unexpected indent` on every following cell, which reads as a dozen unrelated syntax errors rather than one structural mistake. To gate a lot of notebook code, find the one function every path already funnels through and put the guard *inside* it. Related: `from __future__ import annotations` in any cell but the first makes the whole file fail `py_compile` while remaining valid at runtime — so validate notebooks **cell-by-cell** (`ast.parse` per cell), not as one file.
+
+(Source: BUPA — Region Migration project, `SESSION_LEARNINGS.md`, 2026-08-22)
 
 ---
 
@@ -485,9 +585,55 @@ Escape hatches exist (`ignoreChanges` / `ignoreDeletes` reader options) but trad
 Filtering a table's `DESCRIBE HISTORY` by `operation = 'CLONE'` and taking the latest such row gives you `operationParameters.sourceVersion` — the *exact* source-side version that specific clone was made from. This is the authoritative way to map a cloned target back to its source version; don't assume "latest source version" or try to infer it from timestamps — Delta Lake already records it.
 (Source: BUPA — Region Migration project, DeepClone validation framework, 2026-08-08)
 
-### Time Travel Is Bounded by Retention, Not Just Version Existence
-A version number returned by `DESCRIBE HISTORY` existing doesn't mean you can still query it. Delta's default retention window is 7 days (168 hours) — `VACUUM` removes files older than that, and querying a vacuumed version fails. Before querying any resolved historical version, check `now() - <version commit timestamp> > 168 hours` — if true, that version is gone; skip it rather than let the query fail. This matters most for validation/audit tooling that resolves versions programmatically rather than a human picking a recent one by hand.
-(Source: BUPA — Region Migration project, DeepClone validation framework, 2026-08-08)
+### A Governed Delta Table Has THREE Stores on THREE Different Clocks — Find the Store and the Clock Follows
+> **Corrected 2026-08-22.** The earlier version of this lesson said "Delta's default retention window is 7 days (168h); gate every resolved historical version on `now() - commit_ts > 168h`." That was the *then-current implementation*, not the rule, and the framework has since disproved it (`RETENTION_HOURS` is now 720). The error was distilling a **threshold** instead of a **mechanism** — thresholds are consequences and don't survive a fix. Recorded rather than silently overwritten, because a wrong reason is worse than no reason.
+
+A version number existing in `DESCRIBE HISTORY` doesn't mean you can query it — but *which* thing expires depends entirely on which store answers your question. There are three, and they are governed by different clocks (or none):
+
+| Store | Governed by | Default | Answers |
+|---|---|---|---|
+| Physical data files | `deletedFileRetentionDuration` (VACUUM) | **7 d** | Anything reading row *values* |
+| `_delta_log` (commit JSONs + checkpoint Parquet) | `logRetentionDuration` | **30 d** | Schema, file counts, sizes, properties, partitioning, comments, all history |
+| Unity Catalog metastore | **neither** | — | Registration, tags, PK/FK constraints, grants |
+
+**What only the data files can answer** — and therefore the *only* checks the 7-day clock can break: set comparison (`exceptAll`), row sampling / decode probes, checksums, and any aggregate over a column. A much shorter list than it feels like.
+
+**What the log answers alone**, valid the full 30 days *after* VACUUM has removed every data file: column names/types/nullability (`metaData.schemaString`); ordinal column order; file count and total bytes (replay AddFile minus RemoveFile by path); table properties (reconstructable from `metaData.configuration` + `protocol`); partition columns; table and column comments; column-mapping mode; deletion-vector settings; and every `DESCRIBE HISTORY` question.
+
+**The third store is where most confusion lives.** UC has *no time travel over any of it*, so pairing a live UC read against a version-pinned Delta read silently compares **now** on one side against **then** on the other. That's a liveness problem, not a retention problem, and no larger window fixes it.
+
+**Why this matters more than it sounds:** applying the 7-day data-file gate to all twelve checks in a validation suite, when only two of them touch data files, discarded roughly **20,000 valid log-sourced measurements per run**. A gate's blast radius should match its actual cause.
+
+Two refinements worth carrying:
+- **`COUNT(*)` is the interesting edge case.** Delta usually serves it from per-file `numRecords` statistics in the log rather than scanning, so it behaves like a log-only read — pinned row counts kept succeeding long past the 7-day window on a real estate. But that's an *optimisation, not a contract*: absent stats, it falls back to reading files. Treat it as "usually log, occasionally data" and don't build a guarantee on it.
+- **Log replay needs a checkpoint at or before your target version**, not just the commits. If log cleanup removed that checkpoint, the AddFiles from the missing range are simply absent and a naive replay silently **under-counts** — which looks exactly like a table that legitimately shrank. Detect the gap and raise.
+
+(Source: BUPA — Region Migration project, DeepClone validation framework, 2026-08-08; corrected and expanded from `SESSION_LEARNINGS.md`, 2026-08-22)
+
+### `SELECT * WHERE 1=0` Is a Free Full Schema Read
+The predicate is unsatisfiable, so Spark plans a scan of nothing and returns the real schema from `metaData` — a complete column/type/nullability signature with **zero file reads**. Reusable anywhere you want a schema without paying for a read, and it survives VACUUM because it never touches a data file.
+
+Related: fetch the `metaData`/`protocol` pair **once** and pass it to every dependent check. Partitioning, table comment, column comments, column-mapping mode and deletion vectors are all fields of that same pair — letting each check re-trigger its own log walk is the difference between one scan and five.
+(Source: BUPA — Region Migration project, DeepClone validation framework, 2026-08-22)
+
+### Prefer the Log Over Convenient SQL When You Need Time Travel
+`DESCRIBE DETAIL` and `SHOW TBLPROPERTIES` are friendlier, and both are **live-only** — no `VERSION AS OF` variant exists for either. Comparing one against a version-pinned counterpart silently compares live-now against frozen-then. Reconstructing the same facts from the transaction log is more work and buys both time travel and 30-day durability. Note `SHOW TBLPROPERTIES` is not merely `metaData.configuration`: protocol-derived entries surface there too, so a faithful reconstruction must merge both.
+
+Also: workspace-level Delta defaults (`spark.databricks.delta.properties.defaults.<prop>`) are a distinct thing from per-table properties. `SHOW TBLPROPERTIES` on an existing table only shows an override if one was explicitly set — absence means "inheriting the built-in default", not "unset".
+(Source: BUPA — Region Migration project, DeepClone validation framework, 2026-08-22)
+
+### A CLONE Commit Records Far More Than "A Clone Happened"
+Beyond `operationParameters.sourceVersion`, a CLONE row in `DESCRIBE HISTORY` carries `operationMetrics` — `numCopiedFiles`, `copiedFilesSize`, `sourceNumOfFiles`, `numRemovedFiles` — plus the commit `timestamp`. One query on the target yields both sides' versions, the volume actually copied, and when. **Read the full `operationMetrics` map for any operation before building an audit table to record what Delta already recorded.**
+
+- **Counting CLONE commits is a truthful incrementality test.** Two or more means a previous clone exists, so this one is genuinely incremental; exactly one is a first load; zero means never cloned. Stronger evidence than a `sync_type` column in your own audit log, because it comes from the engine's record rather than from what the orchestrator *believed* it was doing.
+- **`operationMetrics` is only populated if the writer collected it.** A clone path running with metrics collection disabled leaves `numCopiedFiles` and `copiedFilesSize` structurally zero — measured at zero for all 13,574 tables in one environment. That zero means "not measured", not "nothing copied", and anything that averages or sums it produces a confident wrong answer.
+- **`MAX(version)` survives log truncation.** Comparing the version recorded at clone time against the source's current maximum tells you whether the source has moved since — and unlike a pinned read it needs no specific commit to still exist, so it stays valid past `logRetentionDuration`. A check built this way can be deliberately *exempted* from the retention gate that pinned reads require.
+
+(Source: BUPA — Region Migration project, DeepClone validation framework, 2026-08-22)
+
+### Deep Clone Copies Data Files, Not Unity Catalog Metadata
+PK/FK constraints, table tags and column tags live in UC's own catalog, not in the Delta transaction log. **A clone can be byte-perfect on data and still lose all of it.** Any DR sign-off that only compares data has not compared the thing most likely to be missing.
+(Source: BUPA — Region Migration project, DeepClone validation framework, 2026-08-22)
 
 ### The UC Path and the Direct Delta Path Are Two Different Routes to the Same Table
 `SELECT ... FROM catalog.schema.table` (Unity Catalog path) and `SELECT ... FROM delta.\`abfss://...\`` (direct storage path) can hit different permission models even though they read the same underlying data. Two consequences worth knowing:
@@ -539,6 +685,51 @@ Lesson: shared pipelines triggered by multiple jobs → overlap failures are ine
 "Clean slate" = delete pipelines + drop tables + redeploy. Deleting only pipelines leaves tables behind; new pipelines re-read all source files → duplicates. Re-running preprocessing without cleanup overwrites `incoming/` files → Autoloader sees them as new → STG duplicates. BRZ CDC deduplicates, so BRZ is fine — but STG is corrupted.
 (Source: `knowledge.md` L496–L500)
 
+### Cloud vCPU Quota Is Per VM *Family*, Per Region, Per Subscription
+Not per pool, per cluster, or per workload. On Azure the buckets have names like `standardESv5Family`, `standardDDSv5Family`, `standardDSv5Family`, and an `AZURE_QUOTA_EXCEEDED_EXCEPTION` names the one you exhausted.
+
+The practical consequence is unintuitive: **changing node size can change which quota you draw from**, so a "smaller, cheaper" node may succeed where a larger one failed purely because it lands in a different, emptier bucket. Spreading a fleet across families is a legitimate capacity strategy, not a hack.
+
+- **Compute peak concurrent vCPU before shipping a fan-out, and do it as a sum.** Every chunk of a parallel fan-out is its own cluster, and independent tiers run *at the same time*, so peak = Σ over all chunks of (workers + 1 driver) × cores-per-node. One job at concurrency 3 and 12 needed **1,344 cores of one family against a limit of 350** — a 4× overrun entirely predictable from the YAML, and unpredicted only because nobody did the arithmetic.
+- **Spot draws from a *separate* quota, and it can be far larger.** Same region, same subscription: 350 cores for the on-demand family versus **10,000** for `Total Regional Spot vCPUs` — and the spot pool was the *same VM*. When a per-family limit blocks you, moving to spot is not a hardware downgrade; it's a change of accounting bucket, and it may be the only way to keep your intended concurrency while a quota increase is pending.
+- **Quota is not capacity.** Headroom in the limit says nothing about whether the provider has spare VMs of that SKU in that region right now — which matters most for spot. "Quota available" and "allocation will succeed" are two separate questions.
+- **Insufficient quota does not always fail loudly.** Sometimes you get a clean exception; sometimes the cluster simply sits **pending** and the fan-out waits on it indefinitely. That second mode is how a run silently becomes a two-day run. **Loud failure is the good case.**
+- **A pool with no `max_capacity` cannot be a contention point.** If pools are uncapped, two clusters sharing one pool draw the same VMs from the same quota as two clusters on two pools — splitting them to "avoid contention" buys nothing. Scarcity lives at the **quota** layer, not the pool layer. Check `max_capacity` and `min_idle_instances` before designing around imagined pool contention.
+
+(Source: BUPA — Region Migration project, `SESSION_LEARNINGS.md`, 2026-08-22)
+
+### VM *Generation* Can Be a Compliance Gate, Independent of Everything Else
+One region enforced a standard requiring VNet encryption, which only v4/v5 SKUs support: `INVALID_PARAMETER_VALUE … must use instances that support Azure Virtual Network encryption`. That is a property of the **VM generation alone** — orthogonal to spot vs on-demand, to size, and to price. So a region can have pools that *exist*, are *quota-available*, and still cannot start a single cluster.
+
+- **Compliance rules shrink usable inventory dramatically, and asymmetrically between regions.** Of 12 pools in the constrained region, 8 were v5 and startable; of those, 4 were on-demand. An "on-demand only" policy plus a v5-only rule left exactly **four** usable pools, and only **two** memory-optimised — both drawing on the same 350-core family. **Enumerate the intersection of all constraints early**; the answer is usually far smaller than the pool list suggests.
+- **The same pool *name* can be different hardware in different regions.** One region's `ondemand_memory_optimised_32core_256gb` was E32s_v5, the other's E32s_v3; a 4-core standard pool was D4s_v5 in one and DS3_v2 in the other. Name-based resolution is what lets one config serve two regions — and it is also what hides the fact that the two regions run different silicon.
+
+(Source: BUPA — Region Migration project, `SESSION_LEARNINGS.md`, 2026-08-22)
+
+### Spot Eviction Loses Shuffle State, Not Just Compute
+An evicted executor's shuffle files disappear with it, so every downstream task waiting on them fails and the stage re-runs — on more spot capacity that may get evicted again. That's a correctness-adjacent infrastructure failure mode, not a tuning problem. Graceful decommissioning (migrate shuffle blocks on eviction) is the mitigation; keeping the **driver** on-demand while workers stay spot is the cheap structural fix, since one driver eviction kills the whole job.
+
+Two adjacent levers worth knowing:
+- **Node shape affects shuffle locality.** Fewer, larger nodes at the same total core count keep more shuffle traffic node-local instead of crossing the network — a real lever independent of instance family.
+- **Photon doesn't accelerate every operator.** Enabling it on a cluster doesn't guarantee it's engaging on your expensive step. Check the query plan for the Photon badge on the actual exchange/aggregate nodes.
+
+(Source: BUPA — Region Migration project, `SESSION_LEARNINGS.md`, 2026-08-22)
+
+### Idle Workers Can Mean a Driver Bottleneck, Not Over-Provisioning
+A tier running a thread pool **on the driver** logged ~70 autoscaler resizes in 3h17m, oscillating 1→3→2→1 on a 40–90 second cycle, and looked massively over-sized. It wasn't: 24 Python threads were running on an 8-core / 64 GB driver, each holding a Delta-log file list in driver heap, and the same log recorded four `DRIVER_NOT_RESPONDING … likely due to GC` stalls. **The workers idled because the work never reached them.** Cutting worker count would have been the intuitive fix and the wrong one.
+
+- **For a driver-hosted thread pool, the metric is memory per concurrent thread.** 64 GB ÷ 24 threads = 2.7 GB/thread stalled; 256 GB ÷ 24 = 10.7 GB fixed it with **no change to concurrency**. Deriving that ratio turns "the driver feels small" into a number you can size against — and it tells you which lever to pull, since halving threads and doubling the driver reach the same ratio at very different throughput.
+- **The Spark UI Executors tab identifies which failure mode you're in.** Low GC time rules out memory pressure. `Shuffle Write >> Shuffle Read` is the signature of work done, discarded, and redone. Executors that appear and die with zero tasks means the cloud provider isn't granting capacity at all.
+- **Diagnose the tier that is slow, not the tier that looks wasteful.** The same job had one tier finishing in 39 minutes and another in 3h17m. Effort spent trimming the fast one is invisible; the slow one is the only thing that moves wall clock. Easy to invert when the *fast* tier is the one with the alarming-looking event log.
+
+(Source: BUPA — Region Migration project, `SESSION_LEARNINGS.md`, 2026-08-22)
+
+### Classify Every Task as Compute-Bound or Wall-Clock-Bound Before Choosing Its Compute
+Serverless bills for the wall-clock you hold it, so **the worst possible fit is a long-lived task that does no compute.** A live progress dashboard — sleep 60s, list a few small files, one API call, render text — sat on serverless for **22h46m** on a single run, because it exits only once every sibling task is terminal. It performed no Spark work in that entire window and was billed at a rate meant for real query compute. Moving it to the cheapest classic single-node cluster cost ~5 minutes of startup, irrelevant against a 22-hour run.
+
+Serverless is excellent for short bursty work and actively wrong for anything that mostly waits.
+(Source: BUPA — Region Migration project, `SESSION_LEARNINGS.md`, 2026-08-22)
+
 ---
 
 ## 8. Errors & Silent Failures (generalizable)
@@ -577,6 +768,31 @@ One typo in a shared template (e.g., `edp_edp_effective_dttm` instead of `edp_ef
 
 Lesson: test shared templates with at least one consumer after every change. Better: add a unit test that runs the template's SQL against a dummy source with expected column names.
 (Source: `LHP_Reference.md` L5466–L5470)
+
+### Read the Error's Own Numbers Before Theorising
+A quota failure stated *Current Limit 350, Current Usage 320, Additional Required 160, Minimum New Limit 480* — enough to compute both the immediate fix and the real ask (~1,400 for the full fan-out) without a single assumption. **Cloud errors are often far more quantitative than they look.**
+
+And then: **ask for the number you actually need, not the minimum the error suggests.** 480 would have unblocked one cluster and failed on the next. The error tells you what the *current request* needed, not what your *workload* needs.
+(Source: BUPA — Region Migration project, `SESSION_LEARNINGS.md`, 2026-08-22)
+
+### When You Can't Run an Experiment, Look for One That Already Ran
+Terminated-cluster history is free evidence. A 30-day cluster list showed three successful spot clusters and two successful runs on the exact SKU that later hit quota — proving *"spot works in this region"* and *"this SKU works in this region"* as **separate facts**, without creating anything.
+
+That feeds the general move: **decompose an unknown into the parts already proven.** "Will spot E32s_v5 work here" split into three questions — does the pool exist (yes), is the SKU compliant (yes, v5), does spot allocate in this region (yes, evidenced on another SKU). What remained unproven was only the *combination* — a far smaller risk, and small enough to accept with a retry as cover.
+
+Two corollaries about the instrumentation itself:
+- **Identical round numbers across unrelated metrics are a smell.** Three different quota families all reading exactly "0 of 350" was the tell that the region filter was wrong — those were untouched defaults for a region nobody deploys to. **Real usage is lumpy.** (The cause: an autocomplete matched *Austria* East instead of *Australia* East. Any console with a region, subscription or environment selector will eventually hand you correct-looking numbers for the wrong scope.)
+- **Verify you can perform the diagnostic action before you need it.** Cluster creation was denied, so an intended five-minute capacity smoke test was impossible — discovered mid-incident. Jobs create their own clusters as the run-as identity, so **a human can lack a permission the pipeline has**, and it only surfaces when you try to debug interactively.
+
+(Source: BUPA — Region Migration project, `SESSION_LEARNINGS.md`, 2026-08-22)
+
+### A Comment That Encodes a *Reason* Is Load-Bearing — and a Wrong One Is Worse Than None
+*"SE-only, so the East VNet constraint does not apply"* was plausible, survived review, and **blocked a prod deploy** — because it forecloses the check it appears to have already performed. A reader trusts it and stops looking.
+
+- When correcting one, **record what was wrong and why**, not just the new value.
+- **Stale comments cause real regressions.** A note reading *"parallelism is cut to 8 because East cannot offer a driver larger than 32 GB"* was true for about a week; anyone acting on it afterwards would have undone the fix that replaced it. **Update the prose in the same commit as the value.**
+
+(Source: BUPA — Region Migration project, `SESSION_LEARNINGS.md`, 2026-08-22)
 
 ---
 
@@ -672,6 +888,43 @@ Renaming an env label (e.g., `prprd` → `preprod`) requires coordinated changes
 - Windows + LHP emoji output → `UnicodeEncodeError`. Fix: `PYTHONIOENCODING=utf-8 lhp validate ...`
 (Source: `knowledge.md` L526–L534)
 
+### Runtime Reachability and Deploy-Time Validation Are Different Properties
+**The single most expensive confusion in an IaC migration.** A bundle deploys the whole job definition to *every* target, so **every cluster spec is validated in every region — including clusters for tasks that can never run there.** A comment reading *"this task is SE-only, so the East constraint doesn't apply"* was correct about runtime and wrong about deployment, and it blocked a prod deploy.
+
+Ask the two questions separately: *will this task ever **execute** here?* and *will this spec ever be **validated** here?*
+
+**Know exactly which checks happen at each stage:**
+
+| Stage | Checks |
+|---|---|
+| Deploy time | Does the resource name resolve; does the spec satisfy any attached policy |
+| Cluster start time | Quota, compliance rules, actual capacity |
+
+A v3 pool that no region-local task uses will **deploy perfectly** and only fail if something eventually tries to start it — a latent trap rather than a visible one.
+
+- **Referencing anything that exists in only one workspace breaks the other's deploy.** The error names the missing resource, not the reasoning that introduced it.
+- **A resource referenced only by a never-running task is a standing fragility.** Nobody in that region has reason to keep it, and if it's cleaned up the deploy starts failing with an error unrelated to whatever change exposed it.
+- **Deploying the same bundle twice with different config between runs leaves the repo correct for only one target at a time.** Any redeploy of the other region — a rollback, a hotfix, an automated pipeline run — then fails, and nothing in the repo records which region the committed state is aimed at. **Prefer configuration valid everywhere; where you can't, make the asymmetry loud in the file itself.**
+
+(Source: BUPA — Region Migration project, `SESSION_LEARNINGS.md`, 2026-08-22)
+
+### A Cluster *Policy* Validates at Deploy, and Its Allowlist Can Be Fundamentally Incompatible With Yours
+A single-node policy in one region allowed only **spot** pools. Combined with an organisational "on-demand only" rule, **no compliant configuration existed at all** — the two requirements were mutually exclusive and no amount of pool-swapping would satisfy both. When a policy blocks you, check whether the policy's allowlist and your own policy can *ever* both hold before hunting for the pool that squares them.
+
+- **A policy that *requires* a property does not *impose* it.** A single-node policy rejected a cluster that hadn't declared itself single-node — the spec had the policy attached and none of `num_workers: 0`, the `ResourceClass` tag, or the `cluster.profile` conf. "Single node *via* the policy" was the assumption; "single node **or rejected by** the policy" was the reality.
+- **Dropping a policy is a legitimate fix when nothing mandates one.** Twelve of fourteen cluster profiles in the repo carried no policy and deployed fine — in the very apply where the one policed cluster failed. That's direct evidence the workspace didn't require policies. **Matching the configuration that demonstrably works beats inferring what a policy wants from its error text.**
+
+(Source: BUPA — Region Migration project, `SESSION_LEARNINGS.md`, 2026-08-22)
+
+### CLI and Shell Gotchas (Databricks CLI / PowerShell)
+- **PowerShell's `` `v `` is a vertical-tab escape, not a literal "v".** So `` "standard$tag`v$ver`Family" `` silently produced `standardES3Family` instead of `standardESv3Family` — and a quota lookup against a family that doesn't exist returns clean-looking zeros. **Use `${}` around every variable in an interpolated string:** `"standard${tag}v${ver}Family"`.
+- **Passing multi-line or quote-containing arguments to native executables from PowerShell is genuinely hostile.** Here-strings (`@'…'@`) need the terminator at column 0 and break inside `;`-chained commands; double quotes embedded in a single-quoted string still break argument boundaries when the call is reconstructed. For anything non-trivial, **write the text to a file and pass the file** (`git commit -F`), or use repeated single-line flags.
+- **`Format-Table` truncates at console width and drops right-hand columns with no indication.** Pipe through `Out-String -Width 4096` when the output matters.
+- **The Databricks CLI emits a UTF-8 BOM when redirected to a file**, which makes `json.load` fail with "Unexpected UTF-8 BOM". Read with `utf-8-sig`.
+- **Prefer one API call that already returns what you need.** `instance-pools list` includes each pool's `stats` block, so per-pool `get` calls to fetch instance counts are wasted round-trips. **Check the list response's shape before fanning out.**
+
+(Source: BUPA — Region Migration project, `SESSION_LEARNINGS.md`, 2026-08-22)
+
 ---
 
 ## 10. Orchestration & Jobs
@@ -724,6 +977,128 @@ Codegen frameworks (like LHP) emit job YAML from a schema-documented set of fiel
 Implication: every re-run of the codegen wipes the manual edits. The only job YAMLs safe from regeneration are those the codegen didn't emit (e.g., a master orchestrator job with no flowgroup references).
 (Source: `LHP_Reference.md` L5589–L5636)
 
+### Job Parameters Silently Override Task Base Parameters of the Same Name
+A job-level `max_parallel` beat **every** per-tier `base_parameter` of that name on every task, so per-tier tuning had no effect at all — and looked exactly like a stale deploy. Redeploying could never have fixed it.
+
+What it actually cost, observed live in one run: a chunk logged *"7 at a time"* (the job parameter's value) while its base parameter asked for 4, so seven concurrent billion-row `exceptAll`s ran on a cluster sized for four. Separately, a fan-out exited with *"chunk_index 7 >= total_chunks 5"* while its base parameter asked for 8, and another was handed 2,490 tables where its own setting wanted 3,113.
+
+**Fix: namespace the job-level parameters** (`default_max_parallel`, `scope_chunks`) so a collision is impossible, rather than renaming the notebook widgets — that keeps every notebook runnable standalone with its familiar names. **Check for name collisions between the two layers before concluding a value "isn't taking effect."**
+(Source: BUPA — Region Migration project, 2026-08-22)
+
+### In a Fan-Out, the Chunk Divisor and the Scheduled Iteration Count Are Two Numbers — and Both Directions of Mismatch Matter
+| Mismatch | Consequence |
+|---|---|
+| iterations > divisor | Wasteful but safe — surplus iterations exit on the guard |
+| divisor > iterations | **Silent data loss** — whole modulo groups get no runner at all |
+
+In the second case nothing fails; 2,490 tables were simply never processed and the only trace was an absent output file. Reconcile row-level coverage **before** overwriting the scope file, not after. This is common because platforms often can't expand a parameter into an array (Databricks Asset Bundles have no `range()` helper), so the divisor lives in a parameter and the iteration count in a fixed YAML literal — two places that must be edited together.
+
+- **A `for_each` repair must resolve to the same iteration count as the original run.** Change the `inputs:` array from 8 entries to 12 and every in-flight or historical run becomes **permanently unrepairable** — the scheduler can't map old iterations onto the new array. Deploys that change pools, parameters or notebook code leave old runs repairable; deploys that change an `inputs:` array do not. Worth knowing before you promise someone a repair.
+- **A default nobody runs with is a bug waiting to surface.** A concurrency default of 1 was survivable only because operators overrode it by hand every time; the first run that used the default would have been ~8× slower with no error. **Defaults should be the value you actually want.**
+- **The UI task-edit is a real escape hatch when redeploys are expensive.** You can repoint a task's cluster in the Jobs UI and repair the run immediately, without another deploy; the next IaC deploy reverts it. That converts "we get one deploy attempt" into "one deploy attempt plus a manual override," which materially changes how much risk a change can carry.
+
+(Source: BUPA — Region Migration project, `SESSION_LEARNINGS.md`, 2026-08-22)
+
+### A Population Statistic Cannot Be Computed Inside a Fan-Out
+A size threshold routing tables into large/small tiers was originally stamped by the per-chunk extractor — but that task was a 5-way `for_each`, so the "population mean" was computed **five times over five disjoint slices**, giving five different thresholds and a tiering that depended on which chunk a table landed in. The fix was to move the decision into the **merge** step, the only place that sees every row.
+
+**Forward rule:** any statistic over the whole population — mean, median, percentile, total, rank — belongs in a **reduce** stage, never in the map stage. If a fanned-out task computes a number that other tasks compare against, **that number is wrong by construction.**
+(Source: BUPA — Region Migration project, `SESSION_LEARNINGS.md`, 2026-08-22)
+
+### Naive `index % N` Chunking Creates Stragglers
+Splitting a workload into N parallel chunks by row position, when the underlying items vary wildly in size (a 1.08B-row table next to a 10-row one), makes total wall-clock a function of luck. **Size-aware bin-packing** — sort descending, assign each item to the currently-lightest bucket — is the standard fix.
+
+Related, on scaling a fan-out: **scale OUT, not UP.** `+1 chunk` = one more *cluster* = genuinely more cores, with cores-per-in-flight-item held constant. `+1 max_parallel` divides the *same* cores among more items, so cores-per-item **falls**. The failure mode of getting this backwards is severe — see the livelock in §7 — and only one of the two levers actually adds capacity.
+(Source: BUPA — Region Migration project, `SESSION_LEARNINGS.md`, 2026-08-22)
+
+### Checkpoint Incrementally, and Express the Interval Relative to the Work Unit
+**A checkpoint interval larger than the work unit is identical to no checkpointing at all — and raising parallelism can silently create that state.** A full diff checkpointed every 250 comparisons. At ~400 items per chunk that fired once per run; when the chunk count was raised for speed, each chunk dropped to ~241 items and the checkpoint **could never fire**. A run cancelled at 171 of 400 therefore produced **no result file whatsoever** — despite checkpointing being implemented, reviewed, and believed to work.
+
+**Forward rule:** express the interval as a *fraction of the expected work unit*, not an absolute count, and re-derive it whenever chunk counts or parallelism change. Any absolute interval is a hidden coupling to a number someone else is free to tune. **Cheap test: divide the smallest plausible unit by the interval — if the answer is under ~5, the interval is wrong.**
+
+Write partial results with a **full-rewrite-not-append** pattern so the file is always valid mid-run.
+(Source: BUPA — Region Migration project, `SESSION_LEARNINGS.md`, 2026-08-22)
+
+### Retries Belong on the Unit That Can Independently Fail and Independently Redo Its Work
+On a fan-out that's the **inner** task, not the wrapper — a retry on the wrapper re-runs every sibling iteration, not the one that died. And a retry is only safe if that unit is **idempotent**: each chunk must re-derive its own slice and *rewrite* its own output rather than append, so a second attempt recomputes instead of duplicating.
+
+**Retry count is a bet on the failure being transient.** Two attempts survives a one-off spot eviction or allocation miss without spending triple the runtime discovering a chunk is systematically broken. Choose it deliberately — with no checkpointing inside the unit, each retry redoes the whole chunk, and chunks here ran ~3h17m.
+(Source: BUPA — Region Migration project, `SESSION_LEARNINGS.md`, 2026-08-22)
+
+### Skip-Lists Must Be Conservative in One Direction Only
+A "don't re-check this, it already passed" list is safe to **under**-populate (you re-verify more than needed) but never safe to **over**-populate — anything that isn't a confirmed pass must re-run, or a real defect disappears silently as "not in scope."
+
+- **A shared skip-list is scoped to the widest run that writes it.** If a narrow-scope run rebuilds the same file the full-scope run uses, it silently discards every entry the full run earned. Nothing fails; the *next* full run just re-does everything — one narrow run over ~500 items cost a later run the 13,320→497 narrowing it had banked. Either scope the file per mode, or make the narrow run **union** into the list rather than replace it.
+- **Incremental and full modes support different claims, so make the mode an explicit parameter and stamp it into the output.** An incremental run can only say *"N items verified as of whenever each was last checked"*; only a full run can say *"the estate is verified as of today."* If the skip list is keyed on name with no version component, an item verified last week that has changed since is **not** re-checked. Without the mode recorded in the summary artifact, nobody reading it later can tell which claim it supports — and "12,823 matched" means very different things in each.
+
+(Source: BUPA — Region Migration project, `SESSION_LEARNINGS.md`, 2026-08-22)
+
+### An Observability Sidecar Must Be Structurally Incapable of Failing or Delaying the Run
+Two properties made this true for a live progress dashboard, and both are counter-intuitive:
+
+1. **Nothing depends on it** — so it can never block a successor.
+2. **It carries no `timeout_seconds`** — because a Databricks task timeout marks the task *Failed*, and a failed task fails the whole run. A timeout on a monitoring task means a cosmetic component can kill a 22-hour validation. It self-exits on its own internal limit instead, with success.
+
+**Forward rule:** for any observability or reporting sidecar, check *both* edges — can it block anything, and can it fail anything — and prefer an in-notebook self-exit over a platform timeout.
+
+**And a task that watches the run it is part of must exclude itself.** The dashboard's exit condition was "all tasks terminal", which it can never observe — it is itself running whenever it asks. Without passing it its own task key to filter on, the condition is unsatisfiable and every run sits until the backstop limit. *If a watcher always runs to its maximum duration, this is the first thing to check.*
+(Source: BUPA — Region Migration project, `SESSION_LEARNINGS.md`, 2026-08-22)
+
+### Gate Off-Leg Tasks on the Control Plane, Not Inside the Notebook
+When one job definition serves two variants (two regions, two directions, src/tgt), a notebook-level `if env != "src": exit()` is correct but expensive — the scheduler still **provisions the cluster** to run a notebook that immediately exits. A `condition_task` is evaluated on the control plane and starts **no compute**, so off-leg tasks are genuinely SKIPPED.
+
+Concretely: two tasks on an 8–16 node cluster meant the off-leg spun that whole cluster up twice purely to exit two notebooks. With gates, it's never provisioned on that leg at all.
+
+Keep the in-notebook self-gates anyway as defence in depth — they still matter for standalone and manual runs — but understand that in a *job* run the gates are what actually prevent execution.
+
+**The join pattern this forces, and why the obvious alternatives are wrong.** A gate's downstream join must depend on **both** the previous gate's off-leg branch **and** the task that only runs on the other leg, with `run_if: AT_LEAST_ONE_SUCCESS`:
+
+| `run_if` | Failure |
+|---|---|
+| `ALL_SUCCESS` (default) | The other-leg task never executes here, so the join is **permanently unreachable** on that leg |
+| `ALL_DONE` | A *skip* satisfies it — so the pipeline continues even when the cross-region trigger genuinely **failed** |
+| `AT_LEAST_ONE_SUCCESS` | ✅ Reachable on both legs **and** still halts the moment the trigger really fails |
+
+(Source: BUPA — Region Migration project, `test_cases_orchestrator_job.yml`, 2026-08-22)
+
+### Cross-Region Job Triggering Is Just the REST API Plus a Service Principal
+A job in region A can fire and then await a job in region B with **no special "cross-workspace" feature to enable.** Region A obtains an OAuth token for a service principal, then calls region B's ordinary Jobs API with it. Once you have the token, the remote workspace is just a hostname.
+
+**The auth flow** is Azure AD machine-to-machine client credentials: POST to `https://login.microsoftonline.com/{TENANT_ID}/oauth2/v2.0/token` with `grant_type=client_credentials`, the SP's `client_id` and `client_secret`, and `scope={DATABRICKS_RESOURCE}/.default`. The response's `access_token` goes straight into `Authorization: Bearer …`.
+
+**`DATABRICKS_RESOURCE` is a fixed, well-known Azure constant** — `2ff814a6-3304-4ab8-85cb-cd0e6f879c1d`, the AzureDatabricks first-party application ID. Identical for every tenant and every workspace on earth, so it belongs in code as a constant, not in config. Worth committing to memory: it's the piece that *looks* like it must be environment-specific and isn't.
+
+**Full checklist, in the order things fail:** the tenant ID → a service principal that exists in the tenant **and has been granted access in the target workspace** (tenant registration alone is not enough) → the secret stored in a secret scope in the *calling* workspace → the target workspace host → the target `job_id`. Everything else is a normal API call.
+
+Hard-won details:
+- **`job_id` is workspace-scoped and is the fragile link.** A number that means nothing in the calling region, and it **changes if the target job is recreated rather than updated** — which in IaC terms means changing the resource key destroys and re-issues it. That single integer is the tightest coupling between the two regions; **treat it as an interface.** (Corollary: rename a job's `name`, never its resource key — the key rename destroys the job, the job_id, and every prior run.)
+- **Preflight with `GET /api/2.1/jobs/get` before `run-now`.** One extra call proves the job exists *and* that the SP can see it, so a wrong ID and a missing grant surface as distinct clear errors rather than one opaque `run-now` failure. Two failure modes separated for the cost of one request.
+- **`run-now` rejects any `job_parameters` key the target job does not declare.** That silently couples the two jobs' parameter lists: adding a parameter on the calling side and forwarding it breaks *every* run until the callee is redeployed. **Deploy the callee first, always.**
+- **Serverless compute cannot make the call.** Serverless egress fails the cross-workspace trust check, so the triggering and waiting tasks must run on classic VNet compute — a constraint that only appears at runtime and forces a cluster into a job that otherwise wanted none.
+- **Derive which region you are in at runtime; do not configure it.** One IaC target deploying byte-identically to two workspaces means a deploy-time "my region" value is correct in one and wrong in the other. Detect the executing workspace and fire the *opposite* one, making direction a **derived property**. Configured direction is a bug waiting for the second deployment.
+- **Per-workspace names you assume are symmetric often aren't.** Two workspaces' Key Vault-backed secret scopes were named differently — same convention, different suffix, e.g. `secret-kvNNN` vs `secret-kvNN` — despite one bundle serving both. So the code carries **both** candidate scope names and selects once the region is known. Expect at least one such asymmetry per region pair, and note that only the scope *name* ever needs to travel through the bundle; the secret itself is read from the scope at run time.
+- **`life_cycle_state` and `result_state` are two different fields and you need both.** `TERMINATED` covers success and failure alike; `result_state` says which. And some terminal states (`SKIPPED`, `INTERNAL_ERROR`) arrive with **no `result_state` at all**, so treating its absence as "still running" produces a poll loop that never exits.
+- **Be generous with a wait task's timeout, or make it unbounded.** A wait that times out marks the task failed and fails the whole run — so the timeout is not a safety net, it's an additional way to lose a good run. 48 hours against a 22-hour job is the right shape of margin.
+- **A cross-region trigger should fail loud, unlike a best-effort one.** If everything downstream is meaningless without the remote run, swallowing the error just moves the failure somewhere less diagnosable.
+
+(Source: BUPA — Region Migration project, `SESSION_LEARNINGS.md`, 2026-08-22)
+
+### Fire-and-Exit, Then Wait Separately — and Wait on the *Task* You Need, Not the Whole Run
+`run-now` returns as soon as the remote run is queued. Publish the returned `run_id` as a task value and consume it downstream. Splitting trigger from wait is what lets local work proceed in parallel with the remote run instead of blocking behind it.
+
+**Then the higher-leverage move: `GET /api/2.1/jobs/runs/get` returns a `tasks[]` array with per-task state, so you can release local work the moment the one upstream task you actually depend on finishes.** That turns a full-run barrier into a precise synchronisation point.
+
+**Watch the right task, though.** Watching a `for_each` *wrapper* releases you too early — the wrapper reaches SUCCESS as soon as the last chunk finishes, at which instant only per-chunk files exist. The merged file the downstream step reads doesn't exist until the **merge** task assembles it. Watch the merge.
+
+Concrete payoff in this framework: moving the longest-running branch (22h24m of a 22h46m run) off the full-run barrier and onto the earlier, genuinely-sufficient guarantee let it run **concurrently** with the extractor chain it consumed nothing from, rather than serialised behind it. **Audit what each step actually reads — a dependency edge justified by "it needs both sides' data" may be a much later guarantee than the step truly requires.**
+(Source: BUPA — Region Migration project, `SESSION_LEARNINGS.md` + `test_cases_orchestrator_job.yml`, 2026-08-22)
+
+### Make the Dangerous Direction Opt-In via the Default
+The `env` parameter defaults to the **safe, self-contained leg** — the one that only extracts its own side and stops. The leg that fires a run in the opposite region and then compares must be requested explicitly. An operator doing that supplies several other parameters anyway, so naming one more costs nothing; the payoff is that a stray "Run now" on either workspace **cannot** fire a cross-workspace run.
+
+Generalizes to any parameterized job with one destructive or outward-facing mode: make the default the mode you'd want an accidental click to take.
+(Source: BUPA — Region Migration project, `test_cases_orchestrator_job.yml`, 2026-08-22)
+
 ---
 
 ## 11. Security & Secrets
@@ -739,6 +1114,42 @@ Refresh tokens get overwritten on each API call — the token returned by the au
 
 Solution: write the new refresh token back to the secret store after each successful auth exchange. Lesson: not all secrets are static. Identify which ones rotate and build write-back logic for those.
 (Source: `knowledge.md` L594–L600)
+
+### Row Filters and Column Masks Block Validation in Two Independent Ways
+On a UC-governed session, a masked or row-filtered table refuses a **path-based** read (`PERMISSION_DENIED: Path-based access … row filter or column mask not supported`) *and separately* refuses **time travel by name** (`COLUMN_MASKS_FEATURE_NOT_SUPPORTED.TIME_TRAVEL`). Fixing one does nothing for the other, so it reads like two unrelated defects.
+
+**The common cause is the session, not the syntax — that's the whole insight.** Both refusals come from **UC's own session-level analyzer**, which fires while resolving the read through UC's catalog metadata. So the fix is not a different query shape; it's a session that never consults UC at all.
+
+**Therefore switching to a `delta.\`<path>\`` read is necessary but NOT sufficient.** A path read from a UC-governed cluster is exactly what the first error blocks — UC maps the path back to the table it governs and refuses.
+
+**It is ONE decision with two consequences, not three ingredients:**
+
+- **The decision** — `data_security_mode: NONE`. Note this *is* what "non-UC cluster" means; it is not something you switch on top of a UC-enabled cluster. `SINGLE_USER` and `USER_ISOLATION` are the UC-enabled values, and on either of them the analyzer is in the session and both blocks fire. **There is no configuration that keeps UC enabled and skips its masking checks** — that would be a governance hole, not a feature.
+- **Consequence 1** — UC no longer brokers storage access, so the cluster must carry its own credential (direct SP OAuth on the storage account: `fs.azure.account.auth.type`, `…oauth.provider.type`, `…oauth2.client.id`, `…client.secret`, `…client.endpoint`, per account host). The secret is read from a scope at run time and lives in Spark conf on that cluster, and the set of accounts must be known up front.
+- **Consequence 2** — there is no catalog to resolve a name against, so the read *must* be expressed by path. **Path syntax is the result of going non-UC, not the thing that defeats the mask.**
+
+**When someone proposes a middle ground:** setting `fs.azure.account.*` credentials on a UC-enabled cluster and reading by path does not work, and in shared/`USER_ISOLATION` mode those confs are generally refused outright. **The governance mode is binary for this purpose.**
+
+**The payoff is correctness, not just access.** Because the non-UC session can time-travel a masked table, *every* table gets compared at its real pinned version — no live-version fallback for the masked subset. That removes an entire class of "we compared now against then" error precisely where the temptation to fall back would have been strongest.
+(Source: BUPA — Region Migration project, `SESSION_LEARNINGS.md`, 2026-08-22)
+
+### Going Non-UC Forces an Architectural Split, Because You Lose Everything UC Knows
+Tags, PK/FK constraints, `information_schema`, registration — **none of it is reachable from a non-UC session.** So a validation suite cannot simply move to non-UC wholesale; it has to **split its checks across two clusters by which store answers them.** That split is the real design consequence of the workaround, and it turns out to be a benefit: log-only checks are latency-bound (thousands of small reads, wanting concurrency) while data-file checks are shuffle-bound (wanting cores per table). Those want opposite cluster shapes, and separating them lets each get one.
+
+**The reusable shape: a UC "prep" task that resolves everything, then a non-UC executor that consumes plain values.** Prep runs on UC compute, resolves external-location names and config lookups, and publishes plain strings as task values; the non-UC task receives them pre-resolved and never needs a catalog. **Anything the executor would have had to *look up* becomes something it is *handed*.**
+
+Costs to price in:
+- **Serverless is off the table.** Serverless is UC-only, so going non-UC forces classic compute — cluster startup on every run, nodes held for the task's duration.
+- **The reads become invisible to governance tooling.** Path reads from a non-UC cluster don't appear in UC audit or lineage. Worth stating out loud when the job doing them is itself compliance-adjacent.
+- **Speed is not the reason to do this.** The dominant costs are unchanged — shuffle for a full comparison, per-table latency for metadata. Choose it for **capability**. (Two genuine secondary savings exist: mask and row-filter evaluation is real per-query CPU that raw file reads skip entirely, and there's no UC credential vending or permission resolution per query — small individually, non-trivial across thousands of tiny metadata reads.)
+- **Direct `_delta_log` access is the underrated upside.** On a non-UC session the log is just files: list the directory, read the checkpoint Parquet and commit JSONs. That's what makes log-replay checks possible *at all*.
+- **Cross-region reads need the path approach regardless of masking.** The other region's tables aren't registered in this workspace's metastore, so there's no name to read them by. Masking and cross-region are two independent reasons that happen to want the same mechanism.
+
+### You Are Reading Unmasked Data — That Must Be a Deliberate, Authorised Decision
+The mask exists for a reason and this bypasses it. What made it defensible in this case: it runs as a service principal with storage-level RBAC, and the checks emit **structure and counts, never row values**. A check that sampled and reported rows would be exfiltrating exactly what the mask protects.
+
+**So when adding checks to a non-UC path, audit what they *output*, not just what they read.** Get the authorisation on the record before the first run, not after someone asks.
+(Source: BUPA — Region Migration project, `SESSION_LEARNINGS.md`, 2026-08-22)
 
 ---
 
@@ -812,6 +1223,7 @@ A short list to internalize. Each is distilled from a concrete incident document
 | Session — consolidation pass 1 | Audited 35 legacy learning notebooks across 8 folders. Consolidated to 19 (16 fewer files, zero content lost). Modernized every deprecated API. Added setup data + concept markdown to every notebook. |
 | Session — consolidation pass 2 | Topic-merged Databricks Features (3→1) and Databricks Prof. (2→1). Deleted Spark Read-Write (covered in PySpark §11). User-side: deleted Workflow folder, renamed PySpark → PySpark_Python_for_DE. **Final count: 12 notebooks across 7 folders.** |
 | Session — BUPA Region Migration | Second, distinct BUPA engagement (DeepClone cross-region DR validation, not the original DLT pipeline build). Distilled 5 new lessons into §4 (validation pattern) and §6 (`DESCRIBE HISTORY` clone lineage, retention-window feasibility, UC-path vs delta-path routing, masking/row-filter bypass) from the live validation framework build. |
+| 2026-08-22 — Region Migration, full distillation | Read the framework source (156 py / 30 yml) and the 917-line `SESSION_LEARNINGS.md` written across two working days (Aug 12: Delta internals + Spark execution + testing methodology; Aug 20: cloud capacity, IaC, orchestration, and three prod failures in one day — a cluster-policy rejection, an Azure vCPU quota exhaustion, and a VM-generation compliance rule). Added ~35 lessons across §1, §4, §5, §6, §7, §8, §9, §10, §11. **Also CORRECTED the retention lesson in §6**, which had encoded a superseded 168h threshold as the general rule; it is now the three-stores / three-clocks model. |
 
 ### Workspace notebooks (deployed at `/Workspace/Users/swaraj.negi@celebaltech.com/Learning/`)
 
@@ -893,6 +1305,7 @@ The architectural and discipline lessons (§1 Architecture, §2 Schema disciplin
 - **`knowledge.md`** (1086 lines) — data engineering knowledge, 11 sections. Originally organized by theme (architecture, CDC, schema, QA, errors, decisions, patterns, compute, deployment, security, platform checks).
 - **`LHP_Reference.md`** (5823 lines) — LHP framework knowledge + universal lessons. Section 14 ("Lessons Learned") is explicitly marked "universal principles, not LHP-specific". Gen2 session learnings at the end have transferable DE nuggets mixed with LHP-specific bugs.
 - **`index.md`** — auto-generated compact map of both files, with line ranges. Regenerate via `python "claude ref/build_index.py"` after any edits.
+- **`SESSION_LEARNINGS.md`** (917 lines) — raw learnings from the BUPA Region Migration / DeepClone DR framework, written by hand across 2026-08-12 and 2026-08-20. Held **outside this repo** in the gitignored `client_work/bupa_region_migration/` quarantine, alongside the framework source it describes, because that material is client IP. Only generalized lessons cross into this file; client source, storage accounts, workspace IDs and table names never do. Cited above as `SESSION_LEARNINGS.md`.
 
 ## Lessons NOT Extracted Here (Deliberately Excluded)
 
