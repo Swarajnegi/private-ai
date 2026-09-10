@@ -194,6 +194,13 @@ class PrototypeClassifier:
             embed_fn=embed_fn,
             threshold=threshold,
             prototypes=prototypes or ROUTING_PROTOTYPES,
+            # "general" is a REAL routing destination here (the general model
+            # pool), not an abstention, so this consumer keeps it as the
+            # below-threshold fallback. The activity-domain consumer uses
+            # UNKNOWN instead, because there "general" was a category nobody
+            # ever classified into. Same classifier, different semantics — made
+            # explicit on 2026-09-09 after hard-coding UNKNOWN broke this gate.
+            fallback_label="general",
         )
 
     def classify(self, text: str) -> Tuple[str, float]:

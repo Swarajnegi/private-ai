@@ -25,8 +25,11 @@ insight it has NOT surfaced before, it emits a DISTINCT injection — framed as
 IMPREGNABLE:
   - FAIL-CLOSED: no qualifying insight (missing feed / below floor / already
     surfaced) -> emit nothing. JARVIS never invents a life-state observation.
-  - NEVER NAG: a watermark file records every surfaced insight_id; each insight
-    surfaces AT MOST ONCE, ever. One surface per session (highest confidence).
+  - NEVER NAG: an append-only watermark LOG records every surfaced insight_id;
+    each insight surfaces AT MOST ONCE, ever. One surface per session (highest
+    confidence). The log is `.jsonl` so that two machines' events union-merge
+    instead of clobbering each other — see _WATERMARK_PATH for why that matters
+    more than it looks.
   - STDLIB-ONLY + config: no embeddings, no network — the SessionStart hook that
     calls this stays sub-second and can NEVER block a session from opening.
 
@@ -47,7 +50,9 @@ STEP 3: Pick the single highest-confidence candidate (rate-limit: one/session).
         None -> fail closed, emit nothing.
         |
 STEP 4: Build the SURFACE-THIS injection (distinct framing from the profile),
-        advance the watermark (flock), and return the SessionStart payload.
+        APPEND one event to the watermark log, and return the SessionStart
+        payload. Appending rather than rewriting is what makes the never-nag
+        guarantee survive a two-machine merge.
 
 =============================================================================
 """
@@ -56,6 +61,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import socket
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -72,10 +78,29 @@ from jarvis_core.config import DATA_ROOT  # noqa: E402
 
 _IST = timezone(timedelta(hours=5, minutes=30))
 _FEED_PATH = Path(DATA_ROOT) / "life_state_feed.jsonl"
-_WATERMARK_PATH = Path(DATA_ROOT) / ".surfaced_watermark"
+
+# APPEND-ONLY, and the extension is the whole reason (changed 2026-09-08).
+# This was `.surfaced_watermark`: a tracked JSON object rewritten in place under
+# flock. The lock made same-machine writes safe and was never the problem. The
+# problem was git: a JSON object has no union merge driver, so when both laptops
+# surfaced an insight the merge either conflicted or silently dropped one side's
+# ids -- and a dropped id means JARVIS re-raises something it already said, which
+# is precisely the "never nag" guarantee this file claims to keep.
+#
+# `.jsonl` inherits `merge=union` from .gitattributes, so concurrent appends
+# from both machines merge with no conflict and no loss. Concatenation IS merge.
+# The set of surfaced ids is now a FOLD over the log rather than a value in a
+# file, which also removes the read-modify-write window entirely instead of
+# guarding it.
+_WATERMARK_PATH = Path(DATA_ROOT) / ".surfaced_watermark.jsonl"
 
 _DEFAULT_FLOOR = 0.60
 _MAX_INJECTION_CHARS = 1200
+
+# Stamped on every surfaced-event so a merged log says WHICH machine surfaced
+# what. Without it, two laptops' events are indistinguishable after a union
+# merge and "did the user actually see this?" becomes unanswerable.
+_HOST = socket.gethostname() or "unknown"
 
 
 class LifeStateMonitor:
@@ -113,19 +138,37 @@ class LifeStateMonitor:
             return []
         return out
 
-    def _load_watermark(self) -> Dict[str, Any]:
+    def surfaced_ids(self) -> set:
+        """Fold the append-only watermark log into the set of surfaced ids.
+
+        EXECUTION FLOW:
+        1. Stream the log; each line is one {"insight_id", "ts"} event.
+        2. Malformed lines are skipped, not fatal — a half-written line from a
+           killed process must not blind the never-nag guarantee.
+
+        Returns:
+            The set of insight_ids already shown. Empty when the log is absent,
+            which fails in the safe direction (something may be re-surfaced
+            once) rather than the unsafe one (an insight never surfaces).
+        """
+        out: set = set()
         if not self._watermark_path.exists():
-            return {"surfaced_ids": [], "last_surfaced_ts": "", "count": 0}
+            return out
         try:
-            data = json.loads(self._watermark_path.read_text(encoding="utf-8"))
-            if not isinstance(data, dict):
-                raise ValueError
-            data.setdefault("surfaced_ids", [])
-            data.setdefault("last_surfaced_ts", "")
-            data.setdefault("count", len(data.get("surfaced_ids", [])))
-            return data
-        except (OSError, ValueError, json.JSONDecodeError):
-            return {"surfaced_ids": [], "last_surfaced_ts": "", "count": 0}
+            with open(self._watermark_path, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        rec = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    if isinstance(rec, dict) and rec.get("insight_id"):
+                        out.add(str(rec["insight_id"]))
+        except OSError:
+            return set()
+        return out
 
     # ---- selection -------------------------------------------------------
 
@@ -134,7 +177,7 @@ class LifeStateMonitor:
         feed = self._load_feed()
         if not feed:
             return None
-        surfaced = set(self._load_watermark().get("surfaced_ids", []))
+        surfaced = self.surfaced_ids()
         candidates = [
             r for r in feed
             if r.get("insight_id") not in surfaced
@@ -150,36 +193,48 @@ class LifeStateMonitor:
         )
         return candidates[0]
 
-    # ---- watermark advance (flock) --------------------------------------
+    # ---- watermark advance (append-only) --------------------------------
 
     def mark_surfaced(self, insight_id: str, ts: Optional[str] = None) -> None:
+        """Append one surfaced-event. Never rewrites, so nothing can be lost.
+
+        The flock is retained even though appends under O_APPEND are already
+        atomic for small writes: it also serialises against a reader mid-fold,
+        so a concurrent surfaced_ids() can never observe a torn line.
+        """
         ts = ts or datetime.now(_IST).isoformat(timespec="seconds")
+        event = json.dumps({"insight_id": str(insight_id), "ts": ts,
+                            "host": _HOST}, ensure_ascii=False)
         self._watermark_path.parent.mkdir(parents=True, exist_ok=True)
         with open(self._watermark_path, "a+", encoding="utf-8") as f:
             if _HAS_FCNTL:
                 fcntl.flock(f.fileno(), fcntl.LOCK_EX)
             try:
-                f.seek(0)
-                raw = f.read().strip()
-                try:
-                    data = json.loads(raw) if raw else {}
-                    if not isinstance(data, dict):
-                        data = {}
-                except json.JSONDecodeError:
-                    data = {}
-                ids = data.get("surfaced_ids", [])
-                if insight_id not in ids:
-                    ids.append(insight_id)
-                data["surfaced_ids"] = ids
-                data["last_surfaced_ts"] = ts
-                data["count"] = len(ids)
-                f.seek(0)
-                f.truncate()
-                f.write(json.dumps(data, ensure_ascii=False))
+                f.write(("" if self._ends_cleanly(f) else "\n") + event + "\n")
                 f.flush()
             finally:
                 if _HAS_FCNTL:
                     fcntl.flock(f.fileno(), fcntl.LOCK_UN)
+
+    @staticmethod
+    def _ends_cleanly(handle: Any) -> bool:
+        """True when the log is empty or its last byte is a newline.
+
+        NOT paranoia — this was a live defect. A process killed mid-write leaves
+        a line with no terminator, and the NEXT append then lands on the same
+        line, so the torn line destroys the good event appended after it rather
+        than just itself. Appending a leading newline first makes the log
+        self-healing: the torn line is skipped by the fold, the new event
+        survives. Any append-only log needs this; a lock does not provide it.
+        """
+        try:
+            handle.seek(0, 2)                  # SEEK_END
+            if handle.tell() == 0:
+                return True
+            handle.seek(handle.tell() - 1)
+            return handle.read(1) == "\n"
+        except (OSError, ValueError):
+            return True                        # unseekable -> assume fine, never block a write
 
     # ---- injection -------------------------------------------------------
 
@@ -292,11 +347,12 @@ def _run_self_test() -> None:
         text3 = mon.surface()
         check("T6 once all surfaced -> None (fail closed)", text3 is None)
 
-        # T7: watermark persisted with both ids
-        wmdata = json.loads(wm.read_text())
-        check("T7 watermark holds both surfaced ids",
-              set(wmdata["surfaced_ids"]) == {"hi1", "mid1"} and wmdata["count"] == 2,
-              str(wmdata))
+        # T7: the watermark log holds one event per surfaced insight
+        lines = [json.loads(l) for l in wm.read_text().splitlines() if l.strip()]
+        check("T7 the watermark log holds one event per surfaced id",
+              [r["insight_id"] for r in lines] == ["hi1", "mid1"], str(lines))
+        check("T7b every event carries a timestamp and the host that surfaced it",
+              all(r.get("ts") and r.get("host") for r in lines), str(lines))
 
         # T8: a fresh monitor honors the existing watermark (dedup persists across sessions)
         mon2 = LifeStateMonitor(feed_path=feed, watermark_path=wm, confidence_floor=0.6)
@@ -331,7 +387,8 @@ def _run_self_test() -> None:
                          encoding="utf-8")
         mon5 = LifeStateMonitor(feed_path=feed5, watermark_path=wm5, confidence_floor=0.6)
         check("T11 corrupt watermark tolerated", mon5.surface() is not None)
-        check("T11b watermark rewritten cleanly", isinstance(json.loads(wm5.read_text()), dict))
+        check("T11b a torn line is skipped but the good events after it survive",
+              mon5.surfaced_ids() == {"c1"}, str(mon5.surfaced_ids()))
 
         # T12 (finding #4): the injection carries the do-not-follow guardrail + quotes the
         # synthesized prose as untrusted data — even when that prose is itself an injection.
@@ -355,9 +412,31 @@ def _run_self_test() -> None:
         mon6 = LifeStateMonitor(feed_path=feed6, watermark_path=wm6, confidence_floor=0.6)
         t6 = mon6.surface()
         check("T13 empty surface_line skipped; good one surfaces", t6 is not None and "real prose insight" in t6)
-        wm6data = json.loads(wm6.read_text())
+        surfaced6 = mon6.surfaced_ids()
         check("T13b empty insight did NOT consume the watermark",
-              "empty1" not in wm6data["surfaced_ids"] and "good1" in wm6data["surfaced_ids"], str(wm6data))
+              "empty1" not in surfaced6 and "good1" in surfaced6, str(surfaced6))
+
+        # T14 -- THE POINT OF THE .jsonl CHANGE. Simulate what git's merge=union
+        # driver produces when both laptops surface an insight: the two files are
+        # concatenated. Under the old in-place-JSON scheme one side's ids were
+        # lost; a fold over an append-only log cannot lose either side.
+        wm7 = Path(td) / ".wm7.jsonl"
+        laptop_a = json.dumps({"insight_id": "from_work", "ts": "2026-09-08T10:00:00+05:30",
+                               "host": "work"})
+        laptop_b = json.dumps({"insight_id": "from_personal", "ts": "2026-09-08T21:00:00+05:30",
+                               "host": "personal"})
+        wm7.write_text(laptop_a + "\n" + laptop_b + "\n", encoding="utf-8")
+        merged = LifeStateMonitor(feed_path=feed, watermark_path=wm7).surfaced_ids()
+        check("T14 a union-merged log from two machines keeps BOTH sides' ids",
+              merged == {"from_work", "from_personal"}, str(merged))
+
+        # T15: appending the same id twice is harmless — the fold de-duplicates,
+        # so an idempotent retry cannot corrupt the never-nag guarantee.
+        mon7 = LifeStateMonitor(feed_path=feed, watermark_path=wm7)
+        mon7.mark_surfaced("from_work")
+        check("T15 a duplicate event folds to the same set",
+              mon7.surfaced_ids() == {"from_work", "from_personal"},
+              str(mon7.surfaced_ids()))
 
     total = passed + len(failed)
     print(f"\n  Passed: {passed}/{total}")
