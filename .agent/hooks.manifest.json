@@ -39,6 +39,16 @@
             ],
             "timeout": 30,
             "statusMessage": "Capturing turn for personalization"
+          },
+          {
+            "_comment": "Added 2026-09-06. capture_turn APPENDS to observation_queue.jsonl; this DRAINS it into cross-domain insights so life_state_monitor has something to RAISE next SessionStart. Until now the consolidator ran only inside Mind's heartbeat (--ask only), which had not run in 35 days, so the feed froze in June and proactive surfacing died. Rate-limited to once/day inside consolidate.py, deterministic template only (no LLM spend), fail-closed to exit 0.",
+            "type": "command",
+            "command": "python3",
+            "args": [
+              "scripts/hooks/run_consolidation.py"
+            ],
+            "timeout": 100,
+            "statusMessage": "Consolidating cross-domain insight"
           }
         ]
       }

@@ -78,7 +78,7 @@ Status: ⬜ not started · 🔄 partially covered · ✅ has real captured depth
 | Topic | Status | Notes |
 |---|---|---|
 | Physics (general) | ⬜ | |
-| Quantum physics | ⬜ | |
+| Quantum physics | 🔄 | **Opened 2026-09-03, user-initiated** — not prompted by me, which is itself the signal. Covered: double slit + the both-slits-open-gives-fewer-hits result, measurement-as-coupling (interference term scaled by environment distinguishability, continuously — not a binary wave/particle choice), Wheeler delayed choice, the Kim quantum eraser and its sorting-not-rewriting resolution, no-signalling, Bell. **Turn 2, same day, also user-initiated** (with `@browser`): asked for groundbreaking discoveries since 2022 on time / multiverses / dimensions. Answered from live search — the frame that landed was a taxonomy: since 2022 every headline result is a **control result** (time crystals, Los Alamos arrow-of-time protocols PRX 2026-07-03, indefinite causal order), a **null result** (every extra-dimension search — PDG 2025, LHC single-photon, Belle II ~900 GeV), or a **proposal not yet run** (all tabletop quantum gravity / GIE). Multiverse: nothing, ever, for a structural reason — many-worlds makes no distinguishable predictions. Also covered: the "negative time" result (Angulo/Steinberg, PRL 2026-04-13) is negative *group delay* measured via weak values, and its press framing is **the same failure shape as the quantum eraser from turn 1** — a result about how a quantity is defined, sold as a result about causality. Twice in two turns makes that a filter worth teaching, not an anecdote. Plus the 2022 Caltech "holographic wormhole" walked back by Yao et al. within four months, as the genre's cautionary tale. **UNFINISHED AND WORTH RESUMING: the time thread.** They proposed a geometry — "time as a vertical line going above and below endlessly with the middle being the exact present" — and I redirected it from quantum measurement to relativity's loss of simultaneity + the block universe. **They still have not responded to that redirect; they went to breadth instead.** Their own model is the valuable artifact here, not my correction of it |
 | Space / astronomy | ⬜ | |
 | Energy | ⬜ | |
 | Mechanics | ⬜ | |
@@ -88,7 +88,7 @@ Status: ⬜ not started · 🔄 partially covered · ✅ has real captured depth
 ### Speculative & conceptual
 | Topic | Status | Notes |
 |---|---|---|
-| Time paradoxes | ⬜ | |
+| Time paradoxes | ⬜ | **Half-opened via the Quantum physics row above (2026-09-03)** — the user's own proposed geometry for time is sitting there unanswered. That thread belongs here more than under quantum physics, and it is the live one: resume by asking what made them reach for a *vertical* axis specifically, before offering any physics |
 | Alternate realities | ⬜ | |
 
 ### Humanities & outlook

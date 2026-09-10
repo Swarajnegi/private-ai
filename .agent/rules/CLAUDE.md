@@ -45,6 +45,7 @@ In this repo you are **Chief Systems Architect & Strategic Co-Founder** for JARV
 - **Stage 5 — Domain Specialists ⬅️ NOW.** Engineer-first QLoRA MVP on the shared Kimi K2.6 base. Next: 5.1 Fine-Tuning Basics (RunPod). Not started.
 - Master roadmap: [js-learning/JARVIS_MASTER_ROADMAP.md](js-learning/JARVIS_MASTER_ROADMAP.md)
 - Production code: [js-development/jarvis_core/memory/](js-development/jarvis_core/memory/), [agent/](js-development/jarvis_core/agent/), [brain/](js-development/jarvis_core/brain/) — Memory + Agent + Brain layers production-grade; Body (Stage 6) still a placeholder
+- **[serve/](js-development/jarvis_core/serve/) — the hearth (2026-09-08, Stage 6.3 v0, built out of order).** One always-on process owns the mutable state and the clock; every surface is a socket client. `hearth.py` = raw ASGI on uvicorn (`POST /v1/ask` + SSE, `GET /v1/health`), loopback-only + bearer token, single-flight, **denies every permission prompt** (no TTY). `scheduler.py` = the pulse — consolidation every 6h, projection refresh guarded per-artifact. Start: `python3 scripts/hearth.py --background`; inspect: `--status`; one-shot jobs: `--tick-once`. Terminal opt-in: `--ask "…" --via-hearth`
 
 ---
 
@@ -109,6 +110,7 @@ Match it. Don't invent your own conventions.
 - **Layer label** in module docstrings: `LAYER: Memory`, `LAYER: Engineer`, etc.
 - **Demo in `__main__`** block with smoke-test args, not a separate test file.
 - **Memory safety:** never `list(generator)` for unbounded data — keep it lazy.
+- **Append-only logs (`*.jsonl`) — two non-negotiables, both learned the hard way.** (1) `flock` the write, and (2) **heal a missing terminator first**: seek to EOF, and if the last byte is not `\n`, write one before your record. A lock stops concurrent writers; it does *nothing* about a writer that was **killed** mid-line, and the next append then joins that torn line and is destroyed with it. `scripts/kb_append.py` has done this since it shipped; `agent/capture.py`, `agent/context_ledger.py` and `agent/life_state_monitor.py` had all skipped it (fixed 2026-09-08, KB 565). Prefer `.jsonl` over JSON for anything tracked and multi-writer — `merge=union` in `.gitattributes` makes concatenation *be* the merge.
 - **No comments explaining what the code does** — well-named identifiers do that. Comments only for non-obvious WHY.
 - **No fluff docstrings.** Multi-paragraph docstrings only on layer entry-points; one-liners elsewhere.
 
@@ -120,7 +122,19 @@ Changes flow via GitHub: `git push` from work laptop → `git pull` on personal 
 
 - **Migration manifest at the end of every write turn.** Compact table: Action, Path, Note. Helps verify what's about to land in the next push.
 - Prefer **additive over destructive** edits. Prefer **one-file changes** over scattered diffs.
-- **Binary regenerables** (ChromaDB, extracted images, third-party clones, research papers) are never committed — see `.gitignore`. Personal laptop regenerates them locally via `python scripts/sync_chromadb.py` (replays manifest) and `python scripts/ingest.py <pdf>` (one-off ingestion).
+- **Derived artifacts — the three-class rule (corrected 2026-09-08).** The previous line here was false on both counts: it claimed ChromaDB "is never committed" (it **is** — 17 files, 19 MB) and pointed at `scripts/sync_chromadb.py` for regeneration (that script **does not exist**). Sixth prose-vs-code instance found this week. What is actually true:
+
+  | Class | Meaning | Tracked? |
+  |---|---|---|
+  | **FACT** | authoritative, append-only | ✅ `knowledge_base.jsonl` |
+  | **PROJECTION** | derived, and rebuildable *on the machine that reads it* | ❌ `cognitive_index.sqlite3`, `behavioral_state_model.jsonl`, `token_ratios.json`, `context/` |
+  | **PROJECTION-AS-TRANSPORT** | derived here, but consumed by a machine that **cannot** rebuild it | ✅ and correctly so |
+
+  **`cognitive_profile.md` and `activity_digest.md` are PROJECTION-AS-TRANSPORT and must stay tracked.** [js-workspace-rule.md](js-workspace-rule.md) §SESSION BOOT tells the personal laptop to READ both at boot, and states why it cannot regenerate them: *"there is NO per-prompt capture here (Antigravity has no hook system)."* No local queue means no digest. Untracking them blinds that machine — this looks like an obvious cleanup and is a regression.
+
+  **`chromadb/` stays tracked too**, for a different reason: its `research_papers` collection (156 embeddings) is not regenerable because the source PDFs are gitignored as well. Only the `jarvis_memory` half rebuilds, via `python3 scripts/index_memory.py`.
+
+- **Staleness is now detected, not discovered by accident.** `python3 scripts/check_projections.py` compares every projection against the KB and exits non-zero when one lags; `jarvis_core/brain/projections.py` surfaces the same check in the boot inhale, and stays silent when everything matches. Re-run `scripts/profile_synth.py` after KB writes and `scripts/index_memory.py` after a batch of them, or retrieval answers from an older mind than the log holds.
 - Memory in `~/.claude/projects/-home-swara-unix-work-JARVIS/memory/` is **machine-local** — does not migrate. Don't put project-canonical knowledge there; use [jarvis_data/knowledge_base.jsonl](jarvis_data/knowledge_base.jsonl).
 - `CLAUDE.md` (root), `SYNC.md`, `RUNBOOK.md` are gitignored — they were transitional or work-laptop-only. The substantive operating context is THIS file (`.agent/rules/CLAUDE.md`), which Antigravity loads via `trigger: always_on`.
 
@@ -166,7 +180,8 @@ These derive from `Cognitive_Pattern` entries — apply on every response, not j
 
 - Don't write generic boilerplate when production primitives exist — read [js-development/jarvis_core/memory/store.py](js-development/jarvis_core/memory/store.py) first.
 - Don't `git add jarvis_data/chromadb/` or any binary in `jarvis_data/` other than `knowledge_base.jsonl`, `*.md`, `model_catalog.json`.
-- **Never commit anything under `client_work/`** — not to this repo, not to a private fork, not anywhere. It holds verbatim Celebal/BUPA client code and notes. Only *generalized* lessons leave it, distilled into [knowledge/Data Engineering/Data_Engineering_Lessons.md](knowledge/Data%20Engineering/Data_Engineering_Lessons.md). Never reproduce client source, connection strings, workspace URLs, or table names from it into a tracked file.
+- **Never commit client source from `client_work/`** — not to this repo, not to a private fork, not anywhere. It holds verbatim Celebal/BUPA client code and notes. Never reproduce client source, connection strings, workspace URLs, or table names into a tracked file. Generalized lessons leave it distilled into [knowledge/Data Engineering/Data_Engineering_Lessons.md](knowledge/Data%20Engineering/Data_Engineering_Lessons.md).
+  - **The authoritative boundary is `.gitignore:76-80`, not this line.** This bullet used to read *"never commit **anything** under `client_work/`"*, which is stricter than the configured reality and therefore wrong: `client_work/**` is ignored, but four `!` negations deliberately re-include `client_work/*/SESSION_LEARNINGS.md` and `session_learnings/**`. Measured 2026-09-08 — `git add -An client_work/` would stage exactly ONE file (`bupa_region_migration/SESSION_LEARNINGS.md`); the verbatim `deepclone/` source is ignored. That carve-out is a decision the user made as the employee, recorded in `.gitignore` as *"raised twice and confirmed twice… do not silently re-exclude it, and do not re-argue it."* Seventh prose-vs-code divergence this week — and the first where the **code** was right and the prose was the stale artifact. Read `.gitignore` before acting on any client-IP question here.
 - The current sync transport is GitHub at https://github.com/Swarajnegi/private-ai. The "GitHub-blocked" claim from earlier turns out to be wrong — github.com is reachable from this work laptop. Push uses a fine-grained PAT with Contents: Read/write scope.
 - Don't merge `knowledge_base.jsonl` with manual editor copy-paste — use [scripts/jsonl_merge.py](scripts/jsonl_merge.py).
 - Don't create new docs/markdown files unless explicitly asked — append to existing where possible. The user has limited migration budget.
@@ -193,6 +208,8 @@ No fluff. Depth over brevity. Be direct. When the user is wrong, say so with rea
 | Raw client-work material (gitignored, never committed) | `client_work/<project>/` — see "Client work" below |
 | Production memory layer | [js-development/jarvis_core/memory/](js-development/jarvis_core/memory/) |
 | Path config | [js-development/jarvis_core/config.py](js-development/jarvis_core/config.py) |
+| The hearth (transport + clock) | [js-development/jarvis_core/serve/](js-development/jarvis_core/serve/) · `scripts/hearth.py` · `scripts/jarvis_client.py` |
+| Unprompted surfacing (the moat organ) | [agent/tension.py](js-development/jarvis_core/agent/tension.py) · `scripts/eval_tension.py` (ship gate) · `scripts/relabel_domains.py` |
 | CLI tools | [scripts/](scripts/) |
 | Workflow protocols | [.agent/workflows/](.agent/workflows/) |
 | Finance strategy (canonical) | [knowledge/Finance/strategy.md](knowledge/Finance/strategy.md) |

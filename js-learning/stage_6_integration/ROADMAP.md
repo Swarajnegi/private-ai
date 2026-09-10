@@ -72,18 +72,41 @@
 
 ---
 
-## Sub-Phase 6.3: Unified API Layer ⬜
+## Sub-Phase 6.3: Unified API Layer 🔄 **v0 SHIPPED 2026-09-08 ("the hearth")**
 
 **Goal:** One interface to rule them all — REST/WebSocket API.
 
-| Lesson | Topic | JARVIS Use Case | Command |
-|--------|-------|-----------------|---------|
-| 6.3.1 | FastAPI for JARVIS | Modern async Python API | `/dev Design JARVIS API with FastAPI.` |
-| 6.3.2 | WebSocket Streaming | Real-time response streaming | `/dev Implement WebSocket streaming.` |
-| 6.3.3 | Authentication | Secure your JARVIS | `/dev Add API key authentication.` |
-| 6.3.4 | Rate Limiting & Queuing | Handle concurrent requests | `/dev Implement request queuing.` |
+> **What actually landed, out of order and ahead of Stage 5**, because the omnipresence plan's
+> steps 1–7 needed it: `js-development/jarvis_core/serve/` — `hearth.py` (ASGI app, 23/23) and
+> `scheduler.py` (the clock, 24/24), plus `scripts/hearth.py` (start/stop/status) and
+> `scripts/jarvis_client.py` (the reference client every other surface copies).
+>
+> **Verified live**, not just tested: `POST /v1/ask` booted the real Mind, ran 4–9 tools, streamed
+> narration over SSE, and a second request **continued the same conversation session**. A terminal
+> can now opt in with `--ask "…" --via-hearth` instead of booting a second Mind.
+>
+> Two design notes that changed the plan below:
+> - **Raw ASGI, not FastAPI.** `uvicorn` was already installed; `fastapi`/`starlette` were not. A
+>   bare ASGI callable adds **zero dependencies** and is testable with a fake `receive`/`send`
+>   pair with no socket — every one of the 23 tests runs offline. 6.3.1 is therefore answered
+>   differently than written, and better.
+> - **The terminal demotion is opt-in, and that is not timidity.** The hearth has no TTY, so it
+>   DENIES every permission prompt (and reports the denial). Making `--via-hearth` the default
+>   would silently *reduce* capability. It flips once remote approval exists — the Commitment gate.
 
-**Practical Exercise:** Query JARVIS via curl and get streaming response.
+| Lesson | Topic | JARVIS Use Case | Status |
+|--------|-------|-----------------|--------|
+| 6.3.1 | HTTP API for JARVIS | Async Python API | ✅ raw ASGI on uvicorn (`serve/hearth.py`) — FastAPI deliberately rejected, see above |
+| 6.3.2 | Streaming | Real-time response streaming | ✅ SSE over `POST /v1/ask` with `Accept: text/event-stream`; `printer=` bridged to an `asyncio.Queue`. WebSockets not needed for one-way narration |
+| 6.3.3 | Authentication | Secure your JARVIS | ✅ bearer token (`.hearth_token`, 0600, gitignored) + per-request loopback peer check. Two independent gates |
+| 6.3.4 | Rate Limiting & Queuing | Handle concurrent requests | 🔄 single-flight only: one ask at a time, 409 otherwise. Rejecting beats queueing (a client blocked 3 min cannot tell that from a hang). Real queuing waits for a reason to exist |
+| 6.3.5 | **The clock** (not in the original plan) | JARVIS's pulse stops depending on the user opening a terminal | ✅ `serve/scheduler.py` — consolidation every 6h, guarded projection refresh. See the note under row 0 below |
+
+**Practical Exercise:** ✅ done — `curl -H "Authorization: Bearer $(python3 scripts/hearth.py --token)"
+http://127.0.0.1:8756/v1/health` and `python3 scripts/jarvis_client.py "…"`.
+
+**Not done, and named honestly:** no WebSocket, no multi-client fan-out, no reachability beyond
+loopback (Tailscale is step 9), no remote approval. `GET /v1/health` is the only other route.
 
 ---
 
@@ -206,6 +229,63 @@ repeating yourself once.
 
 ## Sub-Phase 6.10: Ambient Presence Tier ⬜
 
+> **REFRAMED 2026-09-06: ambient is a DELIVERY CHANNEL, not a destination.** `JARVIS_ENDGAME.md`
+> §1.2 established that all four §1.1 goals reduce to one organ — unprompted surfacing over the
+> user's own history — and that ambient presence is how that organ reaches them, not a fifth goal
+> standing alongside it.
+>
+> The practical consequence is a **hard ordering**: ambient presence is worth exactly as much as the
+> surfacing organ has to say. A phone that is always listening and never has anything worth raising
+> is a novelty with a battery cost. **Build 6.10 only after the organ demonstrably produces
+> insights worth interrupting someone for** — measured, not assumed.
+>
+> Current state of that organ: `agent/life_state_monitor.py` has surfaced **3 insights, ever**, all
+> on 2026-06-18. It was starved for 80 days by the deadlock described in row 0 below, fixed
+> 2026-09-06. Whether it produces anything worth hearing at a sustained rate is now measurable and
+> **unmeasured** — that measurement is the real gate on this sub-phase, not 6.1–6.9.
+>
+> **2026-09-08 — the organ now has a pulse, and that is a smaller claim than it sounds.**
+> `serve/scheduler.py` (shipped with 6.3's hearth) runs the consolidator every 6 hours from the
+> capture stream, so the feed no longer depends on the user opening `--ask`. **Nothing about
+> delivery changed:** surfacing still happens only at SessionStart, so the user still has to open
+> something to hear it. Step 7 made the *pulse* independent of attention; making the *delivery*
+> independent is step 8 (Telegram push). Do not read "the clock ships" as "ambient works".
+>
+> **⛔ 2026-09-08 — THE GATE MEASUREMENT FAILED.** The clock ran the consolidator three times
+> and produced zero new insights. `consolidate.py --dry-run`: `turns=115 domains=5` **`links=0`**,
+> down from 1 link at 115 vs 75 turns. Neither the 0.60 floor nor the plumbing was the constraint.
+>
+> **✅ 2026-09-09 — DIAGNOSED, AND THE DETECTOR IS REPLACED.** The old detector was not
+> under-tuned; it was measuring turn counts and could only fire when a domain *declined*
+> (`b_recent < 0.6 × b_earlier`). Numerator grows with every captured turn, denominator is a
+> frozen slice of history — so its ability to say anything **decayed toward zero the more JARVIS
+> was used.** Its three lifetime "insights" were one volume shift restated three times, and its
+> `70%` confidence was just the cap on a hand-rolled sum. `agent/tension.py` replaced it (KB 571).
+>
+> **What is now PROVEN, on real history, with no hand-feeding:**
+> ```
+> KB 461  →  retrieved KB 429 at rank 1  →  REVERSES  0.95  →  SURFACED
+> KB 518  →  retrieved KB 509 at rank 1  →  NONE            →  silent
+> ```
+> KB 461 genuinely contradicted KB 429; a human did not notice until KB 463, days later. The
+> detector produces: *"This reverses KB 429 (2026-07-20): blocks specialists based on the absence
+> of evidenced personal data, contradicting Prior 429's explicit retraction of the premise that
+> personal corpus absence should delay specialist training."* **That is §1.2's promised sentence,
+> generated unprompted.** And KB 518 — near-identical in shape, but reversing on genuinely new
+> grounds, which it says outright — correctly stayed silent. That discrimination is the design.
+>
+> **What is STILL NOT measured, and this is what 6.10 remains gated on.** A 26-candidate replay
+> over recent material (KB since 2026-08-14, queue since 09-05) returned **0 findings** — funnel:
+> `26 candidates → 26 judged (0 lacked priors) → 26 NONE`. Retrieval is healthy; the judge simply
+> found no tension. That is *plausibly correct* — those candidates are build-log entries
+> ("STEP 4 SHIPPED") and short approvals ("go ahead"), neither of which contradicts anything. But
+> it means the SUSTAINED RATE is unknown: one proven catch is not a cadence.
+>
+> **So the gate has moved from "structurally impossible" to "demonstrated once, rate unmeasured."**
+> Step 8 (Telegram push) stays blocked until a few weeks of scheduled running show whether real
+> catches arrive often enough to justify a channel. Watch `.hearth_jobs.json` and the feed; the
+> `ScanReport` funnel now makes a zero explain itself rather than being ambiguous (KB 573).
+
 **Goal:** Make JARVIS continuously present without a continuously-running GPU. This sub-phase
 exists because *"can really live with me"* and ENDGAME §2's *"cold-wake only"* are in direct
 conflict — continuous 4× A5000 hosting is **~₹8.0 lakh/year** against a Year-1 envelope of
@@ -230,6 +310,54 @@ real wake-up counts, and confirm the ceiling actually stops it.
 
 ---
 
+## Connectivity decisions (2026-09-08, user-confirmed)
+
+Settled while planning the omnipresence architecture. Recorded here because each one changes a
+sub-phase below.
+
+| # | Decision | Effect |
+|---|---|---|
+| 1 | **Third-party servers may call JARVIS** — wanted as a capability, not a near-term use | New final step: a **scoped outbound token** (`ask:readonly`, no tools, no memory writes, no spend), rate-limited, revocable, logged in the Intent Ledger. Deliberately LAST — exposing a system whose permission layer currently fails open is the one thing that must not happen early |
+| 2 | **The restaurant call stays.** My objection was US-centric and I withdrew it: India has no bot-disclosure statute for a personal agent placing a call, and TRAI's UCC framework governs *marketing*, not this | Requirement that replaces the objection: **a call must end in verifiable confirmation** (callback, SMS, or booking reference) or it reports failure. A booking you wrongly believe succeeded is worse than none. The user's own framing of the failure register — *"They hung up on me, sir."* — is now the worked example in `VOICE_SPEC.md` |
+| 3 | **Device-key storage gets an interface now**, implemented as a plain file | Free today, expensive later: moving to OS keychain / Android Keystore / iOS Secure Enclave after devices are enrolled means re-enrolling all of them. Broader host-compromise threat model is deliberately deferred until JARVIS is complete |
+| 4 | **Telegram now → native Android later. iOS dropped.** | Android: Firebase Cloud Messaging is free, Play Store is a **one-time $25**. iOS is **$99/yr ≈ ₹8,300 — 38% of the conservative annual envelope**, for one user, on an envelope with no hosting line. 6.9 client-shell order is therefore: Telegram bot → browser PWA → native Android. Not iOS |
+| 5 | **GraphRAG (4.6) is promoted from deferred to required** | See below — it is the completion of the context design, not an optional retrieval upgrade |
+
+### Storage vs index — the distinction that fixes row 0b's cousin
+
+Settled in the same session, after the question *"context storage is GraphRAG, what about memory
+storage — SQLite?"* GraphRAG is **not** storage. It is one of four **indexes**, and conflating the
+two is what produced the live drift recorded below.
+
+| Layer | Role | State |
+|---|---|---|
+| **Storage** — authoritative, the only thing that is *true* | append-only log | `knowledge_base.jsonl` + the new Context Ledger |
+| **Index** — derived, disposable, rebuildable | semantic | ChromaDB ✅ |
+| | token-level | ColBERT ⏭ (concept learned, skipped on storage cost) |
+| | **graph / multi-hop** | **GraphRAG ⏭ NOT BUILT — now required** |
+| | keyword | BM25 ✅ |
+| | structured | `cognitive_index.sqlite3` ✅ |
+
+**The log must stay JSONL and must not move into SQLite.** Append-only JSONL has a property SQLite
+does not: *concatenation is merge*. Two devices append to their own segments, the files concatenate,
+and the result is correct with no conflict resolution — that is the entire basis of the coherence
+design. A SQLite file is a binary B-tree; two devices writing it produce a conflict git cannot merge.
+
+**LIVE BUG THIS EXPLAINS:** `knowledge_base.jsonl` = 544 entries, `cognitive_index.sqlite3` = 533,
+`cognitive_profile.md` header = 533. All five artifacts are git-tracked, **including the derived
+ones**. Syncing a projection as if it were authoritative is how a mind forks on a single machine
+with nothing noticing. Fix: untrack the projections, rebuild locally, stamp them with the log prefix
+they were built from. `cognitive_index.py:198-203` already declares itself "derived and disposable."
+
+**Why 4.6 GraphRAG is now required, not deferred.** Its trigger was *"first KB-logged multi-hop
+retrieval failure."* That trigger is met by argument rather than incident: unbounded *recall* is
+achievable by the Context Ledger, but retrieval is query-shaped, and the one thing it cannot serve is
+**connecting two distant facts when you did not know to look for either**. That is multi-hop, it is
+Layer 3's stated job, and it is precisely ENDGAME §1.2's moat sentence — *"it cannot fire when you
+did not know to ask."* GraphRAG is the last piece of the context design, not an optional upgrade.
+
+---
+
 ## Distance to Goal
 
 > **The scoreboard.** Progress is reported against *this*, not against corpus statistics. Corpus
@@ -238,9 +366,11 @@ real wake-up counts, and confirm the ceiling actually stops it.
 
 | # | Requirement (ENDGAME §1.1) | State |
 |---|---|---|
-| 1 | Reasoning core reachable end-to-end | ✅ Stage 4 closed, Final Boss 8/8 |
+| **0** | **Used at all — reached for, not just built** | 🔴 **19 `--ask` sessions lifetime; 0 in the last 30 days; last use 2026-08-03** |
+| **0b** | **Proactive surfacing alive — the actual differentiator (§1.2)** | 🟡 **Unstarved 2026-09-06 after 80 days dead. 3 insights surfaced ever, all 2026-06-18. Rate now measurable, still unmeasured** |
+| 1 | Reasoning core reachable end-to-end | ✅ Stage 4 closed — Final Boss 8/8 **offline scripted twin**, not a live run |
 | 2 | Corpus assembled for the trained adapter | ✅ 2,143 engineer + 921 personalization records |
-| 3 | **Adapter actually trained** | ⛔ **BLOCKED — no RunPod account (zero `RUNPOD_*` env vars)** |
+| 3 | **Adapter actually trained** | ⬜ Not started. Gated on row 0 by the user's own condition (corpus richness / value before spend), not blocked |
 | 4 | Adapter deployed and serving | ⬜ Stage 5.4 |
 | 5 | Voice in / voice out | ⬜ 6.1 |
 | 6 | Vision in | ⬜ 6.2 |
@@ -249,9 +379,44 @@ real wake-up counts, and confirm the ceiling actually stops it.
 | 9 | Web / desktop / phone clients | ⬜ 6.9 |
 | 10 | Ambient — always-on tier, cameras + mics live | ⬜ 6.10 |
 
-**Row 3 is the whole critical path.** Rows 4–10 are all downstream of it, and it is not blocked on
-engineering — it is blocked on a signup. Every hour spent deepening the corpus improves row 2, which
-is already green.
+**Row 0 added 2026-09-06, and it precedes everything.** An external audit named the failure mode —
+*"a platform in search of a repeated job"* — and checking it took one command: `conversations/` holds
+19 real sessions, the last on 2026-08-03, against 535 captured turns of *building* JARVIS in the same
+period. The system had not been opened in a month and **nothing in this repo noticed**, because every
+other instrument here counts construction. `conversations/` was the only usage log and had no reader.
+
+It has one now: `brain/usage.py` reports days-since-last-use into the boot inhale, so JARVIS states
+its own disuse in the first block of every session. That number gets worse while you build and
+better only when you use — the one metric here that does not reward construction.
+
+**Row 0b added 2026-09-06, and it explains row 0 mechanically.** Chasing "what job does this do
+daily?" led to `agent/life_state_monitor.py` — the proactive-surfacing daemon, the one capability
+that survives the frontier-subscription counterfactual (ENDGAME §1.2). It was dead:
+
+```
+Consolidator runs only inside Mind's heartbeat (mind.py:349)
+  -> Mind boots only on `--ask`   -> unused 35 days
+    -> life_state_feed.jsonl frozen at 3 entries from 2026-06-18
+      -> life_state_monitor fail-closes, surfaces nothing
+        -> JARVIS has nothing proactive to say
+          -> no reason to open `--ask`
+```
+
+**A closed loop: the capability that justifies the system was starved by not using the system.** The
+fix was small — `CrossDomainCorrelationEngine` already reads `observation_queue.jsonl`
+(`correlation.py:86`), the Claude Code stream, and was never `--ask`-specific. Nothing simply called
+it. `scripts/consolidate.py` plus a `Stop` hook now do, once a day, deterministically, at ₹0.
+`Mind`'s heartbeat is untouched, so both sources feed one organ.
+
+**Do not read row 0b as solved.** Unstarving it is not the same as it being useful. The 0.60 surface
+floor is epistemic control and on the day of the fix the best live link scored 0.592 and correctly
+produced nothing. Whether real insights clear that bar at a worthwhile rate is the open measurement
+— and it gates 6.10 (see the reframe above) more than any of 6.1–6.9 do.
+
+**Rows 4–10 remain downstream of row 3.** But row 3 is downstream of **row 0**: training an adapter
+for a system nobody opens buys a better version of something unused. Two earlier framings on this
+line were wrong and are corrected here — row 3 was never "blocked on a signup" (it is a deliberate
+user-set gate), and row 1's ✅ means an offline scripted harness passed, not that a live system ran.
 
 ---
 
