@@ -7,6 +7,40 @@
 
 ---
 
+## ⚠️ PRIOR QUESTION, OPENED 2026-09-06: does this stage need to happen at all?
+
+An external audit (GPT 5.6 Terra) forced the counterfactual — *what does JARVIS give the user that a
+frontier subscription does not?* — and exactly one answer survived it: **unprompted surfacing over
+their own history.** A frontier model matches everything else the moment you paste the right
+context; it cannot fire when you did not know to ask. `JARVIS_ENDGAME.md` §1.2 now records this as
+the differentiator, and shows all four §1.1 goals collapsing into that single organ.
+
+**That organ requires no trained adapter.** It runs on the KB, `agent/consolidator.py` and
+retrieval — Stage 2/3 machinery, already built and now actually running (`scripts/consolidate.py`,
+2026-09-06).
+
+So the deliverable in `JARVIS_ENDGAME.md` §1.1 point 1 — *"trained, not injected"* — is
+**demoted from settled goal to OPEN QUESTION.** It is not cancelled and this stage is not deleted;
+what changed is that the prior question is now unanswered:
+
+> **Does a trained adapter beat the already-built retrieval + surfacing path, on the user's real
+> recurring work?**
+
+Nobody has tested it. Testing it costs nothing and is a strict prerequisite to the ₹1,480–2,960
+Engineer training run, because a "yes" and a "no" imply completely different next quarters.
+
+Two measurements that make this urgent rather than academic:
+- **`--ask` has 19 sessions lifetime and 0 in the last 30 days** (`brain/usage.py`, row 0 of the
+  Stage 6 Distance-to-Goal table). Training an adapter for a path nobody opens buys a better version
+  of something unused.
+- **The Stage-4 Final Boss that "closed" the prerequisite stage is an offline scripted twin** — fake
+  embeddings, scripted conflicts, zero live calls. Real end-to-end behaviour is untested.
+
+**Do not start 5.1 on RunPod until the open question above has an evidenced answer.** Everything
+below remains the correct recipe *if* the answer is yes.
+
+---
+
 ## Overview
 
 | Sub-Phase | Name | Core Concept | Definition of Done |

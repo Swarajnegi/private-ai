@@ -8,7 +8,22 @@
 
 ## 📍 Current Position
 
-**Stage 3 -- Agent Framework: `jarvis_core/agent/` from scratch** in progress. Stage 2 (Memory Layer) closed 2026-05-03. **Sub-Phase 3.0 Entry Sprint COMPLETE** (2026-05-16): RegistryBase[T] + CostTracker + Tool ABC. **Sub-Phase 3.1 Function Calling & Structured Output COMPLETE** (2026-05-18, all 7 lessons verified by /next audit; parser.py + errors.py + state.py + telemetry.py + exercise_3_1.py shipped). **NOW: Sub-Phase 3.2 Tool Design & Registration** — build 10+ composable tools wrapping `jarvis_core/memory/` primitives + calculator + web search + code exec + file I/O + shell on the 3.0 registry.
+**Stage 5 — Domain Specialists. ⬅️ CURRENT, not yet started.**
+
+Stages 1–4 are complete: Memory closed 2026-05-03, Agent Framework closed with Final Boss 7/7 and
+First Light 2026-06-11, Orchestration closed 2026-07-27 with Final Boss 8/8 PASS (offline, ₹0).
+
+**Next task:** 5.1 Fine-Tuning Basics on RunPod, then the Engineer QLoRA adapter on a shared
+Kimi K2.6 base. The delay is a **deliberate gate, not a blocker** — the user's stated condition is
+corpus richness before spending ~₹2–3K on a training run (KB `corpus_richness_before_spend`).
+Open corpus work: `SFT_SPEC.md`'s 600 instruction/response pairs, and `experience_map.md`
+Parts 3–4.
+
+> **Maintenance note (2026-09-03).** This paragraph read *"Stage 3 … NOW: Sub-Phase 3.2"* until
+> today, contradicting the stage table directly below it. Prose status headers rot; the structured
+> tables get maintained. **If this paragraph ever disagrees with the stage table below, the table
+> wins** — and the paragraph is the thing to fix. `JARVIS_ENDGAME.md` §7 had the identical defect
+> (it claimed Stage 2) and now defers to this file for all status.
 
 ---
 

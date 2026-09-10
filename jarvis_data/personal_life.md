@@ -1,11 +1,21 @@
 # Personal Life — Private Notes
 
-> LOCAL ONLY. Not git-tracked (see `.gitignore`) — deliberately kept off the public repo since this
-> file names real third parties (family, partner, friends) who haven't consented to public
-> visibility, and is more personally identifying than the philosophy/ambition content already in
-> the public KB. Does NOT sync to the personal laptop automatically under the current all-public-
-> GitHub sync model — see the Stage 6.7 "Always-Reachable Memory Backend" gap (KB 452) for why a
-> better sync mechanism would actually help here, not just be architecturally tidy.
+> **TRACKED, in a private repo, by the user's 2026-08-26 decision** ("everything is I want everything
+> in git, even the training corpus, personal info etc. It is priv now"). It syncs to the personal
+> laptop by ordinary `git pull` like everything else.
+>
+> This header previously read "LOCAL ONLY, not git-tracked." That was true at creation and false
+> after the policy change; it is corrected here rather than silently deleted, because the reasoning
+> it carried still governs what gets *added*. This file names real third parties — family, partner,
+> friends — who did not consent to being written down anywhere, and it is more personally
+> identifying than the philosophy and ambition material already in the KB. Private is not secret: a
+> repo can be forked, granted to someone later, or flipped public by accident, and git history is
+> hard to purge. Add only what serves the model, and keep third-party detail to the minimum that
+> makes the user's own context legible.
+>
+> Note that this file is ingested whole into the personalization corpus
+> (`personalization_corpus.py` → `iter_personal_life_records`), so this header is itself training
+> data — which is why it must state the true storage situation rather than a stale one.
 >
 > Started 2026-08-15, at the user's own initiative ("point this mirror at other rooms").
 

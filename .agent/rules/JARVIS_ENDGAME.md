@@ -39,6 +39,44 @@ summoned. In the user's own framing:
 blend ratios, char share) are *instrumentation for step 1* and must always be framed as such — see
 §7's Distance to Goal and `stage_6_integration/ROADMAP.md`.
 
+### 1.2 THE DIFFERENTIATOR — what JARVIS does that a subscription cannot
+
+> **Added 2026-09-06**, after an external audit (GPT 5.6 Terra) concluded JARVIS is not the vehicle
+> for three of the four goals above, and forced the question: *what survives the counterfactual of
+> simply paying for a frontier model?* Everything the audit tested lost — reasoning, context,
+> knowledge, even personalization. **One thing survived.**
+
+**A frontier model does all of it *if you paste the right context*. It cannot fire when you did not
+know to ask.** Pasting requires knowing what you forgot. That gap is the entire moat, and it is not
+a gap you can subscribe your way out of.
+
+So the capability is **unprompted surfacing over your own history** — and every goal in §1.1
+reduces to it:
+
+| Goal | The one sentence JARVIS must say, unprompted |
+|---|---|
+| Work leverage | *"This reverses your July call. The reason you gave then was Y, and nobody addressed it."* |
+| Frontier R&D | *"You tried this optical approach in March. It failed on brightness."* |
+| Learning | *"You have been confused by this exact concept twice before."* |
+| Ambient presence | — **not a goal.** It is the *delivery channel* for the three above |
+
+**Four goals collapse into one organ plus one channel.** That is dramatically smaller than the
+twelve-specialist roster in §3, and it is the part of this architecture that already half-exists:
+`agent/consolidator.py` → `life_state_feed.jsonl` → `agent/life_state_monitor.py`.
+
+**It also does not require the trained adapter** — it runs on the KB, the consolidator and
+retrieval, all Stage 2/3 machinery already built. Which is why §1.1 point 1's *"trained, not
+injected"* is now recorded as a genuinely **open question** rather than a settled deliverable. See
+`stage_5_specialists/ROADMAP.md`.
+
+**The deadlock this was found in (fixed 2026-09-06, KB 531/532).** The organ had surfaced 3 insights
+ever, all on 2026-06-18, then went silent — because `Consolidator` ran only inside `Mind`'s
+heartbeat, `Mind` boots only on `--ask`, and `--ask` had not been used in 35 days. The feed froze,
+the daemon fail-closed, JARVIS had nothing proactive to say, and so there was no reason to open
+`--ask`. **The capability that justifies the system was starved by not using the system.** Broken by
+`scripts/consolidate.py` + a `Stop` hook, driving the same consolidator from the capture stream that
+is written every turn; `Mind`'s heartbeat is untouched and still feeds the same organ.
+
 ---
 
 ## 2. THE HARDWARE TOPOLOGY (Cloud-First, Edge-Augmented)
@@ -60,7 +98,11 @@ JARVIS operates on a **cloud-first, prepaid infrastructure**. Earlier drafts of 
 - **Phase 5:** Same pods, heavier usage during fine-tuning weeks (~₹3,000-6,000/month)
 - **Billing model:** prepaid credits ONLY. No post-paid billing, no auto-recharge by credit card. Out-of-credits = jobs fail closed (correct behavior; better than silent overage).
 - **Top-up cadence:** manual, on-demand. Set a low-balance email alert at ~20% of last top-up.
-- **Privacy:** only the final prompt (query + 5 retrieved chunks) leaves the local machine. The knowledge base, raw research papers, and embeddings stay local.
+- **Privacy — CORRECTED 2026-09-06, this line was false for months.** It previously read *"only the final prompt (query + 5 retrieved chunks) leaves the local machine."* An external audit checked it against the code and it was not true. What actually leaves on every real `--ask` call is the query, the retrieved chunks, **and the boot inhale** — up to ~4.3 KB composed by `brain/context_injector.py`, of which ~2.5 KB is the cognitive profile and ~2.4 KB is the cross-chat activity digest. `boot.py` puts that in the system prompt; `mind.py` sends it to OpenRouter.
+  - **This is deliberate and it is the product.** A JARVIS that does not know its owner is a worse ChatGPT. The user's own self-assessments, cognitive patterns and working style are theirs to send, and sending them is the point — measured 2026-09-06, the shipped slice contains **zero third-party names** (`personal_life.md` is not a provider; the profile is synthesized from the KB).
+  - **The line that IS enforced** is not personal/impersonal but *yours to send / not yours to send*: `brain/outbound_policy.py` strips employer and client identifiers from every provider's output before it leaves, and reports what it removed via `InhaleResult.redacted`. Terms derive from `client_work/` directory names, so a new client project is covered without editing code. That is an employment and contract boundary, the same one `client_work/` already draws — not a privacy preference.
+  - **Why the guarantee rotted:** it existed only as prose, with no place in the code that could enforce or violate it, while `context_injector.py` carried a *passing* test asserting the profile reaches the prompt. Both artifacts looked true for months. The enforcement point now exists and `outbound_policy.py`'s T1 canary fails if a client identifier survives — the guarantee is testable rather than merely written. Same failure class as KB 521/527.
+- Local and never sent: the knowledge base, raw research papers, embeddings, `client_work/`, and `personal_life.md`.
 
 ### RunPod GPU Selection (Verified Pricing, May 2026)
 
@@ -141,6 +183,17 @@ reasoning happens elsewhere and only when summoned. Build targets live at
 **Architecture:** all 12 specialists ship as **QLoRA adapters (~150-500 MB each)** on top of the **shared Kimi K2.6 base**. The Orchestrator loads ONE adapter at a time onto the always-resident base; adapter swap is ~2-5 seconds vs. 10-20s for separate dense model loads. This is the 2026-correct recipe per DeepSeek V4 / Kimi K2.6 / GLM-5.1 distillation patterns and On-Policy Distillation research (arxiv 2602.12125): merged-adapter pattern beats separate dense fine-tunes at ~80% lower training cost.
 
 **The moat is personalization, not parameter count.** Each adapter's value comes from being trained on the user's private corpus — code, KB entries, trade journal, research notes, error logs — not from beating Opus 4.7 zero-shot on MMLU. See KB Decision tagged `specialists, personalization, moat`.
+
+> **⚠️ THE WHOLE ROSTER IS NOW AN OPEN QUESTION (2026-09-06).** §1.2 established that all four
+> §1.1 goals reduce to **one organ** — unprompted surfacing over the user's own history — which
+> needs **no adapter at all**, let alone twelve. Nothing below has a demand signal except Engineer
+> (real day-to-day use) and possibly Analyst; ten of the twelve have been ⏸️ Deferred since
+> 2026-08-10 and none has moved since.
+>
+> Read this section as **architecture that would be correct IF a specialist were justified**, not as
+> a build plan. The prior question — whether *any* trained adapter beats the already-built retrieval
+> and surfacing path — is unanswered, and answering it is cheaper than training anything. Do not
+> cite roster completeness as a reason to build.
 
 **TWO SEPARATE MOATS (Decision 2026-07-18, REVISED — corrected here 2026-08-10 after this doc briefly re-derived and contradicted it):**
 1. **Domain genius** = seed model + PUBLIC corpus (MedGemma, IEEE standards, PubChem, DeepSeekMath-V2, etc. — the Adapter Seed column below). Needs **zero personal data** — a specialist can be genuinely competent from public distillation alone, any time.
@@ -348,16 +401,28 @@ JARVIS does not just "run cron jobs." It executes intelligent loops while the us
 
 ## 7. BUILD PHASES
 
-| Phase | Duration | What Gets Built |
-|-------|----------|----------------|
-| **1 (Systems Python)** ✅ | 2-3 months | Async, generators, context managers |
-| **2 (Memory Layer)** 🔄 | 1-2 months | Embeddings, ChromaDB, chunking, hybrid search |
-| **3 (Agent Framework)** | 1-2 months | Tool-calling, planning agents, ReAct pattern |
-| **4 (Orchestration)** | 2-3 months | Router, Aggregator, GraphRAG, dynamic model loading |
-| **5 (Specialists)** | 2-3 months | Fine-tuning (LoRA), domain-specific models |
-| **6 (Integration)** | 1-2 months | Voice, vision, unified API, JARVIS MVP |
+> **⚠️ THIS FILE OWNS ARCHITECTURE, NOT PROGRESS.** Corrected 2026-09-03. Until that date this
+> section read *"Current Position: Stage 2, Sub-phase 2.5"* — four months and three stages stale,
+> because nothing re-checks a status sentence when the status changes. An external audit
+> (GPT 5.6 Terra, 2026-09-03) tripped on exactly this and reported a wrong project state.
+>
+> **The single source of truth for stage status is
+> [`js-learning/JARVIS_MASTER_ROADMAP.md`](../../js-learning/JARVIS_MASTER_ROADMAP.md)** and the
+> per-stage `ROADMAP.md` files under `js-learning/stage_*/`. The table below is a summary that will
+> drift again; when it disagrees with the roadmap, **the roadmap wins.** Sections 1–6 above are
+> architecture and remain current — they do not carry status.
 
-**Current Position:** Stage 2, Sub-phase 2.5 (Hybrid Search & Reranking) — 2.5.1-2.5.6 complete; 2.5.7 (LLM-as-Judge) and 2.5.8 (KB Compaction & Expiry) pending.
+| Phase | Status | What Gets Built |
+|-------|--------|----------------|
+| **1 (Systems Python)** | ✅ Sufficient | Async, generators, context managers, object model (1.4/1.5 deliberately deferred) |
+| **2 (Memory Layer)** | ✅ Complete — closed 2026-05-03 | Embeddings, ChromaDB, chunking, hybrid search, cross-encoder rerank, KB compaction |
+| **3 (Agent Framework)** | ✅ Complete | Tool ABC + registry, planner (DAG/Kahn), ReAct loop, MemGPT paging. Built from scratch in `jarvis_core/agent/` per Decision 2026-05-13 |
+| **4 (Orchestration)** | ✅ Complete — closed 2026-07-27 | Router (84% frozen gate), model-pool failover, aggregator, epistemic control. Final Boss 8/8 PASS offline, ₹0. 4.6 GraphRAG ⏭ deferred, trigger-gated |
+| **5 (Specialists)** | ⬅️ **CURRENT — not started** | Engineer-first QLoRA adapter on a shared Kimi K2.6 base. Next task: 5.1 Fine-Tuning Basics on RunPod |
+| **6 (Integration)** | Scoped, not started | Voice, vision, unified API, client shells (6.9), ambient presence tier (6.10). 6.1–6.6 self-flagged as stale pre-Stage-3 drafts |
+
+**Current Position:** Stage 5 — Domain Specialists. Stages 1–4 complete. Stage 5 not yet started;
+the gate is deliberate (corpus richness before RunPod spend), not a blocker.
 
 ---
 
