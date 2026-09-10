@@ -271,6 +271,7 @@ class Mind:
             enable_cot_monitor=self._enable_monitor,
             memory_manager=self._memory,
             auto_retrieve_top_k=self._auto_retrieve_top_k,
+            compactor=self._compactor,
         )
         try:
             return await loop.run(task, history=history, plan=plan)
@@ -305,15 +306,17 @@ class Mind:
     # ---- step 4: working-memory compaction (3.5.9) -----------------------
 
     async def _maybe_compact(self, react: ReActResult) -> bool:
-        if self._compactor is None or not react.messages:
-            return False
-        try:
-            if not self._compactor.should_compact(react.messages):
-                return False
-            result = await self._compactor.compact(react.messages)
-            return bool(result.compacted)
-        except Exception:
-            return False
+        """Report whether the LOOP compacted. It no longer compacts here.
+
+        REWRITTEN 2026-09-08. This method used to run the compactor itself,
+        after _run_react had already returned — a position where it could not
+        possibly help: every oversized request had already been sent, and the
+        list it compacted was discarded on the next line (it returned
+        `bool(result.compacted)` and dropped `result.messages`). Compaction is
+        now done by ReActLoop before each send, which is the only place a
+        smaller list changes what the provider receives. This is a read.
+        """
+        return react.compactions > 0
 
     # ---- step 5: heartbeat-gated consolidation (criteria 5,7) ------------
 

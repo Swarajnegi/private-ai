@@ -143,7 +143,7 @@ class OpenRouterTarget(RouteTarget):
         self,
         model: str = "",
         *,
-        budget_usd: float = 0.10,
+        budget_usd: Optional[float] = None,   # None = no ceiling (2026-09-07)
         name: Optional[str] = None,
         client: Optional[Any] = None,
         registry: Optional[ProfileRegistry] = None,

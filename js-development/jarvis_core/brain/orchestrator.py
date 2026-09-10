@@ -90,7 +90,35 @@ from jarvis_core.brain.permgate import (
 from jarvis_core.brain.session_writer import SessionMemoryWriter, SessionRecord
 
 _IST = timezone(timedelta(hours=5, minutes=30))
-_DEFAULT_BUDGET_USD = 0.10
+# None = NO per-question ceiling (user directive 2026-09-07). CostTracker,
+# build_llm_call and RoutingConstraints all treat None as "unbounded" already.
+#
+# WHY IT WAS REMOVED: at $0.10 a hard question spent $0.074 answering and the
+# next one would have died mid-loop. A budget kill mid-ReAct does not produce a
+# cheaper answer, it produces a truncated one — and during the --ask trial that
+# is measurement noise, not thrift.
+#
+# WHAT THIS GIVES UP, stated plainly: with no ceiling, CostTracker.would_exceed
+# and the Stage-4.3.2 downshift both go inert, so a runaway loop is bounded only
+# by ReAct's max-iteration cap, not by spend. Pass --budget 0.50 to restore a
+# fail-closed ceiling for any single run.
+_DEFAULT_BUDGET_USD: Optional[float] = None
+
+# Raised 8 -> 40 (2026-09-07, user directive: "raise it to max, I wanna see
+# JARVIS going all out"). 8 came from model_profiles.DEFAULT_PROFILE and silently
+# beat whatever boot was told, so it — not the dollar ceiling — was the binding
+# constraint on deep questions. Log entry 003 ran 9 tool calls inside those 8
+# rounds and produced a thin answer.
+#
+# WHY A HIGH CEILING IS CHEAP: raising it does NOT force more iterations. A loop
+# that converges stops at TERMINATED_FINAL_ANSWER regardless. Cost and latency
+# rise only on questions that actually want the depth, which is precisely where
+# the old floor was doing damage.
+#
+# NOT unbounded on purpose: with the dollar ceiling removed too, this is now the
+# ONLY hard stop besides the CoT instability monitor. 40 is high enough to be
+# non-binding in practice and low enough that a pathological loop still ends.
+_DEFAULT_MAX_ITERATIONS = 40
 # An independent critic makes ~1 cheap call; cap it at a fraction of the session
 # budget so enabling it widens the combined ceiling to 1.5x, not 2x.
 _CRITIC_BUDGET_FRACTION = 0.5
@@ -296,7 +324,8 @@ def _read_roadmap_status_summary(root: Optional[Path] = None) -> str:
 async def ask(
     question: str,
     llm_call: Optional[Any] = None,
-    budget_usd: float = _DEFAULT_BUDGET_USD,
+    budget_usd: Optional[float] = _DEFAULT_BUDGET_USD,
+    max_iterations: int = _DEFAULT_MAX_ITERATIONS,
     reasoning_effort: Optional[str] = None,
     status_prefetch: bool = False,
     roadmap_root: Optional[Path] = None,
@@ -529,6 +558,8 @@ async def ask(
             tools_mode=("full" if full else "minimal"),
             prebuilt_tools=prebuilt,
             permission_context=p_ctx, ask_handler=p_handler,
+            max_iterations_override=max_iterations,
+            session_id=sess.session_id,
         )
         result = await mind.solve(question, history=hist)
     finally:
@@ -587,9 +618,13 @@ async def ask(
             # never sneak a same-model self-audit through as "independent".
             distinct = bool(cm) and bool(am) and cm.lower() != am.lower()
             if distinct:
+                # The only site that does arithmetic on the budget. With no
+                # ceiling the critic inherits no ceiling — halving None is not
+                # a smaller number, it is a crash.
+                critic_budget = (round(budget_usd * _CRITIC_BUDGET_FRACTION, 6)
+                                 if budget_usd is not None else None)
                 factory = critic_factory or (
-                    lambda m: build_llm_call(
-                        budget_usd=round(budget_usd * _CRITIC_BUDGET_FRACTION, 6), model=m))
+                    lambda m: build_llm_call(budget_usd=critic_budget, model=m))
                 try:
                     critic_client = factory(cm)
                     rgate = ReasoningGate(critic_client)
@@ -1104,7 +1139,7 @@ async def _final_boss_offline() -> Tuple[List[Tuple[int, str, bool, str]], int]:
     return rows, live_api_calls_made
 
 
-async def _final_boss_live(budget_usd: float = _DEFAULT_BUDGET_USD,
+async def _final_boss_live(budget_usd: Optional[float] = _DEFAULT_BUDGET_USD,
                             targets: Optional[List[str]] = None) -> int:
     """LIVE variant -- real models, real (budget-capped) spend. Per the
     precedent set by every prior Stage 4 sub-phase ('the live DoD leg is
@@ -1145,7 +1180,7 @@ async def _final_boss_live(budget_usd: float = _DEFAULT_BUDGET_USD,
     return 1 if failures else 0
 
 
-async def _final_boss(live: bool = False, budget_usd: float = _DEFAULT_BUDGET_USD,
+async def _final_boss(live: bool = False, budget_usd: Optional[float] = _DEFAULT_BUDGET_USD,
                        targets: Optional[List[str]] = None) -> int:
     if live:
         return await _final_boss_live(budget_usd=budget_usd, targets=targets)
@@ -2081,6 +2116,50 @@ def _run_self_test() -> None:
     print("=" * 70)
 
 
+def _ask_via_hearth(question: str, session: Optional[str] = None,
+                    new_session: bool = False) -> int:
+    """Delegate one question to the always-on hearth instead of booting here.
+
+    EXECUTION FLOW:
+    1. Import the stdlib client (scripts/jarvis_client.py — no new deps).
+    2. Stream the hearth's narration to stdout so the terminal looks identical.
+    3. Print the answer, or say plainly that no hearth is running.
+
+    Returns:
+        A process exit code. 1 when no hearth answers — never a silent
+        fallback to in-process, because that would hide which mind answered.
+    """
+    scripts = Path(__file__).resolve().parents[3] / "scripts"
+    sys.path.insert(0, str(scripts))
+    try:
+        import jarvis_client                              # type: ignore
+    except ImportError as e:
+        print(f"  cannot load the hearth client ({e}) — expected {scripts}/jarvis_client.py")
+        return 2
+
+    token = jarvis_client.read_token()
+    if not token or not jarvis_client.is_up(token=token):
+        print("  no hearth is running — start one with:\n"
+              "      python3 scripts/hearth.py --background\n"
+              "  or drop --via-hearth to boot a Mind in this terminal instead.")
+        return 1
+
+    print(f"  via     : hearth at {jarvis_client.DEFAULT_URL} "
+          f"(one process owns the state; this terminal is an adapter)")
+    payload = jarvis_client.ask_streaming(
+        question, jarvis_client.DEFAULT_URL, token,
+        session=session, new_session=new_session)
+    if not payload.get("ok"):
+        print(f"\n  ERROR: {payload.get('error', 'unknown')}")
+        return 1
+    print(f"\n  JARVIS  : {payload.get('answer', '')}")
+    print(f"  confidence: {payload.get('verdict')} ({payload.get('confidence', 0.0):.2f})")
+    for denial in payload.get("denials") or []:
+        print(f"  DENIED  : {denial['tool']} — the hearth has no human to ask; "
+              f"re-run without --via-hearth to approve it")
+    return 0
+
+
 def main() -> int:
     p = argparse.ArgumentParser(description="JARVIS spine v0 (Stage 4.0)")
     p.add_argument("--ask", metavar="QUESTION", help="Ask JARVIS (live, boot-assembled)")
@@ -2132,11 +2211,22 @@ def main() -> int:
                         "target's profile. Default (unset) = a single auto-picked model.")
     p.add_argument("--route-strategy", default="balanced", choices=["balanced", "latency", "cost"],
                    help="Pool selection strategy (default: balanced).")
+    p.add_argument("--max-iterations", type=int, default=_DEFAULT_MAX_ITERATIONS,
+                   metavar="N", dest="max_iterations",
+                   help=f"ReAct iteration ceiling (default {_DEFAULT_MAX_ITERATIONS}). "
+                        "OVERRIDES the per-model profile, which otherwise pins this to its "
+                        "conservative floor of 8 regardless — that floor, not the dollar "
+                        "budget, was the real constraint on deep questions. Raising it does "
+                        "NOT force more work: a loop that converges at 6 still stops at 6. "
+                        "It only removes the ceiling, so cost/latency rise only on questions "
+                        "that genuinely want the depth.")
     p.add_argument("--budget", type=float, default=_DEFAULT_BUDGET_USD, metavar="USD",
-                   help=f"Per-session spend ceiling in USD (default ${_DEFAULT_BUDGET_USD:.2f}, "
-                        "fail-closed). A pricey brain (e.g. Sonnet at $3/$15 per 1M) burns the "
-                        "default in ~2 calls and dies mid-loop before reading broadly — raise "
-                        "this (e.g. 0.60) for a multi-read agentic run on a costly model.")
+                   help="Per-session spend ceiling in USD. DEFAULT: NO CEILING (changed "
+                        "2026-09-07 — the old $0.10 default killed hard questions mid-loop, "
+                        "and a truncated answer is not a cheaper answer). Pass a value "
+                        "(e.g. --budget 0.50) to restore a fail-closed cap for one run. "
+                        "With no ceiling, would_exceed() and the Stage-4.3.2 downshift are "
+                        "inert — a runaway loop is bounded by ReAct max_iterations only.")
     p.add_argument("--route", action="store_true",
                    help="Stage 4.2: classify the query's intent and route to a "
                         "specialist-codename-appropriate model pool (frontier-free). "
@@ -2156,12 +2246,24 @@ def main() -> int:
     p.add_argument("--live", action="store_true",
                    help="With --final-boss: run the LIVE variant (real models, "
                         "budget-capped) instead of the offline twin.")
+    p.add_argument("--via-hearth", action="store_true", dest="via_hearth",
+                   help="Send this question to the running hearth (the always-on "
+                        "process) instead of booting a second Mind in this "
+                        "terminal. OPT-IN, not the default, and the reason is a "
+                        "real capability loss: the hearth has no TTY, so it DENIES "
+                        "every permission prompt (see serve/hearth.py) — an "
+                        "interactive terminal can approve, a socket cannot. Once "
+                        "remote approval exists (the Commitment gate) this becomes "
+                        "the default, because one process owning mutable state is "
+                        "otherwise strictly better than two.")
     args = p.parse_args()
     if args.final_boss:
         tgts = [m.strip() for m in args.targets.split(",")] if args.targets else None
         return asyncio.run(_final_boss(live=args.live, budget_usd=args.budget, targets=tgts))
     if args.awareness:
         return asyncio.run(_awareness())
+    if args.ask and args.via_hearth:
+        return _ask_via_hearth(args.ask, session=args.session, new_session=args.new)
     if args.ask:
         handler = allow_all_ask_handler if (args.full and args.allow_all) else None
         tgts = [m.strip() for m in args.targets.split(",")] if args.targets else None
@@ -2177,6 +2279,7 @@ def main() -> int:
                         aggregate=args.aggregate,
                         aggregate_gate="off" if args.no_aggregate_auto else "on",
                         budget_usd=args.budget,
+                        max_iterations=args.max_iterations,
                         new_session=args.new, session=args.session))
         return 0
     _run_self_test()
