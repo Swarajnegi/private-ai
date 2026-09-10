@@ -58,3 +58,28 @@ rank_bm25==0.2.2             # lexical retrieval — composes with semantic in 2
 
 # -- HTTP client (lessons calling OpenRouter) --------------------------------
 httpx==0.28.1
+
+# -- The hearth (SECOND undeclared-dependency find, same class as bashlex) ----
+# serve/hearth.py::serve() does a hard `import uvicorn`, and agent/tool.py +
+# agent/state.py import pydantic at MODULE level — so without these, the hearth
+# cannot start and the whole agent layer fails to import. Both were installed
+# on this machine only as transitive dependencies of chromadb, which is why
+# nothing ever failed here and the gap stayed invisible.
+#
+# Found 2026-09-11, immediately after NERVOUS_SYSTEM.md and AGENTS.md started
+# telling a NEW machine to run `python3 scripts/hearth.py --background` as a
+# first-run step. That instruction would have failed on a clean venv. Declare
+# what you import directly; never rely on another package's dependency tree to
+# supply it (bashlex, 2026-09-10, was the first instance of exactly this).
+uvicorn==0.46.0
+pydantic==2.12.5
+
+# -- Deliberately NOT pinned here: optional enhancers -------------------------
+# These are guarded by try/except with explicit fallbacks, and are absent on
+# this machine by choice. Listed so a future reader knows the omission is a
+# decision, not an oversight:
+#   dateparser, rapidfuzz  -> agent/temporal.py enhancers; module loads and its
+#                             smoke tests pass without them (_HAVE_* flags)
+#   duckduckgo-search      -> agent/tools/web.py raises a clear ImportError
+#                             naming the install command if a search is tried
+# Install any of them ad hoc if you want the capability; nothing breaks without.
