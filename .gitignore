@@ -40,10 +40,22 @@
 # exclude the raw repo, KEEP the corpus. Their words: "don't push the deepclone
 # code, but remove nothing from the corpus data."
 #
-#   1. client_work/  EXCLUDED. 16 MB of verbatim BUPA DeepClone source — the
-#      framework itself, its git history, its CI config. It also carries its own
-#      .git, so a plain `git add` turns it into a broken gitlink, the same
-#      failure ai_model_repos/OpenClaude had.
+#   1. client_work/  PROJECT FILES EXCLUDED, PER-PROJECT LEARNINGS TRACKED
+#      (revised by the user 2026-09-02; supersedes the blanket exclusion).
+#      Still excluded: 16 MB of verbatim BUPA DeepClone source — the framework
+#      itself, its git history, its CI config. It carries its own .git, so a
+#      plain `git add` would turn it into a broken gitlink, the same failure
+#      ai_model_repos/OpenClaude had. The pattern below keeps that ignored.
+#      Now tracked: each project's own learnings file/folder, because those are
+#      the user's WRITING about the work, not the client's code — and they are
+#      no longer distilled into knowledge/Data Engineering/Data_Engineering_
+#      Lessons.md, which was making that file grow without bound as projects
+#      accumulate. Learnings now live with their project and are cited in place.
+#
+#      Mechanics note: `client_work/` alone could NOT be selectively re-included,
+#      because git cannot re-include a file whose parent DIRECTORY is excluded.
+#      Hence `client_work/**` plus explicit directory re-inclusions. Verified in
+#      a scratch repo against both layouts (nested folder and flat file).
 #
 #   2. jarvis_data/training_corpus/  TRACKED, deliberately and with the tradeoff
 #      understood. 947 of its 3,064 blended records — ~2.58 M chars — ARE client
@@ -60,7 +72,11 @@
 # NOTE: `databricks.yml` at the repo root is NOT client material — it is the
 # user's own JARVIS learning bundle (bundle name "JARVIS", personal workspace).
 # The user guessed it was the client file; checked 2026-08-26, it is not.
-client_work/
+client_work/**
+!client_work/*/
+!client_work/*/session_learnings/
+!client_work/*/session_learnings/**
+!client_work/*/SESSION_LEARNINGS.md
 # =============================================================================
 
 # -- Virtualenv (see header: size + platform-specificity, not privacy) --------
@@ -95,3 +111,90 @@ Thumbs.db
 desktop.ini
 *:Zone.Identifier
 *:sec.endpointdlp
+
+# -- Agent host settings (2026-09-08: LEAK REMEDIATION) -----------------------
+# .claude/settings.json was TRACKED and pushed (commit b7bfbe6) carrying a live
+# github_pat_ inside a permissions allowlist entry — "Bash(GH_TOKEN=\"...\")".
+# The token leaked through an APPROVED COMMAND STRING, not a config value, which
+# is why no secret-shaped config key ever showed up in an audit.
+#
+# .agent/hooks.manifest.json already declared this file "machine-local and
+# gitignored" — that was the intent and it was simply never true. Now it is.
+# bootstrap_jarvis.py rehydrates this file from the manifest, so untracking it
+# loses nothing.
+.claude/settings.json
+.claude/settings.local.json
+
+# -- Derived calibration (a PROJECTION per KB 548) ----------------------------
+# Per-model chars-per-token ratios learned from provider usage.prompt_tokens.
+# Machine-local and regenerable by simply using the system — syncing it would
+# repeat the mistake of git-tracking cognitive_index.sqlite3 and chromadb/,
+# which is how the KB/index count drift (544 vs 533) went unnoticed.
+jarvis_data/token_ratios.json
+
+# -- Context Ledger (per-session verbatim archive of evicted context) --------
+# Append-only spans written before compaction evicts them, keyed by
+# content-addressed handle. Machine-local working memory, not the mind: the
+# authoritative record is knowledge_base.jsonl. Grows with session length and
+# is meaningless on another device (session ids are per-process).
+jarvis_data/context/
+
+# -- Local-only PROJECTIONS (2026-09-08) --------------------------------------
+# Derived from knowledge_base.jsonl and rebuilt where they are read, so syncing
+# them only churns binary diffs and opens staleness windows.
+#   cognitive_index.sqlite3      rebuilt by scripts/profile_synth.py
+#   behavioral_state_model.jsonl rebuilt by agent/correlation.py each consolidation
+# scripts/check_projections.py now detects staleness; brain/projections.py
+# surfaces it in the boot inhale.
+#
+# ⚠️ DELIBERATELY NOT LISTED HERE — do not "finish the job" by adding these:
+#   cognitive_profile.md  }  PROJECTION-AS-TRANSPORT. js-workspace-rule.md:21-22
+#   activity_digest.md    }  tells the personal laptop to READ these at boot, and
+#                            line 25 records why it cannot rebuild them: "there is
+#                            NO per-prompt capture here (Antigravity has no hook
+#                            system)". No local queue => no digest. Untracking
+#                            them BLINDS that machine.
+#   chromadb/               research_papers (156 embeddings) is not regenerable —
+#                            the source PDFs are gitignored too. Only the
+#                            jarvis_memory half rebuilds, via index_memory.py.
+jarvis_data/cognitive_index.sqlite3
+jarvis_data/behavioral_state_model.jsonl
+
+# -- Domain labels (2026-09-08) -----------------------------------------------
+# The AUTHORITATIVE domain label per captured turn, from the embedding classifier.
+# A PROJECTION: rebuilt by `python3 scripts/relabel_domains.py`, idempotent, safe
+# to delete. observation_queue.jsonl is the FACT and is never rewritten -- the
+# labels live beside it precisely so the log stays append-only.
+# Gated by a 28-turn hand-labelled gold set; check_projections.py fails below 80%.
+jarvis_data/domain_labels.jsonl
+
+# -- Hearth runtime (2026-09-08) ----------------------------------------------
+# The hearth is the one always-on process; these three are per-machine facts
+# about THIS host's copy of it, not about the mind:
+#   .hearth_token   a shared secret. Committing it would publish the key to the
+#                   local API — the third credential leak in this project, and
+#                   the first one that would be entirely self-inflicted.
+#   .hearth.pid     a process id. Meaningless anywhere else.
+#   .hearth_jobs.json  last-run times per scheduled job (a PROJECTION: losing it
+#                   costs at most one early run).
+#   hearth.log      detached-mode stdout.
+jarvis_data/.hearth_token
+jarvis_data/.hearth.pid
+jarvis_data/.hearth_jobs.json
+jarvis_data/hearth.log
+
+# -- rfm/ — A SEPARATE REPO, NOT JARVIS CONTENT (2026-09-08) ------------------
+# Working clone of https://github.com/Swarajnegi/dadfinanceapp.git — the user's
+# personal finance app, built primarily on the personal laptop (Antigravity +
+# Codex). It has its own history, its own remote and its own .gitignore.
+#
+# THIRD INSTANCE OF THE GITLINK FAILURE, after ai_model_repos/OpenClaude and
+# client_work/ (see line 46). A nested .git with no ignore rule means a plain
+# `git add -A` here stages rfm as a bare commit-SHA pointer with no .gitmodules
+# entry: git warns and proceeds, and the pointer is unfetchable — on the
+# personal laptop rfm/ then materializes as a permanently empty directory.
+# Submodule was considered and declined: that machine clones dadfinanceapp
+# directly, so a `git submodule update` ritual on every pull buys nothing.
+#
+# Also 9.5 MB of built .apk at the repo root, which is its own reason.
+rfm/

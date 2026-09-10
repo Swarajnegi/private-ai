@@ -37,6 +37,14 @@ numpy==2.2.6
 # -- Vector store ------------------------------------------------------------
 chromadb==1.5.8
 
+# -- Permission classifier (SECURITY-RELEVANT, and it was undeclared) ---------
+# agent/bash_classifier.py parses shell commands into a bashlex AST to decide
+# ALLOW vs ASK vs DENY. Without it the classifier soft-fails to ASK on EVERY
+# command (bash_classifier.py:174) — safe, but it silently destroys the
+# precision the permission gate is supposed to provide, and the only visible
+# symptom was one failing smoke test. Found missing 2026-09-10.
+bashlex==0.18
+
 # -- Document ingestion ------------------------------------------------------
 PyMuPDF==1.27.2.3            # `import fitz` — PDF parsing + image extraction
 aiofiles==25.1.0             # async file I/O for the ingestion pipeline
