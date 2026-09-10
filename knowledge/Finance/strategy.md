@@ -496,6 +496,17 @@ Book is effectively ONE bet (correlation ~0.9; −30% sector ≈ −38% on the U
 
 Dated snapshots of actual holdings (append-only; latest on top). Supersedes the static §2 between full reconciles.
 
+### 2026-07-30 (Live INDmoney Snapshot)
+
+**India MF — ₹35,998.20 invested → ₹42,112.96 (+16.99%)** *(2 funds; tracked via INDmoney)*
+- **1-Day Change:** +₹375.03 (+0.90%)
+- **Total Gain:** +₹6,114.76 (+16.99%)
+
+| Fund | Invested | Value | Gain / Loss | 1D Change |
+|---|---|---|---|---|
+| Invesco India Mid Cap Fund | ₹23,000.00 | ₹26,870.00 | +₹3,870.00 (+16.81%) | +₹187.6 (+0.70%) |
+| Quant Small Cap Fund | ₹12,998.20 | ₹15,250.00 | +₹2,250.00 (+17.30%) | +₹187.5 (+1.24%) |
+
 ### 2026-06-18
 
 **India MF — ₹35,998 invested → ₹40,889 (+13.58%)** *(2 funds; held on Groww, tracked via INDmoney)*
