@@ -1,0 +1,619 @@
+#!/usr/bin/env python3
+"""
+build_sft_pairs.py — turn prose that is already question-shaped into SFT pairs.
+
+LAYER: Tools (corpus assembly — the transform half of Stage 5.1.2 / 5.2.2)
+
+Run with:
+    python3 scripts/build_sft_pairs.py --dry-run    # counts + samples, writes nothing
+    python3 scripts/build_sft_pairs.py              # writes sft_pairs.jsonl + heldout
+    python3 scripts/build_sft_pairs.py --report     # summarise what already exists
+
+=============================================================================
+THE BIG PICTURE
+=============================================================================
+
+`js-learning/stage_5_specialists/SFT_SPEC.md` decided the format, the targets and
+the sources on 2026-08-26, and then nothing built them: `sft_pairs.jsonl` did not
+exist. An external review on 2026-09-09 measured the consequence — 100% of ~1.29 M
+training tokens are raw `{"text": ...}`, so a QLoRA run would push the adapter
+toward "continue this document" and away from "answer this person".
+
+THE KEY INSIGHT IS THE SPEC'S, AND IT IS WHY THIS IS CHEAP: these pairs are
+TRANSFORMED, NOT AUTHORED. `### heading` + body already IS question + answer. A
+bolded lesson already IS the answer to an unasked question. The work is parsing,
+not writing, so nothing here invents content the user did not produce.
+
+=============================================================================
+THE TRAP THIS FILE EXISTS TO NOT SPRING
+=============================================================================
+
+SFT_SPEC.md §5 warned, in 2026-08-26:
+
+    "Do NOT build personalization pairs where the assistant side is MY writing.
+     KB Cognitive_Pattern entries are observations ABOUT the user, authored by
+     me. Training on them teaches the adapter to describe the user in the third
+     person, not to be them."
+
+The warning was scoped to pairs, and the RAW corpus walked into it anyway:
+measured 2026-09-10, 101 of 246 `kb_identity`/`kb_judgment` records (41%) carry
+third-person assistant voice ("PATTERN: ...", "the user prefixed it").
+
+The obvious fix — purge them — is WRONG, and that is the whole design of the
+`kb_verbatim` extractor below. 54% of those records EMBED a quoted utterance of
+the user's own, and some of it is the best voice material in the repository:
+
+    KB 499: "I know not the journey, nor my destination. What I know is how I
+             wanna feel throughout and at the end."
+
+Purging deletes that. So instead the record is SPLIT along the grammatical seam:
+
+    my third-person framing  -> the USER turn   (context; loss-masked, unlearned)
+    the user's quoted words  -> the ASSISTANT turn (the target; learned)
+
+Right content, wrong form — so change the form. A pair is emitted ONLY when a
+verbatim quote is actually present; no quote, no pair, never a paraphrase.
+
+=============================================================================
+THE FLOW
+=============================================================================
+
+STEP 1: Each extractor yields SFTPair objects from one source, carrying the
+        source_path that makes every pair traceable (spec §2).
+        |
+STEP 2: The quality gate drops pairs whose answer states a conclusion with no
+        mechanism — spec §4: "the answer must contain the REASON, not just the
+        fact", because a fact-only answer trains the thing the user rejects.
+        |
+STEP 3: Dedup on a normalised prefix key; overlapping sources collide by design.
+        |
+STEP 4: Carve a ~10% held-out slice BEFORE writing (spec §7/§8.3), so Stage 5.3
+        has something honest to measure against.
+        |
+STEP 5: Report filled-vs-target per bucket. Shortfalls are printed, never
+        padded — a fabricated pair is worse than a missing one.
+=============================================================================
+"""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import random
+import re
+import sys
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any, Dict, Iterator, List, Optional, Tuple
+
+_REPO_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(_REPO_ROOT / "js-development"))
+
+from jarvis_core.config import DATA_ROOT, JARVIS_ROOT, KB_PATH  # noqa: E402
+
+CORPUS_ROOT = Path(DATA_ROOT) / "training_corpus"
+OUT_PATH = CORPUS_ROOT / "sft_pairs.jsonl"
+HELDOUT_PATH = CORPUS_ROOT / "sft_pairs_heldout.jsonl"
+
+_DE_LESSONS = Path(JARVIS_ROOT) / "knowledge" / "Data Engineering" / "Data_Engineering_Lessons.md"
+_CLIENT_WORK = Path(JARVIS_ROOT) / "client_work"
+_JARVIS_CORE = Path(JARVIS_ROOT) / "js-development" / "jarvis_core"
+_LITERATURE = Path(JARVIS_ROOT) / "knowledge" / "literature"
+_EXPERIENCE_MAP = Path(DATA_ROOT) / "experience_map.md"
+
+# Spec §3. Deliberately at the low end of useful: the first run is a measurement.
+TARGETS = {"engineer": 400, "personalization": 200}
+HELDOUT_FRACTION = 0.10
+_HELDOUT_SEED = 20260910          # fixed: the split must be reproducible across runs
+
+_MIN_ANSWER_CHARS = 120
+_MIN_VOICE_CHARS = 60      # a real utterance, not a fragment — voice runs shorter
+_MIN_QUESTION_CHARS = 15
+_MAX_ANSWER_CHARS = 6000
+
+# Spec §4's bar is "the answer must contain the REASON, not just the fact".
+#
+# MY FIRST IMPLEMENTATION OF THIS WAS WRONG, AND WRONG IN THE EXACT WAY THIS
+# REPO SPENT TODAY FIXING ELSEWHERE. It matched a list of connective words
+# (because/since/reason/...) and rejected 106 of 152 curated DE lessons. Every
+# sampled reject carried plain mechanism -- "guarantees they'll drift apart",
+# "nobody does", "is a future regression", and one that literally opened
+# "Reasons:" (which the regex missed anyway, because \breason\b does not match
+# the plural). Rationale has an UNBOUNDED vocabulary; matching keywords against
+# an unbounded space is the same defect as `nse` inside "respo-nse-" in
+# capture.py, and it fails the same silent way.
+#
+# So the gate is STRUCTURAL instead. These sources are hand-written LESSON
+# files: by construction each section already is a lesson with its reason. What
+# genuinely does not belong is a stub, a reference table, or a bare name list.
+_TABLE_ROW = re.compile(r"^\s*\|.*\|\s*$", re.MULTILINE)
+_MIN_SENTENCES = 2
+
+
+def _looks_like_reference_table(text: str) -> bool:
+    """True when the body is mostly a table or a bare list, not prose."""
+    lines = [l for l in text.splitlines() if l.strip()]
+    if not lines:
+        return True
+    table_rows = len(_TABLE_ROW.findall(text))
+    return table_rows >= max(3, len(lines) * 0.6)
+
+
+@dataclass
+class SFTPair:
+    """One training pair. `messages` is the spec's format; the rest is traceability."""
+    user: str
+    assistant: str
+    bucket: str                    # "engineer" | "personalization"
+    source_type: str
+    source_path: str
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+    def to_record(self) -> Dict[str, Any]:
+        return {
+            "messages": [
+                {"role": "user", "content": self.user},
+                {"role": "assistant", "content": self.assistant},
+            ],
+            "source_type": self.source_type,
+            "source_path": self.source_path,
+            "metadata": {"bucket": self.bucket, **self.metadata},
+        }
+
+    @property
+    def cluster_key(self) -> str:
+        """Normalised prefix key — overlapping sources collide by design (spec §7)."""
+        basis = re.sub(r"\W+", " ", self.assistant.lower()).strip()[:220]
+        return hashlib.sha256(basis.encode("utf-8")).hexdigest()[:16]
+
+
+# =============================================================================
+# Part 1: QUALITY GATE
+# =============================================================================
+
+def passes_quality(pair: SFTPair) -> Tuple[bool, str]:
+    """(keep, reason-if-dropped). The gate is the spec's, not taste."""
+    a, q = pair.assistant.strip(), pair.user.strip()
+    if len(q) < _MIN_QUESTION_CHARS:
+        return False, "question too short"
+    floor = _MIN_ANSWER_CHARS if pair.bucket == "engineer" else _MIN_VOICE_CHARS
+    if len(a) < floor:
+        return False, "answer too short"
+    if len(a) > _MAX_ANSWER_CHARS:
+        return False, "answer too long (likely an unsplit section)"
+    if _looks_like_reference_table(a):
+        return False, "body is a reference table, not reasoning"
+    # The sentence floor is a MECHANISM proxy, so it belongs to engineer pairs
+    # only. A personalization pair's target is VOICE: "I know not the journey,
+    # nor my destination" is one clause and is exactly the material wanted.
+    # Applying a mechanism test to voice deleted 36 good pairs on the first try.
+    if pair.bucket == "engineer":
+        if a.count(".") + a.count("!") + a.count("?") < _MIN_SENTENCES:
+            return False, "single-clause answer — no room for a mechanism"
+    return True, ""
+
+
+# =============================================================================
+# Part 2: ENGINEER EXTRACTORS (spec §4 — transformed, not authored)
+# =============================================================================
+
+def _split_md_sections(text: str, level: str = "### ") -> Iterator[Tuple[str, str]]:
+    """(heading, body) for each section at the given heading level."""
+    lines = text.splitlines()
+    heading: Optional[str] = None
+    body: List[str] = []
+    for line in lines:
+        if line.startswith(level):
+            if heading is not None:
+                yield heading, "\n".join(body).strip()
+            heading, body = line[len(level):].strip(), []
+        elif heading is not None:
+            if line.startswith("## ") or line.startswith("# "):
+                yield heading, "\n".join(body).strip()
+                heading, body = None, []
+            else:
+                body.append(line)
+    if heading is not None:
+        yield heading, "\n".join(body).strip()
+
+
+def _as_question(heading: str) -> str:
+    """A heading is an answer's title; make it the question it answers."""
+    h = heading.strip().rstrip(".:").lstrip("#").strip()
+    h = re.sub(r"^\d+[\.\)]\s*", "", h)
+    if h.endswith("?"):
+        return h
+    if re.match(r"^(how|why|what|when|where|which|who)\b", h, re.IGNORECASE):
+        return h + "?"
+    return f"What do I need to know about {h[0].lower() + h[1:]}?"
+
+
+def extract_de_lessons() -> Iterator[SFTPair]:
+    """`### lesson` -> question; body -> answer. Nearly 1:1 (spec §4)."""
+    try:
+        text = _DE_LESSONS.read_text(encoding="utf-8", errors="replace")
+    except (OSError, FileNotFoundError):
+        return
+    for i, (heading, body) in enumerate(_split_md_sections(text)):
+        if not body:
+            continue
+        yield SFTPair(
+            user=_as_question(heading), assistant=body.strip(),
+            bucket="engineer", source_type="sft_engineer",
+            source_path=f"Data_Engineering_Lessons.md#{i}:{heading[:48]}",
+            metadata={"origin": "transformed", "domain": "data_engineering"})
+
+
+_BULLET_START = re.compile(r"^\s*[-*]\s+\*\*")
+_BULLET_LESSON = re.compile(r"^\s*[-*]\s+\*\*(.+?)\*\*[.:—-]?\s*(.*)$", re.DOTALL)
+# A bolded run that is only a date is a journal header, not a lesson.
+_DATE_ONLY = re.compile(r"^(?:\w{3,9}\s+\d{1,2}|\d{4}-\d{2}-\d{2})\s*$")
+
+
+def _iter_bulleted_lessons(text: str) -> Iterator[Tuple[str, str]]:
+    """(bolded claim, continuation) for each `- **claim** body` bullet.
+
+    Two structural facts about this file, both learned by getting it wrong:
+    it is a bulleted list rather than a heading tree (154 bolded lessons against
+    6 `###` headings, so reading it as sections found 6), and MANY bolded claims
+    WRAP ACROSS LINES -- the `**` opens on one line and closes two lines later.
+    A per-line regex matched 93 of 154. So logical bullets are reassembled first,
+    then matched.
+    """
+    blocks: List[str] = []
+    current: List[str] = []
+    for line in text.splitlines():
+        if _BULLET_START.match(line):
+            if current:
+                blocks.append(" ".join(current))
+            current = [line.strip()]
+        elif current:
+            if not line.strip() or line.startswith("#"):
+                blocks.append(" ".join(current))
+                current = []
+            else:
+                current.append(line.strip())
+    if current:
+        blocks.append(" ".join(current))
+
+    for block in blocks:
+        m = _BULLET_LESSON.match(block)
+        if not m:
+            continue
+        claim, rest = m.group(1).strip(), m.group(2).strip()
+        if _DATE_ONLY.match(claim):
+            continue
+        yield claim, rest
+
+
+def extract_session_learnings() -> Iterator[SFTPair]:
+    """A bolded claim IS an answer; the question is what it answers (spec §4)."""
+    for path in sorted(_CLIENT_WORK.glob("*/SESSION_LEARNINGS.md")):
+        try:
+            text = path.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        project = path.parent.name
+        for i, (claim, body) in enumerate(_iter_bulleted_lessons(text)):
+            yield SFTPair(
+                user=_as_question(claim), assistant=f"{claim} {body}".strip(),
+                bucket="engineer", source_type="sft_engineer",
+                source_path=f"{project}/SESSION_LEARNINGS.md#{i}:{claim[:48]}",
+                metadata={"origin": "transformed", "domain": "client_engineering"})
+
+
+def extract_big_picture() -> Iterator[SFTPair]:
+    """A module's THE BIG PICTURE section already explains why it exists (spec §4)."""
+    for path in sorted(_JARVIS_CORE.rglob("*.py")):
+        try:
+            text = path.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        m = re.search(r"THE BIG PICTURE\s*\n=+\s*\n(.*?)(?:\n=+\s*\n|\n\"\"\")",
+                      text, re.DOTALL)
+        if not m:
+            continue
+        body = m.group(1).strip()
+        rel = path.relative_to(JARVIS_ROOT).as_posix()
+        yield SFTPair(
+            user=f"Why does {path.stem}.py exist in JARVIS, and what problem does it solve?",
+            assistant=body, bucket="engineer", source_type="sft_engineer",
+            source_path=f"{rel}#big_picture",
+            metadata={"origin": "transformed", "domain": "jarvis_architecture"})
+
+
+# =============================================================================
+# Part 3: PERSONALIZATION EXTRACTORS (spec §5 — the assistant side must be THEIRS)
+# =============================================================================
+
+# An ATTRIBUTED quote: a marker naming the user's speech, then the quoted run.
+#
+# THE FIRST VERSION OF THIS WAS BADLY WRONG and produced 112 junk pairs that all
+# passed the quality gate. It accepted any quoted-looking span, so the APOSTROPHE
+# in "generator's yield" opened a quote and the pair began mid-word: "s yield
+# (loading current document)". Worse, the captured text was technical KB prose,
+# not the user's voice at all -- the exact opposite of what this extractor is for.
+# The tell was in the report and I nearly missed it: 124 found, ZERO dropped.
+#
+# Requiring attribution collapses it to 12 entries. Twelve real utterances beat a
+# hundred fabricated ones, and the honest count is the point of this whole file.
+_ATTRIBUTED_QUOTE = re.compile(
+    r"(?:VERBATIM|verbatim|user said|their words|user asked|user directed|"
+    r"user wrote|in their own words|user's words)\s*[:\-—]?\s*"
+    r"['\"“]((?:[^'\"”]|'(?=[a-z])){40,1200})", re.IGNORECASE)
+
+# Interrogative or imperative openers: a turn that ASKS or ORDERS is not the user
+# explaining their reasoning, and its text cannot serve as an assistant answer.
+_NOT_EXPLANATORY = re.compile(
+    r"^\s*(?:what|how|why|when|where|which|who|is|are|can|could|should|would|do|does|"
+    r"did|will|explain|tell me|give me|show me|build|make|create|write|add|fix|run|"
+    r"go ahead|continue|do it|alright|ok(?:ay)?)\b", re.IGNORECASE)
+# First-person reasoning is the signal that the turn carries the user's own position.
+_FIRST_PERSON = re.compile(
+    r"\b(I think|I want|I feel|I believe|I know|I don'?t|I'?m|my |me |I have|I had|"
+    r"I was|I would|I'?ve|I decided|I realised|I realized)\b")
+
+_MIN_EXPLANATION_CHARS = 320
+
+
+def extract_user_explanations() -> Iterator[SFTPair]:
+    """Long turns where the user EXPLAINS rather than asks (spec §5, 60 pairs).
+
+    The assistant side must be the user's own reasoning, so interrogative and
+    imperative turns are excluded: "build the guard" is an instruction, not a
+    position. What survives is the shape the spec calls out as ideal -- the
+    "unreasonable men" turn, which worked because the user answered at length in
+    their own voice.
+    """
+    queue = Path(DATA_ROOT) / "observation_queue.jsonl"
+    try:
+        handle = queue.open("r", encoding="utf-8")
+    except (OSError, FileNotFoundError):
+        return
+    with handle:
+        for line in handle:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                rec = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            text = str(rec.get("user_text", "")).strip()
+            if len(text) < _MIN_EXPLANATION_CHARS:
+                continue
+            if _NOT_EXPLANATORY.match(text) or not _FIRST_PERSON.search(text):
+                continue
+            if text.count("?") > 2:          # mostly an interrogation, not a position
+                continue
+            ts = str(rec.get("ts", ""))
+            yield SFTPair(
+                user=("Explain your own thinking on this, in your own words and at "
+                      "the length it deserves."),
+                assistant=text[:_MAX_ANSWER_CHARS],
+                bucket="personalization", source_type="sft_personalization",
+                source_path=f"observation_queue.jsonl#{ts}",
+                metadata={"origin": "authored_by_user", "form": "explanation"})
+
+
+def extract_kb_verbatim() -> Iterator[SFTPair]:
+    """The extraction that replaces the purge. See this module's header."""
+    try:
+        handle = Path(KB_PATH).open("r", encoding="utf-8")
+    except (OSError, FileNotFoundError):
+        return
+    with handle:
+        for line in handle:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                entry = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            content = str(entry.get("content", ""))
+            m = _ATTRIBUTED_QUOTE.search(content)
+            if not m:
+                continue
+            quote = m.group(1).strip()
+            framing = content[:m.start()].strip()
+            if len(framing) < 40:
+                continue
+            eid = entry.get("id")
+            ref = eid if isinstance(eid, int) else f"ts:{str(entry.get('timestamp',''))[:19]}"
+            yield SFTPair(
+                user=(f"Here is a situation from my own history. Respond the way I "
+                      f"actually responded, in my own words.\n\n{framing[:1200]}"),
+                assistant=quote,
+                bucket="personalization", source_type="sft_personalization",
+                source_path=f"kb#{ref}#verbatim",
+                metadata={"origin": "extracted_verbatim", "kb_type": entry.get("type")})
+
+
+def extract_literature() -> Iterator[SFTPair]:
+    """The published essays — the purest voice material available (spec §5)."""
+    if not _LITERATURE.exists():
+        return
+    for path in sorted(_LITERATURE.rglob("*.md")):
+        try:
+            text = path.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        title = path.stem.replace("_", " ").replace("-", " ").strip()
+        for i, (heading, body) in enumerate(_split_md_sections(text, level="## ")):
+            if len(body) < _MIN_ANSWER_CHARS:
+                continue
+            yield SFTPair(
+                user=(f"Write in my own voice about this, from '{title}': {heading}"),
+                assistant=body.strip()[:_MAX_ANSWER_CHARS],
+                bucket="personalization", source_type="sft_personalization",
+                source_path=f"knowledge/literature/{path.name}#{i}",
+                metadata={"origin": "authored_by_user", "form": "essay"})
+
+
+def extract_experience_map() -> Iterator[SFTPair]:
+    """Filled Notes cells are literally (prompt -> the user's own answer)."""
+    try:
+        text = _EXPERIENCE_MAP.read_text(encoding="utf-8", errors="replace")
+    except (OSError, FileNotFoundError):
+        return
+    for i, raw in enumerate(text.splitlines()):
+        if not raw.strip().startswith("|"):
+            continue
+        cells = [c.strip() for c in raw.strip().strip("|").split("|")]
+        if len(cells) < 3:
+            continue
+        subject, note = cells[0], cells[-1]
+        # The user's own prose lives in the Notes column; guesses are marked and skipped.
+        if "GUESS:" in note or len(note) < _MIN_ANSWER_CHARS or "---" in subject:
+            continue
+        subject = re.sub(r"\*+", "", subject).strip()
+        if not subject or subject.lower() in ("#", "project", "technology", "scenario"):
+            continue
+        yield SFTPair(
+            user=f"What is your actual experience with {subject}? Be honest about the limits.",
+            assistant=note, bucket="personalization", source_type="sft_personalization",
+            source_path=f"experience_map.md#L{i + 1}",
+            metadata={"origin": "authored_by_user", "form": "self_assessment"})
+
+
+# =============================================================================
+# Part 4: ASSEMBLY
+# =============================================================================
+
+EXTRACTORS = (
+    ("de_lessons", extract_de_lessons),
+    ("session_learnings", extract_session_learnings),
+    ("big_picture", extract_big_picture),
+    ("kb_verbatim", extract_kb_verbatim),
+    ("user_explanations", extract_user_explanations),
+    ("literature", extract_literature),
+    ("experience_map", extract_experience_map),
+)
+
+
+def build() -> Tuple[List[SFTPair], Dict[str, Dict[str, int]]]:
+    """(kept pairs, per-extractor stats). Dedup is global across sources."""
+    kept: List[SFTPair] = []
+    seen: set = set()
+    stats: Dict[str, Dict[str, int]] = {}
+    for name, fn in EXTRACTORS:
+        s = {"found": 0, "dropped_quality": 0, "dropped_dup": 0, "kept": 0}
+        for pair in fn():
+            s["found"] += 1
+            ok, _ = passes_quality(pair)
+            if not ok:
+                s["dropped_quality"] += 1
+                continue
+            key = pair.cluster_key
+            if key in seen:
+                s["dropped_dup"] += 1
+                continue
+            seen.add(key)
+            kept.append(pair)
+            s["kept"] += 1
+        stats[name] = s
+    return kept, stats
+
+
+def carve_heldout(pairs: List[SFTPair]) -> Tuple[List[SFTPair], List[SFTPair]]:
+    """Stratified ~10% held-out slice, carved BEFORE training (spec §7/§8.3).
+
+    Stratified by bucket so the eval set cannot end up all-engineer, and seeded
+    so the split is identical on both machines and across re-runs.
+    """
+    rng = random.Random(_HELDOUT_SEED)
+    train: List[SFTPair] = []
+    held: List[SFTPair] = []
+    for bucket in ("engineer", "personalization"):
+        group = [p for p in pairs if p.bucket == bucket]
+        rng.shuffle(group)
+        cut = int(len(group) * HELDOUT_FRACTION)
+        held.extend(group[:cut])
+        train.extend(group[cut:])
+    return train, held
+
+
+def write_jsonl(pairs: List[SFTPair], path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(".tmp")
+    with tmp.open("w", encoding="utf-8") as fh:
+        for p in pairs:
+            fh.write(json.dumps(p.to_record(), ensure_ascii=False) + "\n")
+    tmp.replace(path)
+
+
+def report(pairs: List[SFTPair], stats: Dict[str, Dict[str, int]]) -> None:
+    print("=" * 74)
+    print("  SFT pair extraction")
+    print("=" * 74)
+    print(f"  {'extractor':<20} {'found':>7} {'quality':>8} {'dup':>6} {'kept':>7}")
+    print("  " + "-" * 51)
+    for name, s in stats.items():
+        print(f"  {name:<20} {s['found']:>7} {s['dropped_quality']:>8} "
+              f"{s['dropped_dup']:>6} {s['kept']:>7}")
+    print()
+    for bucket, target in TARGETS.items():
+        got = sum(1 for p in pairs if p.bucket == bucket)
+        pct = got / target if target else 0
+        flag = "OK" if got >= target * 0.9 else "SHORT"
+        print(f"  {bucket:<18} {got:>5} / {target}   ({pct:.0%})  {flag}")
+    total = len(pairs)
+    chars = sum(len(p.user) + len(p.assistant) for p in pairs)
+    print(f"  {'TOTAL':<18} {total:>5} pairs, ~{chars:,} chars, ~{chars // 4:,} tokens")
+    print()
+    short = [b for b, t in TARGETS.items()
+             if sum(1 for p in pairs if p.bucket == b) < t * 0.9]
+    if short:
+        print(f"  SHORTFALL in: {', '.join(short)}.")
+        print("  Not padded. The spec's remaining sources for these are")
+        print("  decision-explanation sessions (spec §6) and hand-authored pairs —")
+        print("  both require the user, and a fabricated pair is worse than a missing one.")
+    print("=" * 74)
+
+
+def main() -> int:
+    p = argparse.ArgumentParser(description="Build SFT pairs from already-question-shaped prose.")
+    p.add_argument("--dry-run", action="store_true", help="counts + samples, write nothing")
+    p.add_argument("--report", action="store_true", help="summarise the existing sft_pairs.jsonl")
+    p.add_argument("--samples", type=int, default=0, help="print N sample pairs per bucket")
+    args = p.parse_args()
+
+    if args.report:
+        if not OUT_PATH.exists():
+            print(f"no {OUT_PATH.name} yet — run without --report to build it")
+            return 1
+        recs = [json.loads(l) for l in OUT_PATH.open(encoding="utf-8") if l.strip()]
+        from collections import Counter
+        print(f"{len(recs)} pairs in {OUT_PATH.name}")
+        for k, v in Counter(r["metadata"].get("bucket") for r in recs).most_common():
+            print(f"  {k:<20} {v}")
+        return 0
+
+    pairs, stats = build()
+    report(pairs, stats)
+
+    if args.samples:
+        for bucket in TARGETS:
+            print(f"\n--- sample {bucket} pairs ---")
+            for pair in [x for x in pairs if x.bucket == bucket][:args.samples]:
+                print(f"\n  [{pair.source_path}]")
+                print(f"  USER      : {pair.user[:220]}")
+                print(f"  ASSISTANT : {pair.assistant[:260]}")
+
+    if args.dry_run:
+        print("\n  --dry-run: nothing written")
+        return 0
+
+    train, held = carve_heldout(pairs)
+    write_jsonl(train, OUT_PATH)
+    write_jsonl(held, HELDOUT_PATH)
+    print(f"\n  wrote {len(train)} -> {OUT_PATH.name}")
+    print(f"  wrote {len(held)} -> {HELDOUT_PATH.name}  (held out BEFORE training, seed "
+          f"{_HELDOUT_SEED} so the split is reproducible)")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
