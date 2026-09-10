@@ -96,7 +96,28 @@ python3 scripts/index_memory.py              # rebuilds the jarvis_memory vector
                                               # it is a PROJECTION and does NOT travel via git
                                               # (jarvis_data/chromadb/<uuid>/ for that collection
                                               # is untracked on purpose; the KB it's built from is)
+python3 scripts/hearth.py --background       # START THE CLOCK — see below, this is not optional
+python3 scripts/hearth.py --status           # confirm ingest_codex is listed
 ```
+
+**`~/.codex/config.toml` lives outside the repo and does NOT travel — set it per machine:**
+```toml
+model = "gpt-6-astra"
+model_reasoning_effort = "xhigh"
+
+[features]
+memories = true
+
+[memories]
+generate_memories = true
+use_memories = true
+```
+
+**Why starting the hearth is not optional.** `ingest_codex` is what turns this host's transcripts
+into captured turns. Without a running hearth it fires only when a human remembers to run it — and
+manual capture is exactly what produced **zero** records over months on Antigravity, the other
+hookless host. The adapter existing is not the adapter running. As of 2026-09-11 the hearth is
+running on **no** machine; if `--status` says it is down, JARVIS is not learning from your work.
 
 `JARVIS_ROOT` resolves automatically from this file's location (`jarvis_core/config.py`); no path
 edits needed on Windows vs Linux.
