@@ -102,6 +102,18 @@ SPECIALIST_CORPUS_ROOT: Path = DATA_ROOT / "training_corpus"
 # the KB — never committed; see .gitignore. KB stays the source of truth.
 COGNITIVE_INDEX_PATH: Path = DATA_ROOT / "cognitive_index.sqlite3"
 
+# One JSONL per real `--ask` session. This is the ONLY record of JARVIS being
+# USED rather than BUILT, and until 2026-09-06 nothing read it — every other
+# instrument in this repo counts construction (roadmap rows, corpus records, KB
+# entries), so a month of disuse produced no signal anywhere. brain/usage.py
+# reads it; the boot inhale reports it.
+CONVERSATIONS_ROOT: Path = DATA_ROOT / "conversations"
+
+# Raw client material. Never committed (see .gitignore) and never sent to a
+# model provider — brain/outbound_policy.py derives redaction terms from the
+# directory names here, so a new client project is covered by existing.
+CLIENT_WORK_ROOT: Path = JARVIS_ROOT / "client_work"
+
 # =============================================================================
 # Part 3: MODEL CONFIGURATION (Embedding model constants)
 # =============================================================================

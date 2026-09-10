@@ -72,10 +72,52 @@ from jarvis_core.brain.context_injector import (
 from jarvis_core.brain.model_profiles import ModelProfile
 
 
+# Compaction fires when the transcript passes this, NOT when it nears the
+# context window. Chosen for cost, since react.py re-sends the prefix every
+# iteration: 48K x 40 iterations ~= 2M input tokens, against ~40M if we waited
+# for a 1M window. Loose enough that a normal agentic run with several file
+# reads never compacts; tight enough that a runaway one cannot re-bill a
+# 500K-token prefix forty times. compact.py's own default is 6000, which is
+# safe but would compact constantly on real tool-heavy work.
+_COMPACT_COST_TARGET_TOKENS = 48_000
+
+# How many past-memory items are folded into the system prompt unprompted.
+# 4 is deliberate: enough that a relevant decision or logged failure surfaces
+# on its own, small enough that it cannot crowd out the question. Every item
+# costs tokens on EVERY turn, so this is a standing tax, not a one-off.
+_AUTO_RETRIEVE_TOP_K = 4
+
+# The ChromaDB collection holding the mind's OWN history, maintained by
+# scripts/index_memory.py. Deliberately NOT `research_papers`, which is
+# third-party literature — conflating the two is the L324 bug that made JARVIS
+# answer "what have we built?" from someone else's papers.
+MEMORY_COLLECTION = "jarvis_memory"
+
+
+def _model_context_length(model: Optional[str]) -> int:
+    """This model's context window from the catalog, or 0 if unknown.
+
+    Reuses router._load_catalog() rather than re-reading MODEL_CATALOG_PATH —
+    config.py's law is that paths resolve in one place, and a second reader is
+    a second thing to drift.
+    """
+    if not model:
+        return 0
+    try:
+        from jarvis_core.brain.router import _load_catalog
+        for row in _load_catalog():
+            if row.get("id") == model:
+                return int(row.get("context_length", 0) or 0)
+    except Exception:
+        pass
+    return 0
+
+
 def default_toolset(
     store: Optional[Any] = None,
     kb_path: Path = KB_PATH,
     llm_call: Optional[Any] = None,
+    ledger: Optional[Any] = None,
 ) -> Dict[str, Tool]:
     """The DEFAULT --ask toolset: awareness + autobiography + EYES ON THE CODE.
 
@@ -95,6 +137,12 @@ def default_toolset(
     }
     if store is not None:
         tools["memory_semantic_search"] = MemorySemanticSearchTool(store=store)
+    if ledger is not None:
+        # PAGE-IN. Ships only when a ledger exists, because without one the
+        # tool could only ever return "nothing was archived" — offering it
+        # anyway would advertise a recoverability the session does not have.
+        from jarvis_core.agent.tools.context import ContextExpandTool
+        tools["context_expand"] = ContextExpandTool(ledger=ledger)
     return tools
 
 
@@ -204,6 +252,8 @@ def assemble_mind(
     extra_tools: Optional[Dict[str, Tool]] = None,
     enable_mirror: bool = False,
     max_iterations: int = 8,
+    max_iterations_override: Optional[int] = None,
+    session_id: Optional[str] = None,
     clock: Optional[Callable[[], datetime]] = None,
     profile_path: Optional[Path] = None,
     queue_path: Optional[Path] = None,
@@ -235,14 +285,42 @@ def assemble_mind(
     # Conduct from the profile when present; else the caller's args (back-compat).
     applied_mirror = profile.mirror_ok if profile else enable_mirror
     applied_monitor = profile.enable_monitor if profile else True
-    applied_max_iter = profile.max_iterations if profile else max_iterations
+    # PRECEDENCE (2026-09-07): explicit override > per-model profile > parameter.
+    # The profile is per-model DATA and stays the default, but a caller asking
+    # for depth on ONE question must be able to beat it — previously the profile
+    # silently won, so `google/gemini-3.6-flash` ran at the conservative floor of
+    # 8 regardless of what boot was told, and nothing reported that it had.
+    applied_max_iter = (
+        max_iterations_override if max_iterations_override is not None
+        else (profile.max_iterations if profile else max_iterations)
+    )
+    # THE LEDGER is built first because two consumers need it: the
+    # context_expand tool (model-driven page-in) and the compactor
+    # (archive-before-evict). Keyed by session id; without one there is no
+    # ledger and compaction stays the old one-way door, which the boundary
+    # message then states plainly rather than implying history is safe.
+    ledger = None
+    if session_id:
+        try:
+            from jarvis_core.agent.context_ledger import ContextLedger
+            ledger = ContextLedger(session_id)
+        except Exception:
+            ledger = None
+
     if prebuilt_tools is not None:        # orchestrator (policy) already built them
         tools = dict(prebuilt_tools)
+        if ledger is not None and "context_expand" not in tools:
+            # The orchestrator builds tools before it knows about the ledger,
+            # so add page-in here rather than duplicating ledger construction
+            # in the policy layer.
+            from jarvis_core.agent.tools.context import ContextExpandTool
+            tools["context_expand"] = ContextExpandTool(ledger=ledger)
     elif tools_mode == "full":
         tools = full_toolset(store=store, kb_path=kb_path, llm_call=llm_call,
                              strategy_path=strategy_path)
     else:
-        tools = default_toolset(store=store, kb_path=kb_path, llm_call=llm_call)
+        tools = default_toolset(store=store, kb_path=kb_path, llm_call=llm_call,
+                                ledger=ledger)
     collections: List[str] = _list_collections(store) if store is not None else []
     if extra_tools:
         tools.update(extra_tools)
@@ -270,9 +348,79 @@ def assemble_mind(
         if result.block:
             identity += "\n\n" + result.block
 
+    # WORKING-MEMORY COMPACTION (wired 2026-09-08). Until today boot never
+    # passed `compactor=`, so Mind._compactor was None on every real --ask and
+    # WorkingMemoryCompactor — 322 lines, 17 tests — had never executed outside
+    # its own smoke suite. The consequence was concrete: react.py re-sends the
+    # whole transcript each iteration, so a long agentic run re-billed an
+    # ever-growing prefix and eventually overflowed the window.
+    #
+    # THE THRESHOLD IS COST-DRIVEN, NOT WINDOW-DRIVEN — and getting this
+    # backwards is easy. Sizing compaction to the context window looks right and
+    # is wrong: google/gemini-3.6-flash reports context_length=1048576, so a
+    # window-sized threshold would never compact until a transcript hit ~1M
+    # tokens. Overflow is not the binding problem; RE-BILLING is. react.py
+    # re-sends the whole transcript every iteration, so at max_iterations=40 a
+    # prefix of T tokens costs ~40*T. Holding T near 48K instead of 1M is the
+    # difference between ~2M and ~40M input tokens for one question — this is
+    # exactly why a hard question cost Rs72 on 2026-09-07.
+    #
+    # So: compact at the cost target, and let the real window only LOWER it
+    # (a 32K model must not be handed a 48K threshold).
+    compactor = None
+    try:
+        from jarvis_core.agent.compact import WorkingMemoryCompactor
+        from jarvis_core.agent.tokens import TokenBudget
+        ctx_len = _model_context_length(model)
+        threshold = _COMPACT_COST_TARGET_TOKENS
+        if ctx_len > 0:
+            threshold = min(threshold, TokenBudget(context_length=ctx_len).usable)
+        # THE LEDGER makes eviction reversible. Without it compaction is a
+        # one-way door: the span is summarised and the originals cease to
+        # exist. With it they are archived verbatim first and the boundary
+        # carries a handle back to them. Needs a session id to key the file;
+        # no session -> no ledger -> the old lossy behaviour, and the boundary
+        # message says so out loud rather than implying history is safe.
+        compactor = WorkingMemoryCompactor(
+            llm_call, max_context_tokens=threshold, ledger=ledger)
+    except Exception:
+        compactor = None  # a broken compactor must never block a boot
+
+    # UNPROMPTED RETRIEVAL — the step that makes ENDGAME §1.2's moat real.
+    #
+    # MemoryManager (928 lines, 51 tests) had ZERO production construction
+    # sites, so react.py's auto-retrieve branch was unreachable on every real
+    # --ask and memory reached the prompt ONLY when the model chose to call a
+    # tool. That is verbatim the §1.2 failure: "it cannot fire when you did not
+    # know to ask."
+    #
+    # Two prerequisites had to land first, and the second was invisible:
+    #   1. Something to retrieve. ChromaDB held only `research_papers` (156
+    #      embeddings); the KB was not indexed at all. scripts/index_memory.py
+    #      now maintains `jarvis_memory` (1030 chunks over all 554 entries).
+    #   2. metadata.tier. retrieve() queries with where={"tier": ...}, so
+    #      records without it are invisible — 1030 indexed chunks returned 0
+    #      hits until they were tagged warm.
+    #
+    # Wired only when a store is open: without one there is no WARM tier and
+    # auto-retrieve would burn a query per turn to return nothing.
+    memory_manager = None
+    auto_retrieve_k = 0
+    if store is not None:
+        try:
+            from jarvis_core.agent.memory_manager import MemoryManager
+            memory_manager = MemoryManager(
+                store=store, collection_name=MEMORY_COLLECTION)
+            auto_retrieve_k = _AUTO_RETRIEVE_TOP_K
+        except Exception:
+            memory_manager = None      # never let memory wiring block a boot
+            auto_retrieve_k = 0
+
     mind = Mind(
         llm_call=llm_call,
         tools=tools,
+        memory_manager=memory_manager,
+        auto_retrieve_top_k=auto_retrieve_k,
         max_iterations=applied_max_iter,
         enable_mirror=applied_mirror,
         enable_monitor=applied_monitor,
@@ -280,6 +428,7 @@ def assemble_mind(
         identity_prompt=identity,
         permission_context=permission_context,
         ask_handler=ask_handler,
+        compactor=compactor,
     )
     report = BootReport(
         tools=tuple(sorted(tools)),

@@ -36,11 +36,13 @@ THE FLOW
 
 STEP 1: build_permission_context(tools): ASK rule per requires_permission tool;
         register the bash classifier for shell_run and the repo-scope classifier
-        for file_read; default ALLOW for the safe majority.
+        for file_read; ALLOW rule per EXPLICITLY declared read-only tool;
+        default ASK (corrected 2026-09-08 — this said "default ALLOW for the
+        safe majority", which was true of the code and was the fail-open bug).
         |
 STEP 2: check() priority (permissions.py): classifier -> rules -> default. So
         shell_run/file_read decisions come from their classifiers; code_exec
-        from its ASK rule; everything else ALLOWs.
+        from its ASK rule; an UNKNOWN tool reaches the human.
         |
 STEP 3: on ASK, ReActLoop calls terminal_ask_handler -> [y/N] -> ALLOW | DENY.
         Non-ALLOW blocks dispatch (fail-closed).
@@ -87,14 +89,46 @@ def _repo_scoped_file_read_classifier(repo_root: Path):
     return classify
 
 
+# Tools that read and never act. Naming them EXPLICITLY is the whole point: it
+# inverts the policy from a denylist to an allowlist.
+#
+# WHY THIS EXISTS (2026-09-08). This function used to end in
+# `default=PermissionDecision.ALLOW`, gating only tools that set
+# requires_permission=True. That is an allowlist expressed as a denylist, and it
+# fails OPEN in two verified ways:
+#   - a tool absent from `tools` when the context is built resolves to ALLOW.
+#     Measured: build_permission_context(default_toolset()) returned ALLOW for
+#     "shell_run" purely because shell_run ships only in full_toolset().
+#   - any NEW tool that forgets the flag is silently permitted. Measured:
+#     "a_new_tool_nobody_gated" -> ALLOW.
+# Safety therefore depended on every future tool author remembering a boolean.
+#
+# Inverting costs nothing today — every tool below is already read-only, so the
+# decisions for the shipped toolset are byte-identical — and it means an unknown
+# tool now stops at the human instead of running.
+_READ_ONLY_TOOLS = frozenset({
+    "calculator",
+    "prior_self_consult", "cognitive_mirror", "writing_voice_check", "bear_case_devil",
+    "file_search",
+    "context_expand",   # reads one append-only ledger by handle; cannot write
+    "web_search",
+    "memory_semantic_search", "memory_mmr_search", "memory_bm25_search",
+    "memory_hybrid_search", "memory_rerank", "memory_unified_retrieve",
+    "portfolio_state", "trigger_monitor", "incentive_planner",
+})
+
+
 def build_permission_context(
     tools: Dict[str, Any], repo_root: Path = JARVIS_ROOT
 ) -> PermissionContext:
-    """Derive the safety policy from the toolset itself.
+    """Derive the safety policy from the toolset itself. FAILS CLOSED.
 
-    - ASK rule for every tool that declares requires_permission=True (shell_run,
-      code_exec today; future dangerous tools self-gate).
-    - default ALLOW for the safe majority (memory / cognitive / finance / calc / web).
+    - ALLOW rule for each tool explicitly named in _READ_ONLY_TOOLS.
+    - ASK rule for every tool declaring requires_permission=True.
+    - default ASK — an unknown or newly added tool reaches the human, it does not
+      silently run. This matches permissions.py's own documented contract
+      ("Default is ASK -- the engine fails closed"), which the previous
+      default=ALLOW contradicted.
     - classifiers (priority over rules): bash AST for shell_run, repo-scope for file_read.
     """
     rules = [
@@ -103,7 +137,13 @@ def build_permission_context(
         for name, tool in tools.items()
         if getattr(tool, "requires_permission", False)
     ]
-    ctx = PermissionContext(rules=rules, default=PermissionDecision.ALLOW)
+    rules += [
+        PermissionRule(name, PermissionDecision.ALLOW,
+                       description="explicitly declared read-only")
+        for name in sorted(_READ_ONLY_TOOLS)
+        if name in tools and not getattr(tools[name], "requires_permission", False)
+    ]
+    ctx = PermissionContext(rules=rules, default=PermissionDecision.ASK)
     if "shell_run" in tools:
         ctx.register_classifier("shell_run", BashClassifier().classify_async)
     if "file_read" in tools:

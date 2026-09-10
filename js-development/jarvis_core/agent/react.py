@@ -235,6 +235,9 @@ class ReActResult:
     messages: List[Dict[str, str]] = field(default_factory=list)
     tool_calls: List[Tuple[ToolCall, ToolResult]] = field(default_factory=list)
     iterations_used: int = 0
+    # How many times the transcript was compacted mid-loop. >0 means this run
+    # would have overflowed or over-billed without paging.
+    compactions: int = 0
     terminated_reason: str = TERMINATED_MAX_ITERATIONS
     reflections: List[MirrorReflection] = field(default_factory=list)
     instability: Optional[InstabilityReport] = None
@@ -275,6 +278,11 @@ class ReActLoop:
         trace_arguments: bool = False,
         memory_manager: Optional[MemoryManager] = None,
         auto_retrieve_top_k: int = 0,
+        # 2026-09-08: compaction MUST live here, not in Mind. Mind called it
+        # after _run_react had already finished, so every oversized request had
+        # already gone out and the compacted list was discarded. Inside the loop
+        # it runs BEFORE each send, which is the only position where it helps.
+        compactor: Optional[Any] = None,
     ) -> None:
         self._llm_call = llm_call
         self._tools = tool_instances
@@ -286,6 +294,7 @@ class ReActLoop:
         # changing loop behavior, e.g. so the LLM can add() via a tool).
         self._memory = memory_manager
         self._auto_retrieve_top_k = max(0, auto_retrieve_top_k)
+        self._compactor = compactor
         self._bus = event_bus
         self._perms = permission_context
         self._ask_handler = ask_handler
@@ -386,6 +395,15 @@ class ReActLoop:
                     "iteration": iteration,
                     "messages_so_far": len(messages),
                 })
+
+                # PAGE-OUT BEFORE SEND. react.py re-sends the entire growing
+                # message list every iteration, so an unbounded transcript is
+                # re-billed and eventually overflows. Compacting here — and
+                # ASSIGNING THE RESULT BACK, which mind.py's version failed to
+                # do — is what makes a long session survivable.
+                if self._compactor is not None:
+                    if await self._compact_in_place(messages):
+                        result.compactions += 1
 
                 raw = await self._call_llm(messages)
                 messages.append({"role": "assistant", "content": raw})
@@ -906,6 +924,34 @@ class ReActLoop:
         if inspect.isawaitable(out):
             out = await out
         return str(out)
+
+    async def _compact_in_place(self, messages: List[Dict[str, str]]) -> bool:
+        """Compact the live message list IN PLACE. Returns True if it shrank.
+
+        FAIL-SAFE by construction: any error, or a compactor that declines,
+        leaves `messages` byte-identical. Compaction must never be able to
+        destroy a transcript it could not summarise — that is the same
+        invariant compact.py states for itself, enforced at the call site.
+        """
+        try:
+            if not self._compactor.should_compact(messages):
+                return False
+            result = await self._compactor.compact(messages)
+            if not getattr(result, "compacted", False):
+                return False
+            new_messages = getattr(result, "messages", None)
+            if not new_messages:
+                return False
+            messages[:] = new_messages   # <- the assignment mind.py never made
+            await self._publish(StepType.REASONING, {
+                "compaction": True,
+                "replaced": getattr(result, "replaced_count", 0),
+                "tokens_before": getattr(result, "tokens_before", 0),
+                "tokens_after": getattr(result, "tokens_after", 0),
+            })
+            return True
+        except Exception:
+            return False
 
     async def _check_permission(
         self, tool_name: str, tool_input: Dict[str, Any]

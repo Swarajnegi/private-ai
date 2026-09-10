@@ -72,7 +72,14 @@ _DEFAULT_BUDGET_USD = 0.50
 _DEFAULT_TIMEOUT_S = 90.0
 _DEFAULT_MAX_RETRIES = 2
 _EST_OUTPUT_TOKENS = 600          # conservative pre-gate assumption
-_CHARS_PER_TOKEN = 4
+# Token counting moved to agent/tokens.py 2026-09-08 (the old local
+# _CHARS_PER_TOKEN = 4 was one of two duplicate estimators). Imported lazily so
+# this module stays importable in isolation — llm_client is the one organ a bare
+# harness may load alone.
+def _counter():
+    """Process-wide calibrated token counter (agent/tokens.py)."""
+    from jarvis_core.agent.tokens import shared_counter
+    return shared_counter()
 _REASONING_EFFORT_LEVELS = frozenset({"low", "medium", "high"})
 
 # Injected transport: (url, headers, json_payload, timeout_s) -> (status, body_dict)
@@ -222,7 +229,12 @@ class OpenRouterClient:
         pricing = await self._ensure_pricing()
         in_price, out_price = pricing.get(self._model, (0.0, 0.0))
 
-        est_in_tokens = sum(len(m.get("content", "")) for m in messages) // _CHARS_PER_TOKEN
+        # Was `sum(len(content)) // 4`. Now a per-model ratio calibrated from
+        # this provider's own reported usage (see the observe() call below).
+        # in_chars is retained because calibration needs what we SENT, not what
+        # we estimated — the two diverge as soon as the ratio moves off 4.0.
+        in_chars = sum(len(m.get("content", "")) for m in messages)
+        est_in_tokens = _counter().count_messages(messages, self._model)
         # Stage 4.3.2: when a SHARED CostTracker is present (one instance threaded
         # across every pool target), gate on AGGREGATE spend, not this client's
         # own. Without it, failover A->B resets B's per-client _spend_usd to 0 and
@@ -264,7 +276,18 @@ class OpenRouterClient:
                 usage = body.get("usage", {}) or {}
                 in_tok = int(usage.get("prompt_tokens", est_in_tokens) or 0)
                 out_tok = int(usage.get("completion_tokens",
-                                        len(text) // _CHARS_PER_TOKEN) or 0)
+                                        _counter().count(text, self._model)) or 0)
+                # CALIBRATION (2026-09-08). The provider just told us the truth:
+                # we sent `in_chars` characters and it counted `in_tok` tokens.
+                # Feed that back so every future estimate for THIS model — here
+                # and in compact.py, which shares the process-wide counter — is
+                # measured rather than guessed. Only real reported usage is a
+                # sample; our own fallback estimate must never train the ratio.
+                if usage.get("prompt_tokens"):
+                    try:
+                        _counter().observe(self._model, in_chars, in_tok)
+                    except Exception:
+                        pass  # calibration is disposable; never break a call for it
                 call_cost = in_tok * in_price + out_tok * out_price
                 self._spend_usd += call_cost
                 self._calls += 1

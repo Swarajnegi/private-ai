@@ -57,6 +57,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))  # standalone-run s
 from jarvis_core.config import (
     DATA_ROOT, JARVIS_ROOT, KB_PATH, AGENT_RULES_DIR, AGENT_WORKFLOWS_DIR,
 )
+from jarvis_core.brain.outbound_policy import OutboundPolicy, redact_outbound
 
 _IST = timezone(timedelta(hours=5, minutes=30))
 
@@ -88,6 +89,7 @@ class InhaleResult:
     block: str
     fired: Tuple[str, ...]
     skipped: Tuple[str, ...]
+    redacted: Tuple[str, ...] = ()
 
 
 # =============================================================================
@@ -103,14 +105,17 @@ class ContextInjector:
     )
 
     def __init__(self, providers: List[ProviderSpec],
-                 total_cap: int = _DEFAULT_TOTAL_CAP) -> None:
+                 total_cap: int = _DEFAULT_TOTAL_CAP,
+                 policy: Optional[OutboundPolicy] = None) -> None:
         self._providers = list(providers)
         self._total_cap = max(0, int(total_cap))
+        self._policy = policy or OutboundPolicy()
 
     def inhale(self) -> InhaleResult:
         sections: List[str] = []
         fired: List[str] = []
         skipped: List[str] = []
+        redacted: List[str] = []
         used = len(self.HEADER)
         for spec in self._providers:
             try:
@@ -123,6 +128,13 @@ class ContextInjector:
             if not text:
                 skipped.append(spec.name)
                 continue
+            # THE AIRLOCK. Every provider passes through here, including any
+            # added later — that is the point of doing it in the loop rather
+            # than inside individual providers. Runs BEFORE the cap so the
+            # budget applies to what actually ships.
+            verdict = redact_outbound(text, policy=self._policy)
+            text = verdict.text
+            redacted.extend(verdict.removed)
             if len(text) > spec.max_chars:
                 text = text[: spec.max_chars] + _TRUNCATION_MARK
             section = f"## {spec.name}\n{text}"
@@ -135,9 +147,12 @@ class ContextInjector:
         if not fired:
             # Notes alone are not a breath — boot proceeds bare rather than
             # carrying a block that says only "everything was unavailable".
-            return InhaleResult(block="", fired=(), skipped=tuple(skipped))
+            return InhaleResult(block="", fired=(), skipped=tuple(skipped),
+                                redacted=tuple(sorted(set(redacted))))
         block = self.HEADER + "\n\n" + "\n\n".join(sections)
-        return InhaleResult(block=block, fired=tuple(fired), skipped=tuple(skipped))
+        return InhaleResult(block=block, fired=tuple(fired),
+                            skipped=tuple(skipped),
+                            redacted=tuple(sorted(set(redacted))))
 
 
 # =============================================================================
@@ -249,6 +264,22 @@ def default_providers(
     def runtime_self_state() -> str:
         return self_state or f"Machine: {_machine_name()}."
 
+    def projection_state() -> Optional[str]:
+        # Announces a stale index rather than waiting to be audited. The
+        # 544-vs-533 drift was found by accident, and accident is not a
+        # detection strategy — same reasoning as the usage provider below.
+        # Returns None when everything matches, so a healthy system stays
+        # silent and only a real problem costs prompt space.
+        from jarvis_core.brain.projections import stale_line
+        return stale_line()
+
+    def usage_state() -> str:
+        # The one provider that can report badly on the project. It exists
+        # because conversations/ was the only usage log in the repo and had no
+        # consumer — see brain/usage.py's header for the audit that found it.
+        from jarvis_core.brain.usage import usage_line
+        return usage_line()
+
     def next_task() -> Optional[str]:
         from jarvis_core.brain.roadmap_state import next_pending, default_roadmap_paths
         task = next_pending(roadmap_paths or default_roadmap_paths())
@@ -273,6 +304,9 @@ def default_providers(
         ProviderSpec("Tool routing guidance", tool_guidance, max_chars=600),
         ProviderSpec("Temporal", temporal, max_chars=200),
         ProviderSpec("Runtime self-state", runtime_self_state, max_chars=300),
+        ProviderSpec("Projection integrity", projection_state, max_chars=400),
+        ProviderSpec("Usage reality (built vs actually used)", usage_state,
+                     max_chars=400),
         ProviderSpec("Next pending task", next_task, max_chars=300),
         ProviderSpec("Repo self-map (your own anatomy)", repo_anatomy, max_chars=800),
         ProviderSpec("Cognitive profile (standing model of your owner)",
