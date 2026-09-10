@@ -166,12 +166,18 @@ class JobState:
 
 def default_jobs(python: Optional[str] = None,
                  root: Optional[Path] = None) -> List[Job]:
-    """The three things that must happen whether or not anyone is looking.
+    """Everything that must happen whether or not anyone is looking.
 
     EXECUTION FLOW:
-    1. consolidate  — the pulse for the surfacing organ (ENDGAME §1.2).
+    1. consolidate — the pulse for the surfacing organ (ENDGAME §1.2).
     2. profile/index refresh — guarded by check_projections, so it is nearly
        free on a day when the knowledge base did not change.
+    3. capture + reconcile for hosts with no hook system (Codex), and the
+       digest refresh that no host regenerates on its own.
+
+    Deliberately not stating a count: this docstring said "The three things"
+    while returning six, because the count was never updated when jobs 4-6 were
+    added on 2026-09-10. Read the returned list, not this sentence.
 
     Returns:
         Jobs with absolute script paths, so cwd cannot change their meaning.
@@ -215,6 +221,32 @@ def default_jobs(python: Optional[str] = None,
             timeout_seconds=1800.0,
             initial_delay_seconds=300.0,
             description="re-embed the knowledge base into chromadb when stale"),
+        # --- Added 2026-09-10: the Codex migration (ROADMAP 6.8.3) ---
+        Job(name="ingest_codex",
+            argv=(py, str(scripts / "ingest_codex_sessions.py")),
+            interval_seconds=1 * HOUR,
+            timeout_seconds=300.0,
+            initial_delay_seconds=180.0,
+            description="Codex capture adapter -> observation_queue.jsonl "
+                        "(this job is WHY capture keeps working when this host "
+                        "has no Stop-hook equivalent: see AGENTS.md CAPTURE STATUS)"),
+        Job(name="reconcile_codex_memory",
+            argv=(py, str(scripts / "reconcile_codex_memory.py")),
+            interval_seconds=12 * HOUR,
+            timeout_seconds=300.0,
+            initial_delay_seconds=420.0,
+            description="promote JARVIS-relevant items from Codex's own "
+                        "(global, session-scoped) memory into the one "
+                        "authoritative knowledge_base.jsonl"),
+        Job(name="refresh_digest",
+            argv=(py, str(base / "js-development" / "jarvis_core" / "agent" / "recall.py"),
+                 "--write"),
+            interval_seconds=6 * HOUR,
+            timeout_seconds=300.0,
+            initial_delay_seconds=540.0,
+            description="regenerate activity_digest.md — found 2.5 MONTHS "
+                        "stale on 2026-09-10 because nothing had ever "
+                        "scheduled this; Antigravity reads it at every boot"),
     ]
 
 
@@ -576,8 +608,11 @@ def _run_self_test() -> None:
         # T16: the real default job set is well-formed.
         jobs = default_jobs()
         names = [j.name for j in jobs]
-        check("T16 the default set schedules consolidation + both refreshes",
-              names == ["consolidate", "refresh_profile", "reindex_memory"], str(names))
+        check("T16 the default set schedules the original three plus the "
+              "2026-09-10 Codex-migration trio, in order",
+              names == ["consolidate", "refresh_profile", "reindex_memory",
+                       "ingest_codex", "reconcile_codex_memory", "refresh_digest"],
+              str(names))
         check("T17 consolidate is UNguarded (its whole point is to run anyway)",
               not jobs[0].guard and jobs[1].guard and jobs[2].guard)
         check("T17b each guarded job scopes its guard to the artifact IT fixes",
@@ -585,11 +620,30 @@ def _run_self_test() -> None:
               and jobs[2].guard[-1] == "chromadb"
               and jobs[1].guard[-2] == jobs[2].guard[-2] == "--only",
               f"{jobs[1].guard} / {jobs[2].guard}")
+        # argv[1] (right after the interpreter), not argv[-1]: refresh_digest's
+        # argv carries a trailing "--write" flag after its script path, and
+        # checking argv[-1] broke the moment that job was added (2026-09-10) —
+        # argv[1] is the invariant every job actually satisfies, flags or not.
         check("T18 every default job points at a script that exists",
-              all(Path(j.argv[-1]).exists() for j in jobs),
-              str([j.argv[-1] for j in jobs if not Path(j.argv[-1]).exists()]))
+              all(Path(j.argv[1]).exists() for j in jobs),
+              str([j.argv[1] for j in jobs if not Path(j.argv[1]).exists()]))
         check("T19 the jobs are staggered so startup is not a thundering herd",
               len({j.initial_delay_seconds for j in jobs}) == len(jobs))
+
+        # T19d-T19f -- the three Codex-migration jobs specifically.
+        by_name = {j.name: j for j in jobs}
+        check("T19d ingest_codex is unguarded — it must always attempt to read "
+              "new rollouts, there is nothing to guard it on",
+              not by_name["ingest_codex"].guard)
+        check("T19e refresh_digest points at recall.py, not a scripts/ wrapper "
+              "— recall.py self-inserts its own import path (verified "
+              "standalone-run safe) so no PYTHONPATH env is needed here",
+              "recall.py" in by_name["refresh_digest"].argv[-2]
+              and by_name["refresh_digest"].argv[-1] == "--write")
+        check("T19f reconcile_codex_memory runs at the same 12h cadence as "
+              "reindex_memory — both are 'catch up periodically' jobs, not "
+              "urgent ones",
+              by_name["reconcile_codex_memory"].interval_seconds == 12 * HOUR)
 
         # T19b -- the stagger must not silence a DELIBERATE one-shot run. Before
         # ignore_stagger existed, `hearth.py --tick-once` printed "nothing was

@@ -181,7 +181,7 @@ that depends on yesterday's conversation — no manual sync step first.
 
 ---
 
-## Sub-Phase 6.8: Universal Capture Adapter ⬜
+## Sub-Phase 6.8: Universal Capture Adapter 🔄 **6.8.1-6.8.4 CLOSED 2026-09-10 — forced by the Codex migration, not scheduled work**
 
 **Goal:** Awareness capture — the mechanism that makes JARVIS actually know what you did — is
 host-specific today: automatic via hooks on Claude Code, manual via `/memory` on Antigravity (no
@@ -189,15 +189,31 @@ hook system there). The underlying organ (`jarvis_core/agent/capture.py`) is alr
 host-independent per its own design; what's missing is a defined, minimal adapter contract so a
 brand-new host gets full capture parity without bespoke, one-off wiring each time.
 
-| Lesson | Topic | JARVIS Use Case | Command |
-|--------|-------|-----------------|---------|
-| 6.8.1 | Audit the existing capture organ | Separate what's genuinely host-independent in `capture.py` from what's currently Claude-Code-hook-specific glue | `@[/learn] Trace capture.py's host-independent core vs. its Claude Code hook adapter.` |
-| 6.8.2 | Define the adapter contract | The minimal interface any new host must implement to trigger a capture event | `/dev Draft the capture adapter contract (interface, not implementation).` |
-| 6.8.3 | Build a second reference adapter | Prove the contract actually generalizes by wiring it into ONE new host type (e.g. a plain terminal wrapper) | `/dev Build a second capture adapter against the contract from 6.8.2.` |
-| 6.8.4 | Explicit degraded mode | A host with no adapter yet must fail visibly (no capture, flagged as such) — never silently lose turns pretending capture happened | `/dev Add an explicit "capture unavailable" state instead of silent no-ops.` |
+> **What actually closed this, and why it wasn't a deliberate roadmap pass:** the user bought
+> ChatGPT Plus and decided to shift primary JARVIS development to Codex CLI. Building the second
+> reference adapter was the forcing function this sub-phase had been waiting for — the same
+> pattern as the hearth (Stage 6.3), which shipped out of order because omnipresence needed it.
+> Measured before building: all 599 turns in the live queue came from ONE machine, because
+> Antigravity's manual `/memory` capture has produced **zero** records across months of real use.
+> Automatic beats manual, empirically, not just in theory.
 
-**Practical Exercise:** Use JARVIS from a host that's never been wired up before; confirm it
-either captures via the new adapter, or clearly tells you it isn't capturing — never silence.
+| Lesson | Topic | Status |
+|--------|-------|--------|
+| 6.8.1 | Audit the existing capture organ | ✅ confirmed host-agnostic: `build_observation`/`append_observation`/`redact` have zero `~/.claude/` paths. Only `extract_turn`'s transcript parser and the Stop-hook event shape were Claude-specific |
+| 6.8.2 | Define the adapter contract | ✅ *(implicit, proven by 6.8.3 rather than written as a standalone spec)*: parse your host's transcript into `{user_text, assistant_summary, model, ts}`, call the same two organ functions. One required organ change: `build_observation` gained an optional `ts` override — live capture stamps "now" correctly, but an adapter ingesting a HISTORICAL transcript must supply the turn's own time or corrupt every timestamp-ordered consumer downstream (`recall.py`, `agent/tension.py`) |
+| 6.8.3 | Build a second reference adapter | ✅ `scripts/ingest_codex_sessions.py` (25/25 tests) — reads Codex's own persisted rollouts from `~/.codex/sessions/`, feeds the same organ Claude Code's Stop hook uses. Proves the contract generalizes: this is a **different host, different transcript format, different lifecycle** (no hooks at all — a scheduled reader instead), same queue schema, same downstream consumers unmodified |
+| 6.8.4 | Explicit degraded mode | ✅ `AGENTS.md`'s CAPTURE STATUS section: tells Codex to run `--status`/`--dry-run` and say plainly if capture isn't currently running here, rather than assume the pipeline is live. Antigravity's equivalent statement updated in `js-workspace-rule.md` — still degraded, honestly, because it's still unknown whether Antigravity persists a readable transcript at all |
+
+**What this did NOT close:** Antigravity capture is unchanged — still manual `/memory` only. 6.8.3
+proved the *contract* generalizes; it did not give Antigravity a transcript to read. That remains a
+scoping question (does the host persist anything on disk?), not an architecture one anymore.
+
+**Practical Exercise:** ✅ done — ingested 7 real historical exchanges from 2 real Codex rollouts
+(sessions from 2026-07-15 and 2026-09-05, both predating this sub-phase's own start), verified
+end to end: correct chronological ordering, correct thread names resolved from Codex's own
+session index, harness/wrapper content correctly stripped, a second run correctly ingesting zero
+(watermark holds). `592 → 599` turns in `observation_queue.jsonl`; first non-Claude-Code turns
+the corpus has ever held.
 
 ---
 

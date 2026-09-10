@@ -22,7 +22,9 @@ JARVIS's consciousness travels with this repo (Consciousness Portability Contrac
 2. **Read `jarvis_data/activity_digest.md`** — the distilled cross-chat activity from the other machine(s): what the user worked on, day by day, plus JARVIS's own SELF-STATE (which model produced recent turns). Open the conversation already knowing what happened elsewhere.
 3. For topic context, `python scripts/search_memory.py "<topic>"` as usual.
 
-**Honest limit of this machine:** there is NO per-prompt capture here (Antigravity has no hook system) — this machine's experience enters the corpus only via explicit `/memory` writes through `scripts/kb_append.py`. Be proactive about capturing durable insights; nothing is recording automatically. (A native capture limb is future work — the core organ `jarvis_core/agent/capture.py` is host-independent and ready for an adapter.)
+**Honest limit of this machine, unchanged as of 2026-09-10 — say so if asked whether JARVIS "remembers" this session:** there is still NO per-prompt capture here. Antigravity has no hook system, and — unlike Codex, which persists its own session transcripts to `~/.codex/sessions/` regardless of whether anything reads them — it is not yet established whether Antigravity writes any transcript to disk that an adapter could read after the fact. Until that is checked, this machine's experience enters the corpus only via explicit `/memory` writes through `scripts/kb_append.py`. Be proactive about capturing durable insights; nothing is recording automatically.
+
+**The adapter contract itself is no longer theoretical (ROADMAP 6.8.3, closed 2026-09-10):** `scripts/ingest_codex_sessions.py` is a second, real, working implementation — proof that `jarvis_core/agent/capture.py`'s core organ (`build_observation`, `append_observation`, `redact`) genuinely is host-independent, not just designed to be. Building the Antigravity equivalent is now a scoping question (does Antigravity persist a readable transcript at all?), not an architecture question.
 
 ---
 

@@ -295,14 +295,27 @@ def extract_turn(transcript_path: str) -> Optional[Dict[str, str]]:
 # Part 3: OBSERVATION ASSEMBLY + QUEUE APPEND
 # =============================================================================
 
-def build_observation(event: Dict[str, Any], turn: Dict[str, str], cwd: str) -> Optional[Dict[str, Any]]:
-    """One redacted queue record, or None if nothing capturable."""
+def build_observation(
+    event: Dict[str, Any], turn: Dict[str, str], cwd: str,
+    ts: Optional[str] = None,
+) -> Optional[Dict[str, Any]]:
+    """One redacted queue record, or None if nothing capturable.
+
+    `ts` defaults to now (live capture: the Stop hook fires as the turn ends,
+    so "now" IS correct). A second-host ADAPTER INGESTING HISTORICAL
+    transcripts (agent 6.8.3 — e.g. scripts/ingest_codex_sessions.py reading
+    already-completed rollouts from a prior day) must pass the turn's OWN
+    timestamp instead, or every backfilled turn stamps in at ingestion time —
+    which corrupts every timestamp-ordered consumer downstream: recall.py's
+    day-by-day grouping, tension.py's "only the past can be a prior" filter,
+    and the domain-label projection's (ts, session_id) key.
+    """
     user_text = redact(turn.get("user_text", ""))
     assistant_summary = redact(turn.get("assistant_summary", ""))
     if not user_text.strip():
         return None
     return {
-        "ts": ist_now_iso(),
+        "ts": ts or ist_now_iso(),
         "session_id": event.get("session_id", ""),
         "machine": os.environ.get(
             "JARVIS_MACHINE", os.uname().nodename if hasattr(os, "uname") else "unknown"),
@@ -505,6 +518,22 @@ def _run_self_test() -> None:
                                  queue_path=q) is None)
         check("T18 organ never raises on junk event",
               capture_stop_event({"transcript_path": 123}, queue_path=q) is None)
+
+        # --- T19-T20: build_observation's ts override (agent 6.8.3 — a second
+        # host ingesting HISTORICAL transcripts must be able to backfill the
+        # turn's OWN time, not the ingest-time "now") ---
+        historical_ts = "2026-01-15T09:30:00+05:30"
+        obs = build_observation(
+            {"session_id": "s9"}, {"user_text": "old turn", "assistant_summary": "old answer"},
+            "/some/repo", ts=historical_ts)
+        check("T19 an explicit ts is used verbatim, not overwritten with now",
+              obs is not None and obs["ts"] == historical_ts, str(obs and obs["ts"]))
+        obs_default = build_observation(
+            {"session_id": "s9"}, {"user_text": "new turn", "assistant_summary": "new answer"},
+            "/some/repo")
+        check("T20 omitting ts still defaults to live capture's now (unchanged behavior)",
+              obs_default is not None and obs_default["ts"] != historical_ts
+              and obs_default["ts"].startswith("20"), str(obs_default and obs_default["ts"]))
 
     total = passed + len(failed)
     print(f"\n  Passed: {passed}/{total}")

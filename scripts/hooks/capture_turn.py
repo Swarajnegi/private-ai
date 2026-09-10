@@ -17,7 +17,14 @@ from stdin, locates the organ, calls capture_stop_event(). Always exit 0 — a
 broken hook must NEVER disrupt a turn.
 
 Run `python3 scripts/hooks/capture_turn.py --self-test` for the adapter e2e
-check; the organ's 18 smoke tests live with the organ.
+check; the organ's own smoke tests live with the organ
+(`python3 -m jarvis_core.agent.capture`). Counts deliberately not quoted here —
+this line used to say "18 smoke tests" and went stale without anyone noticing,
+which is the exact drift class NERVOUS_SYSTEM.md is written to avoid.
+
+`scripts/ingest_codex_sessions.py` (2026-09-10) is the SECOND implementation of
+the contract described above, and it works — proof the organ really is
+host-independent rather than merely intended to be.
 """
 
 from __future__ import annotations

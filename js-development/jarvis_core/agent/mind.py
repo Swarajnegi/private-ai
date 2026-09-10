@@ -432,8 +432,29 @@ def _run_self_test() -> None:
             captured.append(kwargs)
             return {"status": "appended", "id": 900 + len(captured)}
         eng = CrossDomainCorrelationEngine(queue_path=q, model_path=Path(td) / "m.jsonl")
+
+        # A stub TensionDetector, standing in for the real one. Consolidator no
+        # longer derives insights from `engine`'s links — that path was deleted
+        # 2026-09-09 (agent/tension.py replaced it; see that module's header for
+        # why: it decayed to zero the more the system was used). `engine` above
+        # is now telemetry-only. Without a `detector=`, consolidate() correctly
+        # returns ZERO insights by design — which is exactly what silently broke
+        # this test until it was updated: C5/C7 predate the tension.py rewrite
+        # and were never re-run against it (caught 2026-09-10, during the
+        # regression sweep for an unrelated Codex-migration change).
+        from jarvis_core.agent.tension import REVERSES, TensionFinding
+
+        class _StubDetector:
+            async def scan(self, **kwargs: Any) -> List[TensionFinding]:
+                return [TensionFinding(
+                    relation=REVERSES, candidate_ref="461", candidate_ts=NOW.isoformat(),
+                    prior_ref="429", prior_ts="2026-07-18T10:00:00+05:30",
+                    which="fixture-driven heartbeat test", grounds_already_rejected=True,
+                    confidence=0.85)]
+
         con = Consolidator(engine=eng, append_fn=fake_append,
-                           feed_path=Path(td) / "feed.jsonl", confidence_floor=0.5)
+                           feed_path=Path(td) / "feed.jsonl", confidence_floor=0.5,
+                           detector=_StubDetector())
         return con, captured
 
     async def scenario() -> None:
