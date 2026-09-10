@@ -113,6 +113,25 @@ _DOMAIN_KEYWORDS = {
     "jarvis-build": ["jarvis_core", "react.py", "memory_manager", "tool.py", "stage 3", "react loop"],
 }
 
+# The classifier declining, as a value. NOT "general": see guess_domain's docstring
+# for the 309-record measurement that made this necessary. Mirrors
+# agent/domain_classifier.UNKNOWN — one vocabulary across both classifiers.
+UNKNOWN_DOMAIN = "unknown"
+
+# Precompiled per keyword, with boundaries that respect the keywords' own shapes.
+# A plain \b fails on the ones containing punctuation ("react.py" would match
+# "react-py"), so the dot is escaped and \b is only applied where the edge
+# character is a word character — otherwise \b there would never match.
+def _kw_pattern(keyword: str) -> "re.Pattern[str]":
+    escaped = re.escape(keyword)
+    left = r"\b" if keyword[:1].isalnum() or keyword[:1] == "_" else ""
+    right = r"\b" if keyword[-1:].isalnum() or keyword[-1:] == "_" else ""
+    return re.compile(left + escaped + right)
+
+
+_DOMAIN_KEYWORD_RE = {kw: _kw_pattern(kw)
+                      for kws in _DOMAIN_KEYWORDS.values() for kw in kws}
+
 # Harness wrapper blocks: injected by the host into user turns, NOT user-typed.
 # Conservative KNOWN-tag list — never a generic "<...>" strip (would eat pasted code).
 _HARNESS_TAGS = (
@@ -149,10 +168,36 @@ def strip_harness_blocks(text: str) -> str:
 
 
 def guess_domain(cwd: str, blob: str) -> str:
+    """A FAST, NON-AUTHORITATIVE domain hint. Returns UNKNOWN when unsure.
+
+    This runs inside the Stop hook on every turn of every chat, so it must stay
+    stdlib-only with no model load. It is therefore a keyword matcher, and a
+    keyword matcher will always be imprecise. Two changes on 2026-09-08 make that
+    imprecision harmless instead of corrosive:
+
+    1. WORD BOUNDARIES. It previously used unanchored `in`, so `nse` matched
+       inside "respo(nse)" — 52 of 52 `nse` hits were spurious, and the single
+       life-state insight that ever cleared the surfacing floor cited
+       "finance volume 0->4", which was almost certainly this. `rag` matched
+       "sto(rag)e"/"ave(rag)e" (26 of 28 spurious), `lora` matched
+       "exp(lora)tion", `sql` matched "sqlite". Requiring boundaries killed that
+       whole class; ~15% of all 583 records were mislabelled by it.
+
+    2. IT ABSTAINS. It used to seed `best="general"` and return that on zero
+       matches, so "genuinely general" and "I have no idea" were the SAME token.
+       Measured: all 309 "general" records had zero keyword hits — every one was
+       a shrug wearing the name of a real category, which is why 99 days of bad
+       labels went unnoticed. UNKNOWN is now returned, so abstention is countable.
+
+    THE AUTHORITATIVE LABEL IS NOT THIS. It is the embedding classifier's output
+    in jarvis_data/domain_labels.jsonl, which carries a score and is checked
+    against a gold set by scripts/check_projections.py. Treat this as a hint for
+    anything that cannot wait for that projection, and never as ground truth.
+    """
     hay = (cwd + " " + blob).lower()
-    best, best_hits = "general", 0
+    best, best_hits = UNKNOWN_DOMAIN, 0
     for domain, kws in _DOMAIN_KEYWORDS.items():
-        hits = sum(1 for k in kws if k in hay)
+        hits = sum(1 for k in kws if _DOMAIN_KEYWORD_RE[k].search(hay))
         if hits > best_hits:
             best, best_hits = domain, hits
     return best
@@ -281,15 +326,32 @@ def build_observation(event: Dict[str, Any], turn: Dict[str, str], cwd: str) -> 
 def append_observation(record: Dict[str, Any], queue_path: Path = QUEUE_PATH) -> None:
     queue_path.parent.mkdir(parents=True, exist_ok=True)
     line = json.dumps(record, ensure_ascii=False)
-    with open(queue_path, "a", encoding="utf-8") as f:
+    with open(queue_path, "a+", encoding="utf-8") as f:
         if _HAS_FCNTL:
             fcntl.flock(f.fileno(), fcntl.LOCK_EX)
         try:
-            f.write(line + "\n")
+            # Heal a missing terminator before appending. A process killed
+            # mid-write leaves a line with no "\n"; the next append then lands
+            # on that same line, so the torn record destroys the GOOD record
+            # written after it instead of only itself. kb_append.py has done
+            # this since it shipped; this call site had not copied it.
+            f.write(("" if _ends_with_newline(f) else "\n") + line + "\n")
             f.flush()
         finally:
             if _HAS_FCNTL:
                 fcntl.flock(f.fileno(), fcntl.LOCK_UN)
+
+
+def _ends_with_newline(handle: Any) -> bool:
+    """True when the file is empty or already ends in a newline."""
+    try:
+        handle.seek(0, 2)
+        if handle.tell() == 0:
+            return True
+        handle.seek(handle.tell() - 1)
+        return handle.read(1) == "\n"
+    except (OSError, ValueError):
+        return True
 
 
 def capture_stop_event(event: Dict[str, Any], queue_path: Path = QUEUE_PATH) -> Optional[Dict[str, Any]]:
@@ -407,6 +469,33 @@ def _run_self_test() -> None:
         check("T15 domain hint + model + machine stamped",
               line["heuristic_signals"]["domain_guess"] == "data-engineering"
               and line["model"] == "claude-fable-5" and bool(line["machine"]), str(line))
+
+        # --- T15b-T15d: the domain hint's two 2026-09-08 guarantees ---
+        # These pin the change that killed 15% of all historical mislabels. A
+        # regression here is silent and corrupts everything downstream of the
+        # label, so it is asserted rather than trusted.
+        spurious = {
+            "the response was fine": "nse inside 'respo(nse)' — 52 of 52 real hits",
+            "storage and average leverage": "rag inside 'sto(rag)e'/'ave(rag)e'",
+            "exploration of colorado": "lora inside 'exp(lora)tion'",
+            "we use sqlite locally": "sql inside 'sqlite'",
+            "a sparkline chart": "spark inside 'sparkline'",
+        }
+        bad = {t: guess_domain("", t) for t in spurious
+               if guess_domain("", t) != UNKNOWN_DOMAIN}
+        check("T15b substring false positives all abstain now", not bad, str(bad))
+        check("T15c a genuinely unrelated turn abstains, it is not called 'general'",
+              guess_domain("", "what time should we meet for lunch") == UNKNOWN_DOMAIN)
+        real = {
+            "explain spark AQE skew in databricks": "data-engineering",
+            "rebalance my SIP portfolio on the NSE": "finance",
+            "LoRA fine-tune a transformer": "ai-ml",
+            "the jarvis_core react loop": "jarvis-build",
+        }
+        missed = {t: guess_domain("", t) for t, want in real.items()
+                  if guess_domain("", t) != want}
+        check("T15d real matches still classify — boundaries did not overcorrect",
+              not missed, str(missed))
 
         # --- guards ---
         check("T16 stop_hook_active -> None",

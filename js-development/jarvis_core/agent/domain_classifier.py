@@ -31,8 +31,9 @@ phrase embeddings; a domain's score for a turn is the MAX cosine over its seeds
 (not a blurry averaged centroid — averaging diverse seeds buries the peak match,
 which is exactly why an early centroid build mis-filed "LoRA fine-tuning" as
 general). A turn embeds once; argmax domain wins UNLESS its best score is below
-`threshold`, in which case it falls back to "general" ("no specific domain is
-confident enough", not its own prototype).
+`threshold`, in which case it returns UNKNOWN -- "no specific domain is confident
+enough". UNKNOWN is deliberately NOT "general": conflating the classifier declining
+with a real category is what hid 99 days of bad labels (see the UNKNOWN constant).
 
 Brain-swap-proof / testable: the embedder is an injected `embed_fn`
 (Callable[[List[str]], List[List[float]]] returning UNIT-normalized vectors).
@@ -49,9 +50,10 @@ STEP 1: (lazy, once) embed the seed phrases of the 4 specific domains; mean +
 STEP 2: classify(text): embed the text (unit vector); cosine = dot vs each
         centroid; pick the best.
         |
-STEP 3: if best_score >= threshold -> that domain; else -> "general". Blank text
-        -> "general". Results cached by content so repeats (e.g. "continue")
-        embed once.
+STEP 3: if best_score >= threshold -> that domain; else -> UNKNOWN. Blank text
+        -> UNKNOWN. The score travels with the label via classify_scored(), so a
+        wrong threshold is measurable rather than invisible. Results cached by
+        content so repeats (e.g. "continue") embed once.
 
 =============================================================================
 """
@@ -72,8 +74,27 @@ EmbedFn = Callable[[List[str]], List[List[float]]]
 _DEFAULT_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
 _DEFAULT_THRESHOLD = 0.30  # tuned against the real queue (see __main__ + KB L314 follow-up)
 
+# ABSTENTION IS A LABEL (2026-09-08). This module used to fall back to "general"
+# below threshold, exactly as the keyword matcher it was built to replace did. That
+# is the real defect, and it is worse than any accuracy problem:
+#
+#   "general" meant BOTH "this turn is genuinely general" AND "I have no idea",
+#   so a failing classifier was indistinguishable from a working one.
+#
+# Measured on the live queue before this change: 309 of 583 records (53%) were
+# labelled "general", and ALL 309 had ZERO keyword hits. Not one was a positive
+# classification. The rot ran for 99 days because an abstention had no way to be
+# counted -- the same "unrepresentable fact" family as usage.py, the life_state
+# feed and projections.py.
+#
+# UNKNOWN is now returned instead. It is not a domain; it is the classifier
+# declining. Callers may then count it, alert on it, and exclude it -- none of
+# which was possible while it wore the name of a real category.
+UNKNOWN = "unknown"
+
 # The 4 SPECIFIC domains (must mirror capture_turn.py's keyword domains) + their
-# seed phrases. "general" is the fallback, NOT a centroid.
+# seed phrases. There is no "general" centroid, which is precisely why nothing was
+# ever positively classified as general.
 _DEFAULT_PROTOTYPES: Dict[str, List[str]] = {
     "data-engineering": [
         "Apache Spark internals, executors and the Catalyst optimizer",
@@ -84,6 +105,14 @@ _DEFAULT_PROTOTYPES: Dict[str, List[str]] = {
         "shuffle partitions, AQE skew handling and broadcast joins",
         "dbt, Airflow orchestration and incremental models",
         "schema evolution, SCD2 and change data capture",
+        # Added 2026-09-08 from gold-set misses: the seeds above described a
+        # narrower slice of the work than the user actually does. Each of these
+        # scored 0.14-0.25 (below threshold) and abstained on a real DE turn.
+        "AWS Glue, the Glue catalog, Athena and Redshift",
+        "Delta time travel, VACUUM, retention windows and the transaction log",
+        "snapshot CDC, apply_changes, handling deletes and late-arriving data",
+        "Azure Data Factory dynamic pipelines and on-premise source ingestion",
+        "data engineering interview questions on warehousing and pipelines",
     ],
     "finance": [
         "stock portfolio allocation and investment strategy",
@@ -98,6 +127,11 @@ _DEFAULT_PROTOTYPES: Dict[str, List[str]] = {
         "retrieval augmented generation and vector search",
         "neural network training, gradients and backpropagation",
         "LLM inference, quantization and model evaluation metrics",
+        # Same gold-set correction: the training-INFRASTRUCTURE vocabulary was
+        # entirely missing, so "the SFT thing / the runpod task" scored 0.210.
+        "SFT supervised fine-tuning datasets and instruction response pairs",
+        "RunPod GPU pods, training cost per hour and adapter training runs",
+        "running models locally on device, agentic AI hardware and NPUs",
     ],
     "jarvis-build": [
         "JARVIS agent framework in jarvis_core and its module design",
@@ -105,10 +139,15 @@ _DEFAULT_PROTOTYPES: Dict[str, List[str]] = {
         "MemGPT memory manager, heartbeat and the consolidator",
         "Stage 3 roadmap, the cognitive synthesis loop and the Final Boss",
         "MIRROR-lite reflection, CoT loop monitor and trace events",
+        # Same correction: JARVIS's own operation and evaluation, as opposed to
+        # its code, had no seeds at all.
+        "iterating on JARVIS's own answers and how it responds to questions",
+        "the observation queue, per-prompt capture and the cognitive profile",
+        "JARVIS chats across VS Code and Antigravity, and its identity",
     ],
 }
 
-KNOWN_DOMAINS = frozenset(set(_DEFAULT_PROTOTYPES) | {"general"})
+KNOWN_DOMAINS = frozenset(set(_DEFAULT_PROTOTYPES) | {UNKNOWN})
 
 
 def _unit(vec: List[float]) -> List[float]:
@@ -142,10 +181,21 @@ class DomainClassifier:
         threshold: float = _DEFAULT_THRESHOLD,
         prototypes: Optional[Dict[str, List[str]]] = None,
         model_name: str = _DEFAULT_MODEL,
+        fallback_label: str = UNKNOWN,
     ) -> None:
         self._embed_fn = embed_fn
         self._model_name = model_name
         self._threshold = float(threshold)
+        # WHAT "BELOW THRESHOLD" MEANS DEPENDS ON THE CALLER, and conflating the
+        # two is what this class was just fixed for. Two live consumers:
+        #   - activity domains: there is no "general" prototype, so falling back
+        #     to that name asserted a category nobody classified into -> UNKNOWN.
+        #   - brain/router.py: "general" IS a real routing destination (the
+        #     general model pool). Abstaining there legitimately means "send it
+        #     to general", so the router passes fallback_label="general".
+        # Hard-coding UNKNOWN broke the router's 50-query gate (Final Boss leg 3,
+        # caught 2026-09-09) because "unknown" is not in its ROUTING_LABELS.
+        self._fallback = str(fallback_label)
         self._prototypes = prototypes or _DEFAULT_PROTOTYPES
         self._seed_vecs: Optional[Dict[str, List[List[float]]]] = None
         self._cache: Dict[str, str] = {}
@@ -183,11 +233,11 @@ class DomainClassifier:
     def classify_scored(self, text: str) -> Tuple[str, float]:
         """Like classify(), but also returns the winning cosine score — the routing
         layer (Stage 4.2) needs a (label, confidence) pair, not just the label. A
-        below-threshold result is ("general", <the sub-threshold max>) so callers see
-        HOW close it came; blank text is ("general", 0.0). Non-breaking: classify()
-        and classify_many() are unchanged."""
+        below-threshold result is (UNKNOWN, <the sub-threshold max>) so callers see
+        HOW close it came; blank text is (UNKNOWN, 0.0) -- blank text is not a
+        "general" turn, it is nothing to classify, and saying so is the point."""
         if not (text or "").strip():
-            return "general", 0.0
+            return self._fallback, 0.0
         key = self._key(text)
         if key in self._score_cache:
             return self._score_cache[key]
@@ -207,7 +257,7 @@ class DomainClassifier:
         for i, t in enumerate(texts):
             key = self._key(t)
             if not (t or "").strip():
-                results[i] = "general"
+                results[i] = self._fallback
             elif key in self._cache:
                 results[i] = self._cache[key]
             else:
@@ -222,7 +272,7 @@ class DomainClassifier:
                 results[i] = domain
                 self._cache[self._key(texts[i])] = domain
 
-        return [r if r is not None else "general" for r in results]
+        return [r if r is not None else self._fallback for r in results]
 
     def _nearest(self, vec: List[float], seed_vecs: Dict[str, List[List[float]]]) -> str:
         """Nearest-prototype: a domain scores = MAX cosine over its seeds."""
@@ -231,17 +281,19 @@ class DomainClassifier:
     def _nearest_scored(
         self, vec: List[float], seed_vecs: Dict[str, List[List[float]]]
     ) -> Tuple[str, float]:
-        """Nearest-prototype with the winning score. Below threshold -> ("general",
-        best_score) — the score is still the closest specific-domain match, so the
-        caller can see the (low) confidence rather than a bare label."""
-        best_domain, best_score = "general", -1.0
+        """Nearest-prototype with the winning score. Below threshold -> (UNKNOWN,
+        best_score): the score is still the closest specific-domain match, so a
+        caller can see HOW close it came and tune the threshold against evidence
+        instead of guessing. Returning UNKNOWN rather than "general" is what makes
+        a wrong threshold detectable at all — see the UNKNOWN constant's note."""
+        best_domain, best_score = self._fallback, -1.0
         for domain, seeds in seed_vecs.items():
             score = max((_dot(vec, s) for s in seeds), default=-1.0)
             if score > best_score:
                 best_domain, best_score = domain, score
         if best_score >= self._threshold:
             return best_domain, best_score
-        return "general", best_score
+        return self._fallback, best_score
 
     @staticmethod
     def _key(text: str) -> str:
@@ -296,25 +348,27 @@ def _run_self_test() -> None:
     check("T2 stock -> finance", clf.classify("rebalance my stock portfolio") == "finance")
     check("T3 lora -> ai-ml", clf.classify("LoRA fine-tuning details") == "ai-ml")
     check("T4 jarvis -> jarvis-build", clf.classify("the jarvis consolidator module") == "jarvis-build")
-    check("T5 unrelated -> general (below threshold)", clf.classify("how do I cook pasta") == "general")
-    check("T6 blank -> general", clf.classify("   ") == "general")
-    check("T7 empty -> general", clf.classify("") == "general")
+    check("T5 unrelated -> UNKNOWN, not 'general' (the classifier declines, and says so)",
+          clf.classify("how do I cook pasta") == UNKNOWN)
+    check("T6 blank -> UNKNOWN (whitespace is nothing to classify, not a general turn)",
+          clf.classify("   ") == UNKNOWN)
+    check("T7 empty -> UNKNOWN", clf.classify("") == UNKNOWN)
 
     # batch + cache
     batch = clf.classify_many(["spark job", "sip plan", "cook pasta", "spark job"])
     check("T8 batch classifies correctly",
-          batch == ["data-engineering", "finance", "general", "data-engineering"], str(batch))
+          batch == ["data-engineering", "finance", UNKNOWN, "data-engineering"], str(batch))
     check("T9 repeated text cached (same result)", batch[0] == batch[3])
     check("T10 cache populated", len(clf._cache) >= 3, str(len(clf._cache)))
 
     # output is always a KNOWN domain
     check("T11 outputs are known domains", all(d in KNOWN_DOMAINS for d in batch))
 
-    # threshold tightening pushes ambiguous -> general
+    # threshold tightening pushes ambiguous -> UNKNOWN
     strict = DomainClassifier(embed_fn=fake_embed, threshold=0.99, prototypes=fake_protos)
-    # "spark stock" -> unit [.707,.707,0,0]; best single-seed dot = .707 < 0.99 -> general.
-    check("T12 high threshold pushes ambiguous -> general",
-          strict.classify("spark stock") == "general", str(strict.classify("spark stock")))
+    # "spark stock" -> unit [.707,.707,0,0]; best single-seed dot = .707 < 0.99 -> UNKNOWN.
+    check("T12 an over-tight threshold abstains rather than guessing",
+          strict.classify("spark stock") == UNKNOWN, str(strict.classify("spark stock")))
 
     # mixed-keyword text picks the stronger domain
     check("T13 mixed picks argmax", clf.classify("spark spark sql stock") == "data-engineering")
@@ -327,7 +381,7 @@ def _run_self_test() -> None:
     check("T14c classify_scored agrees with classify",
           clf.classify_scored("rebalance my stock portfolio")[0] == clf.classify("rebalance my stock portfolio"))
     blbl, bsc = clf.classify_scored("   ")
-    check("T14d blank -> (general, 0.0)", blbl == "general" and bsc == 0.0, f"{blbl},{bsc}")
+    check("T14d blank -> (UNKNOWN, 0.0)", blbl == UNKNOWN and bsc == 0.0, f"{blbl},{bsc}")
 
     # --- OPTIONAL: real MiniLM model with the REAL prototypes (tunes the default
     # threshold). Skips gracefully if sentence-transformers can't load. ---
@@ -339,7 +393,10 @@ def _run_self_test() -> None:
             "rebalance my SIP portfolio allocation on NSE": "finance",
             "LoRA fine-tuning a transformer with QLoRA adapters": "ai-ml",
             "the jarvis_core ReAct agent loop and consolidator": "jarvis-build",
-            "what time should we meet for lunch tomorrow": "general",
+            # Not "general" — there is no general prototype to match, so the honest
+            # answer is that no domain is confident enough. That distinction is the
+            # entire point of UNKNOWN.
+            "what time should we meet for lunch tomorrow": UNKNOWN,
         }
         for text, expect in cases.items():
             got = real.classify(text)

@@ -50,7 +50,12 @@ def _load_monitor(cwd: str):
         sys.path.insert(0, str(Path(cwd) / "js-development"))
         from jarvis_core.agent.life_state_monitor import LifeStateMonitor  # type: ignore
         feed = Path(cwd) / "jarvis_data" / "life_state_feed.jsonl"
-        wm = Path(cwd) / "jarvis_data" / ".surfaced_watermark"
+        # .jsonl, matching _WATERMARK_PATH (changed 2026-09-08 so two machines'
+        # surfaced-events union-merge). This fallback hardcodes the path, so it
+        # must be kept in step with the module default the primary branch uses —
+        # a mismatch splits the never-nag record across two files and silently
+        # re-raises insights the user has already been shown.
+        wm = Path(cwd) / "jarvis_data" / ".surfaced_watermark.jsonl"
         return LifeStateMonitor(feed_path=feed, watermark_path=wm)
     except Exception:
         return None
