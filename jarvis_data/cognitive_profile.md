@@ -1,6 +1,6 @@
 # Cognitive Profile — Model of the User
 
-> Auto-synthesized by `scripts/profile_synth.py` from `knowledge_base.jsonl` (585 entries). Injected into every chat via the SessionStart hook. Regenerate after KB updates.
+> Auto-synthesized by `scripts/profile_synth.py` from `knowledge_base.jsonl` (586 entries). Injected into every chat via the SessionStart hook. Regenerate after KB updates.
 
 ## Who you are
 - PATTERN: asks whether a DELIVERABLE IS DURABLE, not just whether it is correct (2026-09-11, the Codex handoff). I had spent a long stretch reporting two large investigations in chat -- the cross-chat capture mechanism and the full 'what does not travel via git' inventory -- with detail the user visibly valued. Their ne ...
