@@ -49,12 +49,15 @@ In this repo you are **Chief Systems Architect & Strategic Co-Founder** for JARV
 
 ---
 
-## Dual-runtime topology
+## Triple-runtime topology (Codex added 2026-09-10)
 
 | Machine | OS | Runtime | When | Role |
 |---|---|---|---|---|
 | Work laptop (this one) | Linux | Claude Code (Opus 4.7) | Daytime | Heavy lifting; scratchpad |
-| Personal laptop | Windows | Antigravity | Evenings | Learning + brainstorming via slash-command workflows; canonical machine |
+| Personal laptop | Windows | Antigravity | Evenings | Learning + brainstorming via slash-command workflows |
+| Personal laptop | Windows | **Codex CLI (GPT-6 Astra)** | Primary build, going forward | Entry point [AGENTS.md](AGENTS.md); orientation mirrors [js-workspace-rule.md](.agent/rules/js-workspace-rule.md)'s SESSION BOOT pattern since Codex has no hook system either. Capture via `scripts/ingest_codex_sessions.py` (ROADMAP 6.8.3) reading `~/.codex/sessions/`, scheduled by the hearth — **not** manual `/memory` like Antigravity, whose capture has produced zero records in months. Codex's own `~/.codex/memories/` is a global, session-scoped cache reconciled INTO the KB by `scripts/reconcile_codex_memory.py`, never the reverse — `knowledge_base.jsonl` stays the one FACT. |
+
+**"Canonical machine" was dropped from the personal laptop's row.** Verified 2026-09-10: `~/.claude/projects/.../memory/` (this machine, Claude Code's own local notes — see the rule below) held 13 project-canonical notes, at least 2 of which had **zero** representation anywhere in the tracked KB, violating the very rule stated two paragraphs down. No single machine has been the sole source of truth in practice; the KB is, and the machine-local memory directories on both existing hosts have at times quietly disagreed with that. Promoted the orphaned notes to KB 579-581 as part of the Codex migration; if a similar audit is ever run against Antigravity's equivalent local state, expect the same finding.
 
 **Sync:** GitHub at https://github.com/Swarajnegi/private-ai — **PRIVATE since 2026-08-26** (it was public until then; the earlier "pull is auth-free" note no longer holds). Standard `git pull` / `git push` flow, and **both** now require a fine-grained PAT in `$GH_TOKEN` (Contents: Read and write). **Single-user-at-a-time** — no concurrent edits, so `merge=union` on `*.jsonl` (set in `.gitattributes`) handles the rare append-from-both-sides case automatically.
 
@@ -132,10 +135,10 @@ Changes flow via GitHub: `git push` from work laptop → `git pull` on personal 
 
   **`cognitive_profile.md` and `activity_digest.md` are PROJECTION-AS-TRANSPORT and must stay tracked.** [js-workspace-rule.md](js-workspace-rule.md) §SESSION BOOT tells the personal laptop to READ both at boot, and states why it cannot regenerate them: *"there is NO per-prompt capture here (Antigravity has no hook system)."* No local queue means no digest. Untracking them blinds that machine — this looks like an obvious cleanup and is a regression.
 
-  **`chromadb/` stays tracked too**, for a different reason: its `research_papers` collection (156 embeddings) is not regenerable because the source PDFs are gitignored as well. Only the `jarvis_memory` half rebuilds, via `python3 scripts/index_memory.py`.
+  **`chromadb/` stays tracked**, but not for the reason previously stated here. **Corrected 2026-09-10** — this line claimed "`research_papers` is not regenerable because the source PDFs are gitignored"; that was false and I (Claude) wrote it without checking. All 24 source PDFs **are** tracked (`research_papers/`, not gitignored). Both halves rebuild: `jarvis_memory` via `python3 scripts/index_memory.py`; `research_papers` via `python3 scripts/ingest.py <pdf> --collection research_papers`, once per PDF. `chromadb/` stays tracked anyway per the no-binaries rule below — a 22 MB regenerable index isn't worth committing or worth un-tracking mid-project. Tenth prose-vs-code instance this week (KB 548 family), and the first where the error was mine, repeating an earlier unverified claim instead of re-checking it.
 
 - **Staleness is now detected, not discovered by accident.** `python3 scripts/check_projections.py` compares every projection against the KB and exits non-zero when one lags; `jarvis_core/brain/projections.py` surfaces the same check in the boot inhale, and stays silent when everything matches. Re-run `scripts/profile_synth.py` after KB writes and `scripts/index_memory.py` after a batch of them, or retrieval answers from an older mind than the log holds.
-- Memory in `~/.claude/projects/-home-swara-unix-work-JARVIS/memory/` is **machine-local** — does not migrate. Don't put project-canonical knowledge there; use [jarvis_data/knowledge_base.jsonl](jarvis_data/knowledge_base.jsonl).
+- Memory in `~/.claude/projects/-home-swara-unix-work-JARVIS/memory/` is **machine-local** — does not migrate. Don't put project-canonical knowledge there; use [jarvis_data/knowledge_base.jsonl](jarvis_data/knowledge_base.jsonl). **This rule was found violated, not just theoretical** (2026-09-10, auditing before the Codex migration): 13 notes lived there, 2 with zero KB representation — including the sole record of a Databricks workspace/warehouse/job id (now KB 579). The habit that caused it: writing a note there felt like "storing it" and the distinction from the KB was easy to forget mid-session. If you ever write there, treat it as a **draft** and promote anything durable via `kb_append.py` before the session ends — don't rely on remembering to audit it later.
 - `CLAUDE.md` (root), `SYNC.md`, `RUNBOOK.md` are gitignored — they were transitional or work-laptop-only. The substantive operating context is THIS file (`.agent/rules/CLAUDE.md`), which Antigravity loads via `trigger: always_on`.
 
 ---
@@ -200,6 +203,8 @@ No fluff. Depth over brevity. Be direct. When the user is wrong, say so with rea
 
 | What | Path |
 |---|---|
+| **Nervous system, inventory, per-host setup** | **[NERVOUS_SYSTEM.md](NERVOUS_SYSTEM.md)** — how cross-chat context actually works, what does NOT survive a `git pull` and how to rebuild it, and the adapter contract for a new host |
+| Codex entry point | [AGENTS.md](AGENTS.md) |
 | Endgame architecture | [.agent/rules/JARVIS_ENDGAME.md](.agent/rules/JARVIS_ENDGAME.md) |
 | Antigravity always-on protocol | [.agent/rules/js-workspace-rule.md](.agent/rules/js-workspace-rule.md) |
 | GitHub remote | https://github.com/Swarajnegi/private-ai |

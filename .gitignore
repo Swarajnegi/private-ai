@@ -58,7 +58,9 @@
 #      a scratch repo against both layouts (nested folder and flat file).
 #
 #   2. jarvis_data/training_corpus/  TRACKED, deliberately and with the tradeoff
-#      understood. 947 of its 3,064 blended records — ~2.58 M chars — ARE client
+#      understood. 947 of its blended records (3,127 as of 2026-09-11; the count
+#      here read 3,064 and went stale — check with `wc -l`, don't trust this
+#      line) — ~2.58 M chars — ARE client
 #      text: engineer_corpus.py and personalization_corpus.py lift source files
 #      out of client_work/ and chunk them, so these records are the source text
 #      itself, not summaries of it. Roughly 60% of the raw client volume travels
@@ -154,9 +156,27 @@ jarvis_data/context/
 #                            NO per-prompt capture here (Antigravity has no hook
 #                            system)". No local queue => no digest. Untracking
 #                            them BLINDS that machine.
-#   chromadb/               research_papers (156 embeddings) is not regenerable —
-#                            the source PDFs are gitignored too. Only the
-#                            jarvis_memory half rebuilds, via index_memory.py.
+#   chromadb/               CORRECTED 2026-09-10 — the line this replaces was
+#                            wrong on the load-bearing fact and I (Claude) wrote
+#                            it. It claimed "research_papers is not regenerable
+#                            — the source PDFs are gitignored too." Verified:
+#                            all 24 source PDFs ARE tracked (git ls-files
+#                            research_papers/ | grep -c '.pdf$' => 24; `git
+#                            check-ignore` matches nothing under that dir).
+#                            BOTH halves of chromadb/ rebuild:
+#                              jarvis_memory     -> scripts/index_memory.py
+#                              research_papers   -> scripts/ingest.py <pdf>
+#                                                   --collection research_papers,
+#                                                   once per PDF (no batch mode
+#                                                   exists yet — 24 calls today)
+#                            chromadb/ stays tracked anyway, per CLAUDE.md's
+#                            "don't stage binaries" rule this file itself
+#                            states elsewhere: a 22 MB regenerable index isn't
+#                            worth committing OR worth ripping out mid-project.
+#                            Tenth prose-vs-code drift found this week (KB 548
+#                            family) — and the first of the ten where I was
+#                            checking someone else's earlier claim and simply
+#                            repeated it without re-verifying.
 jarvis_data/cognitive_index.sqlite3
 jarvis_data/behavioral_state_model.jsonl
 
@@ -182,6 +202,19 @@ jarvis_data/.hearth_token
 jarvis_data/.hearth.pid
 jarvis_data/.hearth_jobs.json
 jarvis_data/hearth.log
+
+# -- Codex ingestion watermark — MACHINE-LOCAL (2026-09-11) -------------------
+# {"file": "<rollout basename>", "ts": ...} indexing which of THIS machine's
+# ~/.codex/sessions/ rollouts have been ingested. Rollout filenames are local to
+# the machine that produced them, so syncing this file carries entries naming
+# transcripts the other machine does not have, while saying nothing about its
+# own. Harmless but pure noise — and `merge=union` would accumulate it forever.
+#
+# Contrast .surfaced_watermark.jsonl and .tension_watermark.jsonl, which ARE
+# tracked and correctly so: those are keyed by insight id and KB timestamp — the
+# same facts on every machine — so sharing them stops an insight already raised
+# with the user from being raised again elsewhere.
+jarvis_data/.codex_ingest_watermark.jsonl
 
 # -- rfm/ — A SEPARATE REPO, NOT JARVIS CONTENT (2026-09-08) ------------------
 # Working clone of https://github.com/Swarajnegi/dadfinanceapp.git — the user's

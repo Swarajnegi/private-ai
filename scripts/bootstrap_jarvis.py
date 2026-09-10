@@ -228,9 +228,16 @@ def _run_self_test() -> None:
 
     manifest_hooks = json.loads(_MANIFEST.read_text(encoding="utf-8"))["hooks"]
 
-    # T1: merge into EMPTY settings installs all 5 hooks
+    # T1: merge into EMPTY settings installs every manifest hook.
+    # NOT hardcoded to a literal count: the manifest has grown from 5 to 7 hooks
+    # since this test was written (capture_gap_nudge.py, run_consolidation.py),
+    # and the count silently went stale — this self-test itself failed 8/12 on
+    # 2026-09-10 for exactly that reason, caught only by actually running it.
+    manifest_hook_count = sum(len(group["hooks"])
+                              for groups in manifest_hooks.values() for group in groups)
     merged, added = merge_hooks({}, manifest_hooks)
-    check("T1 fresh machine gets all 5 hooks", added == 5, str(added))
+    check(f"T1 fresh machine gets all {manifest_hook_count} manifest hooks",
+          added == manifest_hook_count, str(added))
     check("T1b all three events present",
           set(merged["hooks"].keys()) == {"UserPromptSubmit", "Stop", "SessionStart"})
 
@@ -250,7 +257,8 @@ def _run_self_test() -> None:
     stop_cmds = [tuple(h.get("args", [])) for g in merged3["hooks"]["Stop"] for h in g["hooks"]]
     check("T3b local extra hook survives", ("my_local_hook.py",) in stop_cmds)
     check("T3c manifest Stop hook added alongside", ("scripts/hooks/capture_turn.py",) in stop_cmds)
-    check("T3d added count = 5 (manifest only)", added3 == 5, str(added3))
+    check(f"T3d added count = {manifest_hook_count} (manifest only, local hook untouched)",
+          added3 == manifest_hook_count, str(added3))
 
     # T4: partial install — one SessionStart hook present, merge adds only the missing
     partial = {"hooks": {"SessionStart": [{"matcher": "startup|resume|clear|compact", "hooks": [
@@ -259,13 +267,15 @@ def _run_self_test() -> None:
     merged4, added4 = merge_hooks(partial, manifest_hooks)
     ss = next(g for g in merged4["hooks"]["SessionStart"]
               if g["matcher"] == "startup|resume|clear|compact")
-    check("T4 partial -> only missing added (4)", added4 == 4, str(added4))
+    partial_gap = manifest_hook_count - 1   # `partial` pre-installs exactly one hook
+    check(f"T4 partial -> only the missing {partial_gap} added",
+          added4 == partial_gap, str(added4))
     check("T4b no duplicate inject_profile",
           sum(1 for h in ss["hooks"] if h.get("args") == ["scripts/hooks/inject_profile.py"]) == 1)
 
     # T5: missing_hooks reporting
     gaps = missing_hooks(partial, manifest_hooks)
-    check("T5 check-mode finds the 4 gaps", len(gaps) == 4, str(gaps))
+    check(f"T5 check-mode finds the {partial_gap} gaps", len(gaps) == partial_gap, str(gaps))
     check("T5b complete settings -> no gaps", missing_hooks(merged, manifest_hooks) == [])
 
     total = passed + len(failed)
