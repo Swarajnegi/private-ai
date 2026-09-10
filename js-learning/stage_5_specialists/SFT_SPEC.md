@@ -4,7 +4,29 @@
 > Written 2026-08-26 because "gather until the corpus is rich" had no stopping criterion — a
 > condition that cannot be met by observation is not a plan. This replaces it with numbers.
 >
-> **Status:** spec agreed, pairs not yet built.
+> **Status (2026-09-10): BUILT — `scripts/build_sft_pairs.py`. 440 pairs (397 train + 43 held-out).**
+>
+> | Bucket | Target | Built | |
+> |---|---|---|---|
+> | Engineer | 400 | **359** | 90% — mechanical sources nearly exhausted |
+> | Personalization | 200 | **81** | 40% — §5's "actual bottleneck", confirmed empirically |
+>
+> Every §8 criterion is met except the counts: `source_path` on all 440, `messages` format,
+> a stratified 10% held-out slice carved before training with a fixed seed, zero train/heldout leakage.
+>
+> **The measurement that matters, and it is not good news.** Adding these pairs moves the
+> personalization character share from **13.4% → 13.7%**. Effectively nothing, because 90% of the
+> pairs are Engineer. So of the two failures an external review named on 2026-09-09:
+> **"zero SFT pairs" is FIXED** (they are now 5.7% of the corpus by character);
+> **the 87/13 asymmetry is NOT** — and no amount of further *extraction* will fix it, because the
+> mechanical sources are Engineer-heavy by nature.
+>
+> That leaves exactly two levers, and §7 already rules on one of them: `_PERSONALIZATION_REPEATS`
+> stays at **1**. Upsampling repeats the same ~200 K tokens rather than adding information, and §5's
+> own Failure-C warning (memorization on a thin corpus) gets *worse* with repetition, not better.
+> **The remaining lever is more personalization SOURCE material** — §6 decision-explanation
+> sessions. That requires the user, and it is now the single highest-value unblocked action in
+> Stage 5.
 
 ---
 
