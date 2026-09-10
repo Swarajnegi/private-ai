@@ -315,6 +315,33 @@ python3 scripts/bootstrap_jarvis.py     # safe to re-run
 python3 scripts/index_memory.py         # rebuild the vector index — it does NOT travel (Class 2)
 ```
 
+**Also on a new machine — set Codex's own model.** `~/.codex/config.toml` is outside the repo, so
+it does **not** travel and each machine needs it set independently:
+```toml
+model = "gpt-6-astra"
+model_reasoning_effort = "xhigh"
+
+[features]
+memories = true
+
+[memories]
+generate_memories = true
+use_memories = true
+```
+`memories = true` is deliberate: Codex's native memory is a cheap per-session cache that matters
+given a 258 K context window. It is **not** a second mind — see the reconciler note below for why
+that is safe.
+
+**Then make capture automatic — this is the step that decides whether any of it works.**
+```bash
+python3 scripts/hearth.py --background   # start the clock; run this ON THIS MACHINE
+python3 scripts/hearth.py --status       # confirm ingest_codex is in the job list
+```
+Without a running hearth, `ingest_codex` fires **only when a human runs it**, which makes Codex
+capture manual in practice — and manual capture is the thing that has already been measured to
+produce zero records over months on the other hookless host (§4.3). The adapter existing is not
+the same as the adapter running. **Start the hearth on whichever machine you actually work on.**
+
 **Every session** — this is `AGENTS.md`'s SESSION BOOT, and it is the whole orientation:
 read `cognitive_profile.md`, read `activity_digest.md` (check its `Generated` stamp), **check for
 something to raise**, then use `search_memory.py` for topic recall.
@@ -426,8 +453,16 @@ reads it at boot and *cannot* rebuild it, having no local queue — was booting 
 That is the `PROJECTION-AS-TRANSPORT` class: derived here, consumed by a machine that cannot derive
 it. Untracking such a file looks like obvious cleanup and is a regression.
 
-> **Honest status:** the hearth is **not** currently running as a persistent daemon on the work
-> laptop. Check with `--status` before assuming any scheduled job has fired recently.
+> **Honest status (2026-09-11): the hearth is not running as a persistent daemon on ANY machine.**
+> Not the work laptop, and not yet the personal laptop. Everything in the job table above therefore
+> fires **only when someone runs `--tick-once` or the underlying script by hand** — including
+> `ingest_codex`, which is what makes Codex capture automatic rather than manual (§4.2).
+>
+> This is the single highest-leverage unstarted thing in the whole setup: every organ is built,
+> tested and committed, and the clock that drives them is off. Run
+> `python3 scripts/hearth.py --background` on the machine you actually work on, then `--status` to
+> confirm. Check `--status` before assuming any scheduled job has fired recently — a stale
+> `.hearth_jobs.json` reports the last tick, which may be weeks old.
 
 ---
 
