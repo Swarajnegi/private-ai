@@ -8,8 +8,18 @@
 > Both had been answered only in conversation, which means they were answered nowhere. This file
 > is the answer, and it is tracked so it arrives with the code it describes.
 >
-> **Audience:** any agent or human operating JARVIS on any machine. Codex-first (that is the host
-> that most needs it), but Claude Code and Antigravity are covered too.
+> **Audience:** any agent or human operating JARVIS on any machine.
+>
+> **Find your part and read it — the hosts are genuinely not equivalent:**
+>
+> | You are | Read | Your situation in one line |
+> |---|---|---|
+> | **Codex CLI** | §1, §5.2, §6 | Capture works, but ONLY if the hearth is running here — check it |
+> | **Antigravity** | §1, §5.3, §7.1 | **Nothing is capturing you.** Say so if asked; write durable things to the KB by hand |
+> | **Claude Code** | §1, §5.1 | Hooks capture every turn automatically; nothing to start |
+>
+> §1 is mandatory for all three — it corrects four misconceptions that otherwise produce confidently
+> wrong answers to the user about what JARVIS can and cannot see.
 
 ---
 
@@ -34,7 +44,79 @@ If you are about to add a count to this file: don't. Add the command that prints
 
 ---
 
-## 1. The mechanism — how every chat knows every other chat
+## 1. The mental model — four things people get wrong
+
+Read this before the mechanics. These four misconceptions came up in a real conversation on
+2026-09-11, and all four are the kind that quietly produce wrong answers to the user.
+
+### 1.1 The hearth has no senses
+
+The hearth **observes nothing.** It is a process that runs other programs on a schedule — the
+heartbeat, not the eyes. What actually observes is different on every host:
+
+| Host | What observes a turn | Automatic? | Needs the hearth? |
+|---|---|---|---|
+| **Claude Code** | `Stop` hook → `capture.py`, one line per turn | yes, always | **no** — the hook fires on its own |
+| **Codex** | `ingest_codex_sessions.py` reading `~/.codex/sessions/` | only if scheduled | **yes** — the hearth is what runs it |
+| **Antigravity** | **nothing at all** | **no** | a hearth changes nothing here |
+
+So "turn the hearth on and JARVIS sees everything everywhere" is **false in two directions**: Claude
+Code already captures without it, and Antigravity captures nothing with it. The hearth's role is to
+keep the *Codex* reader firing when nobody remembers to run it, and to keep consolidation,
+projections and the digest fresh on a clock rather than on attention.
+
+### 1.2 The hearth is not the sync mechanism either
+
+It binds `127.0.0.1` only and re-checks the peer per request. **One machine's hearth cannot see
+another's.** Two hearths are two independent local clocks, not a network.
+
+**Git is the transport, and always was.** The full chain:
+
+```
+work in Codex → ingest_codex (hearth clock) → observation_queue.jsonl
+              → YOU git push → other machine git pulls
+              → its hooks / boot ritual inject it
+```
+
+Skip the push/pull and the two machines diverge no matter how many hearths run.
+
+### 1.3 ChromaDB is an index, not a store — this one matters most
+
+`chromadb/` holds **no original information.** It is a rebuilt lookup structure over data that
+lives elsewhere.
+
+| Class | Files | Tracked? |
+|---|---|---|
+| **FACT** — authoritative, append-only, the actual mind | `knowledge_base.jsonl`, `observation_queue.jsonl` | ✅ yes |
+| **PROJECTION** — derived, rebuildable, disposable | `chromadb/`, `cognitive_index.sqlite3` | ❌ no |
+| **PROJECTION-AS-TRANSPORT** — derived here, consumed by a machine that cannot rebuild it | `cognitive_profile.md`, `activity_digest.md` | ✅ yes, and correctly so |
+
+The proof is in this repo's own history: on 2026-09-11 the entire 25 MB `chromadb/` directory was
+removed from version control and **nothing was lost** — every fact intact, search still working
+after a rebuild. That is only possible because it stores nothing original. It is the card
+catalogue, not the library.
+
+If you ever find yourself worried about "losing ChromaDB", you are worried about the wrong file.
+Worry about `knowledge_base.jsonl`.
+
+### 1.4 Time is real; general perception of absence is not (yet)
+
+**Time is genuinely modelled.** Every captured turn is stamped IST; `recall.py` groups by calendar
+day; `agent/tension.py` enforces "only the past can be a prior" so a later decision cannot be
+contradicted by an earlier one in the wrong direction.
+
+**Absence is only detected where an instrument was built for it**, and there are exactly three:
+`capture_gap_nudge.py` (turns accumulating with no KB append), `check_projections.py` (a projection
+that stopped being refreshed), and the digest's day-by-day view (a visible gap between days).
+
+There is **no general faculty** for noticing "you stopped working on X." Measured 2026-09-11: across
+100 days and 607 captured turns, all six domains were active within 0–2 days, so a domain-level
+dormancy detector would never fire at all. Do not claim this capability to the user. See §7.3 for
+what it would actually take.
+
+---
+
+## 2. The mechanism — how every chat knows every other chat
 
 **One sentence:** a `Stop` hook appends every turn of every chat to one append-only JSONL file;
 three `SessionStart` hooks read that file (plus two derived artifacts) back into the next chat as
@@ -60,7 +142,7 @@ New session starts
 If you are porting to a new host, that string is what you must reproduce — whatever channel your
 host offers for putting text in front of the model before it answers.
 
-### 1.1 The committed wiring recipe
+### 2.1 The committed wiring recipe
 
 `.agent/hooks.manifest.json` is the **canonical, committed** declaration of every hook.
 `.claude/settings.json` is machine-local and gitignored — the manifest is what it gets rehydrated
@@ -82,7 +164,7 @@ never blanks a synced digest on a machine with no local capture.
 **Rule:** any new awareness feature adds its registration to the manifest — core organ + thin
 adapter + committed manifest entry. Never only in local settings.
 
-### 1.2 The seven hooks
+### 2.2 The seven hooks
 
 | Event | Script | What it does |
 |---|---|---|
@@ -99,7 +181,7 @@ Two details that are easy to get wrong:
 - **`surface_life_state.py` does not build the `additionalContext` envelope.** The organ does —
   `life_state_monitor.session_start_payload()`. The hook only serializes what it is handed. That
   is the organ/adapter split working correctly, and it is why the surfacing capability is portable
-  to a host with no hooks at all (see §4.2).
+  to a host with no hooks at all (see §5.2).
 - **`run_consolidation.py`'s internal timeout is not the manifest's timeout.** The manifest grants
   the hook a larger budget than the subprocess is given, deliberately, so the subprocess loses the
   race and the hook always exits cleanly. Do not "simplify" them to the same number.
@@ -107,7 +189,7 @@ Two details that are easy to get wrong:
 Every hook reads stdin JSON, **swallows all exceptions, and exits 0 unconditionally.** A broken
 hook must never disrupt a turn. Preserve that discipline in any port.
 
-### 1.3 What actually gets written
+### 2.3 What actually gets written
 
 One line per turn, appended to `jarvis_data/observation_queue.jsonl`. Top-level keys:
 
@@ -140,14 +222,14 @@ tail -1 jarvis_data/observation_queue.jsonl | python3 -m json.tool   # the live 
 
 ---
 
-## 2. The adapter contract — porting to a host with no hooks
+## 3. The adapter contract — porting to a host with no hooks
 
 This is no longer theoretical. `scripts/ingest_codex_sessions.py` is a **second working
 implementation** against a different host, a different transcript format, and a different
 lifecycle (no hooks at all — a scheduled reader instead). It proved the organ genuinely is
 host-independent rather than merely designed to be. That closed ROADMAP 6.8.1–6.8.4.
 
-### 2.1 Reuse this — it is host-agnostic
+### 3.1 Reuse this — it is host-agnostic
 
 | Component | Where |
 |---|---|
@@ -170,7 +252,7 @@ The only hit is a **comment in the Codex ingester asserting this very fact** —
 ever see a second hit, the portability contract has been broken and capture has become
 host-locked.
 
-### 2.2 Re-derive this — it is Claude-Code-specific
+### 3.2 Re-derive this — it is Claude-Code-specific
 
 1. **Lifecycle event names** — `Stop`, `SessionStart` (matcher `startup|resume|clear|compact`),
    `UserPromptSubmit`. `compact` in particular is a Claude Code concept.
@@ -184,7 +266,7 @@ host-locked.
    fills with harness noise instead of user prompts, because a pure-wrapper turn will look like
    real user text.
 
-### 2.3 The one change the organ needed, and why
+### 3.3 The one change the organ needed, and why
 
 `build_observation` originally hardcoded "now" as the timestamp — correct for a **live** Stop hook
 (the turn just ended), and wrong for **ingesting a historical transcript** written weeks ago.
@@ -198,7 +280,7 @@ optional `ts=` override. Every existing call site is unaffected.
 **Generalize this:** when a second host needs a variation, extend the organ by one optional
 parameter — do not copy it. A forked schema diverges the first time either copy changes.
 
-### 2.4 Two bugs this pattern produced — do not repeat them
+### 3.4 Two bugs this pattern produced — do not repeat them
 
 Both are in the KB with full mechanisms (search `def-time binding`, `regex closed set`):
 
@@ -215,7 +297,7 @@ Both are in the KB with full mechanisms (search `def-time binding`, `regex close
 
 ---
 
-## 3. The inventory — what does NOT travel via `git pull`
+## 4. The inventory — what does NOT travel via `git pull`
 
 The repo **is** the mind: the knowledge base, the cognitive profile, the activity digest, the
 training corpus, `.agent/rules/`, the research PDFs, and the ChromaDB SQLite file are all tracked.
@@ -303,16 +385,16 @@ git add -An client_work/    # dry run: shows exactly what would be staged
 
 ---
 
-## 4. Per-host setup
+## 5. Per-host setup
 
-### 4.1 Claude Code — automatic
+### 5.1 Claude Code — automatic
 
 ```bash
 python3 scripts/bootstrap_jarvis.py --check   # verify all manifest hooks are live
 ```
 Capture is per-turn and automatic. Nothing else to do.
 
-### 4.2 Codex CLI — scheduled capture, manual boot ritual
+### 5.2 Codex CLI — scheduled capture, manual boot ritual
 
 Codex has **no hook system**, but it **persists its own session transcripts** to
 `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl` whether or not anything reads them. That is enough
@@ -352,7 +434,7 @@ python3 scripts/hearth.py --status       # confirm ingest_codex is in the job li
 ```
 Without a running hearth, `ingest_codex` fires **only when a human runs it**, which makes Codex
 capture manual in practice — and manual capture is the thing that has already been measured to
-produce zero records over months on the other hookless host (§4.3). The adapter existing is not
+produce zero records over months on the other hookless host (§5.3). The adapter existing is not
 the same as the adapter running. **Start the hearth on whichever machine you actually work on.**
 
 **Every session** — this is `AGENTS.md`'s SESSION BOOT, and it is the whole orientation:
@@ -400,7 +482,7 @@ unrelated work.
 > Both Codex scripts accept `--self-test`, but it is checked directly from `sys.argv` and so does
 > **not** appear in `--help`. It runs entirely on temp directories and never touches `~/`.
 
-### 4.3 Antigravity — degraded, and honest about it
+### 5.3 Antigravity — degraded, and honest about it
 
 **Capture does not run here.** Antigravity has no hook system, and unlike Codex it is *not yet
 established* whether it persists any transcript to disk that an adapter could read after the fact.
@@ -416,7 +498,7 @@ Orientation is the same read-at-boot ritual — see `.agent/rules/js-workspace-r
 
 ---
 
-## 5. Keeping it running — the hearth
+## 6. Keeping it running — the hearth
 
 One always-on process owns the mutable state and the clock; every surface is a client.
 
@@ -441,7 +523,7 @@ force a needless expensive rebuild.
 The hearth also **denies every permission prompt** — it has no TTY, so it reports the denial and
 tells you to re-run through `--ask` where a human is reachable.
 
-### 5.1 The scheduled jobs
+### 6.1 The scheduled jobs
 
 `serve/scheduler.py::default_jobs()`. Read the list, don't trust a count:
 
@@ -469,7 +551,7 @@ it. Untracking such a file looks like obvious cleanup and is a regression.
 > **Honest status (2026-09-11): the hearth is not running as a persistent daemon on ANY machine.**
 > Not the work laptop, and not yet the personal laptop. Everything in the job table above therefore
 > fires **only when someone runs `--tick-once` or the underlying script by hand** — including
-> `ingest_codex`, which is what makes Codex capture automatic rather than manual (§4.2).
+> `ingest_codex`, which is what makes Codex capture automatic rather than manual (§5.2).
 >
 > This is the single highest-leverage unstarted thing in the whole setup: every organ is built,
 > tested and committed, and the clock that drives them is off. Run
@@ -479,14 +561,14 @@ it. Untracking such a file looks like obvious cleanup and is a regression.
 
 ---
 
-## 6. What is not built
+## 7. What is not built
 
-### 6.1 An Antigravity capture adapter
+### 7.1 An Antigravity capture adapter
 
 **Blocked on a question, not on architecture:** does Antigravity persist a readable transcript to
 disk at all? If it does, the adapter is a near-copy of the Codex one and the contract in §2 already
 proves it generalizes. If it does not, capture there cannot be automated after the fact and the
-honest answer is to keep §4.3's degraded-mode statement.
+honest answer is to keep §5.3's degraded-mode statement.
 
 **If you build it, follow the shape that worked:**
 1. Find the transcript. Confirm the real on-disk format by *reading actual files* — do not build a
@@ -497,12 +579,12 @@ honest answer is to keep §4.3's degraded-mode statement.
 4. Keep a **per-file, append-only watermark** so re-runs never double-ingest. Per-file, not
    global: a long-lived transcript keeps growing, and a global watermark either re-scans forever
    or misses late turns appended to an older file.
-5. Write offline self-tests that **never touch `~/`** — and re-read §2.4 first, because the
+5. Write offline self-tests that **never touch `~/`** — and re-read §3.4 first, because the
    obvious way to write those tests has a bug that makes them read production instead.
 6. Add it to `default_jobs()` with a unique `initial_delay_seconds`.
-7. Update §4.3 here and in `js-workspace-rule.md` the moment it works.
+7. Update §5.3 here and in `js-workspace-rule.md` the moment it works.
 
-### 6.2 Codex has no `notice_runtime_change` or `capture_gap_nudge` equivalent
+### 7.2 Codex has no `notice_runtime_change` or `capture_gap_nudge` equivalent
 
 Low value on Codex (it runs one model, so self-state barely changes), and the capture-gap question
 is answered on demand by `ingest_codex_sessions.py --dry-run`, which `AGENTS.md` now instructs.
@@ -510,7 +592,65 @@ Build only if the manual check proves insufficient in practice.
 
 ---
 
-## 7. Maintaining this file
+### 7.3 General perception of absence — requested 2026-09-11, designed, not built
+
+The user asked for it directly: *"JARVIS doesn't notice you stopped working on the finance thing
+unless something measures that — I want this general perception of absence."*
+
+It is the natural sibling of `agent/tension.py`. That organ surfaces **contradiction** over your
+own history; this one would surface **silence**. Both answer "what would JARVIS say that you did
+not ask for," which ENDGAME §1.2 names as the whole moat.
+
+**Two measurements were run first, and both killed an obvious design. Read them before building.**
+
+*Measurement 1 — domain-level dormancy has no signal.* Across 100 days and 607 captured turns, all
+six domains (`general`, `data-engineering`, `finance`, `jarvis-build`, `ai-ml`, `unknown`) were last
+active **0–2 days ago**. A "domain has gone quiet" detector would fire **never**, or would need a
+threshold so short it becomes noise. *You do not stop touching finance; you stop touching one
+specific question inside it.* The granularity is wrong, not the idea.
+
+*Measurement 2 — keyword-matched "open loops" are mostly false positives.* Scanning the KB for
+deferral language (`deferred`, `revisit`, `pending`, `still need`, `TODO`, `not yet`, …) matched 70
+entries, 51 of them older than 30 days — which looks like a rich signal until you read the rows.
+The top hits include `"Decision: Skip Phase 1.4 … as standalone study"` and `"/next verdict:
+Sub-phase 2.4 COMPLETE"` — **closed** decisions that merely contain deferral vocabulary. This is the
+fourth time keyword matching against an open vocabulary has failed in this repo (see `nse` matching
+inside "response", the SFT reason gate, the Codex placeholder regex). Do not build the detector
+this way. It will look like it works and quietly generate noise.
+
+**What the measurements imply.** The signal is not absence of *activity*; it is absence of
+*resolution*. And resolution state should be **recorded, not inferred** — the same move that
+replaced `domain_guess` (a keyword hint) with `domain_labels.jsonl` (an explicit projection).
+
+**Tier 1 — a commitment registry (build this first; it is the cheap part).**
+When a decision defers something, write it as a structured record rather than prose: what was
+deferred, the condition that would resolve it, and a review horizon. The repo *already does this
+informally* and those cases are machine-checkable today — `ROADMAP.md`'s `4.6 GraphRAG ⏭ DEFERRED
+(trigger-gated: first KB-logged multi-hop retrieval failure)` is a real open loop with an explicit
+trigger. Make that shape first-class and absence detection becomes a boring scan with no inference
+and no false positives. Stop inferring what you can record.
+
+**Tier 2 — a dormancy detector over that registry**, mirroring `tension.py`'s proven architecture:
+candidate selection → LLM judge with an **abstention option** → confidence floor → append-only
+watermark so nothing nags twice. Crucially, `tension.py` shipped with `scripts/eval_tension.py`, a
+labelled gold set where a positive case *must* surface and a negative case *must stay silent*.
+**Build the equivalent gold set before the detector**, or you cannot tell a working detector from a
+broken one — which is exactly how the previous volume-based detector died after producing zero
+insights for months without anyone noticing.
+
+**Tier 3 — statistical dormancy over topic clusters.** Only if Tiers 1–2 prove insufficient.
+Measurement 1 says the data is bursty and coarse-grained, so this is speculative; it needs finer
+clustering than `domain_guess` provides and would have to clear the same anti-inductive test —
+a threshold whose satisfiability does **not** decay as the corpus grows.
+
+**The one thing not to do:** ship a detector that reports "you have 51 stale items." Most of them
+are finished work. A false-positive firehose trains the user to ignore the channel, and an ignored
+channel is indistinguishable from a broken one — which is the failure this whole organ exists to
+prevent.
+
+---
+
+## 8. Maintaining this file
 
 Update it when a host is added, a capture mechanism changes, or a degraded-mode statement stops
 being true. Substantive **rules** land in `.agent/rules/CLAUDE.md`; this file explains **mechanism

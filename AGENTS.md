@@ -52,7 +52,11 @@ treat this file as a lighter substitute for it.
    anything you're not certain of, per the standing memory-hygiene rule.
 
 Full mechanism, the inventory of what does NOT survive a `git pull`, and per-host setup:
-**[NERVOUS_SYSTEM.md](NERVOUS_SYSTEM.md)** — read it once on a new machine, then as needed.
+**[NERVOUS_SYSTEM.md](NERVOUS_SYSTEM.md)**. Read **§1 (the mental model)** and **§5.2 (Codex)** on a
+new machine before doing anything else — §1 corrects four misconceptions that otherwise make you
+tell the user confidently wrong things about what JARVIS can see (the hearth has no senses; the
+hearth is not the sync mechanism, git is; ChromaDB is an index and not a store; and JARVIS has no
+general perception of absence).
 
 ---
 
