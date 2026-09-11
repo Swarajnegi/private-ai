@@ -242,22 +242,33 @@ git check-ignore -v <path>            # why is this ignored? (silence = it is NO
 | `.claude/settings.json` | `python3 scripts/bootstrap_jarvis.py` (from the committed manifest) |
 | `__pycache__/`, caches, OS junk | automatic |
 
-### Class 2 — Untracked but **not** gitignored (the trap)
+### Class 2 — The whole vector store, and why it stopped being tracked
 
-**`jarvis_data/chromadb/<jarvis_memory-collection-uuid>/`** — the HNSW vector index for the
-`jarvis_memory` collection. `git check-ignore` matches nothing: it is absent from the repo only
-because nobody ever staged it. **`git add -A` would commit it.**
-
-This is a different situation from every row in Class 1, and it cuts both ways: a pull gets
-`chroma.sqlite3` but **not** this index, silently, and a careless `git add -A` commits ~2 MB of
-binary that the no-binaries rule forbids.
+**`jarvis_data/chromadb/` is gitignored as of 2026-09-11.** A fresh clone has **no vector index**,
+and semantic search returns nothing until you rebuild it. Both halves:
 
 ```bash
-python3 scripts/index_memory.py      # rebuilds it; idempotent, safe to delete and re-run
+python3 scripts/index_memory.py                                    # jarvis_memory (from the KB)
+python3 scripts/ingest.py <pdf> --collection research_papers       # research_papers, per PDF
 ```
 
-Note the asymmetry: the **`research_papers`** collection's vector segment *is* tracked. Do not
-assume both halves of `chromadb/` behave the same way.
+**Why it was un-tracked**, since this reverses an earlier recorded decision: `chroma.sqlite3` is a
+23 MB binary, `.gitattributes` marks `*.sqlite3` binary, and so it has **no merge driver**. The
+hearth's `reindex_memory` job rewrites it every 12 hours and is meant to run on *both* machines —
+which produces an unresolvable binary conflict the first time both sides commit. `merge=union`
+rescues `*.jsonl` only, not this.
+
+**The rebuild was tested, not assumed.** Running `ingest.py` against a real tracked PDF with
+`JARVIS_ROOT` pointed at a scratch directory produced 99 embeddings in ~18 s, so all 24 tracked
+PDFs rebuild in roughly 8 minutes. That matters because the *previous* version of this claim was
+wrong in the opposite direction — it asserted `research_papers` was unrebuildable because the PDFs
+were gitignored, when every one of them is tracked. Two wrong claims about the same directory, in
+opposite directions, before anyone ran the command.
+
+> **Historical note for anyone reading old commits:** until 2026-09-11 most of `chromadb/` was
+> tracked while the `jarvis_memory` vector segment alone was untracked-but-not-gitignored — so a
+> pull got the SQLite file without the index it described, and `git add -A` would have committed a
+> binary the no-binaries rule forbids. That asymmetry is gone; the whole directory is ignored now.
 
 ### Class 3 — Genuinely does not travel
 
@@ -312,7 +323,9 @@ for a real adapter rather than a manual process.
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 python3 scripts/bootstrap_jarvis.py     # safe to re-run
-python3 scripts/index_memory.py         # rebuild the vector index — it does NOT travel (Class 2)
+python3 scripts/index_memory.py         # rebuild jarvis_memory — chromadb/ does NOT travel (Class 2)
+# and, if you want paper retrieval (24 tracked PDFs, ~8 min total):
+for p in research_papers/*/*.pdf; do python3 scripts/ingest.py "$p" --collection research_papers; done
 ```
 
 **Also on a new machine — set Codex's own model.** `~/.codex/config.toml` is outside the repo, so
