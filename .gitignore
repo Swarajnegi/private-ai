@@ -133,6 +133,7 @@ desktop.ini
 # repeat the mistake of git-tracking cognitive_index.sqlite3 and chromadb/,
 # which is how the KB/index count drift (544 vs 533) went unnoticed.
 jarvis_data/token_ratios.json
+jarvis_data/token_ratios.json.lock
 
 # -- Context Ledger (per-session verbatim archive of evicted context) --------
 # Append-only spans written before compaction evicts them, keyed by

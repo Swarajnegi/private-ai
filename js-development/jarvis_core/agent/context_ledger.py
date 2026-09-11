@@ -66,7 +66,6 @@ STEP 4: expand_span(handle) returns the original messages byte-identical, for
 
 from __future__ import annotations
 
-import fcntl
 import hashlib
 import json
 import os
@@ -80,6 +79,7 @@ from typing import Any, Dict, List, Optional, Tuple
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))  # standalone-run safety
 
 from jarvis_core.config import DATA_ROOT
+from jarvis_core.locking import exclusive_lock
 
 _IST = timezone(timedelta(hours=5, minutes=30))
 _CONTEXT_ROOT = Path(DATA_ROOT) / "context"
@@ -188,9 +188,8 @@ class ContextLedger:
         }
         try:
             self._root.mkdir(parents=True, exist_ok=True)
-            with self.path.open("a+", encoding="utf-8") as fh:
-                fcntl.flock(fh.fileno(), fcntl.LOCK_EX)
-                try:
+            with exclusive_lock(self.path):
+                with self.path.open("a+", encoding="utf-8") as fh:
                     # Heal a missing terminator first: a killed process leaves a
                     # line with no "\n", and the next append would join it and be
                     # destroyed with it. Costs one seek; without it an evicted
@@ -199,8 +198,6 @@ class ContextLedger:
                     fh.write(("" if _ends_with_newline(fh) else "\n") + line + "\n")
                     fh.flush()
                     os.fsync(fh.fileno())
-                finally:
-                    fcntl.flock(fh.fileno(), fcntl.LOCK_UN)
         except OSError:
             return None
         return LedgerHandle(handle=handle, message_count=len(messages), chars=chars)

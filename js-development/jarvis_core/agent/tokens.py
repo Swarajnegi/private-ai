@@ -63,7 +63,6 @@ STEP 4: TokenBudget(context_length, reserve_output) answers fits()/remaining()
 
 from __future__ import annotations
 
-import fcntl
 import json
 import os
 import sys
@@ -74,6 +73,7 @@ from typing import Any, Dict, Iterable, List, Optional
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))  # standalone-run safety
 
 from jarvis_core.config import DATA_ROOT
+from jarvis_core.locking import exclusive_lock
 
 # 4.0 chars/token is the industry rule of thumb for English prose and is what
 # both previous estimators hardcoded. It is the STARTING point now, not the
@@ -168,16 +168,13 @@ class TokenCounter:
         }
         try:
             p.parent.mkdir(parents=True, exist_ok=True)
-            with p.open("a+", encoding="utf-8") as fh:
-                fcntl.flock(fh.fileno(), fcntl.LOCK_EX)
-                try:
+            with exclusive_lock(p):
+                with p.open("a+", encoding="utf-8") as fh:
                     fh.seek(0)
                     fh.truncate()
                     json.dump(payload, fh, ensure_ascii=False, indent=2)
                     fh.flush()
                     os.fsync(fh.fileno())
-                finally:
-                    fcntl.flock(fh.fileno(), fcntl.LOCK_UN)
             return True
         except OSError:
             return False

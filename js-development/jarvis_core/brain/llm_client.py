@@ -31,7 +31,7 @@ Engineering posture (per JARVIS_ENDGAME Phase 1-3 + cost.py STEAL #2):
     - BUDGET-GATED: a session ceiling (default $0.50) — a call that would
       exceed it raises LLMBudgetExceeded BEFORE spending. Fail-closed.
     - Brain-swap-proof in both directions: model id is config (env
-      OPENROUTER_MODEL) or auto-discovered (cheapest free chat model). The
+      OPENROUTER_MODEL) or auto-discovered through OpenRouter's free router. The
       self-model limb tracks which brain answered; Stage 4's router will sit
       on exactly this ledger.
     - Transport is injected (httpx by default) so every test runs OFFLINE.
@@ -42,7 +42,7 @@ THE FLOW
 
 STEP 1: ctor reads key/model/budget from env (or args). No network yet.
         |
-STEP 2: first __call__: if no model configured, auto-pick a free chat model
+STEP 2: first __call__: if no model configured, use OpenRouter's free router
         from /models (cached, one fetch per session).
         |
 STEP 3: budget pre-gate (projected cost vs ceiling) -> POST /chat/completions
@@ -205,8 +205,12 @@ class OpenRouterClient:
     _AVOID_SUBSTRINGS = ("alpha", "beta", "preview", "clip", "lyria", "owl")
 
     async def pick_free_model(self) -> str:
-        """Cheapest viable default: a $0, MAINSTREAM, instruct-tuned chat model."""
+        """Choose OpenRouter's maintained free router before ranking individual models."""
         models = await self.list_models()
+        free_router = next((m for m in models if m.get("id") == "openrouter/free"), None)
+        if free_router is not None:
+            self._model = "openrouter/free"
+            return self._model
         free = [m for m in models
                 if float((m.get("pricing", {}) or {}).get("prompt", 1) or 1) == 0.0
                 and float((m.get("pricing", {}) or {}).get("completion", 1) or 1) == 0.0]
@@ -339,6 +343,8 @@ def _run_self_test() -> None:
             failed.append(f"FAIL: {name}" + (f" ({hint})" if hint else ""))
 
     CATALOG = {"data": [
+        {"id": "openrouter/free", "context_length": 200000,
+         "pricing": {"prompt": "0", "completion": "0"}},
         {"id": "stealth/owl-alpha", "context_length": 1000000,
          "pricing": {"prompt": "0", "completion": "0"}},      # must be excluded
         {"id": "freebie/chat-large-instruct:free", "context_length": 128000,
@@ -457,14 +463,15 @@ def _run_self_test() -> None:
         check("T8c no tracker -> per-client gate unchanged (call succeeds)",
               await c8c([{"role": "user", "content": "hi"}]) == "Hello from the model.")
 
-        # T9: auto-pick prefers mainstream instruct free model; excludes stealth/alpha
+        # T9: auto-pick delegates volatile free-model eligibility to OpenRouter.
         t9, _ = make_transport([OK])
         c9 = OpenRouterClient(api_key="sk-test", transport=t9)  # no model
         await c9([{"role": "user", "content": "hi"}])
-        check("T9 auto-picks the instruct free model",
-              c9.model == "freebie/chat-large-instruct:free", c9.model)
+        check("T9 auto-picks OpenRouter's free router",
+              c9.model == "openrouter/free", c9.model)
         check("T9b free model spends $0", c9.spend_usd == 0.0)
-        check("T9c stealth/alpha excluded despite biggest context", "alpha" not in c9.model)
+        check("T9c does not select a provider-restricted individual free model",
+              c9.model != "stealth/owl-alpha", c9.model)
 
         # T10: malformed success body -> clear error
         t10, _ = make_transport([(200, {"unexpected": True})])
