@@ -143,6 +143,7 @@ class HearthConfig:
     host: str = DEFAULT_HOST
     port: int = DEFAULT_PORT
     token: str = ""
+    allow_remote: bool = False
     ask_kwargs: Dict[str, Any] = field(default_factory=dict)
 
 
@@ -220,10 +221,16 @@ class Hearth:
             A JSON-safe dict: answer, verdict, confidence, denials, ledger.
         """
         queue: "asyncio.Queue[str]" = asyncio.Queue()
+        # The orchestration spine is async at its boundary, but several of its
+        # dependencies (embedding, local retrieval, and some provider clients)
+        # can still block the event loop.  Run it on a dedicated loop in a
+        # worker thread so /v1/health remains truthful while an answer is being
+        # built.  Printer callbacks cross back to this request's loop safely.
+        request_loop = asyncio.get_running_loop()
         denials: List[_Denial] = []
 
         def printer(line: str) -> None:
-            queue.put_nowait(str(line))
+            request_loop.call_soon_threadsafe(queue.put_nowait, str(line))
 
         def deny_handler(tool_name: str, tool_input: Dict[str, Any]) -> Any:
             from jarvis_core.agent.permissions import PermissionDecision
@@ -254,7 +261,11 @@ class Hearth:
             kwargs["reasoning_effort"] = reasoning_effort
 
         ask_fn = self._resolve_ask()
-        task = asyncio.ensure_future(ask_fn(question, **kwargs))
+
+        def invoke() -> Any:
+            return asyncio.run(ask_fn(question, **kwargs))
+
+        task = asyncio.create_task(asyncio.to_thread(invoke))
         try:
             async for line in self._drain(queue, task):
                 await emit("log", {"line": line})
@@ -312,7 +323,7 @@ class Hearth:
         """
         client = scope.get("client") or ("", 0)
         host = str(client[0] if isinstance(client, (list, tuple)) and client else "")
-        if host not in _LOOPBACK:
+        if not self._cfg.allow_remote and host not in _LOOPBACK:
             return f"non-loopback client {host}"
 
         path = scope.get("path", "")
@@ -896,7 +907,44 @@ def _run_self_test() -> None:
     check("T17 the rejection is counted", busy.requests_rejected >= 1,
           str(busy.requests_rejected))
 
-    # T18-T19: permission prompts are denied AND reported.
+    # T18: a dependency that blocks synchronously must not starve health.
+    # This reproduces the browser's former false "Hearth disconnected" state.
+    async def blocking_ask(question: str, **kwargs: Any) -> FakeResult:
+        time.sleep(0.4)
+        return FakeResult()
+
+    responsive = Hearth(HearthConfig(token="tok"), ask_fn=blocking_ask)
+    responsive_app = build_app(responsive)
+
+    async def health_while_asking() -> Tuple[int, float]:
+        ask_sent: List[Dict[str, Any]] = []
+        health_sent: List[Dict[str, Any]] = []
+
+        async def ask_receive() -> Dict[str, Any]:
+            return {"type": "http.request", "body": _json_bytes({"question": "slow"}), "more_body": False}
+
+        async def health_receive() -> Dict[str, Any]:
+            return {"type": "http.request", "body": b"", "more_body": False}
+
+        async def ask_send(message: Dict[str, Any]) -> None:
+            ask_sent.append(message)
+
+        async def health_send(message: Dict[str, Any]) -> None:
+            health_sent.append(message)
+
+        asking = asyncio.create_task(responsive_app(http_scope("POST", "/v1/ask"), ask_receive, ask_send))
+        await asyncio.sleep(0.03)
+        started = loop.time()
+        await responsive_app(http_scope("GET", "/v1/health"), health_receive, health_send)
+        elapsed = loop.time() - started
+        await asking
+        return status_of(health_sent), elapsed
+
+    health_status, health_elapsed = loop.run_until_complete(health_while_asking())
+    check("T18 health stays responsive during a blocking ask",
+          health_status == 200 and health_elapsed < 0.2, f"{health_status}, {health_elapsed:.2f}s")
+
+    # T19-T20: permission prompts are denied AND reported.
     async def dangerous_ask(question: str, **kwargs: Any) -> FakeResult:
         handler = kwargs["ask_handler"]
         decision = handler("shell_run", {"command": "rm -rf /"})
@@ -910,25 +958,25 @@ def _run_self_test() -> None:
     sent, _ = drive(build_app(gated), http_scope("POST", "/v1/ask"),
                     body=_json_bytes({"question": "delete everything"}))
     gated_payload = json.loads(body_of(sent))
-    check("T18 a permission prompt over the hearth resolves to DENY",
+    check("T19 a permission prompt over the hearth resolves to DENY",
           any("PermissionDecision.DENY" in line for line in gated_payload["log"]),
           str(gated_payload["log"])[:140])
-    check("T19 the denial is REPORTED in the response, not swallowed",
+    check("T20 the denial is REPORTED in the response, not swallowed",
           gated_payload["denials"]
           and gated_payload["denials"][0]["tool"] == "shell_run",
           str(gated_payload["denials"])[:80])
 
-    # T20-T22: the token file.
+    # T21-T23: the token file.
     with tempfile.TemporaryDirectory() as td:
         tpath = Path(td) / ".hearth_token"
         first_token = ensure_token(tpath)
-        check("T20 a token is minted on first use", len(first_token) >= 32, first_token[:8])
-        check("T21 the same token is returned on the next call",
+        check("T21 a token is minted on first use", len(first_token) >= 32, first_token[:8])
+        check("T22 the same token is returned on the next call",
               ensure_token(tpath) == first_token)
         mode = stat.S_IMODE(tpath.stat().st_mode)
-        check("T22 the token file is 0600", mode == 0o600 or (os.name == "nt" and mode in (0o600, 0o666)), oct(mode))
+        check("T23 the token file is 0600", mode == 0o600 or (os.name == "nt" and mode in (0o600, 0o666)), oct(mode))
 
-    # T23: lifespan is answered, so uvicorn can actually start the app.
+    # T24: lifespan is answered, so uvicorn can actually start the app.
     async def lifespan() -> List[str]:
         got: List[str] = []
         messages = [{"type": "lifespan.startup"}, {"type": "lifespan.shutdown"}]
@@ -942,31 +990,31 @@ def _run_self_test() -> None:
         await app({"type": "lifespan"}, receive, send)
         return got
 
-    check("T23 lifespan startup and shutdown both complete",
+    check("T24 lifespan startup and shutdown both complete",
           loop.run_until_complete(lifespan())
           == ["lifespan.startup.complete", "lifespan.shutdown.complete"])
 
-    # T24: UI route on loopback serves without bearer token header
+    # T25: UI route on loopback serves without bearer token header
     sent_ui, _ = drive(app, {"type": "http", "method": "GET", "path": "/", "client": ("127.0.0.1", 1234),
                              "headers": [(b"accept", b"text/html")]})
-    check("T24 GET / serves web dashboard HTML on loopback",
+    check("T25 GET / serves web dashboard HTML on loopback",
           status_of(sent_ui) == 200 and b"JARVIS" in body_of(sent_ui))
 
-    # T25: Static CSS asset served
+    # T26: Static CSS asset served
     sent_css, _ = drive(app, {"type": "http", "method": "GET", "path": "/ui/app.css", "client": ("127.0.0.1", 1234),
                               "headers": [(b"accept", b"text/css")]})
-    check("T25 GET /ui/app.css serves static stylesheet",
+    check("T26 GET /ui/app.css serves static stylesheet",
           status_of(sent_css) == 200 and b"--bg-app" in body_of(sent_css))
 
-    # T26: Sessions endpoint returns 200 and a list
+    # T27: Sessions endpoint returns 200 and a list
     sent_sess, _ = drive(app, http_scope("GET", "/v1/sessions"))
     sess_payload = json.loads(body_of(sent_sess))
-    check("T26 GET /v1/sessions returns session list",
+    check("T27 GET /v1/sessions returns session list",
           status_of(sent_sess) == 200 and "sessions" in sess_payload and isinstance(sess_payload["sessions"], list))
 
-    # T27: Session detail returns 404 for missing session
+    # T28: Session detail returns 404 for missing session
     sent_miss, _ = drive(app, http_scope("GET", "/v1/sessions/nonexistent_session_xyz"))
-    check("T27 GET /v1/sessions/{missing} returns 404", status_of(sent_miss) == 404)
+    check("T28 GET /v1/sessions/{missing} returns 404", status_of(sent_miss) == 404)
 
     with tempfile.TemporaryDirectory() as td:
         from jarvis_core.brain.conversation import ConversationStore
@@ -976,12 +1024,12 @@ def _run_self_test() -> None:
         store.append_turn("named-thread", "user", "Keep all of this")
         store.append_turn("named-thread", "assistant", complete_answer)
         listed = _list_sessions(directory)
-        check("T28 named conversations appear in history",
+        check("T29 named conversations appear in history",
               any(s["session_id"] == "named-thread" for s in listed))
         turns = _get_session_turns(directory, "named-thread")
-        check("T29 full Unicode answer survives storage and history serialization",
+        check("T30 full Unicode answer survives storage and history serialization",
               json.loads(_json_bytes(turns))[-1]["content"] == complete_answer)
-        check("T30 conversation path traversal is refused",
+        check("T31 conversation path traversal is refused",
               _get_session_turns(directory, "../named-thread") is None
               and _get_session_turns(directory, "..\\named-thread") is None)
 

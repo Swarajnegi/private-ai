@@ -25,6 +25,8 @@
     el.innerHTML = svg(el.dataset.icon);
   });
   const welcome = $("welcome").cloneNode(true);
+  const remoteSurface = !["127.0.0.1", "localhost", "::1"].includes(location.hostname);
+  $("connection-label").textContent = remoteSurface ? "SECURE REMOTE" : "PRIVATE LOCAL";
   const state = {
     sessions: [],
     messages: [],
@@ -121,11 +123,9 @@
       $("status-light").className =
         `status-light ${h.busy ? "busy" : "online"}`;
       $("status-text").textContent = h.busy
-        ? "Hearth is working"
-        : "Hearth online";
-      $("pulse-state").textContent = h.busy
-        ? "Processing request"
-        : "Connected & ready";
+        ? "JARVIS is thinking"
+        : "System online";
+      $("pulse-state").textContent = h.busy ? "Thinking in progress" : "System online";
       $("uptime").textContent =
         `${Math.floor(h.uptime_seconds / 3600)}h ${Math.floor(h.uptime_seconds / 60) % 60}m uptime`;
       $("metric-requests").textContent = h.requests_served;
@@ -145,6 +145,14 @@
         $("jobs").append(row);
       }
     } catch (error) {
+      // An ask can be actively running while a short status probe is delayed.
+      // Do not overwrite the truthful in-flight state with a false disconnect.
+      if (state.busy) {
+        $("status-light").className = "status-light busy";
+        $("status-text").textContent = "JARVIS is still working";
+        $("pulse-state").textContent = "Checking connection…";
+        return;
+      }
       state.health = null;
       $("status-light").className = "status-light";
       $("status-text").textContent = "Hearth disconnected";

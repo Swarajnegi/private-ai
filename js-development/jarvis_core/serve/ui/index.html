@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <meta name="theme-color" content="#080d12" />
+    <meta name="theme-color" content="#070a10" />
     <title>JARVIS — Your cognitive workspace</title>
     <link
       rel="icon"
@@ -19,8 +19,7 @@
       <aside id="sidebar" class="sidebar" aria-label="Conversations">
         <a class="brand" href="#" aria-label="JARVIS home"
           ><span class="brand-mark">J</span
-          ><span>J.A.R.V.I.S<small>PERSONAL COGNITIVE SYSTEM</small></span
-          ><span class="version">01</span></a
+          ><span>J.A.R.V.I.S<small>PERSONAL INTELLIGENCE</small></span></a
         ><button id="new-chat" class="new-chat">
           <span data-icon="plus"></span>New conversation<kbd>Alt N</kbd></button
         ><label class="search"
@@ -78,11 +77,11 @@
             <span data-icon="menu"></span>
           </button>
           <div class="breadcrumb">
-            WORKSPACE <span>/</span
+            <span class="crumb-core">JARVIS</span><span>/</span
             ><strong id="chat-title">New conversation</strong>
           </div>
           <div class="top-actions">
-            <span class="local-badge"><span></span> LOCAL CONNECTION</span
+            <span class="local-badge"><span></span><span id="connection-label">PRIVATE CONNECTION</span></span
             ><button
               id="export"
               class="icon-button"
@@ -110,9 +109,6 @@
               aria-label="Conversation messages"
             >
               <section id="welcome" class="welcome">
-                <div class="eyebrow">
-                  <span>+</span> INTELLIGENCE, WITH CONTINUITY <span>+</span>
-                </div>
                 <div class="reactor" aria-hidden="true">
                   <div class="reactor-orbit orbit-one"></div>
                   <div class="reactor-orbit orbit-two"></div>
@@ -126,14 +122,10 @@
                   </div>
                   <span class="reactor-node n1"></span
                   ><span class="reactor-node n2"></span
-                  ><span class="reactor-label">JARVIS / CORE</span>
                 </div>
-                <p id="greeting" class="greeting">Welcome back, Swaraj.</p>
-                <h1>What are we<br /><span>thinking about today?</span></h1>
-                <p class="intro">
-                  Your ideas, decisions, and everything in between.<br />A
-                  little more connected.
-                </p>
+                <p id="greeting" class="greeting">Welcome back.</p>
+                <h1>Think clearly.<br /><span>Build deliberately.</span></h1>
+                <p class="intro">A continuous private workspace for your ideas, decisions, and work.</p>
                 <div class="suggestions">
                   <button
                     data-prompt="What past JARVIS decisions constrain the task I am starting today?"
@@ -165,8 +157,8 @@
             </button>
             <div class="composer-zone">
               <div id="working" class="working" role="status" hidden>
-                <span class="thinking-dots"><i></i><i></i><i></i></span
-                ><span id="working-text">JARVIS is working</span
+                <span class="thinking-core" aria-hidden="true"><i></i><i></i><i></i></span
+                ><span id="working-text">JARVIS is thinking</span
                 ><time id="elapsed">0s</time>
               </div>
               <form id="composer" class="composer">

@@ -119,10 +119,21 @@ def _cmd_status(args: argparse.Namespace, token: str) -> int:
     return 0
 
 
-def _cmd_stop(args: argparse.Namespace) -> int:
+def _cmd_stop(args: argparse.Namespace, token: str) -> int:
     pid = _read_pid()
     if not pid:
         print("no live hearth found (pid file absent or stale)")
+        PID_PATH.unlink(missing_ok=True)
+        return 1
+    # On Windows PIDs are reusable.  A handle proves that *a* process exists,
+    # not that it is our hearth; never taskkill an unrelated process merely
+    # because it inherited a stale pid-file number.
+    try:
+        health = _request("/v1/health", args.host, args.port, token, timeout=2.0)
+        if int(health.get("pid", 0)) != pid:
+            raise ValueError("pid does not match the responding hearth")
+    except (urllib.error.URLError, OSError, ValueError, TypeError):
+        print("pid file names no reachable hearth; removing stale pid file")
         PID_PATH.unlink(missing_ok=True)
         return 1
     if os.name == "nt":
@@ -160,9 +171,9 @@ def _detach() -> None:
 def main() -> int:
     p = argparse.ArgumentParser(
         description="The hearth: one process, the clock, and every surface's socket.")
-    p.add_argument("--host", default=DEFAULT_HOST,
+    p.add_argument("--host", default=os.environ.get("HOST", DEFAULT_HOST),
                    help="bind address (default 127.0.0.1 — do NOT widen in v0)")
-    p.add_argument("--port", type=int, default=DEFAULT_PORT)
+    p.add_argument("--port", type=int, default=int(os.environ.get("PORT", DEFAULT_PORT)))
     p.add_argument("--background", action="store_true",
                    help="detach and write a pid file; logs to jarvis_data/hearth.log")
     p.add_argument("--no-clock", action="store_true",
@@ -174,13 +185,14 @@ def main() -> int:
                    help="run every due scheduled job once, then exit (no socket)")
     args = p.parse_args()
 
-    token = ensure_token()
+    configured_token = os.environ.get("JARVIS_HEARTH_TOKEN", "").strip()
+    token = configured_token or ensure_token()
 
     if args.token:
         print(token)
         return 0
     if args.stop:
-        return _cmd_stop(args)
+        return _cmd_stop(args, token)
     if args.status:
         return _cmd_status(args, token)
 
@@ -197,8 +209,19 @@ def main() -> int:
             print(f"  {job['name']:<18} {job['status']}")
         return 0
 
-    if _read_pid():
-        print(f"a hearth is already running (pid {_read_pid()}) — "
+    existing_pid = _read_pid()
+    if existing_pid:
+        # A numeric PID is only a hint on Windows; health is the authority.
+        # This lets the watchdog recover after a crash instead of being wedged
+        # forever by a recycled PID.
+        try:
+            health = _request("/v1/health", args.host, args.port, token, timeout=2.0)
+            existing_pid = int(health.get("pid", 0)) or existing_pid
+        except (urllib.error.URLError, OSError, ValueError, TypeError):
+            PID_PATH.unlink(missing_ok=True)
+            existing_pid = 0
+    if existing_pid:
+        print(f"a hearth is already running (pid {existing_pid}) — "
               f"use --stop first, or --status to inspect it")
         return 1
 
@@ -211,12 +234,19 @@ def main() -> int:
     PID_PATH.parent.mkdir(parents=True, exist_ok=True)
     PID_PATH.write_text(str(os.getpid()), encoding="utf-8")
 
+    remote = os.environ.get("JARVIS_ALLOW_REMOTE", "").lower() in {"1", "true", "yes"}
+    if args.host not in {"127.0.0.1", "::1", "localhost"} and not remote:
+        p.error("non-loopback binding requires JARVIS_ALLOW_REMOTE=true")
+    if remote and not configured_token:
+        p.error("remote mode requires JARVIS_HEARTH_TOKEN; never mint a public token into a container")
+
     scheduler = None if args.no_clock else Scheduler(jobs=default_jobs())
     banner = "clock ON" if scheduler else "clock OFF"
     print(f"hearth listening on http://{args.host}:{args.port}  ({banner})", flush=True)
     print(f"  token: {Path(DATA_ROOT) / '.hearth_token'}  (gitignored, 0600)", flush=True)
     try:
-        return serve(HearthConfig(host=args.host, port=args.port, token=token),
+        return serve(HearthConfig(host=args.host, port=args.port, token=token,
+                                  allow_remote=remote),
                      scheduler=scheduler)
     finally:
         PID_PATH.unlink(missing_ok=True)

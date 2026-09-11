@@ -48,7 +48,9 @@ JARVIS_ROOT: Path = Path(
 # =============================================================================
 
 # The parent folder for ALL system data. Never stored inside the source tree.
-DATA_ROOT: Path = JARVIS_ROOT / "jarvis_data"
+DATA_ROOT: Path = Path(
+    os.environ.get("JARVIS_DATA_ROOT", JARVIS_ROOT / "jarvis_data")
+).resolve()
 
 # ChromaDB persistent vector store.
 # The JarvisMemoryStore reads this path at startup.
