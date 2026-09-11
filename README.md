@@ -4,55 +4,183 @@ A private "Model of Models" cognitive orchestrator and autonomous R&D lab. Not a
 a system built to be trained on one person's own corpus and deployed as an ambient presence across
 their devices.
 
-**Current stage: 5 — Domain Specialists. Stages 1–4 complete.** Status lives in
-[`js-learning/JARVIS_MASTER_ROADMAP.md`](js-learning/JARVIS_MASTER_ROADMAP.md); it is canonical, and
-anything here that disagrees with it is stale.
+---
+
+## ⇢ If you are an AI agent starting work on this repo, read this section first
+
+Four agents' worth of context live in these files. **Read them in this order**, then you are current
+— there is no separate onboarding, and nothing important is only in someone's chat history.
+
+### Tier 1 — before your first response, every session (~10 min)
+
+| # | Read | Why |
+|---|---|---|
+| 1 | **your own entry file** — [`AGENTS.md`](AGENTS.md) (Codex) · [`.agent/rules/js-workspace-rule.md`](.agent/rules/js-workspace-rule.md) (Antigravity) · [`CLAUDE.md`](CLAUDE.md) → [`.agent/rules/CLAUDE.md`](.agent/rules/CLAUDE.md) (Claude Code) | Your host's boot ritual. **Auto-loaded** — but read it consciously the first time |
+| 2 | [`NERVOUS_SYSTEM.md`](NERVOUS_SYSTEM.md) **§1** | Four misconceptions that otherwise make you tell the user confidently wrong things about what JARVIS can see. Non-optional |
+| 3 | [`.agent/rules/CLAUDE.md`](.agent/rules/CLAUDE.md) | **The canon.** Code style, memory hygiene, migration discipline, what not to do. Applies to every host, not just Claude Code |
+| 4 | [`jarvis_data/cognitive_profile.md`](jarvis_data/cognitive_profile.md) | The standing model of the user — who they are, how they work, active directives. Replaces ever asking "tell me about yourself" |
+| 5 | [`jarvis_data/activity_digest.md`](jarvis_data/activity_digest.md) | What happened on the *other* machines, day by day. Check its `Generated` stamp; say so if stale |
+
+Then run your host's live checks — the surfacing organ and your mail:
+
+```bash
+cd js-development && python3 -m jarvis_core.agent.life_state_monitor --peek   # anything to raise?
+cd .. && python3 scripts/agent_mail.py --check <claude|codex|antigravity>     # questions for you?
+```
+
+### Tier 2 — to understand *why* the system is shaped this way (~30 min)
+
+| # | Read | Why |
+|---|---|---|
+| 6 | [`.agent/rules/JARVIS_ENDGAME.md`](.agent/rules/JARVIS_ENDGAME.md) **§1.1 and §1.2** | The goal, and the one capability a frontier subscription cannot replicate. Everything else is in service of this |
+| 7 | [`js-learning/JARVIS_MASTER_ROADMAP.md`](js-learning/JARVIS_MASTER_ROADMAP.md) | **Canonical status.** Anything anywhere that disagrees with it is stale, including this README |
+| 8 | [`NERVOUS_SYSTEM.md`](NERVOUS_SYSTEM.md) in full | How cross-chat memory actually works, what does NOT survive a `git pull`, per-host setup, and what is not built |
+| 9 | [`agents_converse/README.md`](agents_converse/README.md) | How to ask the other agents questions, and answer theirs |
+
+### Tier 3 — read when the work touches them
+
+| Read | When |
+|---|---|
+| [`js-learning/stage_*/ROADMAP.md`](js-learning/) | Working inside that stage. Stage 5 and 6 are the live ones |
+| [`.agent/workflows/`](.agent/workflows/) | **Always relevant** — 8 protocols that fire by *request shape*, not by typing a slash. See the canon |
+| [`js-learning/stage_5_specialists/SFT_SPEC.md`](js-learning/stage_5_specialists/SFT_SPEC.md) | Training-data work |
+| [`js-learning/stage_6_integration/VOICE_SPEC.md`](js-learning/stage_6_integration/VOICE_SPEC.md) | Voice / interface work |
+| [`knowledge/`](knowledge/) | Domain questions — see the map below |
+| [`antigravity_review.md`](antigravity_review.md) | An external audit of the training corpus, and the response to it |
+
+**Never read the whole knowledge base.** It is thousands of entries. Query it:
+
+```bash
+python3 scripts/search_memory.py "<topic>"     # semantic search — do this before answering anything uncertain
+```
 
 ---
 
-## Where things are
+## Current state
+
+| Stage | Status |
+|---|---|
+| 1 — Systems Python | ✅ sufficient (1.4/1.5 deliberately deferred) |
+| 2 — Memory Layer | ✅ complete |
+| 3 — Agent Framework | ✅ complete — built from scratch, not on a framework |
+| 4 — Multi-Model Orchestration | ✅ complete — Final Boss 8/8 |
+| **5 — Domain Specialists** | ⬅️ **current.** Engineer-first QLoRA on a shared base. Not started |
+| 6 — Integration | scoped; the hearth (6.3) and capture adapters (6.8) shipped early, out of order |
+
+**Where it is going**, in one line each — full detail in `JARVIS_ENDGAME.md`:
+
+- **The deliverable** is a *trained* model that is *present* — on phone, desktop and web, wired to
+  camera and mic, ambient rather than summoned. Not a terminal command. (§1.1)
+- **The moat** is unprompted surfacing over your own history — *"this reverses your July call, and
+  the reason you gave then was never addressed."* A frontier model does everything else if you paste
+  the right context; it cannot fire when you did not know to ask. (§1.2)
+- **The open question** is whether a trained adapter beats the retrieval path already built. It is
+  unanswered, and answering it is cheaper than training anything.
+
+Verify status yourself rather than trusting this table:
+
+```bash
+python3 scripts/check_projections.py    # is the mind's index current?
+python3 scripts/hearth.py --status      # is the clock running? (as of 2026-09-11: no machine)
+git log --oneline -15                   # what actually happened recently
+```
+
+---
+
+## The full map
+
+### Code
 
 | Path | What |
 |---|---|
-| [`js-development/jarvis_core/`](js-development/jarvis_core/) | Production code — the system itself |
-| [`js-learning/`](js-learning/) | Roadmaps: master + one per stage. **Ground truth for status** |
-| [`.agent/rules/`](.agent/rules/) | Operating context loaded into every agent session |
-| [`.agent/workflows/`](.agent/workflows/) | 8 protocols (`/learn`, `/dev`, `/next`, …) |
-| [`jarvis_data/`](jarvis_data/) | Knowledge base, cognitive profile, capture queue, training corpus |
-| [`scripts/`](scripts/) | CLI tools — memory search, KB append, profile synthesis, compaction |
-| [`knowledge/`](knowledge/) | Distilled notes: data engineering, finance, literature |
+| [`js-development/jarvis_core/memory/`](js-development/jarvis_core/memory/) | ChromaDB + BM25 hybrid retrieval, cross-encoder rerank, chunking, compaction |
+| [`js-development/jarvis_core/agent/`](js-development/jarvis_core/agent/) | Tool ABC + registry, DAG planner, ReAct loop, MemGPT paging, **capture**, **tension** (the surfacing organ), recall, consolidation |
+| [`js-development/jarvis_core/brain/`](js-development/jarvis_core/brain/) | Intent router, model-pool failover, aggregator, epistemic control, context injection, permission gate |
+| [`js-development/jarvis_core/serve/`](js-development/jarvis_core/serve/) | **The hearth** — one always-on process owning the clock; loopback HTTP + scheduler |
+| [`js-development/jarvis_core/specialists/`](js-development/jarvis_core/specialists/) | Corpus building for Stage 5 |
+| `js-development/jarvis_core/body/` | Placeholder — Stage 6 |
+| [`js-development/jarvis_core/config.py`](js-development/jarvis_core/config.py) | **Every path resolves here.** Never hardcode one |
+| [`scripts/`](scripts/) | CLI tools + the hook adapters in `scripts/hooks/` |
 
-## The four layers
+### Data — and which class each file is
 
-| Layer | Module | State |
+The storage taxonomy matters more than the file list. Getting it wrong means either losing something
+irreplaceable or committing 25 MB of rebuildable binary:
+
+| Class | Files | Tracked? |
 |---|---|---|
-| **Memory** | `jarvis_core/memory/` | ChromaDB + BM25 hybrid, cross-encoder rerank, KB compaction |
-| **Agent** | `jarvis_core/agent/` | Tool ABC + registry, DAG planner, ReAct loop, MemGPT paging |
-| **Brain** | `jarvis_core/brain/` | Intent router, model-pool failover, aggregator, epistemic control |
-| **Body** | `jarvis_core/body/` | Placeholder — Stage 6 |
+| **FACT** — authoritative, append-only, *the actual mind* | `knowledge_base.jsonl`, `observation_queue.jsonl` | ✅ |
+| **PROJECTION** — derived, rebuildable, disposable | `chromadb/`, `cognitive_index.sqlite3`, `domain_labels.jsonl` | ❌ |
+| **PROJECTION-AS-TRANSPORT** — derived here, consumed by a machine that *cannot* rebuild it | `cognitive_profile.md`, `activity_digest.md` | ✅ and correctly so |
+
+Also in [`jarvis_data/`](jarvis_data/): `life_state_feed.jsonl` (surfaced insights),
+`training_corpus/` (Stage 5 corpora + SFT pairs), `experience_map.md`, `personal_life.md`,
+`model_catalog.json`, `conversations/`.
+
+### Knowledge and learning
+
+| Path | What |
+|---|---|
+| [`js-learning/`](js-learning/) | Master roadmap + one per stage. **Ground truth for status** |
+| [`knowledge/Data Engineering/`](knowledge/Data%20Engineering/) | Distilled DE lessons, interview prep, ADF deep-dive |
+| [`knowledge/AI ML/`](knowledge/AI%20ML/) | ML notes and interview prep |
+| [`knowledge/Finance/`](knowledge/Finance/) | **`strategy.md` is canonical** — check it first for any finance question |
+| [`knowledge/literature/`](knowledge/literature/), [`knowledge/Job Switch/`](knowledge/Job%20Switch/) | Reading notes; career material |
+| [`research_papers/`](research_papers/) | 24 source PDFs, tracked. Rebuild their index with `scripts/ingest.py` |
+
+### Coordination
+
+| Path | What |
+|---|---|
+| [`agents_converse/`](agents_converse/) | Agent-to-agent questions and answers, delivered by git |
+| [`.agent/hooks.manifest.json`](.agent/hooks.manifest.json) | The committed hook wiring. `.claude/settings.json` is rehydrated *from* this |
+| [`NERVOUS_SYSTEM.md`](NERVOUS_SYSTEM.md) | Mechanism, inventory, per-host setup |
+
+---
+
+## First run on a fresh machine
+
+```bash
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+python3 scripts/bootstrap_jarvis.py     # rehydrates hooks from the committed manifest; safe to re-run
+python3 scripts/index_memory.py         # REQUIRED — chromadb/ is gitignored, so a fresh clone has
+                                        # no vector index and semantic search returns nothing
+python3 scripts/hearth.py --background  # start the clock (see NERVOUS_SYSTEM.md §6)
+```
+
+Optional, for research-paper retrieval (~8 min):
+```bash
+for p in research_papers/*/*.pdf; do python3 scripts/ingest.py "$p" --collection research_papers; done
+```
+
+---
 
 ## Conventions worth knowing before reading the code
 
-- **Tests are `__main__` smoke blocks, not a pytest suite.** 75 of 83 modules carry one. This is
-  deliberate and documented in [`.agent/rules/CLAUDE.md`](.agent/rules/CLAUDE.md); there is
-  currently **no runner**, which is a real gap rather than a hidden feature.
-- **Paths are never hardcoded** — everything resolves through
-  [`jarvis_core/config.py`](js-development/jarvis_core/config.py) so the same source works on Linux
-  and Windows.
-- **Systems Python is non-negotiable**: generators for pipelines, async for I/O, context managers
-  for every external resource, strict typing on cross-layer contracts.
+- **Tests are `__main__` smoke blocks, not a pytest suite** — run a module directly to test it
+  (`python3 -m jarvis_core.agent.capture`). Deliberate, and there is **no runner**, which is a real
+  gap rather than a hidden feature.
+- **Paths never hardcoded** — everything through `config.py`, so one source works on Linux and Windows.
+- **Systems Python is non-negotiable**: generators for pipelines, async for I/O, context managers for
+  every external resource, strict typing on cross-layer contracts.
+- **Append-only logs heal a torn line before writing**, and take the lock. A `flock` stops concurrent
+  writers; it does nothing about a writer that was *killed* mid-line.
+- **Write to the KB only via `scripts/kb_append.py`** — it locks, dedups at >0.85 similarity, and
+  mints a collision-free id. Never hand-append a line.
+- **Prose rots.** This repo has caught a dozen cases of a comment confidently describing something
+  the code no longer does — including a file mis-describing *itself*. Prefer a command that prints
+  the answer over a number typed into a document. If you find such a case, fix it *and* say so.
+
+---
 
 ## Not in this repository
 
-`client_work/` holds employer/client material and is excluded by
-[`.gitignore`](.gitignore) — permanently, regardless of repo visibility. Only *generalized* lessons
-leave it. Note that `jarvis_data/training_corpus/` **is** tracked and does contain client-derived
-text; the tradeoff is documented in the `.gitignore` header.
+`client_work/` holds employer/client material and is excluded by [`.gitignore`](.gitignore) —
+permanently, regardless of repo visibility. **`.gitignore` is the authority on that boundary, not a
+paraphrase of it**; it carries deliberate re-inclusions. Note that `jarvis_data/training_corpus/`
+**is** tracked and does contain client-derived text; that tradeoff is documented in the `.gitignore`
+header and was confirmed twice.
 
-## Quick start
-
-```bash
-pip install -r requirements.txt
-python3 scripts/search_memory.py "<topic>"     # semantic search over the knowledge base
-python3 scripts/profile_synth.py               # regenerate the cognitive profile
-```
+Also absent from a fresh clone: the vector index, the venv, and every machine-local projection —
+see [`NERVOUS_SYSTEM.md`](NERVOUS_SYSTEM.md) §4 for the complete inventory and how to rebuild each.
