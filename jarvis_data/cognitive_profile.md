@@ -1,6 +1,6 @@
 # Cognitive Profile — Model of the User
 
-> Auto-synthesized by `scripts/profile_synth.py` from `knowledge_base.jsonl` (603 entries). Injected into every chat via the SessionStart hook. Regenerate after KB updates.
+> Auto-synthesized by `scripts/profile_synth.py` from `knowledge_base.jsonl` (606 entries). Injected into every chat via the SessionStart hook. Regenerate after KB updates.
 
 ## Who you are
 - PATTERN: judges a handoff by what the RECIPIENT has, not by how well I explained it (2026-09-11, handing the Codex migration over). Across one session the user asked three completeness questions in a row -- 'is everything good and documented to be migrated?', 'this needs setup for personal laptop, is everything provide ...

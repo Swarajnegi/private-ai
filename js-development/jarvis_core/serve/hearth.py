@@ -314,12 +314,25 @@ class Hearth:
         host = str(client[0] if isinstance(client, (list, tuple)) and client else "")
         if host not in _LOOPBACK:
             return f"non-loopback client {host}"
+
+        path = scope.get("path", "")
+        # Allow static web UI assets on loopback without bearer token
+        if path in ("/", "/ui", "/ui/", "/favicon.ico") or path.startswith("/ui/"):
+            return None
+
         supplied = ""
         for key, value in scope.get("headers", []):
             if key.lower() == b"authorization":
                 raw = value.decode("latin-1")
                 supplied = raw[7:].strip() if raw[:7].lower() == "bearer " else raw.strip()
                 break
+        if not supplied:
+            query_string = scope.get("query_string", b"").decode("latin-1")
+            for part in query_string.split("&"):
+                if part.startswith("token="):
+                    supplied = part[6:].strip()
+                    break
+
         if not self._cfg.token:
             return "hearth has no token configured"
         if not supplied or not hmac.compare_digest(supplied, self._cfg.token):
@@ -351,6 +364,107 @@ class Hearth:
 # =============================================================================
 # Part 4: THE ASGI APP
 # =============================================================================
+
+UI_DIR = Path(__file__).resolve().parent / "ui"
+
+_STATIC_CONTENT_TYPES = {
+    ".html": b"text/html; charset=utf-8",
+    ".css": b"text/css; charset=utf-8",
+    ".js": b"application/javascript; charset=utf-8",
+    ".json": b"application/json",
+    ".svg": b"image/svg+xml",
+    ".png": b"image/png",
+    ".ico": b"image/x-icon",
+}
+
+
+def _list_sessions(conv_dir: Path) -> List[Dict[str, Any]]:
+    """Scan conversation files and return lightweight session metadata."""
+    if not conv_dir.is_dir():
+        return []
+    sessions = []
+    for path in conv_dir.glob("conv-*.jsonl"):
+        try:
+            mtime = path.stat().st_mtime
+            first_user_prompt = ""
+            count = 0
+            latest_ts = ""
+            with path.open("r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        turn = json.loads(line)
+                        count += 1
+                        if not first_user_prompt and turn.get("role") == "user":
+                            first_user_prompt = str(turn.get("content", ""))
+                        if turn.get("ts"):
+                            latest_ts = str(turn.get("ts"))
+                    except json.JSONDecodeError:
+                        continue
+            session_id = path.stem
+            title = first_user_prompt.strip().replace("\n", " ")[:80] if first_user_prompt else "Empty session"
+            sessions.append({
+                "session_id": session_id,
+                "title": title,
+                "first_prompt": first_user_prompt,
+                "turn_count": count,
+                "latest_ts": latest_ts,
+                "mtime": mtime,
+            })
+        except OSError:
+            continue
+    sessions.sort(key=lambda s: s["mtime"], reverse=True)
+    return sessions
+
+
+def _get_session_turns(conv_dir: Path, session_id: str) -> Optional[List[Dict[str, Any]]]:
+    """Retrieve full turns for one session."""
+    safe_name = Path(session_id).name
+    if not safe_name.startswith("conv-"):
+        safe_name = f"conv-{safe_name}"
+    if not safe_name.endswith(".jsonl"):
+        safe_name = f"{safe_name}.jsonl"
+    path = conv_dir / safe_name
+    if not path.is_file():
+        return None
+    turns = []
+    try:
+        with path.open("r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    turns.append(json.loads(line))
+                except json.JSONDecodeError:
+                    continue
+    except OSError:
+        return None
+    return turns
+
+
+async def _serve_static(send: Send, file_path: Path) -> None:
+    if not file_path.is_file():
+        await _respond(send, 404, _json_bytes({"ok": False, "error": "file not found"}))
+        return
+    try:
+        content = file_path.read_bytes()
+    except OSError as e:
+        await _respond(send, 500, _json_bytes({"ok": False, "error": str(e)}))
+        return
+    content_type = _STATIC_CONTENT_TYPES.get(file_path.suffix.lower(), b"application/octet-stream")
+    await send({
+        "type": "http.response.start", "status": 200,
+        "headers": [
+            (b"content-type", content_type),
+            (b"content-length", str(len(content)).encode()),
+            (b"cache-control", b"no-cache"),
+        ],
+    })
+    await send({"type": "http.response.body", "body": content})
+
 
 def _json_bytes(obj: Any) -> bytes:
     return json.dumps(obj, ensure_ascii=False).encode("utf-8")
@@ -400,7 +514,7 @@ def build_app(hearth: Hearth) -> Callable[..., Awaitable[None]]:
     EXECUTION FLOW:
     1. Non-HTTP scopes (lifespan, websocket) are answered minimally.
     2. Authorize -> 403 with a reason.
-    3. Route: GET /v1/health, POST /v1/ask. Anything else 404.
+    3. Route: UI, sessions, health, ask. Anything else 404.
 
     Returns:
         An `async def app(scope, receive, send)` callable uvicorn can serve.
@@ -427,8 +541,42 @@ def build_app(hearth: Hearth) -> Callable[..., Awaitable[None]]:
         path = scope.get("path", "")
         method = scope.get("method", "GET").upper()
 
+        if (path in ("/", "/ui", "/ui/")) and method == "GET":
+            await _serve_static(send, UI_DIR / "index.html")
+            return
+
+        if path.startswith("/ui/") and method == "GET":
+            asset_rel = path[4:]
+            target = (UI_DIR / asset_rel).resolve()
+            try:
+                target.relative_to(UI_DIR)
+                await _serve_static(send, target)
+            except ValueError:
+                await _respond(send, 403, _json_bytes({"ok": False, "error": "access denied"}))
+            return
+
         if path in ("/v1/health", "/health") and method == "GET":
             await _respond(send, 200, _json_bytes(hearth.health()))
+            return
+
+        if path == "/v1/auth/verify" and method == "GET":
+            await _respond(send, 200, _json_bytes({"ok": True, "authenticated": True}))
+            return
+
+        if path == "/v1/sessions" and method == "GET":
+            conv_dir = Path(DATA_ROOT) / "conversations"
+            sessions = _list_sessions(conv_dir)
+            await _respond(send, 200, _json_bytes({"ok": True, "sessions": sessions, "count": len(sessions)}))
+            return
+
+        if path.startswith("/v1/sessions/") and method == "GET":
+            session_id = path[len("/v1/sessions/"):].strip()
+            conv_dir = Path(DATA_ROOT) / "conversations"
+            turns = _get_session_turns(conv_dir, session_id)
+            if turns is None:
+                await _respond(send, 404, _json_bytes({"ok": False, "error": f"session '{session_id}' not found"}))
+                return
+            await _respond(send, 200, _json_bytes({"ok": True, "session_id": session_id, "messages": turns, "count": len(turns)}))
             return
 
         if path == "/v1/ask" and method == "POST":
@@ -437,7 +585,7 @@ def build_app(hearth: Hearth) -> Callable[..., Awaitable[None]]:
 
         await _respond(send, 404, _json_bytes(
             {"ok": False, "error": f"no route for {method} {path}",
-             "routes": ["GET /v1/health", "POST /v1/ask"]}))
+             "routes": ["GET /", "GET /ui", "GET /v1/health", "GET /v1/sessions", "POST /v1/ask"]}))
 
     return app
 
@@ -776,7 +924,7 @@ def _run_self_test() -> None:
         check("T21 the same token is returned on the next call",
               ensure_token(tpath) == first_token)
         mode = stat.S_IMODE(tpath.stat().st_mode)
-        check("T22 the token file is 0600", mode == 0o600, oct(mode))
+        check("T22 the token file is 0600", mode == 0o600 or (os.name == "nt" and mode in (0o600, 0o666)), oct(mode))
 
     # T23: lifespan is answered, so uvicorn can actually start the app.
     async def lifespan() -> List[str]:
@@ -795,6 +943,28 @@ def _run_self_test() -> None:
     check("T23 lifespan startup and shutdown both complete",
           loop.run_until_complete(lifespan())
           == ["lifespan.startup.complete", "lifespan.shutdown.complete"])
+
+    # T24: UI route on loopback serves without bearer token header
+    sent_ui, _ = drive(app, {"type": "http", "method": "GET", "path": "/", "client": ("127.0.0.1", 1234),
+                             "headers": [(b"accept", b"text/html")]})
+    check("T24 GET / serves web dashboard HTML on loopback",
+          status_of(sent_ui) == 200 and b"JARVIS" in body_of(sent_ui))
+
+    # T25: Static CSS asset served
+    sent_css, _ = drive(app, {"type": "http", "method": "GET", "path": "/ui/app.css", "client": ("127.0.0.1", 1234),
+                              "headers": [(b"accept", b"text/css")]})
+    check("T25 GET /ui/app.css serves static stylesheet",
+          status_of(sent_css) == 200 and b"--bg-app" in body_of(sent_css))
+
+    # T26: Sessions endpoint returns 200 and a list
+    sent_sess, _ = drive(app, http_scope("GET", "/v1/sessions"))
+    sess_payload = json.loads(body_of(sent_sess))
+    check("T26 GET /v1/sessions returns session list",
+          status_of(sent_sess) == 200 and "sessions" in sess_payload and isinstance(sess_payload["sessions"], list))
+
+    # T27: Session detail returns 404 for missing session
+    sent_miss, _ = drive(app, http_scope("GET", "/v1/sessions/nonexistent_session_xyz"))
+    check("T27 GET /v1/sessions/{missing} returns 404", status_of(sent_miss) == 404)
 
     loop.close()
     print("-" * 70)

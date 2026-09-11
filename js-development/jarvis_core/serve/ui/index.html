@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>JARVIS // Cognitive Operating System</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/ui/app.css">
+</head>
+<body>
+  <div id="app" class="app-layout">
+    <!-- SIDEBAR -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <div class="brand">
+          <div class="brand-logo">
+            <span class="pulse-ring"></span>
+            <span class="core-dot"></span>
+          </div>
+          <div class="brand-text">
+            <h2>J.A.R.V.I.S</h2>
+            <span class="subtext">COGNITIVE OS</span>
+          </div>
+        </div>
+        <button id="btn-new-chat" class="btn-primary" title="Start a fresh conversation">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+          New Session
+        </button>
+      </div>
+
+      <div class="sidebar-section-title">
+        <span>CONVERSATIONS</span>
+        <span id="session-count" class="badge">0</span>
+      </div>
+
+      <div id="session-list" class="session-list">
+        <!-- Dynamically populated session cards -->
+        <div class="session-loading">Loading conversations...</div>
+      </div>
+
+      <div class="sidebar-footer">
+        <div class="hearth-status" id="hearth-status-card">
+          <div class="status-indicator online" id="status-dot"></div>
+          <div class="status-info">
+            <div class="status-title" id="status-label">Hearth: Online</div>
+            <div class="status-details" id="status-sub">Port 8756 • PID: --</div>
+          </div>
+        </div>
+        <button id="btn-settings" class="btn-icon" title="Hearth Security & Token Settings">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+        </button>
+      </div>
+    </aside>
+
+    <!-- MAIN CHAT STAGE -->
+    <main class="main-content">
+      <!-- TOP CONTROLS BAR -->
+      <header class="topbar">
+        <div class="session-meta">
+          <span class="active-tag" id="session-tag">NEW SESSION</span>
+          <h1 id="session-title-display">Interactive Operating Console</h1>
+        </div>
+
+        <div class="controls-cluster">
+          <!-- Brain / Model -->
+          <div class="control-group">
+            <label for="select-model">Model</label>
+            <select id="select-model" class="dropdown">
+              <option value="google/gemini-3.6-flash" selected>Gemini 3.6 Flash</option>
+              <option value="google/gemini-2.5-flash">Gemini 2.5 Flash</option>
+              <option value="anthropic/claude-3-5-sonnet">Claude 3.5 Sonnet</option>
+              <option value="deepseek/deepseek-chat">DeepSeek V3</option>
+            </select>
+          </div>
+
+          <!-- Reasoning Effort -->
+          <div class="control-group">
+            <label>Reasoning</label>
+            <div class="toggle-group" id="reasoning-toggles">
+              <button type="button" class="toggle-btn" data-val="low">Low</button>
+              <button type="button" class="toggle-btn" data-val="medium">Med</button>
+              <button type="button" class="toggle-btn active" data-val="high">High</button>
+            </div>
+          </div>
+
+          <!-- Tool Mode -->
+          <div class="control-group">
+            <label>Tooling</label>
+            <div class="toggle-group" id="tool-mode-toggles">
+              <button type="button" class="toggle-btn" data-val="default">Std (7)</button>
+              <button type="button" class="toggle-btn active" data-val="full">Full (21)</button>
+            </div>
+          </div>
+
+          <!-- Auto-allow Gated Tools -->
+          <div class="control-group checkbox-control" title="Auto-allow file_read, code_exec, shell_run">
+            <label class="custom-checkbox">
+              <input type="checkbox" id="check-allow-all" checked>
+              <span class="checkmark"></span>
+              <span class="checkbox-label">Allow Gated</span>
+            </label>
+          </div>
+        </div>
+      </header>
+
+      <!-- MESSAGES DISPLAY AREA -->
+      <div id="messages-stream" class="messages-stream">
+        <div class="hero-placeholder" id="hero-placeholder">
+          <div class="hero-icon">
+            <div class="ring outer"></div>
+            <div class="ring inner"></div>
+            <div class="core-glow"></div>
+          </div>
+          <h2>JARVIS Autonomous Cognitive Orchestrator</h2>
+          <p>Autonomous R&D, Memory Triangulation, and Systems Engineering.</p>
+          <div class="quick-prompts">
+            <button class="prompt-chip" data-prompt="have you gone through the entire local JARVIS folder? what do you think about this project? like what is it about and what is it I am building and trying to achieve with this in the long long term?">
+              🏢 Audit repository architecture & long-term endgame
+            </button>
+            <button class="prompt-chip" data-prompt="What past JARVIS decisions constrain the task I am starting today?">
+              🛡️ Check past authoritative decisions for Stage 5
+            </button>
+            <button class="prompt-chip" data-prompt="Check the current volume of our observation queue, knowledge base, and domain labels using your corpus introspection tool.">
+              📊 Inspect observation queue & corpus volume
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- STREAMING ACTIVITY DOCK -->
+      <div id="activity-dock" class="activity-dock hidden">
+        <div class="activity-header" id="activity-toggle">
+          <div class="activity-title">
+            <span class="spinner"></span>
+            <span id="activity-label">JARVIS is thinking & executing tools...</span>
+          </div>
+          <div class="activity-badge" id="activity-badge">0 steps</div>
+        </div>
+        <div id="activity-trace" class="activity-trace"></div>
+      </div>
+
+      <!-- INPUT BAR -->
+      <div class="input-dock">
+        <div class="input-card">
+          <textarea id="prompt-input" placeholder="Type your directive or inquiry... (Shift+Enter for newline, Enter to send)" rows="1"></textarea>
+          <div class="input-actions">
+            <button id="btn-submit" class="btn-send" title="Send (Enter)">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+            </button>
+          </div>
+        </div>
+        <div class="input-footer">
+          <span>Loopback Security: 127.0.0.1:8756</span>
+          <span id="token-status-pill" class="pill success">Token Verified</span>
+        </div>
+      </div>
+    </main>
+
+    <!-- SETTINGS / TOKEN MODAL -->
+    <div id="modal-settings" class="modal-overlay hidden">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h3>Hearth Authentication & Security</h3>
+          <button id="modal-close" class="btn-icon">&times;</button>
+        </div>
+        <div class="modal-body">
+          <p>Every API request to Hearth requires the local bearer token from <code>jarvis_data/.hearth_token</code>.</p>
+          <div class="form-group">
+            <label for="input-token">Bearer Token</label>
+            <input type="password" id="input-token" placeholder="Paste your hearth token here">
+          </div>
+          <div class="modal-tip">
+            <strong>Tip:</strong> You can also pass <code>?token=your_token</code> in the browser URL once, and it will be saved securely in your browser's local storage.
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button id="btn-save-token" class="btn-primary">Save & Connect</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/ui/app.js"></script>
+</body>
+</html>
