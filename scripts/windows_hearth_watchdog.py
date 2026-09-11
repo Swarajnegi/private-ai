@@ -138,6 +138,26 @@ def _watchdog_log(root: Optional[Path] = None) -> Path:
     return repo / "jarvis_data" / "hearth_watchdog.log"
 
 
+def _current_environment() -> dict[str, str]:
+    """Merge live HKCU environment variables so hearth picks up env changes without re-logon."""
+    env = dict(os.environ)
+    if winreg is not None:
+        try:
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Environment") as key:
+                i = 0
+                while True:
+                    try:
+                        name, val, _ = winreg.EnumValue(key, i)
+                        if isinstance(val, str):
+                            env[name] = val
+                        i += 1
+                    except OSError:
+                        break
+        except OSError:
+            pass
+    return env
+
+
 def _spawn_hearth(root: Optional[Path] = None) -> subprocess.Popen[bytes]:
     """Start a normal foreground hearth; Windows owns this watchdog, not a shell."""
     repo = root if root is not None else _REPO_ROOT
@@ -151,6 +171,7 @@ def _spawn_hearth(root: Optional[Path] = None) -> subprocess.Popen[bytes]:
     try:
         process = subprocess.Popen(
             [str(_hearth_python()), str(hearth)], cwd=repo,
+            env=_current_environment(),
             stdin=subprocess.DEVNULL, stdout=log, stderr=log, creationflags=flags,
         )
         log.close()  # The child inherited its own handle; do not leak one per restart.

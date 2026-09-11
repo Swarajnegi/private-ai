@@ -195,6 +195,35 @@ def _extract_json_str(raw: str) -> Optional[str]:
     return None
 
 
+_XML_TOOLCALL_PATTERN = re.compile(
+    r"<tool_call>\s*([a-zA-Z0-9_-]+)(.*?)</tool_call>",
+    re.DOTALL | re.IGNORECASE,
+)
+_XML_ARG_PATTERN = re.compile(
+    r"<arg_key>(.*?)</arg_key>\s*<arg_value>(.*?)</arg_value>",
+    re.DOTALL | re.IGNORECASE,
+)
+
+
+def _extract_xml_tool_calls(raw: str) -> List[ToolCall]:
+    """Extract tool calls formatted in <tool_call>...<arg_key>..</arg_value> markup."""
+    calls: List[ToolCall] = []
+    for match in _XML_TOOLCALL_PATTERN.finditer(raw):
+        name = match.group(1).strip()
+        body = match.group(2)
+        arguments: Dict[str, Any] = {}
+        for k_match, v_match in _XML_ARG_PATTERN.findall(body):
+            k = k_match.strip()
+            v_raw = v_match.strip()
+            try:
+                v = json.loads(v_raw)
+            except Exception:
+                v = v_raw
+            arguments[k] = v
+        calls.append(ToolCall(name=name, arguments=arguments))
+    return calls
+
+
 # =============================================================================
 # Part 4: SINGLE TOOL CALL PARSER
 # =============================================================================
@@ -222,6 +251,9 @@ def parse_tool_call(raw_text: str) -> ToolCall | ParseError:
     """
     json_str = _extract_json_str(raw_text)
     if json_str is None:
+        xml_calls = _extract_xml_tool_calls(raw_text)
+        if xml_calls:
+            return xml_calls[0]
         return ParseError(
             message="No JSON object found in LLM output.",
             raw_text=raw_text,
@@ -313,6 +345,11 @@ def parse_tool_calls(raw_text: str) -> List[ToolCall | ParseError]:
                 return results
         except json.JSONDecodeError:
             pass  # Fall through to single-call parsing
+
+    # Check for XML tool calls (<tool_call>...</tool_call>)
+    xml_calls = _extract_xml_tool_calls(raw_text)
+    if xml_calls:
+        return list(xml_calls)
 
     # Single call
     result = parse_tool_call(raw_text)
@@ -573,6 +610,19 @@ if __name__ == "__main__":
         obs_error = dr_unknown.to_observation()
         print(f"\n  [12] Observation (success): '{obs_success}'")
         print(f"       Observation (error):   '{obs_error}'")
+
+        # --- Test 13: XML tool call parsing ---
+        raw_xml = (
+            '<tool_call>calculator\n'
+            '<arg_key>expression</arg_key>\n'
+            '<arg_value>"5 * 5"</arg_value>\n'
+            '</tool_call>'
+        )
+        xml_res = parse_tool_call(raw_xml)
+        assert isinstance(xml_res, ToolCall)
+        assert xml_res.name == "calculator"
+        assert xml_res.arguments == {"expression": "5 * 5"}
+        print(f"\n  [13] XML tool call parse: {xml_res.name}({xml_res.arguments})")
 
         print("\n" + "=" * 60)
         print("  All smoke tests passed.")

@@ -125,6 +125,13 @@ def _cmd_stop(args: argparse.Namespace) -> int:
         print("no live hearth found (pid file absent or stale)")
         PID_PATH.unlink(missing_ok=True)
         return 1
+    if os.name == "nt":
+        import subprocess
+        res = subprocess.run(["taskkill", "/F", "/PID", str(pid)], capture_output=True)
+        if res.returncode == 0:
+            print(f"SIGTERM sent to hearth pid {pid}")
+            PID_PATH.unlink(missing_ok=True)
+            return 0
     try:
         os.kill(pid, signal.SIGTERM)
     except PermissionError:

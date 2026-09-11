@@ -203,6 +203,10 @@ class Hearth:
     async def run_ask(
         self, question: str, emit: Callable[[str, Dict[str, Any]], Awaitable[None]],
         session: Optional[str] = None, new_session: bool = False,
+        targets: Optional[List[str]] = None,
+        full: bool = False, allow_all: bool = False,
+        max_iterations: Optional[int] = None, budget_usd: Optional[float] = None,
+        reasoning_effort: Optional[str] = None,
     ) -> Dict[str, Any]:
         """One spine pass, narrated through `emit`. Returns the final payload.
 
@@ -229,9 +233,25 @@ class Hearth:
                     f"over the hearth; run it from --ask if you want to approve it")
             return PermissionDecision.DENY
 
+        if allow_all:
+            from jarvis_core.brain.orchestrator import allow_all_ask_handler
+            active_handler = allow_all_ask_handler
+        else:
+            active_handler = deny_handler
+
         kwargs: Dict[str, Any] = dict(self._cfg.ask_kwargs)
-        kwargs.update(printer=printer, ask_handler=deny_handler,
+        kwargs.update(printer=printer, ask_handler=active_handler,
                       session=session, new_session=new_session)
+        if targets:
+            kwargs["targets"] = targets
+        if full:
+            kwargs["full"] = True
+        if max_iterations is not None:
+            kwargs["max_iterations"] = max_iterations
+        if budget_usd is not None:
+            kwargs["budget_usd"] = budget_usd
+        if reasoning_effort is not None:
+            kwargs["reasoning_effort"] = reasoning_effort
 
         ask_fn = self._resolve_ask()
         task = asyncio.ensure_future(ask_fn(question, **kwargs))
@@ -456,6 +476,13 @@ async def _handle_ask(hearth: Hearth, scope: Dict[str, Any],
 
     session = body.get("session")
     new_session = bool(body.get("new_session", False))
+    model = body.get("model")
+    targets = [str(model)] if model else body.get("targets")
+    full = bool(body.get("full", False))
+    allow_all = bool(body.get("allow_all", False))
+    max_iterations = body.get("max_iterations")
+    budget_usd = body.get("budget_usd")
+    reasoning_effort = body.get("reasoning_effort")
     streaming = _wants_stream(scope)
 
     async with hearth._slot:
@@ -468,7 +495,10 @@ async def _handle_ask(hearth: Hearth, scope: Dict[str, Any],
                     collected.append(str(data["line"]))
 
             payload = await hearth.run_ask(question, collect,
-                                           session=session, new_session=new_session)
+                                           session=session, new_session=new_session,
+                                           targets=targets, full=full, allow_all=allow_all,
+                                           max_iterations=max_iterations, budget_usd=budget_usd,
+                                           reasoning_effort=reasoning_effort)
             payload["log"] = collected
             await _respond(send, 200 if payload.get("ok") else 500, _json_bytes(payload))
             return
@@ -485,7 +515,10 @@ async def _handle_ask(hearth: Hearth, scope: Dict[str, Any],
 
         await emit("open", {"question": question})
         payload = await hearth.run_ask(question, emit,
-                                       session=session, new_session=new_session)
+                                       session=session, new_session=new_session,
+                                       targets=targets, full=full, allow_all=allow_all,
+                                       max_iterations=max_iterations, budget_usd=budget_usd,
+                                       reasoning_effort=reasoning_effort)
         await emit("answer", payload)
         await send({"type": "http.response.body", "body": b"", "more_body": False})
 

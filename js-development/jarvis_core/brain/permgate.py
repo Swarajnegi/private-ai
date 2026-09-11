@@ -109,7 +109,7 @@ def _repo_scoped_file_read_classifier(repo_root: Path):
 _READ_ONLY_TOOLS = frozenset({
     "calculator",
     "prior_self_consult", "cognitive_mirror", "writing_voice_check", "bear_case_devil",
-    "file_search",
+    "file_search", "list_dir", "corpus_stats",
     "context_expand",   # reads one append-only ledger by handle; cannot write
     "web_search",
     "memory_semantic_search", "memory_mmr_search", "memory_bm25_search",
@@ -141,7 +141,7 @@ def build_permission_context(
         PermissionRule(name, PermissionDecision.ALLOW,
                        description="explicitly declared read-only")
         for name in sorted(_READ_ONLY_TOOLS)
-        if name in tools and not getattr(tools[name], "requires_permission", False)
+        if not getattr(tools.get(name), "requires_permission", False)
     ]
     ctx = PermissionContext(rules=rules, default=PermissionDecision.ASK)
     if "shell_run" in tools:
