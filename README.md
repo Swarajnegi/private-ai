@@ -81,7 +81,8 @@ Verify status yourself rather than trusting this table:
 
 ```bash
 python3 scripts/check_projections.py    # is the mind's index current?
-python3 scripts/hearth.py --status      # is the clock running? (as of 2026-09-11: no machine)
+python3 scripts/hearth.py --status      # is the clock running? (work laptop: yes, cron-persisted
+                                        #  since 2026-09-11. Personal laptop: set it up — §6.2)
 git log --oneline -15                   # what actually happened recently
 ```
 

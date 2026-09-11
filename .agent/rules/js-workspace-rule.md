@@ -28,6 +28,14 @@ JARVIS's consciousness travels with this repo (Consciousness Portability Contrac
 
 **Honest limit of this machine, unchanged as of 2026-09-10 — say so if asked whether JARVIS "remembers" this session:** there is still NO per-prompt capture here. Antigravity has no hook system, and — unlike Codex, which persists its own session transcripts to `~/.codex/sessions/` regardless of whether anything reads them — it is not yet established whether Antigravity writes any transcript to disk that an adapter could read after the fact. Until that is checked, this machine's experience enters the corpus only via explicit `/memory` writes through `scripts/kb_append.py`. Be proactive about capturing durable insights; nothing is recording automatically.
 
+**The hearth on this machine serves you AND Codex** — it is one per machine, not per agent. It will
+not give you per-turn capture (no adapter exists for this host), but it does keep consolidation, the
+projections and `activity_digest.md` fresh on a clock instead of on someone's memory. If
+`python3 scripts/hearth.py --status` says it is down, start it and make it persistent — see
+NERVOUS_SYSTEM.md §6.2 for the cron/Task-Scheduler recipe. Starting it by hand alone is a one-shot
+that expires at the next reboot; that exact failure went unnoticed for three days on the other
+laptop.
+
 **Read [NERVOUS_SYSTEM.md](../../NERVOUS_SYSTEM.md) §1 and §5.3 once on this machine.** §1 corrects
 four misconceptions that otherwise produce confidently wrong answers about what JARVIS can see —
 most relevant here: a running hearth does **not** give this host capture, because no adapter exists

@@ -550,16 +550,63 @@ reads it at boot and *cannot* rebuild it, having no local queue — was booting 
 That is the `PROJECTION-AS-TRANSPORT` class: derived here, consumed by a machine that cannot derive
 it. Untracking such a file looks like obvious cleanup and is a regression.
 
-> **Honest status (2026-09-11): the hearth is not running as a persistent daemon on ANY machine.**
-> Not the work laptop, and not yet the personal laptop. Everything in the job table above therefore
-> fires **only when someone runs `--tick-once` or the underlying script by hand** — including
-> `ingest_codex`, which is what makes Codex capture automatic rather than manual (§5.2).
->
-> This is the single highest-leverage unstarted thing in the whole setup: every organ is built,
-> tested and committed, and the clock that drives them is off. Run
-> `python3 scripts/hearth.py --background` on the machine you actually work on, then `--status` to
-> confirm. Check `--status` before assuming any scheduled job has fired recently — a stale
-> `.hearth_jobs.json` reports the last tick, which may be weeks old.
+### 6.2 Keeping it alive — ONE hearth per MACHINE, not per agent
+
+**There are two machines, so there are two hearths.** Codex and Antigravity both run on the personal
+laptop and **share** its hearth; you do not run one per agent. A hearth serves whatever runs beside
+it on the same box.
+
+| Machine | Hearth | Serves |
+|---|---|---|
+| Work laptop | #1 — **live since 2026-09-11, cron-persisted** | Claude Code |
+| Personal laptop | #2 — **not yet set up** | Codex **and** Antigravity |
+
+**Why it was off for three days, which is the instructive part.** It was started on 2026-09-08 with
+`--background`. That double-forks, so it survives the *shell* closing — but not the *VM* closing.
+WSL shuts its VM down once the last terminal exits, and `last reboot` shows WSL restarted three
+times between then and 2026-09-11. Nothing registered the hearth to start again, so it simply never
+came back. **A process whose entire purpose is to run unattended failed unattended, silently, for
+three days** — and the `--status` command that would have revealed it was never run by anything.
+Starting it by hand is not setup; it is a one-shot that expires at the next reboot.
+
+**The fix on this machine (cron, no privileges needed):**
+```bash
+crontab -e     # then add both lines:
+@reboot      cd /path/to/JARVIS && .venv/bin/python3 scripts/hearth.py --background >> jarvis_data/hearth.log 2>&1
+*/10 * * * * cd /path/to/JARVIS && .venv/bin/python3 scripts/hearth.py --background >> jarvis_data/hearth.log 2>&1
+```
+Two triggers, one command. `@reboot` covers WSL starting; the 10-minute entry is the self-heal —
+it covers a crash, a missed `@reboot`, and a machine that was asleep. **Firing it repeatedly is
+safe**: `--background` refuses when a live pid already holds the port, so the recurring entry is a
+no-op whenever the hearth is already up. Verified by killing it and watching cron revive it.
+
+Why cron and not systemd here: systemd *is* PID 1 (`/etc/wsl.conf` has `systemd=true`), but
+`systemctl --user` has no session bus in a non-login shell, and a system unit needs `sudo`, which is
+not passwordless on this box. cron is already running and a **user** crontab needs no privilege.
+Use `~/.venv/bin/python3` (an absolute interpreter path) — cron does not inherit your `PATH`.
+
+**On the personal laptop (Windows) — choose by where Codex actually runs:**
+- **Inside WSL** (recommended, and what this repo assumes): identical to the above. `crontab -e`,
+  same two lines with that machine's path.
+- **Native Windows Python**: `--background` **cannot work** — it needs `os.fork`, and the script
+  says so and exits. Use Task Scheduler instead: trigger *At log on* **and** *Repeat every 10
+  minutes*, action `wsl.exe -d Ubuntu -e bash -lc "cd /path/to/JARVIS && .venv/bin/python3 scripts/hearth.py --background"`
+  (or the native `python.exe` equivalent running it in the **foreground** in a hidden window).
+
+**The honest ceiling: "always on" means "whenever the machine is on and WSL is up."** A hearth
+cannot run while the laptop is asleep or shut down, and WSL is not running when no terminal or
+scheduled task has started it. Jobs are cadence-based rather than wall-clock exact, so a missed
+window is caught on the next tick rather than skipped — but a machine that is off for a week does a
+week of catching up when it returns, not nothing.
+
+**Check, never assume:**
+```bash
+python3 scripts/hearth.py --status      # UP/DOWN plus per-job last-run
+crontab -l                              # is the keepalive actually installed?
+tail jarvis_data/hearth.log             # what cron's attempts did
+```
+A stale `.hearth_jobs.json` reports the last tick, which may be weeks old — that file existing does
+**not** mean the clock is running.
 
 ---
 
