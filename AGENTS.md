@@ -23,6 +23,17 @@ treat this file as a lighter substitute for it.
 
 ## SESSION BOOT (read before your first response, every session)
 
+**0. First, ask the machine what it is missing — do not probe or guess:**
+```bash
+python3 scripts/bootstrap_jarvis.py --check
+```
+It reports repo state *and* machine state (venv, dependencies, vector index, hearth, clock
+keepalive, unanswered agent mail) with the fix command inline for anything missing. Machine state
+does **not** arrive with `git pull`; on a fresh clone several of these will be MISSING and the
+report tells you exactly what to run. Do that before the rest of this list — `search_memory.py`
+returns nothing without a rebuilt index, and it fails silently rather than loudly.
+
+
 1. **Read [jarvis_data/cognitive_profile.md](jarvis_data/cognitive_profile.md)** — the standing
    model of the user: who they are, how they work, active directives. Replaces ever asking "tell
    me about yourself."
