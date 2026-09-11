@@ -176,6 +176,7 @@ def _machine_readiness(root: Path, report: List[str]) -> None:
     outright. Added 2026-09-11 after the question "is everything provided for
     them to start?" turned out to be answerable only by reading four files.
     """
+    import os as _os
     import shutil
     import subprocess
     import sys as _sys
@@ -211,18 +212,37 @@ def _machine_readiness(root: Path, report: List[str]) -> None:
         report.append("  vector index    : MISSING -> python3 scripts/index_memory.py"
                       "   (gitignored by design; search returns NOTHING until this runs)")
 
-    pid_file = root / "jarvis_data" / ".hearth.pid"
+    token_path = root / "jarvis_data" / ".hearth_token"
     alive = False
-    if pid_file.exists():
-        try:
-            import os as _os
-            _os.kill(int(pid_file.read_text().strip()), 0)
-            alive = True
-        except Exception:
-            alive = False
-    report.append(f"  hearth (clock)  : {'UP' if alive else 'DOWN -> python3 scripts/hearth.py --background'}")
+    try:
+        import urllib.request
+        token = token_path.read_text(encoding="utf-8").strip()
+        request = urllib.request.Request(
+            "http://127.0.0.1:8756/v1/health",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        with urllib.request.urlopen(request, timeout=1) as response:
+            alive = response.status == 200
+    except (OSError, ValueError):
+        alive = False
+    hearth_fix = ("python scripts/windows_hearth_watchdog.py --install"
+                  if _os.name == "nt" else "python3 scripts/hearth.py --background")
+    report.append(f"  hearth (clock)  : {'UP' if alive else f'DOWN -> {hearth_fix}'}")
 
-    if shutil.which("crontab"):
+    if _os.name == "nt":
+        try:
+            import winreg
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER,
+                                r"Software\Microsoft\Windows\CurrentVersion\Run", 0,
+                                winreg.KEY_READ) as key:
+                value, _kind = winreg.QueryValueEx(key, "JARVIS Hearth Watchdog")
+            persisted = "windows_hearth_watchdog.py" in str(value)
+        except (FileNotFoundError, OSError):
+            persisted = False
+        report.append("  clock keepalive : " + (
+            "installed (HKCU logon watchdog)" if persisted else
+            "NOT installed -> python scripts/windows_hearth_watchdog.py --install"))
+    elif shutil.which("crontab"):
         try:
             out = subprocess.run(["crontab", "-l"], capture_output=True, text=True, timeout=10)
             persisted = "hearth.py" in (out.stdout or "")

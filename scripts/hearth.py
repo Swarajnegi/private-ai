@@ -53,9 +53,20 @@ def _read_pid() -> int:
         pid = int(PID_PATH.read_text(encoding="utf-8").strip())
     except (OSError, FileNotFoundError, ValueError):
         return 0
+    if os.name == "nt":
+        # Windows rejects os.kill(pid, 0) with WinError 87 even for a live
+        # process. Querying the process handle is the equivalent existence test.
+        import ctypes
+        process_query_limited_information = 0x1000
+        handle = ctypes.windll.kernel32.OpenProcess(
+            process_query_limited_information, False, pid)
+        if not handle:
+            return 0
+        ctypes.windll.kernel32.CloseHandle(handle)
+        return pid
     try:
         os.kill(pid, 0)                        # signal 0 = existence check only
-    except (ProcessLookupError, ValueError, OSError, SystemError):
+    except (ProcessLookupError, ValueError, SystemError):
         return 0
     except PermissionError:
         return pid                             # alive, owned by someone else
@@ -79,6 +90,15 @@ def _cmd_status(args: argparse.Namespace, token: str) -> int:
               f"({type(e).__name__}: {e})")
         print(f"  pid file: {'stale/absent' if not pid else f'pid {pid} alive but not answering'}")
         return 1
+    # Health is the authority when a previous stop attempt removed a valid PID
+    # file on Windows. Restore it so the next --stop can target this process.
+    try:
+        health_pid = int(health.get("pid", 0))
+        if health_pid > 0 and health_pid != pid:
+            PID_PATH.parent.mkdir(parents=True, exist_ok=True)
+            PID_PATH.write_text(str(health_pid), encoding="utf-8")
+    except (OSError, TypeError, ValueError):
+        pass
     print(f"hearth UP on {args.host}:{args.port}  pid {health.get('pid')}  "
           f"uptime {health.get('uptime_seconds')}s")
     print(f"  served {health.get('requests_served')} · "
@@ -105,7 +125,11 @@ def _cmd_stop(args: argparse.Namespace) -> int:
         print("no live hearth found (pid file absent or stale)")
         PID_PATH.unlink(missing_ok=True)
         return 1
-    os.kill(pid, signal.SIGTERM)
+    try:
+        os.kill(pid, signal.SIGTERM)
+    except PermissionError:
+        print(f"cannot stop hearth pid {pid}: permission denied")
+        return 1
     print(f"SIGTERM sent to hearth pid {pid}")
     PID_PATH.unlink(missing_ok=True)
     return 0
