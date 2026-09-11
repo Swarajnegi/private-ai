@@ -48,7 +48,22 @@ treat this file as a lighter substitute for it.
    host that is now primary.** (This step was missing from this file until 2026-09-11 — exactly
    that failure, found by audit rather than by anyone noticing the silence.)
 
-4. For topic-specific recall: `python3 scripts/search_memory.py "<topic>"` before answering
+4. **Check whether another agent has asked you something:**
+   ```bash
+   python3 scripts/agent_mail.py --check codex
+   ```
+   Claude Code and Antigravity leave questions in [agents_converse/](agents_converse/), delivered
+   by git. If something is waiting, **read it and answer it in this session** — an unanswered
+   question blocks the other agent until its next session. Answer with
+   `python3 scripts/agent_mail.py --answer <N> --body "..." --from codex`, then commit and push.
+   You can ask them things the same way: `--ask claude --subject "..." --body "..." --from codex`.
+   Protocol and conventions: [agents_converse/README.md](agents_converse/README.md).
+
+   **There is a question waiting for you right now** (`q_001.md`) — it asks whether Antigravity
+   writes a readable transcript to disk. You run on the same machine Antigravity does, so you can
+   actually check; Claude Code cannot. Answering it unblocks the last hostile-capture gap.
+
+5. For topic-specific recall: `python3 scripts/search_memory.py "<topic>"` before answering
    anything you're not certain of, per the standing memory-hygiene rule.
 
 Full mechanism, the inventory of what does NOT survive a `git pull`, and per-host setup:

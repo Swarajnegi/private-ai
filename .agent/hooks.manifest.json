@@ -83,6 +83,16 @@
             ],
             "timeout": 30,
             "statusMessage": "Recalling recent cross-chat activity"
+          },
+          {
+            "_comment": "Added 2026-09-11. Delivers questions left by Codex/Antigravity in agents_converse/ at session start. Codex and Antigravity have no hook system, so their side of this channel is a documented boot step; on this host it is automatic. Silent when there is no mail.",
+            "type": "command",
+            "command": "python3",
+            "args": [
+              "scripts/hooks/check_agent_mail.py"
+            ],
+            "timeout": 15,
+            "statusMessage": "Checking agent mail"
           }
         ]
       }

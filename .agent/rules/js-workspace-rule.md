@@ -20,7 +20,11 @@ JARVIS's consciousness travels with this repo (Consciousness Portability Contrac
 
 1. **Read `jarvis_data/cognitive_profile.md`** — the standing model of the user (who they are, how they work, active directives). This replaces ever asking "tell me about yourself."
 2. **Read `jarvis_data/activity_digest.md`** — the distilled cross-chat activity from the other machine(s): what the user worked on, day by day, plus JARVIS's own SELF-STATE (which model produced recent turns). Open the conversation already knowing what happened elsewhere.
-3. For topic context, `python scripts/search_memory.py "<topic>"` as usual.
+3. **Check for mail from the other agents:** `python3 scripts/agent_mail.py --check antigravity`.
+   Claude Code and Codex leave questions in `agents_converse/`, delivered by git. Answer with
+   `--answer <N> --body "..." --from antigravity`, then commit and push. Ask them things the same
+   way with `--ask`. See `agents_converse/README.md`.
+4. For topic context, `python scripts/search_memory.py "<topic>"` as usual.
 
 **Honest limit of this machine, unchanged as of 2026-09-10 — say so if asked whether JARVIS "remembers" this session:** there is still NO per-prompt capture here. Antigravity has no hook system, and — unlike Codex, which persists its own session transcripts to `~/.codex/sessions/` regardless of whether anything reads them — it is not yet established whether Antigravity writes any transcript to disk that an adapter could read after the fact. Until that is checked, this machine's experience enters the corpus only via explicit `/memory` writes through `scripts/kb_append.py`. Be proactive about capturing durable insights; nothing is recording automatically.
 
