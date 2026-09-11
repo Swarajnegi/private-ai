@@ -607,9 +607,18 @@ Use `~/.venv/bin/python3` (an absolute interpreter path) — cron does not inher
 - **Inside WSL** (recommended, and what this repo assumes): identical to the above. `crontab -e`,
   same two lines with that machine's path.
 - **Native Windows Python**: `--background` **cannot work** — it needs `os.fork`, and the script
-  says so and exits. Use Task Scheduler instead: trigger *At log on* **and** *Repeat every 10
-  minutes*, action `wsl.exe -d Ubuntu -e bash -lc "cd /path/to/JARVIS && .venv/bin/python3 scripts/hearth.py --background"`
-  (or the native `python.exe` equivalent running it in the **foreground** in a hidden window).
+  says so and exits. Prefer Task Scheduler when the account permits it. On a managed Windows
+  account where Scheduler is denied, install the tracked per-user fallback once:
+
+  ```powershell
+  python scripts/windows_hearth_watchdog.py --install
+  python scripts/windows_hearth_watchdog.py --status
+  ```
+
+  It writes one `HKCU\\...\\Run` value — no administrator permission, service, or scheduled task —
+  so Windows launches a hidden watchdog directly at logon. The watchdog owns a foreground native
+  `hearth.py` child and restarts it after a crash. It is intentionally per-user: it runs while the
+  user is logged in, not while Windows is powered off. Remove it with `--uninstall`.
 
 **The honest ceiling: "always on" means "whenever the machine is on and WSL is up."** A hearth
 cannot run while the laptop is asleep or shut down, and WSL is not running when no terminal or

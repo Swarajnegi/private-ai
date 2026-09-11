@@ -205,6 +205,7 @@ jarvis_data/.hearth_token
 jarvis_data/.hearth.pid
 jarvis_data/.hearth_jobs.json
 jarvis_data/hearth.log
+jarvis_data/hearth_watchdog.log
 
 # -- chromadb/ — UNTRACKED as of 2026-09-11 (this REVERSES a recorded decision)
 # The prior decision was "chromadb/ stays tracked": a ~22 MB regenerable index
