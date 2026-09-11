@@ -17,6 +17,9 @@ COPY knowledge ./knowledge
 COPY jarvis_data/conversations ./jarvis_data/conversations
 COPY README.md NERVOUS_SYSTEM.md AGENTS.md ./
 
+# Railway mounts persistent volumes as root-owned. The entrypoint needs to
+# initialize the empty mount once, then the token-gated hearth is the only
+# process exposed by this image.
 RUN useradd --create-home --uid 10001 jarvis && chown -R jarvis:jarvis /app
-USER jarvis
+USER root
 CMD ["python", "scripts/hosted_entrypoint.py"]
