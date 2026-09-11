@@ -142,6 +142,11 @@ That is not hypothetical: the work laptop's hearth was started once on 2026-09-0
 dead three days later, because WSL shut its VM down and nothing restarted it. Add a keepalive:
 
 ```bash
+# PREFLIGHT — none of these are WSL defaults; check before trusting crontab:
+ps -p 1 -o comm=                                # expect "systemd", not "init"
+command -v crontab || sudo apt install -y cron  # often absent on a fresh WSL
+pgrep -x cron     || sudo service cron start    # installed != running
+
 crontab -e     # then add BOTH lines, using this machine's path:
 @reboot      cd /path/to/JARVIS && .venv/bin/python3 scripts/hearth.py --background >> jarvis_data/hearth.log 2>&1
 */10 * * * * cd /path/to/JARVIS && .venv/bin/python3 scripts/hearth.py --background >> jarvis_data/hearth.log 2>&1

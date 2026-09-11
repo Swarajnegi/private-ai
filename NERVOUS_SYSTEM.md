@@ -569,6 +569,24 @@ came back. **A process whose entire purpose is to run unattended failed unattend
 three days** — and the `--status` command that would have revealed it was never run by anything.
 Starting it by hand is not setup; it is a one-shot that expires at the next reboot.
 
+**PREFLIGHT — do this first on a new machine; none of it is a WSL default.** The work laptop
+happened to have all three already, which is luck, not a given:
+
+```bash
+ps -p 1 -o comm=                       # expect "systemd". If it says "init", see the wsl.conf note
+command -v crontab || sudo apt install -y cron    # cron is often absent on a fresh Ubuntu WSL
+pgrep -x cron || sudo service cron start          # installed != running; @reboot never fires if down
+```
+
+If PID 1 is **not** systemd, cron will not be started for you at boot. Enable it once:
+```ini
+# /etc/wsl.conf   (needs sudo; then from Windows: wsl --shutdown, and reopen the terminal)
+[boot]
+systemd=true
+```
+Skipping this is the quiet failure mode: `crontab -e` succeeds, the entry looks installed,
+and nothing ever runs it.
+
 **The fix on this machine (cron, no privileges needed):**
 ```bash
 crontab -e     # then add both lines:
