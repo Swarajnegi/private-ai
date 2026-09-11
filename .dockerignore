@@ -1,0 +1,11 @@
+.git
+.venv
+venv
+__pycache__
+*.pyc
+dadfinanceapp
+client_work
+jarvis_data
+research_papers
+ollama models
+*.zip
