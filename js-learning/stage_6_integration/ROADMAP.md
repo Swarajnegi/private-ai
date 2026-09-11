@@ -243,6 +243,20 @@ repeating yourself once.
 
 ---
 
+## Sub-Phase 6.11: General Perception of Absence ⬜ **spec written, not built**
+
+**Goal:** the sibling of `agent/tension.py`. That organ surfaces *contradiction* over the user's own
+history; this one surfaces *silence* — "you opened this and never closed it." Requested directly by
+the user 2026-09-11.
+
+**Spec: [DORMANCY_SPEC.md](DORMANCY_SPEC.md).** Read §0 first — two measurements already killed the
+two obvious implementations (domain-level dormancy has literally zero signal; keyword-scraping the
+KB for deferral language returns mostly *closed* decisions). Tier 1 is a commitment registry that
+records resolution conditions instead of inferring them; Tiers 2–3 are gated on Tier 1 proving
+insufficient. Handed to Codex as `agents_converse/q_002.md`.
+
+---
+
 ## Sub-Phase 6.10: Ambient Presence Tier ⬜
 
 > **REFRAMED 2026-09-06: ambient is a DELIVERY CHANNEL, not a destination.** `JARVIS_ENDGAME.md`
