@@ -6,6 +6,33 @@ their devices.
 
 ---
 
+## Talk to JARVIS in your browser
+
+With the hearth running, open **http://127.0.0.1:8756/**. The web workspace has searchable
+conversation history, an animated core, live hearth/job status, Markdown tables and code blocks,
+full-message copy and Markdown export, drafts, and a layout that adapts to narrow screens.
+
+On first connection, use **Choose the token file** and select `jarvis_data/.hearth_token`.
+This is the local hearth token, not an OpenRouter API key. It stays in the browser tab's session
+storage. Existing browser connections are migrated automatically. All UI assets are served locally.
+
+**Enter** sends; **Shift+Enter** adds a line; **Alt+N** starts a conversation; **/** searches titles
+and first prompts. Selecting a conversation continues that exact session. A blank model field uses
+the configured brain. **Configure** exposes model reasoning and tool settings; gated actions are
+opt-in. The system panel shows the complete execution trace and actual scheduler status.
+
+New answers are stored in full and displayed without a character limit. Named terminal sessions
+also appear in history. Older answers saved under the former 2,000-character cap cannot recover
+their missing text from those transcripts. The model's short-term context budget still uses
+explicit excerpts; it does not shorten the saved or displayed answer.
+
+Verification: `python js-development/jarvis_core/serve/hearth.py` and
+`python js-development/jarvis_core/brain/conversation.py`. The browser regression in
+`scripts/verify_hearth_ui.cjs` uses Playwright with Edge and an isolated local fixture server;
+set `JARVIS_UI_LIVE=1` to additionally read the real hearth's session list and history.
+
+---
+
 ## ⇢ If you are an AI agent starting work on this repo, read this section first
 
 Four agents' worth of context live in these files. **Read them in this order**, then you are current

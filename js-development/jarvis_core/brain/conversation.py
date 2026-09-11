@@ -22,7 +22,7 @@ reuses the persistence without inheriting terminal quirks):
 
   - ConversationStore — DUMB, host-agnostic transcript persistence keyed on a
     session_id. It knows nothing about terminals or time windows. append_turn /
-    load_recent, both bounded.
+    load_recent. Storage keeps full text; only model context reads are bounded.
   - resolve_terminal_session — the TERMINAL host's policy: which session am I in?
     Auto-continue the most recent one within an inactivity window (effortless, the
     standing zero-user-effort value), else mint a fresh, pid-qualified id. A future
@@ -59,6 +59,7 @@ from typing import Dict, List, Optional
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))  # standalone-run safety
 
 from jarvis_core.config import DATA_ROOT
+from jarvis_core.locking import exclusive_lock
 
 _IST = timezone(timedelta(hours=5, minutes=30))
 _CONV_DIR = Path(DATA_ROOT) / "conversations"
@@ -66,7 +67,7 @@ _SESSION_STATE = Path(DATA_ROOT) / ".terminal_session.json"
 
 _DEFAULT_MAX_TURNS = 6          # ~3 exchanges of context — plenty for continuity
 _DEFAULT_READ_CHARS = 4000      # read-time budget across all loaded turns
-_STORE_ASSISTANT_CHARS = 2000   # store-time head cap (a --full answer can't bloat the file)
+_CONTEXT_TURN_CHARS = 2000      # model-facing excerpts; the transcript remains complete
 _DEFAULT_WINDOW_HOURS = 2.0
 _VALID_ROLES = frozenset({"user", "assistant"})
 
@@ -88,17 +89,24 @@ class ConversationStore:
         return self._dir / f"{safe}.jsonl"
 
     def append_turn(self, session_id: str, role: str, content: str) -> None:
-        """Persist one turn. Assistant content is head-capped at store time; a
-        problem here must never crash the session that produced it."""
+        """Persist the complete turn; model context limits apply only when reading."""
         if role not in _VALID_ROLES or not (content or "").strip():
             return
-        text = content if role != "assistant" else content[:_STORE_ASSISTANT_CHARS]
         rec = {"ts": datetime.now(_IST).isoformat(timespec="seconds"),
-               "role": role, "content": text}
+               "role": role, "content": content}
         try:
             self._dir.mkdir(parents=True, exist_ok=True)
-            with self._path(session_id).open("a", encoding="utf-8") as f:
-                f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+            path = self._path(session_id)
+            with exclusive_lock(path):
+                with path.open("a+b") as f:
+                    f.seek(0, os.SEEK_END)
+                    if f.tell():
+                        f.seek(-1, os.SEEK_END)
+                        if f.read(1) != b"\n":
+                            f.write(b"\n")
+                    f.write((json.dumps(rec, ensure_ascii=False) + "\n").encode("utf-8"))
+                    f.flush()
+                    os.fsync(f.fileno())
         except OSError:
             pass
 
@@ -127,8 +135,15 @@ class ConversationStore:
                         turns.append({"role": role, "content": content})
         except OSError:
             return []
-        # take the last max_turns, then trim oldest until under the char budget
+        # A single long answer must not evict ALL continuity on the next turn.
+        # Excerpt only the model-facing copy when a context budget is exceeded.
         recent = turns[-max_turns:]
+        if sum(len(t["content"]) for t in recent) > max_chars:
+            recent = [{"role": t["role"], "content": t["content"]
+                       if len(t["content"]) <= _CONTEXT_TURN_CHARS else
+                       t["content"][:_CONTEXT_TURN_CHARS - 48]
+                       + "\n[Context excerpt; full answer in conversation.]"}
+                      for t in recent]
         while recent and sum(len(t["content"]) for t in recent) > max_chars:
             recent.pop(0)
         return recent
@@ -246,13 +261,16 @@ def _run_self_test() -> None:
         store.append_turn(sid, "user", "   ")
         check("T2 invalid role + blank skipped", store.turn_count(sid) == 3)
 
-        # T3: store-time assistant head cap
+        # Storage must survive reload without imposing model context limits.
         store.append_turn(sid, "assistant", "X" * 5000)
-        last = store.load_recent(sid, max_turns=1)[0]
-        check("T3 assistant store-cap ~2000", len(last["content"]) == _STORE_ASSISTANT_CHARS)
+        last = store.load_recent(sid, max_turns=1, max_chars=6000)[0]
+        check("T3 complete assistant answer survives reload", last["content"] == "X" * 5000)
+        check("T3b long answer retains model-facing continuity",
+              bool(store.load_recent(sid))
+              and "Context excerpt" in store.load_recent(sid)[-1]["content"])
 
         # T4: max_turns window
-        check("T4 max_turns", len(store.load_recent(sid, max_turns=2)) == 2)
+        check("T4 max_turns", len(store.load_recent(sid, max_turns=2, max_chars=6000)) == 2)
 
         # T5: max_chars trims oldest
         s5 = "conv-test-5"

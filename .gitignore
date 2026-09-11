@@ -141,6 +141,7 @@ jarvis_data/token_ratios.json.lock
 # authoritative record is knowledge_base.jsonl. Grows with session length and
 # is meaningless on another device (session ids are per-process).
 jarvis_data/context/
+jarvis_data/conversations/*.lock
 
 # -- Local-only PROJECTIONS (2026-09-08) --------------------------------------
 # Derived from knowledge_base.jsonl and rebuilt where they are read, so syncing
