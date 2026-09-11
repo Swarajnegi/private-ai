@@ -135,8 +135,24 @@ use_memories = true
 **Why starting the hearth is not optional.** `ingest_codex` is what turns this host's transcripts
 into captured turns. Without a running hearth it fires only when a human remembers to run it — and
 manual capture is exactly what produced **zero** records over months on Antigravity, the other
-hookless host. The adapter existing is not the adapter running. As of 2026-09-11 the hearth is
-running on **no** machine; if `--status` says it is down, JARVIS is not learning from your work.
+hookless host. The adapter existing is not the adapter running.
+
+**And starting it by hand is not enough — make it persistent, or it dies at the next reboot.**
+That is not hypothetical: the work laptop's hearth was started once on 2026-09-08 and was found
+dead three days later, because WSL shut its VM down and nothing restarted it. Add a keepalive:
+
+```bash
+crontab -e     # then add BOTH lines, using this machine's path:
+@reboot      cd /path/to/JARVIS && .venv/bin/python3 scripts/hearth.py --background >> jarvis_data/hearth.log 2>&1
+*/10 * * * * cd /path/to/JARVIS && .venv/bin/python3 scripts/hearth.py --background >> jarvis_data/hearth.log 2>&1
+```
+
+Safe to fire repeatedly — `--background` refuses when one is already live. If Codex runs under
+**native Windows** rather than WSL, `--background` cannot work at all (it needs `os.fork`); use
+Task Scheduler instead. Full reasoning and the Windows variant: NERVOUS_SYSTEM.md §6.2.
+
+**One hearth per MACHINE, not per agent** — you and Antigravity share this laptop, so you share its
+hearth. Check with `--status` before assuming; if it is down, JARVIS is not learning from your work.
 
 `JARVIS_ROOT` resolves automatically from this file's location (`jarvis_core/config.py`); no path
 edits needed on Windows vs Linux.
