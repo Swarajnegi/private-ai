@@ -59,10 +59,6 @@ treat this file as a lighter substitute for it.
    You can ask them things the same way: `--ask claude --subject "..." --body "..." --from codex`.
    Protocol and conventions: [agents_converse/README.md](agents_converse/README.md).
 
-   **There is a question waiting for you right now** (`q_001.md`) — it asks whether Antigravity
-   writes a readable transcript to disk. You run on the same machine Antigravity does, so you can
-   actually check; Claude Code cannot. Answering it unblocks the last hostile-capture gap.
-
 5. For topic-specific recall: `python3 scripts/search_memory.py "<topic>"` before answering
    anything you're not certain of, per the standing memory-hygiene rule.
 
@@ -123,7 +119,9 @@ python3 scripts/hearth.py --status           # confirm ingest_codex is listed
 
 **`~/.codex/config.toml` lives outside the repo and does NOT travel — set it per machine:**
 ```toml
-model = "gpt-6-astra"
+# model = whichever you are using — GPT-6 Astra, or GPT-5.6 Sol/Terra/Luna.
+# JARVIS does not care which; nothing in this repo keys off the model name.
+model = "<your-model>"
 model_reasoning_effort = "xhigh"
 
 [features]

@@ -413,7 +413,9 @@ for p in research_papers/*/*.pdf; do python3 scripts/ingest.py "$p" --collection
 **Also on a new machine — set Codex's own model.** `~/.codex/config.toml` is outside the repo, so
 it does **not** travel and each machine needs it set independently:
 ```toml
-model = "gpt-6-astra"
+# model = whichever you are using — GPT-6 Astra, or GPT-5.6 Sol/Terra/Luna.
+# JARVIS does not care which; nothing in this repo keys off the model name.
+model = "<your-model>"
 model_reasoning_effort = "xhigh"
 
 [features]

@@ -51,8 +51,10 @@ A global watermark would be simpler. What breaks?
 ~ claude
 ```
 
-Known names, with aliases so free text still routes: `claude` (Claude Code, cc, opus, sonnet),
-`codex` (Codex CLI, gpt, GPT-6 Astra), `antigravity` (ag). A name that matches nothing resolves
+Known names, with aliases so free text still routes: `claude` (Claude Code, cc, opus, sonnet,
+fable), `codex` (Codex CLI, gpt, openai), `antigravity` (ag). **Aliases name the HOST, never a
+model version** — Codex may be running Astra or any Sol/Terra/Luna, and Claude Code swaps models
+mid-session, so any version suffix resolves to its host automatically. A name that matches nothing resolves
 to **nobody** — the question is then undeliverable rather than misdelivered to whichever agent
 checks first.
 
