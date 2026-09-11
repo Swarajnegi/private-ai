@@ -68,7 +68,7 @@ from typing import Any, Awaitable, Callable, Dict, List, Optional, Tuple
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))  # standalone-run safety
 
 _BASE_URL = "https://openrouter.ai/api/v1"
-_DEFAULT_BUDGET_USD = 0.50
+_DEFAULT_BUDGET_USD: Optional[float] = None
 _DEFAULT_TIMEOUT_S = 90.0
 _DEFAULT_MAX_RETRIES = 2
 _EST_OUTPUT_TOKENS = 600          # conservative pre-gate assumption

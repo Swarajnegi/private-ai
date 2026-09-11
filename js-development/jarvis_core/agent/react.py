@@ -461,7 +461,8 @@ class ReActLoop:
                     stripped = parsable_raw.strip()
                     attempted_call = (
                         stripped.startswith("{") or stripped.startswith("[")
-                        or stripped.startswith("```")
+                        or stripped.startswith("```") or "<tool_call" in stripped
+                        or stripped.startswith("<")
                     ) and any(isinstance(p, ParseError) for p in parsed)
 
                     if attempted_call and repair_attempts < _MAX_TOOLCALL_REPAIRS:

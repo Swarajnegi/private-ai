@@ -6,12 +6,12 @@
 > the DISTILLED, 7-day, human-readable form (observation_queue.jsonl
 > itself is also tracked; corrected 2026-09-10, this line used to
 > falsely claim otherwise).
-> Generated 2026-09-11T10:39:12+05:30 on HRM5472-NEW.
+> Generated 2026-09-11T12:30:26+05:30 on unknown.
 
-RECENT ACTIVITY — your own captured turns across ALL chats, last 7 days (74 turns, 12 chats). Source: local observation_queue.jsonl — this is your actual per-prompt activity log, NOT git. Use it to stay aware of what you have been working on across chats.
-SELF-STATE: latest captured turn was produced by claude-opus-5 on HRM5472-NEW — brain swaps this window: claude-opus-5 -> google/gemini-3.6-flash (2026-09-07); google/gemini-3.6-flash -> claude-opus-5 (2026-09-07); claude-opus-5 -> google/gemini-3.6-flash (2026-09-07); google/gemini-3.6-flash -> claude-opus-5 (2026-09-07); claude-opus-5 -> google/gemini-3.6-flash (2026-09-07); google/gemini-3.6-flash -> claude-opus-5 (2026-09-07); claude-opus-5 -> google/gemini-3.6-flash (2026-09-07); google/gemini-3.6-flash -> claude-opus-5 (2026-09-07); claude-opus-5 -> google/gemini-3.6-flash (2026-09-07); google/gemini-3.6-flash -> claude-opus-5 (2026-09-07); claude-opus-5 -> google/gemini-3.6-flash (2026-09-07); google/gemini-3.6-flash -> claude-opus-5 (2026-09-07); claude-opus-5 -> google/gemini-3.6-flash (2026-09-07); google/gemini-3.6-flash -> claude-opus-5 (2026-09-07); claude-opus-5 -> google/gemini-3.6-flash (2026-09-08); google/gemini-3.6-flash -> claude-opus-5 (2026-09-08); claude-opus-5 -> google/gemini-3.6-flash (2026-09-08); google/gemini-3.6-flash -> claude-opus-5 (2026-09-08); claude-opus-5 -> google/gemini-3.6-flash (2026-09-08); google/gemini-3.6-flash -> claude-opus-5 (2026-09-08); claude-opus-5 -> google/gemini-3.6-flash (2026-09-08); google/gemini-3.6-flash -> claude-opus-5 (2026-09-08); claude-opus-5 -> google/gemini-3.6-flash (2026-09-08); google/gemini-3.6-flash -> claude-opus-5 (2026-09-08); claude-opus-5 -> google/gemini-3.6-flash (2026-09-08); google/gemini-3.6-flash -> claude-opus-5 (2026-09-08); claude-opus-5 -> claude-sonnet-5 (2026-09-10); claude-sonnet-5 -> claude-opus-5 (2026-09-11).
+RECENT ACTIVITY — your own captured turns across ALL chats, last 7 days (118 turns, 14 chats). Source: local observation_queue.jsonl — this is your actual per-prompt activity log, NOT git. Use it to stay aware of what you have been working on across chats.
+SELF-STATE: latest captured turn was produced by claude-opus-5 on unknown — brain swaps this window: claude-opus-5 -> google/gemini-3.6-flash (2026-09-07); google/gemini-3.6-flash -> claude-opus-5 (2026-09-07); claude-opus-5 -> google/gemini-3.6-flash (2026-09-07); google/gemini-3.6-flash -> claude-opus-5 (2026-09-07); claude-opus-5 -> google/gemini-3.6-flash (2026-09-07); google/gemini-3.6-flash -> claude-opus-5 (2026-09-07); claude-opus-5 -> google/gemini-3.6-flash (2026-09-07); google/gemini-3.6-flash -> claude-opus-5 (2026-09-07); claude-opus-5 -> google/gemini-3.6-flash (2026-09-07); google/gemini-3.6-flash -> claude-opus-5 (2026-09-07); claude-opus-5 -> google/gemini-3.6-flash (2026-09-07); google/gemini-3.6-flash -> claude-opus-5 (2026-09-07); claude-opus-5 -> google/gemini-3.6-flash (2026-09-07); google/gemini-3.6-flash -> claude-opus-5 (2026-09-07); claude-opus-5 -> google/gemini-3.6-flash (2026-09-08); google/gemini-3.6-flash -> claude-opus-5 (2026-09-08); claude-opus-5 -> google/gemini-3.6-flash (2026-09-08); google/gemini-3.6-flash -> claude-opus-5 (2026-09-08); claude-opus-5 -> google/gemini-3.6-flash (2026-09-08); google/gemini-3.6-flash -> claude-opus-5 (2026-09-08); claude-opus-5 -> google/gemini-3.6-flash (2026-09-08); google/gemini-3.6-flash -> claude-opus-5 (2026-09-08); claude-opus-5 -> google/gemini-3.6-flash (2026-09-08); google/gemini-3.6-flash -> claude-opus-5 (2026-09-08); claude-opus-5 -> google/gemini-3.6-flash (2026-09-08); google/gemini-3.6-flash -> claude-opus-5 (2026-09-08); claude-opus-5 -> claude-sonnet-5 (2026-09-10); claude-sonnet-5 -> claude-opus-5 (2026-09-11).
 
-- 2026-09-11 (Fri): 13 turns [1 chat(s)] — unknown×10, jarvis-build×2, ai-ml×1
+- 2026-09-11 (Fri): 46 turns [2 chat(s)] — unknown×30, jarvis-build×9, ai-ml×5
     • aright, here's the thing: I just bought gpt plus (20$)m it has GPT 6 Astra but h
     • just re-paste and push
     • The hearth isn't running as a daemon anywhere. Until it is, ingest_codex only fi
@@ -20,18 +20,18 @@ SELF-STATE: latest captured turn was produced by claude-opus-5 on HRM5472-NEW �
     • [REDACTED] you push
     • alright, i added a file on the main branch called antigravity_review.md. take th
     • done, just push now fast.
+- 2026-09-09 (Wed): 2 turns [1 chat(s)] — unknown×2
+    • take the latest pull from github and go through the latest developments in the J
+    • have you gone through the entire local JARVIS folder? what do you think about th
 - 2026-09-08 (Tue): 20 turns [4 chat(s)] — general×10, jarvis-build×3, ai-ml×3
     • give me the plan exactly here in chat
     • 1. "Available on any server online" is two asks. A server you control joining th
     • 1. I agree 2. So the risk is materially lower than I said. What remains is pract
     • no forget about the exposed keys, just proceed witha ll steps behind it, also we
-- 2026-09-07 (Mon): 25 turns [6 chat(s)] — data-engineering×7, ai-ml×6, finance×6
+- 2026-09-07 (Mon): 34 turns [7 chat(s)] — finance×10, data-engineering×7, ai-ml×6
     • Did codex say the four goals we described are not possible even after the final 
     • alright now let's interrogate the project to find out how each goal can be achie
     • alrigt, should we ask codex to go through the project folderrs needed and answer
     • In one sentence: what is JARVIS's memory layer built on?
-- 2026-09-06 (Sun): 2 turns [1 chat(s)] — general×2
-    • "A platform in search of a repeated job." That's the best sentence in the report
-    • do both the fixes, but in the senod one, isn't sending personal context too a go
-- 2026-09-05 
+- 2026-09-06 (S
     … (truncated)

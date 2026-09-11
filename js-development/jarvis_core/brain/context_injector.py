@@ -245,8 +245,10 @@ def default_providers(
         text = (
             "Tool guidance: prior_self_consult is your AUTOBIOGRAPHY — the "
             "project's own knowledge base (what was built, decisions, failures, "
-            "history). For any question about what we built/decided/did, call "
-            "prior_self_consult FIRST with a topical query string."
+            "history). list_dir inspects repository folder hierarchy and code directories. "
+            "file_read inspects actual source code (.py) and specs (.md). corpus_stats "
+            "inspects observation queues and fine-tuning datasets. For code/project architecture "
+            "questions, always inspect real source files directly."
         )
         if collections:
             text += (

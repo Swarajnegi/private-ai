@@ -74,7 +74,7 @@ from jarvis_core.agent.plan import Plan, Step, StepStatus
 # Part 1: CONSTANTS
 # =============================================================================
 
-DEFAULT_MAX_OBSERVATION_CHARS: int = 4000
+DEFAULT_MAX_OBSERVATION_CHARS: int = 50000
 TRUNCATION_MARKER_TEMPLATE: str = "\n... [TRUNCATED, omitted {n} chars] ..."
 
 

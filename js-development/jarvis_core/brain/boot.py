@@ -127,6 +127,8 @@ def default_toolset(
     stay behind full_toolset()."""
     from jarvis_core.agent.tools.fs import FileReadTool
     from jarvis_core.agent.tools.fs_search import FileSearchTool
+    from jarvis_core.agent.tools.fs_dir import ListDirTool
+    from jarvis_core.agent.tools.corpus import CorpusStatsTool
 
     tools: Dict[str, Tool] = {
         "calculator": CalculatorTool(),
@@ -134,6 +136,8 @@ def default_toolset(
         "cognitive_mirror": CognitiveMirrorTool(kb_path=kb_path),
         "file_read": FileReadTool(),
         "file_search": FileSearchTool(),
+        "list_dir": ListDirTool(),
+        "corpus_stats": CorpusStatsTool(),
     }
     if store is not None:
         tools["memory_semantic_search"] = MemorySemanticSearchTool(store=store)
@@ -162,6 +166,8 @@ def full_toolset(
     from jarvis_core.agent.tools.web import WebSearchTool
     from jarvis_core.agent.tools.fs import FileReadTool
     from jarvis_core.agent.tools.fs_search import FileSearchTool
+    from jarvis_core.agent.tools.fs_dir import ListDirTool
+    from jarvis_core.agent.tools.corpus import CorpusStatsTool
     from jarvis_core.agent.tools.exec import CodeExecTool
     from jarvis_core.agent.tools.shell import ShellRunTool
     from jarvis_core.agent.tools.cognitive import BearCaseDevilTool, WritingVoiceCheckTool
@@ -179,6 +185,8 @@ def full_toolset(
         ("web_search", lambda: WebSearchTool()),
         ("file_read", lambda: FileReadTool()),
         ("file_search", lambda: FileSearchTool()),
+        ("list_dir", lambda: ListDirTool()),
+        ("corpus_stats", lambda: CorpusStatsTool()),
         ("code_exec", lambda: CodeExecTool()),
         ("shell_run", lambda: ShellRunTool()),
         ("prior_self_consult", lambda: PriorSelfConsultTool(kb_path=kb_path)),
@@ -372,9 +380,10 @@ def assemble_mind(
         from jarvis_core.agent.compact import WorkingMemoryCompactor
         from jarvis_core.agent.tokens import TokenBudget
         ctx_len = _model_context_length(model)
-        threshold = _COMPACT_COST_TARGET_TOKENS
         if ctx_len > 0:
-            threshold = min(threshold, TokenBudget(context_length=ctx_len).usable)
+            threshold = min(250_000, TokenBudget(context_length=ctx_len).usable)
+        else:
+            threshold = _COMPACT_COST_TARGET_TOKENS
         # THE LEDGER makes eviction reversible. Without it compaction is a
         # one-way door: the span is summarised and the originals cease to
         # exist. With it they are archived verbatim first and the boundary
@@ -488,7 +497,7 @@ def _run_self_test() -> None:
             tdp = Path(td)
             kb = tdp / "kb.jsonl"
             kb.write_text(json.dumps({
-                "id": 1, "timestamp": FIXED.isoformat(), "type": "Decision",
+                "id": 1, "timestamp": datetime.now(timezone.utc).isoformat(), "type": "Decision",
                 "tags": ["stage-4", "route-target"], "expiry": "Permanent",
                 "content": "Decision: we chose the RouteTarget contract for Stage 4 routing.",
             }) + "\n", encoding="utf-8")
