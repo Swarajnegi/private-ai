@@ -59,6 +59,7 @@ Parts 3–4.
 - **Duration:** 1-2 months
 - **Output:** Voice + Vision + Context Caching (cloud) + JARVIS MVP + always-reachable memory
   backend (replaces git-sync) + a universal, host-independent capture adapter contract
+- **Verified early delivery:** 6.3's loopback-only hearth v0 and 6.8.1-6.8.4's Codex capture adapter are shipped out of order; the remaining Stage 6 work is still unstarted.
 - **Roadmap:** [stage_6_integration/ROADMAP.md](stage_6_integration/ROADMAP.md)
 
 ---
@@ -154,12 +155,12 @@ Parts 3–4.
 |---|-----------|--------|
 | 6.1 | Voice Input (Whisper) | ⬜ |
 | 6.2 | Vision Input (LLaVA) | ⬜ |
-| 6.3 | Unified API Layer | ⬜ |
+| 6.3 | Unified API Layer | SHIPPED v0 - loopback hearth; client shells/queueing remain |
 | 6.4 | Conversation Memory | ⬜ |
 | 6.5 | Context Caching (optional cloud-assisted code) | ⬜ |
 | 6.6 | JARVIS MVP | ⬜ |
 | 6.7 | Always-Reachable Memory Backend (replaces git-sync; any device, no manual pull) | ⬜ |
-| 6.8 | Universal Capture Adapter (host-independent awareness capture, not per-IDE bespoke) | ⬜ |
+| 6.8 | Universal Capture Adapter (host-independent awareness capture, not per-IDE bespoke) | COMPLETE - 6.8.1-6.8.4 |
 
 ---
 
@@ -172,7 +173,7 @@ Parts 3–4.
 | 3 | Agent Framework (`jarvis_core/agent/` from scratch — Decision 2026-05-13) | ✅ Complete (ReAct + tools + errors + STEAL #8/#9/#13) |
 | 4 | Orchestration (Kimi K2.6 brain + 12 QLoRA adapters) | ✅ Complete (4.0-4.5 all shipped; Final Boss 8/8 PASS 2026-07-27; 4.6 GraphRAG deferred, trigger documented) |
 | 5 | Specialists (Engineer-first MVP) | ⬜ 0% ⬅️ CURRENT |
-| 6 | Integration | ⬜ 0% |
+| 6 | Integration | PARTIAL, out-of-order - 6.3 v0 and 6.8.1-6.8.4 shipped |
 
 ---
 

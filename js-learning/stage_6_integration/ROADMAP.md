@@ -470,12 +470,12 @@ The complete system that:
 |-----------|--------|------------------|
 | 6.1 Voice Input | ⬜ Not Started | 0/4 |
 | 6.2 Vision Input | ⬜ Not Started | 0/4 |
-| 6.3 Unified API Layer | ⬜ Not Started | 0/4 |
+| 6.3 Unified API Layer | SHIPPED v0 - hearth | 4/4 core lessons; queueing/client shells remain |
 | 6.4 Conversation Memory | ⬜ Not Started | 0/4 |
 | 6.5 Context Caching (Cloud) | ⬜ Not Started | 0/4 |
 | 6.6 JARVIS MVP | ⬜ Not Started | 0/4 |
 | 6.7 Always-Reachable Memory Backend | ⬜ Not Started | 0/4 |
-| 6.8 Universal Capture Adapter | ⬜ Not Started | 0/4 |
+| 6.8 Universal Capture Adapter | COMPLETE - 6.8.1-6.8.4 | 4/4 |
 
 ---
 
