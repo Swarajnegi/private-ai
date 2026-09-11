@@ -383,7 +383,7 @@ def _list_sessions(conv_dir: Path) -> List[Dict[str, Any]]:
     if not conv_dir.is_dir():
         return []
     sessions = []
-    for path in conv_dir.glob("conv-*.jsonl"):
+    for path in conv_dir.glob("*.jsonl"):
         try:
             mtime = path.stat().st_mtime
             first_user_prompt = ""
@@ -422,11 +422,13 @@ def _list_sessions(conv_dir: Path) -> List[Dict[str, Any]]:
 def _get_session_turns(conv_dir: Path, session_id: str) -> Optional[List[Dict[str, Any]]]:
     """Retrieve full turns for one session."""
     safe_name = Path(session_id).name
-    if not safe_name.startswith("conv-"):
-        safe_name = f"conv-{safe_name}"
+    if safe_name != session_id or not safe_name or "\\" in safe_name:
+        return None
     if not safe_name.endswith(".jsonl"):
         safe_name = f"{safe_name}.jsonl"
     path = conv_dir / safe_name
+    if not path.is_file() and not safe_name.startswith("conv-"):
+        path = conv_dir / f"conv-{safe_name}"
     if not path.is_file():
         return None
     turns = []
@@ -965,6 +967,23 @@ def _run_self_test() -> None:
     # T27: Session detail returns 404 for missing session
     sent_miss, _ = drive(app, http_scope("GET", "/v1/sessions/nonexistent_session_xyz"))
     check("T27 GET /v1/sessions/{missing} returns 404", status_of(sent_miss) == 404)
+
+    with tempfile.TemporaryDirectory() as td:
+        from jarvis_core.brain.conversation import ConversationStore
+        directory = Path(td)
+        store = ConversationStore(directory)
+        complete_answer = "Full response 🧠\n" * 1200 + "END OF ANSWER"
+        store.append_turn("named-thread", "user", "Keep all of this")
+        store.append_turn("named-thread", "assistant", complete_answer)
+        listed = _list_sessions(directory)
+        check("T28 named conversations appear in history",
+              any(s["session_id"] == "named-thread" for s in listed))
+        turns = _get_session_turns(directory, "named-thread")
+        check("T29 full Unicode answer survives storage and history serialization",
+              json.loads(_json_bytes(turns))[-1]["content"] == complete_answer)
+        check("T30 conversation path traversal is refused",
+              _get_session_turns(directory, "../named-thread") is None
+              and _get_session_turns(directory, "..\\named-thread") is None)
 
     loop.close()
     print("-" * 70)

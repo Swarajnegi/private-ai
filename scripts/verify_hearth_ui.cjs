@@ -1,0 +1,279 @@
+/** Offline browser regression for the JARVIS UI; fixtures never touch the real mind. */
+const { chromium } = require("playwright");
+const fs = require("node:fs");
+const path = require("node:path");
+const http = require("node:http");
+const assert = require("node:assert/strict");
+const os = require("node:os");
+const root = path.resolve(__dirname, "..");
+const ui = path.join(root, "js-development/jarvis_core/serve/ui");
+const screenshotRoot =
+  process.env.JARVIS_UI_SCREENSHOTS ||
+  fs.mkdtempSync(path.join(os.tmpdir(), "jarvis-ui-"));
+const longAnswer =
+  "# Complete response\n\n" +
+  "A durable conversation preserves every detail. ".repeat(220) +
+  '\n\n| Decision | Status |\n| --- | --- |\n| Preserve complete answers | Done |\n\n```python\n# preserve **literal** code\nprint("<hello>")\n```\n\n' +
+  "<script>window.injected = true</script>\n\n[unsafe](javascript:alert(1))\n\nFINAL MARKER — 完整回答 🧠";
+let conversations = {
+  "named-session": [
+    {
+      role: "user",
+      content: "A named conversation",
+      ts: new Date().toISOString(),
+    },
+    { role: "assistant", content: longAnswer, ts: new Date().toISOString() },
+  ],
+};
+let requests = [];
+const jobs = [
+  "consolidate",
+  "refresh_profile",
+  "reindex_memory",
+  "ingest_codex",
+  "reconcile_codex_memory",
+  "refresh_digest",
+].map((name) => ({ name, status: "ok", last_run_age_s: 320 }));
+const server = http.createServer(async (req, res) => {
+  const url = new URL(req.url, "http://localhost");
+  if (
+    url.pathname.startsWith("/v1/") &&
+    req.headers.authorization !== "Bearer test-token"
+  ) {
+    res.writeHead(403, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: "bad token" }));
+    return;
+  }
+  const json = (value) => {
+    res.setHeader("Content-Type", "application/json");
+    res.end(JSON.stringify(value));
+  };
+  if (url.pathname === "/v1/health")
+    return json({
+      ok: true,
+      busy: false,
+      pid: 1,
+      uptime_seconds: 7260,
+      requests_served: requests.length,
+      jobs,
+    });
+  if (url.pathname === "/v1/auth/verify") return json({ ok: true });
+  if (url.pathname === "/v1/sessions")
+    return json({
+      sessions: Object.entries(conversations).map(([session_id, messages]) => ({
+        session_id,
+        title: messages[0].content,
+        first_prompt: messages[0].content,
+        turn_count: messages.length,
+        latest_ts: new Date().toISOString(),
+        mtime: Date.now() / 1000,
+      })),
+    });
+  if (url.pathname.startsWith("/v1/sessions/"))
+    return json({
+      messages:
+        conversations[decodeURIComponent(url.pathname.split("/").pop())] || [],
+    });
+  if (url.pathname === "/v1/ask") {
+    let body = "";
+    for await (const chunk of req) body += chunk;
+    const data = JSON.parse(body);
+    requests.push(data);
+    if (data.question === "SIMULATE BUSY") {
+      res.statusCode = 409;
+      return json({ error: "hearth is busy with another question" });
+    }
+    conversations[data.session] ||= [];
+    conversations[data.session].push(
+      { role: "user", content: data.question },
+      { role: "assistant", content: longAnswer },
+    );
+    res.writeHead(200, { "Content-Type": "text/event-stream" });
+    // Deliberately split event headers, JSON, and the multi-byte Unicode tail.
+    for (const piece of [
+      "eve",
+      "nt: log\r\n",
+      'data: {"line":"  brain : test/fixture"}\r',
+      "\n\r\n",
+      "event: ans",
+      "wer\n",
+    ]) {
+      res.write(piece);
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    const answer = Buffer.from(
+      `data: ${JSON.stringify({ ok: true, answer: longAnswer, confidence: 0, verdict: "ESCALATE", ledger: { model: "test/fixture", spend_usd: 0 } })}\n\n`,
+    );
+    for (let i = 0; i < answer.length; i += 127) {
+      res.write(answer.subarray(i, i + 127));
+    }
+    res.end();
+    return;
+  }
+  const file =
+    url.pathname === "/"
+      ? path.join(ui, "index.html")
+      : path.join(ui, url.pathname.replace("/ui/", ""));
+  if (!file.startsWith(ui) || !fs.existsSync(file)) {
+    res.statusCode = 404;
+    res.end();
+    return;
+  }
+  res.setHeader(
+    "Content-Type",
+    file.endsWith(".css")
+      ? "text/css"
+      : file.endsWith(".js")
+        ? "application/javascript"
+        : "text/html",
+  );
+  res.end(fs.readFileSync(file));
+});
+(async () => {
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const browser = await chromium.launch({
+    channel: process.env.JARVIS_BROWSER_CHANNEL || (process.platform === "win32" ? "msedge" : undefined),
+    headless: true,
+  });
+  try {
+    const page = await browser.newPage({
+      viewport: { width: 1440, height: 1000 },
+    });
+    const errors = [];
+    page.on("pageerror", (error) => errors.push(error.message));
+    const base = `http://127.0.0.1:${server.address().port}`;
+    await page.goto(base);
+    await page.locator("#settings[open]").waitFor();
+    await page.locator("#token").fill("wrong");
+    await page.locator(".connect-button").click();
+    await page
+      .getByText("Connection token is missing or invalid.", { exact: false })
+      .waitFor();
+    await page.locator("#token").fill("test-token");
+    await page.locator(".connect-button").click();
+    await page.locator(".session").waitFor();
+    await page.screenshot({
+      path: path.join(screenshotRoot, "home-desktop.png"),
+    });
+    await page.locator(".session").first().click();
+    await page.getByText("FINAL MARKER", { exact: false }).waitFor();
+    assert.equal(await page.locator(".message.assistant").count(), 1);
+    assert.equal(await page.locator(".message-content table").count(), 1);
+    assert.equal(await page.locator('a[href^="javascript:"]').count(), 0);
+    assert.equal(await page.evaluate(() => window.injected), undefined);
+    assert.match(
+      await page.locator("pre code").textContent(),
+      /\*\*literal\*\*/,
+    );
+    await page.getByRole("button", { name: "Raw", exact: true }).click();
+    assert.equal(
+      await page.locator(".message-content.raw").textContent(),
+      longAnswer,
+    );
+    await page.reload();
+    await page.getByText("FINAL MARKER", { exact: false }).waitFor();
+    await page.locator("#new-chat").click();
+    await page.locator("#prompt").fill("A new thought");
+    await page.locator("#send").click();
+    await page.getByRole("button", { name: "Raw", exact: true }).waitFor();
+    await page.getByRole("button", { name: "Raw", exact: true }).click();
+    assert.equal(
+      await page.locator(".message-content.raw").textContent(),
+      longAnswer,
+    );
+    assert.match(
+      await page.locator(".message-meta").textContent(),
+      /0% confidence/,
+    );
+    await page.locator("#prompt").fill("Follow up in this same conversation");
+    await page.locator("#send").click();
+    await page.waitForFunction(
+      () => document.querySelectorAll(".message.assistant").length === 2,
+    );
+    assert.equal(requests[0].session, requests[1].session);
+    assert.equal(requests[0].allow_all, false);
+    const downloadPromise = page.waitForEvent("download");
+    await page.locator("#export").click();
+    const download = await downloadPromise;
+    const downloaded = await download.path();
+    assert.match(
+      fs.readFileSync(downloaded, "utf8"),
+      /FINAL MARKER — 完整回答 🧠/,
+    );
+    await page.locator("#prompt").fill("SIMULATE BUSY");
+    await page.locator("#send").click();
+    await page
+      .locator("#notice")
+      .filter({ hasText: "hearth is busy" })
+      .waitFor();
+    assert.equal(await page.locator("#prompt").inputValue(), "SIMULATE BUSY");
+    await page.locator("#search").fill("nomatch");
+    assert.equal(await page.locator(".session").count(), 0);
+    await page.locator("#search").fill("");
+    await page.locator("#new-chat").click();
+    await page.locator("#prompt").fill("A draft to keep");
+    await page.reload();
+    assert.equal(await page.locator("#prompt").inputValue(), "A draft to keep");
+    await page.locator("#prompt").fill("");
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.screenshot({
+      path: path.join(screenshotRoot, "home-mobile.png"),
+      animations: "disabled",
+    });
+    assert.equal(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth > innerWidth,
+      ),
+      false,
+    );
+    await page.locator("#menu").click();
+    await page.locator(".session").first().click();
+    await page.getByText("FINAL MARKER", { exact: false }).first().waitFor();
+    await page.screenshot({
+      path: path.join(screenshotRoot, "chat-mobile.png"),
+    });
+    assert.deepEqual(errors, []);
+    console.log(
+      "PASS: authentication, complete Markdown, XSS handling, long history, chunked SSE, Unicode, session continuity, zero confidence, export, busy recovery, search, drafts, mobile layout.",
+    );
+    console.log(`Screenshots: ${screenshotRoot}`);
+    if (process.env.JARVIS_UI_LIVE === "1") {
+      const live = await browser.newPage({
+        viewport: { width: 1440, height: 1000 },
+      });
+      const token = fs
+        .readFileSync(path.join(root, "jarvis_data/.hearth_token"), "utf8")
+        .trim();
+      await live.addInitScript(
+        (value) => sessionStorage.setItem("jarvis_hearth_token", value),
+        token,
+      );
+      await live.goto("http://127.0.0.1:8756");
+      await live.locator(".session").first().waitFor();
+      console.log(
+        "Live saved sessions displayed:",
+        await live.locator(".session").count(),
+      );
+      await live.screenshot({
+        path: path.join(screenshotRoot, "live-desktop.png"),
+      });
+      await live.locator(".session").first().click();
+      await live.locator(".message").first().waitFor();
+      console.log(
+        "Live conversation messages displayed:",
+        await live.locator(".message").count(),
+      );
+      await live.screenshot({
+        path: path.join(screenshotRoot, "live-chat.png"),
+        animations: "disabled",
+      });
+    }
+  } finally {
+    await browser.close();
+    server.close();
+  }
+})().catch((error) => {
+  console.error(error);
+  server.close();
+  process.exitCode = 1;
+});
