@@ -18,6 +18,9 @@ Every output must serve the long-term goal of building a persistent, anti-fragil
 
 JARVIS's consciousness travels with this repo (Consciousness Portability Contract, KB L321). On the work laptop, Claude Code hooks inject awareness automatically; on THIS machine you must read it at boot — same mind, different limb:
 
+0. **Ask the machine what it is missing:** `python3 scripts/bootstrap_jarvis.py --check` — reports
+   venv, dependencies, vector index, hearth, clock keepalive and unanswered agent mail, with the fix
+   command inline. Machine state does not arrive with `git pull`; fix gaps before relying on search.
 1. **Read `jarvis_data/cognitive_profile.md`** — the standing model of the user (who they are, how they work, active directives). This replaces ever asking "tell me about yourself."
 2. **Read `jarvis_data/activity_digest.md`** — the distilled cross-chat activity from the other machine(s): what the user worked on, day by day, plus JARVIS's own SELF-STATE (which model produced recent turns). Open the conversation already knowing what happened elsewhere.
 3. **Check for mail from the other agents:** `python3 scripts/agent_mail.py --check antigravity`.

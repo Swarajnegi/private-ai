@@ -165,6 +165,85 @@ def _ensure_artifacts(root: Path, report: List[str], check_only: bool) -> None:
                      else "none (capture starts with the first turn on this machine)"))
 
 
+def _machine_readiness(root: Path, report: List[str]) -> None:
+    """Report the per-MACHINE prerequisites that git cannot carry.
+
+    Everything above this line is repo state, which arrives with a pull.
+    Everything below is machine state, which does NOT: a venv, a rebuilt vector
+    index, a running clock, a keepalive to restart it. Those are exactly the
+    things an agent landing on a fresh machine has to discover by probing, and
+    probing is how you get a confident wrong answer -- so this reports them
+    outright. Added 2026-09-11 after the question "is everything provided for
+    them to start?" turned out to be answerable only by reading four files.
+    """
+    import shutil
+    import subprocess
+    import sys as _sys
+
+    report.append("  " + "-" * 58)
+    report.append("  MACHINE state (does NOT arrive with git pull):")
+
+    venv_py = root / ".venv" / "bin" / "python3"
+    venv_py_win = root / ".venv" / "Scripts" / "python.exe"
+    have_venv = venv_py.exists() or venv_py_win.exists()
+    report.append(f"  venv            : {'present' if have_venv else 'MISSING -> python3 -m venv .venv && pip install -r requirements.txt'}")
+
+    try:
+        import chromadb  # noqa: F401
+        deps = "importable"
+    except Exception:
+        deps = "NOT importable in this interpreter -> activate .venv, pip install -r requirements.txt"
+    report.append(f"  deps (chromadb) : {deps}")
+
+    # chromadb/ is gitignored as of 2026-09-11, so a fresh clone has NO index
+    # and semantic search silently returns nothing until it is rebuilt.
+    db = root / "jarvis_data" / "chromadb" / "chroma.sqlite3"
+    if db.exists():
+        try:
+            import sqlite3
+            con = sqlite3.connect(f"file:{db}?mode=ro", uri=True)
+            names = [r[0] for r in con.execute("select name from collections")]
+            con.close()
+            report.append(f"  vector index    : present ({', '.join(names) or 'no collections'})")
+        except Exception as e:
+            report.append(f"  vector index    : present but unreadable ({type(e).__name__})")
+    else:
+        report.append("  vector index    : MISSING -> python3 scripts/index_memory.py"
+                      "   (gitignored by design; search returns NOTHING until this runs)")
+
+    pid_file = root / "jarvis_data" / ".hearth.pid"
+    alive = False
+    if pid_file.exists():
+        try:
+            import os as _os
+            _os.kill(int(pid_file.read_text().strip()), 0)
+            alive = True
+        except Exception:
+            alive = False
+    report.append(f"  hearth (clock)  : {'UP' if alive else 'DOWN -> python3 scripts/hearth.py --background'}")
+
+    if shutil.which("crontab"):
+        try:
+            out = subprocess.run(["crontab", "-l"], capture_output=True, text=True, timeout=10)
+            persisted = "hearth.py" in (out.stdout or "")
+        except Exception:
+            persisted = False
+        report.append(f"  clock keepalive : {'installed (cron)' if persisted else 'NOT installed -> see NERVOUS_SYSTEM.md §6.2'}")
+    else:
+        report.append("  clock keepalive : cron NOT INSTALLED -> sudo apt install -y cron  (see NERVOUS_SYSTEM.md §6.2)")
+
+    try:
+        sys_path = root / "scripts"
+        if str(sys_path) not in _sys.path:
+            _sys.path.insert(0, str(sys_path))
+        import agent_mail
+        pend = sum(len(agent_mail.pending_for(a)) for a in agent_mail.AGENTS)
+        report.append(f"  agent mail      : {pend} unanswered thread(s) across all agents"
+                      + ("  -> python3 scripts/agent_mail.py --check <you>" if pend else ""))
+    except Exception:
+        pass
+
+
 # =============================================================================
 # MAIN ENTRY POINT  +  SMOKE TESTS
 # =============================================================================
@@ -207,6 +286,7 @@ def run(check_only: bool = False) -> int:
                       + (" (already complete)" if added == 0 else ""))
 
     _ensure_artifacts(_ROOT, report, check_only)
+    _machine_readiness(_ROOT, report)
     report.append("=" * 62)
     print("\n".join(report))
     return 0

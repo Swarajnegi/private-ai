@@ -11,6 +11,15 @@ their devices.
 Four agents' worth of context live in these files. **Read them in this order**, then you are current
 — there is no separate onboarding, and nothing important is only in someone's chat history.
 
+### Tier 0 — one command, before anything else
+
+```bash
+python3 scripts/bootstrap_jarvis.py --check
+```
+Reports repo state **and** machine state — venv, dependencies, vector index, hearth, clock
+keepalive, unanswered agent mail — with the fix command inline for each gap. Machine state does not
+travel with git; on a fresh clone several will be MISSING. Fix those first, then read on.
+
 ### Tier 1 — before your first response, every session (~10 min)
 
 | # | Read | Why |
