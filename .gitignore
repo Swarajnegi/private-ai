@@ -245,6 +245,11 @@ jarvis_data/chromadb/
 # with the user from being raised again elsewhere.
 jarvis_data/.codex_ingest_watermark.jsonl
 
+# -- Commitment registry lock -------------------------------------------------
+# commitments.jsonl is a tracked fact. Its sibling lock only serializes writers
+# on one machine and has no meaning after a pull.
+jarvis_data/commitments.jsonl.lock
+
 # -- rfm/ — A SEPARATE REPO, NOT JARVIS CONTENT (2026-09-08) ------------------
 # Working clone of https://github.com/Swarajnegi/dadfinanceapp.git — the user's
 # personal finance app, built primarily on the personal laptop (Antigravity +

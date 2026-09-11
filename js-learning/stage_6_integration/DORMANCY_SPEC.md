@@ -1,6 +1,8 @@
 # DORMANCY_SPEC — general perception of absence, Tier 1
 
-> **Status:** spec only. Nothing built. Written 2026-09-11 for whichever agent picks it up.
+> **Status:** Tier 1 shipped 2026-09-11: `scripts/commitments.py` plus a five-item, KB-linked
+> seed registry. Tier 2–3 and session-start wiring remain deliberately unbuilt until Tier 1 proves
+> insufficient over a quiet week.
 > **Requested by the user, verbatim:** *"JARVIS doesn't notice you stopped working on the finance
 > thing unless something measures that — I want this general perception of absence."*
 > **Parent:** `JARVIS_ENDGAME.md` §1.2. This is the sibling of `agent/tension.py`: that organ

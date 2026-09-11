@@ -243,7 +243,7 @@ repeating yourself once.
 
 ---
 
-## Sub-Phase 6.11: General Perception of Absence ⬜ **spec written, not built**
+## Sub-Phase 6.11: General Perception of Absence 🟡 **Tier 1 shipped; Tier 2–3 gated**
 
 **Goal:** the sibling of `agent/tension.py`. That organ surfaces *contradiction* over the user's own
 history; this one surfaces *silence* — "you opened this and never closed it." Requested directly by
