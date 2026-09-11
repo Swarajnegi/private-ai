@@ -13,8 +13,9 @@ THE BIG PICTURE
 =============================================================================
 
 The user's decision (2026-09-10): keep Codex's native `memories` feature ON —
-GPT-6 Astra has only 258K context, so a fast per-session cache is a real cost
-saver — while `knowledge_base.jsonl` stays the ONE authoritative mind. They
+the Codex models in use have a far smaller context window than Claude Code's,
+so a fast per-session cache is a real cost saver — while
+`knowledge_base.jsonl` stays the ONE authoritative mind. They
 asked for a layer that decides which of the two lines (Codex's or the KB's)
 gets kept.
 

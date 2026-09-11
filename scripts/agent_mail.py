@@ -105,15 +105,21 @@ CONVERSE_DIR = _REPO_ROOT / "agents_converse"
 
 _IST = timezone(timedelta(hours=5, minutes=30))
 
-# Canonical agent ids, with the aliases a human or a model might actually
-# type. Normalisation matters because the addressee is free text written by
-# another agent -- "Codex", "codex CLI", "GPT-6 Astra" must all resolve, or a
-# question silently addresses nobody and is never delivered.
+# Canonical agent ids, with the aliases a human or a model might actually type.
+# Normalisation matters because the addressee is free text written by another
+# agent, and a name that resolves to nothing is never delivered.
+#
+# THESE NAME HOSTS, NOT MODELS -- deliberately. Each host runs whichever model
+# the user picked that day: Codex may be GPT-6 Astra or GPT-5.6 Sol/Terra/Luna,
+# and Claude Code swaps between Opus/Sonnet/Fable mid-session (the runtime
+# self-state hook exists precisely because that happens). Pinning an alias to a
+# model version would rot the moment the user switched, so the generic vendor
+# tokens below ("gpt", "claude") carry the routing and the substring fallback in
+# normalize_agent() catches any version suffix for free.
 _ALIASES: Dict[str, str] = {
     "claude": "claude", "claude code": "claude", "claude-code": "claude",
-    "cc": "claude", "opus": "claude", "sonnet": "claude",
-    "codex": "codex", "codex cli": "codex", "gpt": "codex",
-    "gpt-6": "codex", "gpt-6 astra": "codex", "astra": "codex",
+    "cc": "claude", "opus": "claude", "sonnet": "claude", "fable": "claude",
+    "codex": "codex", "codex cli": "codex", "gpt": "codex", "openai": "codex",
     "antigravity": "antigravity", "ag": "antigravity", "anti-gravity": "antigravity",
 }
 AGENTS = ("claude", "codex", "antigravity")
@@ -387,8 +393,16 @@ def _run_self_test() -> None:
           normalize_agent("codex") == "codex" and normalize_agent("claude") == "claude")
     check("T2 aliases resolve (the addressee is free text another model wrote)",
           normalize_agent("Claude Code") == "claude"
-          and normalize_agent("GPT-6 Astra") == "codex"
           and normalize_agent("Antigravity") == "antigravity")
+    # Routing must survive the user switching models on either host -- Codex can
+    # be Astra or any Sol/Terra/Luna, Claude Code swaps Opus/Sonnet/Fable.
+    check("T2b ANY model version routes to its HOST, so no alias goes stale "
+          "when the user switches models",
+          all(normalize_agent(n) == "codex" for n in
+              ("GPT-6 Astra", "gpt-5.6 Sol", "GPT-5.6 Terra", "gpt-5.6-luna", "codex"))
+          and all(normalize_agent(n) == "claude" for n in
+                  ("Opus 5", "claude-sonnet-5", "Fable 5.1")),
+          str([normalize_agent(n) for n in ("gpt-5.6 Sol", "Fable 5.1")]))
     check("T3 an unknown name resolves to None, not a wrong agent",
           normalize_agent("Gemini") is None and normalize_agent("") is None)
 
