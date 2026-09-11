@@ -55,7 +55,7 @@ def _read_pid() -> int:
         return 0
     try:
         os.kill(pid, 0)                        # signal 0 = existence check only
-    except (ProcessLookupError, ValueError):
+    except (ProcessLookupError, ValueError, OSError, SystemError):
         return 0
     except PermissionError:
         return pid                             # alive, owned by someone else
