@@ -5,7 +5,9 @@ __pycache__
 *.pyc
 dadfinanceapp
 client_work
-jarvis_data
+jarvis_data/*
+!jarvis_data/conversations/
+!jarvis_data/conversations/**
 research_papers
 ollama models
 *.zip

@@ -1530,7 +1530,13 @@ kbd { color: #89a7d3; }
 .messages { padding: 0 46px; scroll-behavior: smooth; }
 .welcome { max-width: 730px; padding: clamp(48px, 10vh, 114px) 0 42px; }
 .welcome .eyebrow { display: none; }
-.reactor { width: 172px; height: 172px; margin: 0 0 31px; }
+.reactor {
+  width: 172px;
+  height: 172px;
+  /* The animated rings extend outside the reactor box. Reserve that visual
+     space so the headline never shares the reactor's vertical band. */
+  margin: 0 auto 62px;
+}
 .reactor::before { content: ""; position: absolute; inset: -28px; border-radius: 50%; background: radial-gradient(circle, #3d82ff16, transparent 66%); filter: blur(8px); animation: breathe 4s ease-in-out infinite; }
 .reactor-orbit { border-color: #3d82ff7d; }
 .orbit-one { animation-duration: 10s; }
