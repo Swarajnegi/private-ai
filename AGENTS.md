@@ -92,10 +92,12 @@ memory is a fast cache that periodically donates into it, never the other way ro
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 python3 scripts/bootstrap_jarvis.py          # rehydrates hook-equivalent state; safe to re-run
-python3 scripts/index_memory.py              # rebuilds the jarvis_memory vector index —
-                                              # it is a PROJECTION and does NOT travel via git
-                                              # (jarvis_data/chromadb/<uuid>/ for that collection
-                                              # is untracked on purpose; the KB it's built from is)
+python3 scripts/index_memory.py              # rebuilds the jarvis_memory vector index.
+                                              # jarvis_data/chromadb/ is GITIGNORED as of
+                                              # 2026-09-11, so a fresh clone has NO vector index
+                                              # and semantic search returns nothing until this runs.
+# Optional, for research-paper retrieval (24 tracked PDFs, ~8 min):
+for p in research_papers/*/*.pdf; do python3 scripts/ingest.py "$p" --collection research_papers; done
 python3 scripts/hearth.py --background       # START THE CLOCK — see below, this is not optional
 python3 scripts/hearth.py --status           # confirm ingest_codex is listed
 ```
@@ -143,8 +145,9 @@ edits needed on Windows vs Linux.
   authoritative boundary is `.gitignore`'s explicit rules there, not a paraphrase of them; read the
   `.gitignore` comments before acting on any client-IP question.
 - Don't stage binaries under `jarvis_data/` other than what's already tracked (check `git status`
-  before `git add -A`) — `jarvis_data/chromadb/<jarvis_memory-collection-uuid>/` is deliberately
-  untracked and regenerates via `index_memory.py`.
+  before `git add -A`) — all of `jarvis_data/chromadb/` is gitignored as of 2026-09-11 and
+  regenerates via `index_memory.py` + `ingest.py`; it was un-tracked because two machines running
+  the hearth would both rewrite a 23 MB binary with no merge driver.
 - Don't merge `knowledge_base.jsonl` by hand — use `scripts/jsonl_merge.py` if a manual merge is
   ever needed; normally `git`'s `merge=union` on `*.jsonl` (set in `.gitattributes`) handles it.
 - Don't treat `~/.codex/memories/` as canonical — it's a cache, not the mind. See CAPTURE STATUS.
