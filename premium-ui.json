@@ -1,0 +1,9 @@
+{
+  "profile": "product-admin",
+  "sourceRoots": ["js-development/jarvis_core/serve/ui"],
+  "locale": "en",
+  "requiredCapabilities": ["Select/Listbox", "Form", "Scrollbar"],
+  "ownership": {
+    "Select/Listbox": "native"
+  }
+}

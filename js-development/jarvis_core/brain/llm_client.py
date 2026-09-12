@@ -269,7 +269,8 @@ class OpenRouterClient:
                 continue
             if status == 200:
                 try:
-                    text = body["choices"][0]["message"]["content"] or ""
+                    msg = body["choices"][0]["message"]
+                    text = msg.get("content") or ""
                 except (KeyError, IndexError, TypeError):
                     raise LLMCallError(f"malformed response: {str(body)[:300]}")
                 if not text.strip() and attempt < self._retries:

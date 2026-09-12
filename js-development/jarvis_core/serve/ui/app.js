@@ -609,20 +609,22 @@
         notice(
           `Some tools require approval: ${final.denials.map((d) => (typeof d === "string" ? d : d.tool)).join(", ")}. See Configure before your next request.`,
         );
-      // Verify durability, not just a successful stream. Provider-error answers may be intentionally unsaved.
-      try {
-        const saved = await api(`/v1/sessions/${encodeURIComponent(session)}`);
-        const last = [...(saved.messages || [])]
-          .reverse()
-          .find((m) => m.role === "assistant");
-        if (last?.content !== answer.content)
+      // Verify durability, not just a successful stream. Provider-error or degenerate answers may be intentionally unsaved.
+      if (final.persisted !== false && !final.degenerate) {
+        try {
+          const saved = await api(`/v1/sessions/${encodeURIComponent(session)}`);
+          const last = [...(saved.messages || [])]
+            .reverse()
+            .find((m) => m.role === "assistant");
+          if (last?.content !== answer.content)
+            notice(
+              "This response is visible here but was not saved in full by the hearth. Export it before leaving this chat.",
+            );
+        } catch {
           notice(
-            "This response is visible here but was not saved in full by the hearth. Export it before leaving this chat.",
+            "This response is visible here, but saved history could not be verified. Export it before leaving this chat.",
           );
-      } catch {
-        notice(
-          "This response is visible here, but saved history could not be verified. Export it before leaving this chat.",
-        );
+        }
       }
     } catch (error) {
       notice(error.message);

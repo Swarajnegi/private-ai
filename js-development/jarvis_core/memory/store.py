@@ -74,6 +74,44 @@ from jarvis_core.config import (
     validate_paths,
 )
 
+# ---------------------------------------------------------------------------
+# Module-level singleton cache — loaded once per process, reused every request.
+# The hearth is a long-lived daemon; reloading a ~90 MB SentenceTransformer
+# model from disk on every /v1/ask call caused the 100-second cold-start.
+# ---------------------------------------------------------------------------
+_CACHED_ENCODER: Any = None          # SentenceTransformer instance
+_CACHED_ENCODER_MODEL: str = ""      # which model name is cached
+_CACHED_CHROMA_CLIENT: Any = None    # chromadb.PersistentClient instance
+_CACHED_CHROMA_PATH: str = ""        # which db_path is open
+
+
+def _get_cached_encoder(model_name: str) -> Any:
+    """Return (or build) the shared SentenceTransformer encoder for this process."""
+    global _CACHED_ENCODER, _CACHED_ENCODER_MODEL
+    norm_name = model_name.split("/")[-1]
+    if _CACHED_ENCODER is not None and _CACHED_ENCODER_MODEL == norm_name:
+        return _CACHED_ENCODER
+    from sentence_transformers import SentenceTransformer
+    import torch
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    print(f"[MemoryStore] Loading encoder: {model_name} on {device.upper()} (one-time warm-up)")
+    _CACHED_ENCODER = SentenceTransformer(model_name, device=device)
+    _CACHED_ENCODER_MODEL = norm_name
+    print("[MemoryStore] Encoder ready.")
+    return _CACHED_ENCODER
+
+
+def _get_cached_chroma_client(db_path: str) -> Any:
+    """Return (or build) the shared ChromaDB PersistentClient for this process."""
+    global _CACHED_CHROMA_CLIENT, _CACHED_CHROMA_PATH
+    if _CACHED_CHROMA_CLIENT is not None and _CACHED_CHROMA_PATH == db_path:
+        return _CACHED_CHROMA_CLIENT
+    import chromadb
+    print(f"[MemoryStore] Connecting to ChromaDB at: {db_path} (one-time)")
+    _CACHED_CHROMA_CLIENT = chromadb.PersistentClient(path=db_path)
+    _CACHED_CHROMA_PATH = db_path
+    return _CACHED_CHROMA_CLIENT
+
 
 # =============================================================================
 # Part 1: MMR PURE FUNCTION (stateless, testable in isolation)
@@ -265,30 +303,21 @@ class JarvisMemoryStore:
 
     def __enter__(self) -> "JarvisMemoryStore":
         """
-        Open the ChromaDB connection and load the embedding model.
+        Attach the shared ChromaDB client and encoder (warm from cache).
 
         EXECUTION FLOW:
-        1. Import chromadb and initialize PersistentClient at self._db_path.
-        2. Load SentenceTransformer embedding model into CPU RAM.
-        3. Mark instance as open (self._closed = False).
-        4. Return self.
+        1. _get_cached_chroma_client() — returns the already-open PersistentClient
+           (or opens it once and caches it for all future requests).
+        2. _get_cached_encoder() — returns the already-loaded SentenceTransformer
+           (or loads it once; subsequent calls are instant).
+        3. Mark instance as open.
 
         Returns:
-            Self -- the open store object, assigned to the 'as' variable.
+            Self -- the open store object.
         """
-        import chromadb
-        from sentence_transformers import SentenceTransformer
-
-        print(f"[MemoryStore] Connecting to ChromaDB at: {self._db_path}")
-        self._client = chromadb.PersistentClient(path=str(self._db_path))
-
-        import torch
-        device = "cuda" if torch.cuda.is_available() else "cpu"
-        print(f"[MemoryStore] Loading encoder: {self._embedding_model_name} on {device.upper()}")
-        self._encoder = SentenceTransformer(self._embedding_model_name, device=device)
-
+        self._client = _get_cached_chroma_client(str(self._db_path))
+        self._encoder = _get_cached_encoder(self._embedding_model_name)
         self._closed = False
-        print("[MemoryStore] Ready.")
         return self
 
     def __exit__(
@@ -310,13 +339,18 @@ class JarvisMemoryStore:
         return False
 
     def _close(self) -> None:
-        """Release ChromaDB client and force garbage collection."""
+        """Detach this instance from the shared client (do not destroy it).
+
+        The module-level singletons (_CACHED_CHROMA_CLIENT, _CACHED_ENCODER)
+        stay alive for the process lifetime so the next request is instant.
+        We only clear this instance's references, not the shared objects.
+        """
         if self._closed:
             return
-        if self._client is not None:
-            del self._client
-            self._client = None
-        gc.collect()
+        # Do NOT del self._client — it is the shared singleton.
+        # Clearing the reference here is enough to release our borrow.
+        self._client = None
+        self._encoder = None
         self._closed = True
         print("[MemoryStore] Connection closed.")
 

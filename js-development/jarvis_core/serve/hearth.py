@@ -310,6 +310,8 @@ class Hearth:
             "denials": [{"tool": d.tool, "preview": d.preview} for d in denials],
             "ledger": {k: v for k, v in ledger.items()
                        if isinstance(v, (str, int, float, bool, type(None)))},
+            "degenerate": bool(get("degenerate", False)),
+            "persisted": bool(get("persisted", True)),
         }
 
     # ---- authorization ---------------------------------------------------

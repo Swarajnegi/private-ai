@@ -168,6 +168,8 @@ class AskResult:
     conflict_detected: bool = False
     conflict_detail: str = ""
     escalation_question: str = ""
+    degenerate: bool = False
+    persisted: bool = True
 
 
 # =============================================================================
@@ -235,9 +237,9 @@ def _is_unparsed_answer(text: str) -> bool:
     s = (text or "").strip()
     if not s:
         return True
-    if s.startswith("["):
+    if s.startswith("[") and ('"name"' in s or '"arguments"' in s or '"tool"' in s or '"function"' in s):
         return True
-    if s.startswith("{") and ('"name"' in s or '"arguments"' in s):
+    if s.startswith("{") and ('"name"' in s or '"arguments"' in s or '"tool"' in s or '"function"' in s):
         return True
     return False
 
@@ -860,6 +862,8 @@ async def ask(
         reasoning_verdict=rreport.verdict, reasoning_flaw=rreport.flaw,
         conflict_detected=conflict_detected, conflict_detail=conflict_detail,
         escalation_question=escalation_question,
+        degenerate=degenerate,
+        persisted=not degenerate,
     )
 
 
