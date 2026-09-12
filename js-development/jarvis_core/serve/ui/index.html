@@ -1,322 +1,92 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <meta name="theme-color" content="#070a10" />
-    <title>JARVIS — Your cognitive workspace</title>
-    <link
-      rel="icon"
-      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='12' fill='%23080d12' stroke='%237de6e2' stroke-width='2'/%3E%3Cpath d='M11 10h10v10l-5 4-5-4' fill='none' stroke='%237de6e2' stroke-width='2'/%3E%3C/svg%3E"
-    />
-    <link rel="stylesheet" href="/ui/app.css" />
-    <script defer src="/ui/marked.umd.js"></script>
-    <script defer src="/ui/app.js"></script>
-  </head>
-  <body>
-    <a class="skip-link" href="#prompt">Skip to message</a>
-    <div class="workspace">
-      <aside id="sidebar" class="sidebar" aria-label="Conversations">
-        <a class="brand" href="#" aria-label="JARVIS home"
-          ><span class="brand-mark">J</span
-          ><span>J.A.R.V.I.S<small>PERSONAL INTELLIGENCE</small></span></a
-        ><button id="new-chat" class="new-chat">
-          <span data-icon="plus"></span>New conversation<kbd>Alt N</kbd></button
-        ><label class="search"
-          ><span data-icon="search"></span
-          ><input
-            id="search"
-            type="search"
-            placeholder="Search conversations"
-            aria-label="Search conversations"
-          /><kbd>/</kbd></label
-        >
-        <div class="section-label">
-          YOUR CONVERSATIONS <span id="session-count">—</span
-          ><button
-            id="refresh"
-            class="icon-button"
-            aria-label="Refresh conversations"
-            title="Refresh conversations"
-          >
-            <span data-icon="refresh"></span>
-          </button>
-        </div>
-        <nav id="sessions" class="sessions" aria-label="Saved conversations">
-          <p class="muted empty-list">Connect to load your history.</p>
-        </nav>
-        <div class="sidebar-bottom">
-          <button id="system-toggle" class="system-button">
-            <span class="status-light" id="status-light"></span
-            ><span id="status-text">Connecting to hearth</span
-            ><span data-icon="chevron"></span>
-          </button>
-          <div class="profile-row">
-            <span class="avatar">SN</span
-            ><span>Swaraj Negi<small>Personal workspace</small></span
-            ><button
-              id="settings-button"
-              class="icon-button"
-              aria-label="Connection settings"
-              title="Connection settings"
-            >
-              <span data-icon="settings"></span>
-            </button>
-          </div>
-        </div>
-      </aside>
-      <button
-        id="scrim"
-        class="scrim"
-        aria-label="Close navigation"
-        hidden
-      ></button>
-      <main class="main">
-        <header class="topbar">
-          <button id="menu" class="icon-button" aria-label="Toggle navigation">
-            <span data-icon="menu"></span>
-          </button>
-          <div class="breadcrumb">
-            <span class="crumb-core">JARVIS</span><span>/</span
-            ><strong id="chat-title">New conversation</strong>
-          </div>
-          <div class="top-actions">
-            <span class="local-badge"><span></span><span id="connection-label">PRIVATE CONNECTION</span></span
-            ><button
-              id="export"
-              class="icon-button"
-              aria-label="Export full conversation"
-              title="Export full conversation"
-            >
-              <span data-icon="download"></span></button
-            ><button
-              id="inspector-button"
-              class="icon-button"
-              aria-label="Toggle system panel"
-              title="System panel"
-            >
-              <span data-icon="panel"></span>
-            </button>
-          </div>
-        </header>
-        <div class="stage">
-          <section class="conversation">
-            <div id="notice" class="notice" role="status" hidden></div>
-            <div
-              id="messages"
-              class="messages"
-              tabindex="0"
-              aria-label="Conversation messages"
-            >
-              <section id="welcome" class="welcome">
-                <div class="reactor" aria-hidden="true">
-                  <div class="reactor-orbit orbit-one"></div>
-                  <div class="reactor-orbit orbit-two"></div>
-                  <div class="reactor-ticks"></div>
-                  <div class="reactor-disc">
-                    <svg viewBox="0 0 100 100">
-                      <path
-                        d="M30 26h41v43L50 83 29 68V53M42 38h16v24l-8 6-8-6"
-                      />
-                    </svg>
-                  </div>
-                  <span class="reactor-node n1"></span
-                  ><span class="reactor-node n2"></span
-                </div>
-                <p id="greeting" class="greeting">Welcome back.</p>
-                <h1>Think clearly.<br /><span>Build deliberately.</span></h1>
-                <p class="intro">A continuous private workspace for your ideas, decisions, and work.</p>
-                <div class="suggestions">
-                  <button
-                    data-prompt="What past JARVIS decisions constrain the task I am starting today?"
-                  >
-                    <span class="suggestion-icon" data-icon="layers"></span
-                    ><strong>Pick up the thread</strong>
-                    <p>Revisit decisions that shape what’s next.</p>
-                    <span class="suggestion-arrow">↗</span></button
-                  ><button
-                    data-prompt="Help me think through a new idea. Start by asking me what I have in mind."
-                  >
-                    <span class="suggestion-icon" data-icon="spark"></span
-                    ><strong>Explore an idea</strong>
-                    <p>Make room for a different perspective.</p>
-                    <span class="suggestion-arrow">↗</span></button
-                  ><button
-                    data-prompt="Review the current JARVIS roadmap and help me identify the most useful next step."
-                  >
-                    <span class="suggestion-icon" data-icon="compass"></span
-                    ><strong>Find the next move</strong>
-                    <p>Turn the bigger picture into a clear step.</p>
-                    <span class="suggestion-arrow">↗</span>
-                  </button>
-                </div>
-              </section>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#060911">
+<meta name="color-scheme" content="dark">
+<title>JARVIS | Personal intelligence</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='12' fill='%23060911' stroke='%233c96ff'/%3E%3Ccircle cx='16' cy='16' r='5' fill='%233c96ff'/%3E%3C/svg%3E">
+<script>
+  // Direct file preview uses adjacent assets; authenticated API calls require HTTP.
+  const assetRoot = location.protocol === "file:" ? "./" : "/ui/";
+  document.write('<link rel="stylesheet" href="' + assetRoot + 'app.css?v=20260912-5">');
+  for (const file of ["marked.umd.js", "core.js", "app.js"])
+    document.write('<script defer src="' + assetRoot + file + '?v=20260912-5"><\/script>');
+</script>
+</head>
+<body data-connection="offline">
+<a class="skip-link" href="#prompt">Skip to message</a>
+<div class="workspace">
+  <aside id="sidebar" class="sidebar" aria-label="Conversations">
+    <a class="brand" href="/" aria-label="JARVIS home"><span class="brand-orb" aria-hidden="true"></span><span class="brand-word">JARVIS<small>PERSONAL INTELLIGENCE</small></span></a>
+    <button id="new-chat" class="new-chat" type="button"><span data-icon="plus"></span><span>New conversation</span><kbd>Alt N</kbd></button>
+    <div class="search"><span data-icon="search"></span><input id="search" type="search" placeholder="Search conversations" aria-label="Search conversations" autocomplete="off"><button id="clear-search" class="icon-button" type="button" aria-label="Clear search" hidden><span data-icon="close"></span></button><kbd id="search-shortcut">/</kbd></div>
+    <div class="history-heading"><span>Conversations</span><span id="session-count">0</span><button id="refresh" class="icon-button" type="button" aria-label="Refresh conversations" title="Refresh conversations"><span data-icon="refresh"></span></button></div>
+    <nav id="sessions" class="sessions" aria-label="Saved conversations"><p class="empty-list">Connect to load your conversations.</p></nav>
+    <div class="sidebar-bottom">
+      <button id="system-toggle" class="system-button" type="button"><span class="status-light" id="status-light"></span><span id="status-text">Not connected</span><span data-icon="chevron"></span></button>
+      <div class="profile-row"><span class="avatar">SN</span><span>Swaraj Negi<small>Personal workspace</small></span><button id="settings-button" class="icon-button" type="button" aria-label="Connection settings" title="Connection settings"><span data-icon="settings"></span></button></div>
+    </div>
+  </aside>
+  <button id="scrim" class="scrim" type="button" aria-label="Close navigation" hidden></button>
+  <main class="main">
+    <header class="topbar">
+      <button id="menu" class="icon-button" type="button" aria-label="Toggle navigation"><span data-icon="menu"></span></button>
+      <div class="breadcrumb"><span class="crumb-core">WORKSPACE</span><span class="crumb-divider">/</span><strong id="chat-title">New conversation</strong></div>
+      <div class="top-actions"><span class="connection-badge"><span class="connection-dot"></span><span id="connection-label">PRIVATE CONNECTION</span></span><span class="action-divider"></span><button id="export" class="icon-button" type="button" aria-label="Export full conversation" title="Export full conversation"><span data-icon="download"></span></button><button id="inspector-button" class="icon-button" type="button" aria-label="Toggle system panel" title="System activity" aria-expanded="false"><span data-icon="activity"></span></button></div>
+    </header>
+    <div class="stage">
+      <section class="conversation" aria-label="JARVIS chat">
+        <div id="notice" class="notice" role="status" hidden></div>
+        <div id="messages" class="messages" tabindex="0" aria-label="Conversation messages">
+          <section id="welcome" class="welcome">
+            <div class="welcome-heading"><p class="eyebrow">YOUR MIND, EXTENDED</p><h1>Welcome back, Swaraj<span>.</span></h1></div>
+            <div class="core-stage">
+              <div class="core-guide guide-left" aria-hidden="true"><span>J.A.R.V.I.S</span><i></i><span>COGNITIVE CORE</span></div>
+              <canvas class="living-core" data-core="hero" aria-label="Animated blue particle core"></canvas>
+              <div class="core-guide guide-right" aria-hidden="true"><span>PERSONAL</span><i></i><span>INTELLIGENCE</span></div>
+              <div class="core-caption"><span class="core-caption-dot"></span><span id="core-caption">Awaiting connection</span><button id="motion-toggle" type="button" class="motion-toggle" aria-label="Pause core animation" title="Pause core animation" aria-pressed="false"><span data-icon="pause"></span></button></div>
             </div>
-            <button id="jump-bottom" class="jump-bottom" hidden>
-              ↓ Latest message
-            </button>
-            <div class="composer-zone">
-              <div id="working" class="working" role="status" hidden>
-                <span class="thinking-core" aria-hidden="true"><i></i><i></i><i></i></span
-                ><span id="working-text">JARVIS is thinking</span
-                ><time id="elapsed">0s</time>
-              </div>
-              <form id="composer" class="composer">
-                <label class="sr-only" for="prompt">Message JARVIS</label
-                ><textarea
-                  id="prompt"
-                  rows="2"
-                  placeholder="Ask, explore, or pick up where you left off…"
-                ></textarea>
-                <div class="composer-bottom">
-                  <div class="model-control">
-                    <span data-icon="spark"></span
-                    ><label class="sr-only" for="model">Model</label
-                    ><input
-                      id="model"
-                      list="model-options"
-                      placeholder="Configured brain"
-                      aria-label="Model override"
-                    /><datalist id="model-options">
-                      <option value="openrouter/free">Free models</option>
-                    </datalist>
-                  </div>
-                  <button
-                    id="options-button"
-                    class="composer-options"
-                    type="button"
-                    aria-expanded="false"
-                  >
-                    <span data-icon="sliders"></span
-                    ><span>Configure</span></button
-                  ><button
-                    id="send"
-                    class="send"
-                    type="submit"
-                    aria-label="Send message"
-                  >
-                    <span data-icon="arrow"></span>
-                  </button>
-                </div>
-                <div id="options" class="options" hidden>
-                  <label
-                    >Reasoning<select id="reasoning">
-                      <option value="">Model default</option>
-                      <option value="low">Low</option>
-                      <option value="medium">Medium</option>
-                      <option value="high">High</option>
-                    </select></label
-                  ><label
-                    >Tools<select id="tools">
-                      <option value="default">Standard</option>
-                      <option value="full">Full toolkit</option>
-                    </select></label
-                  ><label class="permission-option"
-                    ><input id="allow-all" type="checkbox" />Allow gated
-                    tools<span
-                      >Permits code, shell and file actions for this
-                      request.</span
-                    ></label
-                  >
-                </div>
-              </form>
-              <div class="composer-caption">
-                <span
-                  ><span class="mini-dot"></span> ONE WORKSPACE. A CONTINUOUS
-                  THREAD.</span
-                ><span>Enter to send · Shift + Enter for a new line</span>
-              </div>
+            <div class="suggestions" aria-label="Conversation starters">
+              <button type="button" data-prompt="What past JARVIS decisions constrain the task I am starting today?"><span class="suggestion-icon" data-icon="layers"></span><strong>Pick up the thread</strong><p>Return to what matters.</p><span class="suggestion-arrow" data-icon="diagonal"></span></button>
+              <button type="button" data-prompt="Help me think through a new idea. Start by asking me what I have in mind."><span class="suggestion-icon" data-icon="spark"></span><strong>Explore an idea</strong><p>A little space to think bigger.</p><span class="suggestion-arrow" data-icon="diagonal"></span></button>
+              <button type="button" data-prompt="Review the current JARVIS roadmap and help me identify the most useful next step."><span class="suggestion-icon" data-icon="compass"></span><strong>Find the next move</strong><p>From a bigger picture to a clear step.</p><span class="suggestion-arrow" data-icon="diagonal"></span></button>
             </div>
           </section>
-          <aside id="inspector" class="inspector" aria-label="System activity">
-            <div class="inspector-header">
-              <span class="section-label">SYSTEM PULSE</span
-              ><button
-                id="close-inspector"
-                class="icon-button"
-                aria-label="Close system panel"
-              >
-                ×
-              </button>
-            </div>
-            <div class="pulse-visual" aria-hidden="true">
-              <svg viewBox="0 0 210 60">
-                <path
-                  d="M0 32h40l7-8 8 18 10-35 10 49 9-24h30l5-5 5 10 6-14 6 9h74"
-                />
-              </svg>
-            </div>
-            <div class="pulse-summary">
-              <span id="pulse-state">Awaiting connection</span
-              ><span class="mono" id="uptime">—</span>
-            </div>
-            <div class="metric-row">
-              <span>Conversations</span><strong id="metric-sessions">—</strong>
-            </div>
-            <div class="metric-row">
-              <span>Requests this run</span
-              ><strong id="metric-requests">—</strong>
-            </div>
-            <div class="section-label jobs-title">BACKGROUND ACTIVITY</div>
-            <div id="jobs" class="jobs">
-              <p class="muted">Connect to see background jobs.</p>
-            </div>
-            <details id="trace-details" class="trace-details">
-              <summary>Execution trace <span id="trace-count">0</span></summary>
-              <pre id="trace">
-Activity from your next message will appear here.</pre
-              >
-            </details>
-            <div class="inspector-foot">
-              <span class="mini-dot"></span> Powered by your JARVIS hearth
-            </div>
-          </aside>
         </div>
-      </main>
+        <button id="jump-bottom" class="jump-bottom" type="button" hidden>↓ Latest message</button>
+        <div class="composer-zone">
+          <div id="working" class="working" role="status" hidden><canvas data-core="thinking" class="thinking-core" aria-hidden="true"></canvas><span><strong id="working-text">JARVIS is thinking</strong><small>Making the connections.</small></span><time id="elapsed">0s</time></div>
+          <form id="composer" class="composer" novalidate>
+            <label class="sr-only" for="prompt">Message JARVIS</label><textarea id="prompt" rows="2" placeholder="What's on your mind?" style="resize: none"></textarea>
+            <div class="composer-bottom"><div class="model-control"><span data-icon="spark"></span><label class="sr-only" for="model">Model</label><input id="model" list="model-options" placeholder="Default intelligence" aria-label="Model override"><datalist id="model-options"><option value="openrouter/free">Free models</option></datalist></div><button id="options-button" class="composer-options" type="button" aria-label="Configure request" aria-expanded="false"><span data-icon="sliders"></span><span>Configure</span></button><button id="send" class="send" type="submit" aria-label="Send message"><span data-icon="arrow"></span></button></div>
+            <div id="options" class="options" hidden><label>Reasoning<select id="reasoning"><option value="">Model default</option><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option></select></label><label>Tools<select id="tools"><option value="default">Standard</option><option value="full">Full toolkit</option></select></label><label class="permission-option"><input id="allow-all" type="checkbox">Allow gated tools<span>Permits code, shell and file actions for this request.</span></label></div>
+          </form>
+          <div class="composer-caption"><span>One continuous conversation with your intelligence.</span><span><kbd>Enter</kbd> to send <b>·</b> <kbd>Shift Enter</kbd> for a new line</span></div>
+        </div>
+      </section>
+      <aside id="inspector" class="inspector" aria-label="System activity" hidden>
+        <div class="inspector-header"><div><p class="eyebrow">BEHIND THE THOUGHT</p><h2>System activity</h2></div><button id="close-inspector" class="icon-button" type="button" aria-label="Close system panel"><span data-icon="close"></span></button></div>
+        <div class="pulse-visual" aria-hidden="true"><svg viewBox="0 0 240 60"><path d="M0 32h50l9-9 10 20 13-35 15 45 12-21h35l8-8 9 16 8-12 8 4h63"/></svg></div>
+        <div class="pulse-summary"><span id="pulse-state">Awaiting connection</span><span id="uptime">—</span></div>
+        <div class="metric-row"><span>Conversations</span><strong id="metric-sessions">—</strong></div><div class="metric-row"><span>Requests this run</span><strong id="metric-requests">—</strong></div>
+        <p class="eyebrow jobs-title">BACKGROUND ACTIVITY</p><div id="jobs" class="jobs"><p class="muted">Connect to see background activity.</p></div>
+        <details id="trace-details" class="trace-details"><summary>Execution trace <span id="trace-count">0</span></summary><pre id="trace">Activity from your next message will appear here.</pre></details><p class="inspector-foot">Powered by your JARVIS hearth</p>
+      </aside>
     </div>
-    <dialog id="settings">
-      <form id="connection-form">
-        <div class="dialog-heading">
-          <div>
-            <span class="eyebrow">YOUR PRIVATE WORKSPACE</span>
-            <h2>Connect to JARVIS</h2>
-          </div>
-          <button
-            type="button"
-            id="close-settings"
-            class="icon-button"
-            aria-label="Close settings"
-          >
-            ×
-          </button>
-        </div>
-        <p>
-          Use your local hearth token to connect this browser. This is separate
-          from your model provider API key.
-        </p>
-        <label for="token">Hearth token</label
-        ><input
-          id="token"
-          type="password"
-          autocomplete="off"
-          placeholder="Paste your local connection token"
-        />
-        <p class="token-help">
-          Located in <code>jarvis_data/.hearth_token</code>. Kept in this
-          browser tab for this session.
-        </p>
-        <label class="token-file"
-          >Or choose the token file<input
-            id="token-file"
-            type="file"
-            aria-label="Choose local hearth token file"
-        /></label>
-        <p id="connection-error" role="alert"></p>
-        <button class="connect-button" type="submit">
-          Connect workspace <span>↗</span>
-        </button>
-      </form>
-    </dialog>
-    <div id="toast" class="toast" role="status" hidden></div>
-  </body>
+  </main>
+</div>
+<dialog id="settings" aria-labelledby="settings-title">
+  <form id="connection-form" novalidate>
+    <div class="dialog-heading"><div><p class="eyebrow">A PRIVATE CONNECTION</p><h2 id="settings-title">Connect to JARVIS</h2></div><button type="button" id="close-settings" class="icon-button" aria-label="Close settings"><span data-icon="close"></span></button></div>
+    <p>Your workspace is protected with a hearth token. Use the token for this server to access your conversations.</p>
+    <label for="token">Hearth token</label><div class="token-input"><input id="token" type="password" autocomplete="off" placeholder="Enter your connection token" aria-describedby="token-help connection-error"><button id="show-token" type="button" aria-label="Show token" class="icon-button"><span data-icon="eye"></span></button></div>
+    <p id="token-help" class="token-help">This is separate from your model provider API key. It stays in this browser tab for the session.</p>
+    <label class="token-file">Or choose a token file<input id="token-file" type="file" aria-label="Choose local hearth token file"></label>
+    <p id="connection-error" role="alert"></p><button class="connect-button" type="submit">Connect workspace <span data-icon="diagonal"></span></button>
+  </form>
+</dialog>
+<div id="toast" class="toast" role="status" hidden></div>
+</body>
 </html>

@@ -426,7 +426,14 @@ def _list_sessions(conv_dir: Path) -> List[Dict[str, Any]]:
             })
         except OSError:
             continue
-    sessions.sort(key=lambda s: s["mtime"], reverse=True)
+    # Git/Docker checkouts give many conversation files the same mtime, so
+    # filesystem order is not a meaningful proxy for recency. Conversation
+    # timestamps are ISO-8601 and sort chronologically as strings; use mtime
+    # only for legacy records that have no timestamp.
+    sessions.sort(
+        key=lambda s: (bool(s["latest_ts"]), s["latest_ts"] or "", s["mtime"]),
+        reverse=True,
+    )
     return sessions
 
 
@@ -1004,7 +1011,8 @@ def _run_self_test() -> None:
     sent_css, _ = drive(app, {"type": "http", "method": "GET", "path": "/ui/app.css", "client": ("127.0.0.1", 1234),
                               "headers": [(b"accept", b"text/css")]})
     check("T26 GET /ui/app.css serves static stylesheet",
-          status_of(sent_css) == 200 and b"--bg-app" in body_of(sent_css))
+          status_of(sent_css) == 200 and b":root" in body_of(sent_css)
+          and b".composer" in body_of(sent_css))
 
     # T27: Sessions endpoint returns 200 and a list
     sent_sess, _ = drive(app, http_scope("GET", "/v1/sessions"))
@@ -1032,6 +1040,25 @@ def _run_self_test() -> None:
         check("T31 conversation path traversal is refused",
               _get_session_turns(directory, "../named-thread") is None
               and _get_session_turns(directory, "..\\named-thread") is None)
+
+    with tempfile.TemporaryDirectory() as td:
+        directory = Path(td)
+        older = directory / "conv-older.jsonl"
+        newer = directory / "conv-newer.jsonl"
+        older.write_text(
+            json.dumps({"ts": "2026-01-01T10:00:00+05:30", "role": "user", "content": "older"}) + "\n",
+            encoding="utf-8",
+        )
+        newer.write_text(
+            json.dumps({"ts": "2026-09-12T10:00:00+05:30", "role": "user", "content": "newer"}) + "\n",
+            encoding="utf-8",
+        )
+        same_mtime = time.time()
+        os.utime(older, (same_mtime, same_mtime))
+        os.utime(newer, (same_mtime, same_mtime))
+        ordered = _list_sessions(directory)
+        check("T32 sessions sort by conversation timestamp, not copied mtime",
+              [s["session_id"] for s in ordered] == ["conv-newer", "conv-older"])
 
     loop.close()
     print("-" * 70)

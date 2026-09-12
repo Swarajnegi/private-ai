@@ -16,6 +16,10 @@ const longAnswer =
   '\n\n| Decision | Status |\n| --- | --- |\n| Preserve complete answers | Done |\n\n```python\n# preserve **literal** code\nprint("<hello>")\n```\n\n' +
   "<script>window.injected = true</script>\n\n[unsafe](javascript:alert(1))\n\nFINAL MARKER — 完整回答 🧠";
 let conversations = {
+  "older-session": [
+    { role: "user", content: "An older conversation", ts: "2025-06-17T11:33:00Z" },
+    { role: "assistant", content: "An earlier thought.", ts: "2025-06-17T11:34:00Z" },
+  ],
   "named-session": [
     {
       role: "user",
@@ -65,7 +69,7 @@ const server = http.createServer(async (req, res) => {
         title: messages[0].content,
         first_prompt: messages[0].content,
         turn_count: messages.length,
-        latest_ts: new Date().toISOString(),
+        latest_ts: messages.at(-1).ts,
         mtime: Date.now() / 1000,
       })),
     });
@@ -130,7 +134,11 @@ const server = http.createServer(async (req, res) => {
   res.end(fs.readFileSync(file));
 });
 (async () => {
-  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  await new Promise((resolve) => server.listen(Number(process.env.JARVIS_UI_FIXTURE_PORT || 0), "127.0.0.1", resolve));
+  if (process.env.JARVIS_UI_FIXTURE_PORT) {
+    console.log(`Isolated UI fixture ready on http://127.0.0.1:${server.address().port}; token: test-token. No real data or model calls.`);
+    return;
+  }
   const browser = await chromium.launch({
     channel: process.env.JARVIS_BROWSER_CHANNEL || (process.platform === "win32" ? "msedge" : undefined),
     headless: true,
@@ -151,7 +159,12 @@ const server = http.createServer(async (req, res) => {
       .waitFor();
     await page.locator("#token").fill("test-token");
     await page.locator(".connect-button").click();
-    await page.locator(".session").waitFor();
+    await page.locator(".session").first().waitFor();
+    assert.match(await page.locator(".session").first().textContent(), /A named conversation/);
+    assert.equal(await page.locator("#inspector").isVisible(), false);
+    await page.getByRole("button", {name: "Pause core animation", exact: true}).click();
+    assert.equal(await page.locator("#motion-toggle").getAttribute("aria-pressed"), "true");
+    await page.getByRole("button", {name: "Play core animation", exact: true}).click();
     await page.screenshot({
       path: path.join(screenshotRoot, "home-desktop.png"),
     });

@@ -3,6 +3,12 @@
   "use strict";
   const $ = (id) => document.getElementById(id);
   const icons = {
+    close: "m6 6 12 12M6 18 18 6",
+    activity: "M2 12h4l3-8 6 16 3-8h4",
+    diagonal: "M6 18 18 6M6 6h12v12",
+    pause: "M8 5v14M16 5v14",
+    play: "m8 5 11 7-11 7Z",
+    eye: "M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12Zm13 0a3 3 0 1 1-6 0 3 3 0 0 1 6 0",
     plus: "M12 5v14M5 12h14",
     search: "M21 21l-5-5M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0",
     refresh: "M20 7v5h-5M4 17v-5h5M6 6a8 8 0 0 1 13 3M18 18A8 8 0 0 1 5 15",
@@ -25,8 +31,9 @@
     el.innerHTML = svg(el.dataset.icon);
   });
   const welcome = $("welcome").cloneNode(true);
+  const filePreview = location.protocol === "file:";
   const remoteSurface = !["127.0.0.1", "localhost", "::1"].includes(location.hostname);
-  $("connection-label").textContent = remoteSurface ? "SECURE REMOTE" : "PRIVATE LOCAL";
+  $("connection-label").textContent = filePreview ? "DESIGN PREVIEW" : remoteSurface ? "SECURE REMOTE" : "PRIVATE LOCAL";
   const state = {
     sessions: [],
     messages: [],
@@ -105,8 +112,15 @@
     return `${Math.floor(seconds / 3600)}h ago`;
   }
   function setSidebar(open) {
+    const wasOpen = $("sidebar").classList.contains("open");
+    const narrow = innerWidth <= 760;
     $("sidebar").classList.toggle("open", open);
     $("scrim").hidden = !open;
+    $("menu").setAttribute("aria-expanded", String(open));
+    $("sidebar").inert = narrow && !open;
+    document.querySelector(".main").inert = narrow && open;
+    if (narrow && open) $("new-chat").focus();
+    else if (narrow && wasOpen) $("menu").focus();
   }
   function toggleInspector(force) {
     const panel = $("inspector");
@@ -114,12 +128,26 @@
     const show = force ?? !visible;
     panel.hidden = !show;
     panel.classList.toggle("open", show);
+    $("inspector-button").setAttribute("aria-expanded", String(show));
+  }
+  function syncCore() {
+    if ($("core-caption")) $("core-caption").textContent = filePreview ? "Design preview · connect on the live app" : state.busy ? "Thinking with you" : state.health ? "Online. Ready when you are." : "Awaiting connection";
+    const button = $("motion-toggle");
+    if (button) {
+      const paused = window.JarvisCore?.paused;
+      button.setAttribute("aria-pressed", String(Boolean(paused)));
+      button.setAttribute("aria-label", paused ? "Play core animation" : "Pause core animation");
+      button.title = button.getAttribute("aria-label");
+      button.innerHTML = svg(paused ? "play" : "pause");
+    }
   }
   async function checkHealth() {
     if (!state.token) return;
     try {
       const h = await api("/v1/health");
       state.health = h;
+      document.body.dataset.connection = "online";
+      syncCore();
       $("status-light").className =
         `status-light ${h.busy ? "busy" : "online"}`;
       $("status-text").textContent = h.busy
@@ -159,6 +187,9 @@
       $("pulse-state").textContent = "Connection unavailable";
       $("uptime").textContent = "—";
       $("jobs").textContent = "Live status unavailable. Reconnect to refresh.";
+      state.health = null;
+      document.body.dataset.connection = "offline";
+      syncCore();
     }
   }
   async function loadSessions() {
@@ -170,11 +201,19 @@
   }
   function renderSessions() {
     const query = $("search").value.toLowerCase().trim();
-    const sessions = state.sessions.filter((s) =>
-      `${s.title} ${s.first_prompt} ${s.session_id}`
-        .toLowerCase()
-        .includes(query),
-    );
+    $("clear-search").hidden = !query;
+    $("search-shortcut").hidden = Boolean(query);
+    const sessions = state.sessions
+      .filter((s) =>
+        `${s.title} ${s.first_prompt} ${s.session_id}`
+          .toLowerCase()
+          .includes(query),
+      )
+      .sort((a, b) => {
+        const aTime = Date.parse(a.latest_ts) || a.mtime * 1000 || 0;
+        const bTime = Date.parse(b.latest_ts) || b.mtime * 1000 || 0;
+        return bTime - aTime || b.session_id.localeCompare(a.session_id);
+      });
     $("session-count").textContent = state.sessions.length;
     $("sessions").replaceChildren();
     let lastGroup = "";
@@ -249,6 +288,7 @@
       $("chat-title").textContent =
         state.sessions.find((s) => s.session_id === id)?.title ||
         "Conversation";
+      document.title = `${$("chat-title").textContent} | JARVIS`;
       $("messages").replaceChildren();
       state.messages.forEach(renderMessage);
       if (!state.messages.length)
@@ -271,7 +311,10 @@
     state.messages = [];
     state.trace = [];
     $("chat-title").textContent = "New conversation";
+    document.title = "JARVIS | Personal intelligence";
     $("messages").replaceChildren(welcome.cloneNode(true));
+    window.JarvisCore?.setScroll(0);
+    syncCore();
     notice();
     restoreDraft();
     renderSessions();
@@ -464,6 +507,9 @@
   }
   function setBusy(busy) {
     state.busy = busy;
+    document.body.dataset.busy = String(busy);
+    window.JarvisCore?.setBusy(busy);
+    syncCore();
     $("send").disabled = busy;
     $("working").hidden = !busy;
     $("messages").setAttribute("aria-busy", String(busy));
@@ -472,6 +518,7 @@
     event.preventDefault();
     const question = $("prompt").value.trim();
     if (!question || state.busy) return;
+    if (filePreview) { notice("This is a design preview. Open https://jarvis-hearth-production.up.railway.app to talk to JARVIS."); return; }
     if (!state.token) {
       $("settings").showModal();
       return;
@@ -499,6 +546,7 @@
     renderMessage(user);
     $("chat-title").textContent =
       state.sessions.find((s) => s.session_id === session)?.title || question;
+    document.title = `${$("chat-title").textContent} | JARVIS`;
     $("prompt").value = "";
     writeLocal(oldDraftKey, "");
     writeLocal(draftKey(), "");
@@ -598,12 +646,17 @@
     event?.preventDefault();
     const candidate = $("token").value.trim();
     if (!candidate) {
+      $("token").setAttribute("aria-invalid", "true");
       $("connection-error").textContent =
         "Choose the local token file or enter its contents.";
       return;
     }
     const previous = state.token;
     state.token = candidate;
+    const button = $("connection-form").querySelector('[type="submit"]');
+    button.disabled = true;
+    $("connection-error").textContent = "Connecting…";
+    $("token").removeAttribute("aria-invalid");
     try {
       await api("/v1/auth/verify");
       try {
@@ -611,6 +664,8 @@
         localStorage.removeItem("jarvis_hearth_token");
       } catch {}
       $("token").value = "";
+      $("token").type = "password";
+      $("show-token").setAttribute("aria-label", "Show token");
       $("connection-error").textContent = "";
       $("settings").close();
       await checkHealth();
@@ -620,6 +675,9 @@
     } catch (error) {
       state.token = previous;
       $("connection-error").textContent = error.message;
+      $("token").setAttribute("aria-invalid", "true");
+    } finally {
+      button.disabled = false;
     }
   }
   $("composer").onsubmit = submit;
@@ -634,6 +692,7 @@
     }
   };
   $("search").oninput = renderSessions;
+  $("clear-search").onclick = () => { $("search").value = ""; renderSessions(); $("search").focus(); };
   $("refresh").onclick = async () => {
     try {
       await loadSessions();
@@ -649,6 +708,7 @@
     newSession();
   };
   $("messages").onclick = (event) => {
+    if (event.target.closest("#motion-toggle")) { window.JarvisCore?.togglePause(); syncCore(); return; }
     const button = event.target.closest("[data-prompt]");
     if (button) {
       $("prompt").value = button.dataset.prompt;
@@ -658,6 +718,7 @@
     }
   };
   $("messages").onscroll = () => {
+    window.JarvisCore?.setScroll($("messages").scrollTop / Math.max(1, $("messages").scrollHeight - $("messages").clientHeight));
     $("jump-bottom").hidden =
       $("messages").scrollHeight -
         $("messages").scrollTop -
@@ -669,7 +730,7 @@
     setSidebar(!$("sidebar").classList.contains("open"));
   $("scrim").onclick = () => setSidebar(false);
   $("inspector-button").onclick = () => toggleInspector();
-  $("system-toggle").onclick = () => toggleInspector();
+  $("system-toggle").onclick = () => { setSidebar(false); toggleInspector(); };
   $("close-inspector").onclick = () => toggleInspector(false);
   $("options-button").onclick = () => {
     $("options").hidden = !$("options").hidden;
@@ -681,6 +742,11 @@
   $("settings-button").onclick = () => $("settings").showModal();
   $("close-settings").onclick = () => $("settings").close();
   $("connection-form").onsubmit = connect;
+  $("show-token").onclick = () => {
+    const show = $("token").type === "password";
+    $("token").type = show ? "text" : "password";
+    $("show-token").setAttribute("aria-label", show ? "Hide token" : "Show token");
+  };
   $("token-file").onchange = async (event) => {
     const file = event.target.files[0];
     if (file) {
@@ -715,6 +781,12 @@
     $(id).onchange = () => writeLocal(`jarvis.${id}`, $(id).value);
   }
   document.onkeydown = (event) => {
+    if (event.key === "Tab" && innerWidth <= 760 && $("sidebar").classList.contains("open")) {
+      const controls = [...$("sidebar").querySelectorAll('a,button,input')].filter(el => !el.hidden && el.getClientRects().length);
+      const first = controls[0], last = controls.at(-1);
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+    }
     const typing = /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName);
     if (event.key === "/" && !typing && !$("settings").open) {
       event.preventDefault();
@@ -728,6 +800,12 @@
     if (event.key === "Escape") setSidebar(false);
   };
   async function boot() {
+    syncCore();
+    if (filePreview) {
+      $("status-text").textContent = "Design preview";
+      notice("Design preview only. Open the hosted JARVIS app to connect and load your conversations.");
+      return;
+    }
     const url = new URL(location.href);
     const fragment = new URLSearchParams(url.hash.slice(1));
     const supplied = fragment.get("token") || url.searchParams.get("token");
@@ -763,6 +841,9 @@
     }
   }
   boot();
+  setSidebar(false);
+  addEventListener("resize", () => { if (innerWidth > 760) setSidebar(false); else $("sidebar").inert = !$("sidebar").classList.contains("open"); });
+  matchMedia("(prefers-reduced-motion: reduce)").addEventListener("change", syncCore);
   setInterval(() => {
     if (!document.hidden) checkHealth();
   }, 20000);
