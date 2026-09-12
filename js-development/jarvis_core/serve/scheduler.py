@@ -88,6 +88,27 @@ _OUTPUT_TAIL_CHARS = 400
 
 HOUR = 3600.0
 
+
+def _remote_sync_configured() -> bool:
+    """Whether the local host has both machine-local sync settings.
+
+    On native Windows the watchdog may predate a user environment update. Read
+    HKCU as a narrow fallback so a restart is sufficient; on POSIX normal
+    process environment inheritance remains the only mechanism.
+    """
+    if os.environ.get("JARVIS_REMOTE_URL") and os.environ.get("JARVIS_REMOTE_TOKEN"):
+        return True
+    if os.name != "nt":
+        return False
+    try:
+        import winreg
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Environment") as key:
+            url, _ = winreg.QueryValueEx(key, "JARVIS_REMOTE_URL")
+            token, _ = winreg.QueryValueEx(key, "JARVIS_REMOTE_TOKEN")
+        return bool(str(url).strip() and str(token).strip())
+    except (ImportError, OSError):
+        return False
+
 # An async callable: argv, timeout -> (returncode, output tail)
 Runner = Callable[[Sequence[str], float], Awaitable[Tuple[int, str]]]
 
@@ -260,7 +281,7 @@ def default_jobs(python: Optional[str] = None,
             timeout_seconds=600.0,
             initial_delay_seconds=660.0,
             description="bidirectional union-sync of authoritative facts with the hosted Context Ledger"),
-    ] if os.environ.get("JARVIS_REMOTE_URL") and os.environ.get("JARVIS_REMOTE_TOKEN") else [])
+    ] if _remote_sync_configured() else [])
 
 
 # =============================================================================
@@ -623,8 +644,9 @@ def _run_self_test() -> None:
         names = [j.name for j in jobs]
         check("T16 the default set includes GraphRAG plus the "
               "2026-09-10 Codex-migration trio, in order",
-              names == ["consolidate", "refresh_profile", "reindex_memory",
-                       "rebuild_graphrag", "ingest_codex", "reconcile_codex_memory", "refresh_digest"],
+              names[:7] == ["consolidate", "refresh_profile", "reindex_memory",
+                            "rebuild_graphrag", "ingest_codex", "reconcile_codex_memory", "refresh_digest"]
+              and (names[7:] in ([], ["sync_remote_memory"])),
               str(names))
         check("T17 consolidate is UNguarded (its whole point is to run anyway)",
               not jobs[0].guard and jobs[1].guard and jobs[2].guard)

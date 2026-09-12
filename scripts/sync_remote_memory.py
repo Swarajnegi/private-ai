@@ -28,9 +28,30 @@ _LOGS = ("knowledge_base.jsonl", "observation_queue.jsonl", "commitments.jsonl")
 _MAX_BATCH_BYTES = 180_000
 
 
+def _environment_value(name: str) -> str:
+    """Read a process setting, with a Windows user-environment fallback.
+
+    The native-Windows hearth is supervised by a long-running watchdog.  A
+    value written to HKCU after that watchdog started is not automatically in
+    its inherited environment, so relying only on ``os.environ`` silently
+    disables sync until the next logon.  This is deliberately limited to the
+    two machine-local settings this client owns.
+    """
+    value = os.environ.get(name, "").strip()
+    if value or os.name != "nt":
+        return value
+    try:
+        import winreg
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Environment") as key:
+            stored, _kind = winreg.QueryValueEx(key, name)
+        return str(stored).strip()
+    except (ImportError, OSError):
+        return ""
+
+
 def _endpoint() -> tuple[str, str]:
-    url = os.environ.get("JARVIS_REMOTE_URL", "").rstrip("/")
-    token = os.environ.get("JARVIS_REMOTE_TOKEN", "").strip()
+    url = _environment_value("JARVIS_REMOTE_URL").rstrip("/")
+    token = _environment_value("JARVIS_REMOTE_TOKEN")
     if not url or not token:
         raise RuntimeError("Set JARVIS_REMOTE_URL and JARVIS_REMOTE_TOKEN; never commit either value.")
     return url, token
