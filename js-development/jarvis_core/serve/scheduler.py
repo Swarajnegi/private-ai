@@ -89,6 +89,19 @@ _OUTPUT_TAIL_CHARS = 400
 HOUR = 3600.0
 
 
+def _runtime_python(base: Path) -> str:
+    """Prefer the repo virtualenv over the watchdog's base interpreter.
+
+    On Windows ``pythonw`` may report the global Python executable even when
+    the watchdog was launched from ``.venv``.  Scheduled jobs then lose the
+    project dependency set and, on managed installs, can fail to spawn the
+    global executable at all.  The repository venv is the explicit runtime
+    contract, so select it when it exists.
+    """
+    candidate = base / ".venv" / ("Scripts/python.exe" if os.name == "nt" else "bin/python3")
+    return str(candidate) if candidate.is_file() else (sys.executable or "python3")
+
+
 def _remote_sync_configured() -> bool:
     """Whether the local host has both machine-local sync settings.
 
@@ -203,8 +216,8 @@ def default_jobs(python: Optional[str] = None,
     Returns:
         Jobs with absolute script paths, so cwd cannot change their meaning.
     """
-    py = python or sys.executable or "python3"
     base = Path(root or JARVIS_ROOT)
+    py = python or _runtime_python(base)
     scripts = base / "scripts"
     checker = str(scripts / "check_projections.py")
 
