@@ -114,6 +114,7 @@ _READ_ONLY_TOOLS = frozenset({
     "web_search",
     "memory_semantic_search", "memory_mmr_search", "memory_bm25_search",
     "memory_hybrid_search", "memory_rerank", "memory_unified_retrieve",
+    "memory_graph_search",
     "portfolio_state", "trigger_monitor", "incentive_planner",
 })
 

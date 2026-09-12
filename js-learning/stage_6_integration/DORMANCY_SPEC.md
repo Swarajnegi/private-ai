@@ -62,7 +62,9 @@ inference and zero false positives.
 
 The repo already does this informally, and those cases are machine-checkable **today**:
 
-> `4.6 GraphRAG ⏭ DEFERRED (trigger-gated: first KB-logged multi-hop retrieval failure)`
+> Historical example: `4.6 GraphRAG ⏭ DEFERRED (trigger-gated: first KB-logged multi-hop retrieval failure)`.
+> It was promoted to required on 2026-09-08; this is exactly the kind of recorded reversal the
+> commitment registry must preserve rather than silently overwrite.
 
 That is a real open loop with an explicit trigger condition. Tier 1 makes that shape first-class.
 
@@ -117,7 +119,8 @@ slowly fills with things nobody will ever do and becomes the noise it was built 
    - `--self-test` — offline, temp dirs, never touches the real file
 2. **A seed set, hand-picked, NOT keyword-scraped.** Measurement 2 is exactly why. Real open loops
    in the canon today, to be verified before entering:
-   - `4.6 GraphRAG` — trigger-gated on a KB-logged multi-hop retrieval failure (has a `check`)
+   - `4.6 GraphRAG` — required after the always-reachable Context Ledger is verified; its prior
+     trigger-gated form remains historical evidence of the reversal
    - The **Antigravity capture adapter** — blocked on `agents_converse/q_001.md`
      (`check`: does `a_001.md` exist?)
    - **Tier 2 / Tier 3 of this spec** — gated on Tier 1 proving insufficient

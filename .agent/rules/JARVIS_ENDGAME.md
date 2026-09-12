@@ -417,7 +417,7 @@ JARVIS does not just "run cron jobs." It executes intelligent loops while the us
 | **1 (Systems Python)** | ✅ Sufficient | Async, generators, context managers, object model (1.4/1.5 deliberately deferred) |
 | **2 (Memory Layer)** | ✅ Complete — closed 2026-05-03 | Embeddings, ChromaDB, chunking, hybrid search, cross-encoder rerank, KB compaction |
 | **3 (Agent Framework)** | ✅ Complete | Tool ABC + registry, planner (DAG/Kahn), ReAct loop, MemGPT paging. Built from scratch in `jarvis_core/agent/` per Decision 2026-05-13 |
-| **4 (Orchestration)** | ✅ Complete — closed 2026-07-27 | Router (84% frozen gate), model-pool failover, aggregator, epistemic control. Final Boss 8/8 PASS offline, ₹0. 4.6 GraphRAG ⏭ deferred, trigger-gated |
+| **4 (Orchestration)** | ✅ Shipped scope closed 2026-07-27 | Router (84% frozen gate), model-pool failover, aggregator, epistemic control. Final Boss 8/8 PASS offline, ₹0. 4.6 GraphRAG is required but not built: it was promoted 2026-09-08 because proactive surfacing needs multi-hop retrieval over distant facts. |
 | **5 (Specialists)** | ⬅️ **CURRENT — not started** | Engineer-first QLoRA adapter on a shared Kimi K2.6 base. Next task: 5.1 Fine-Tuning Basics on RunPod |
 | **6 (Integration)** | Scoped, not started | Voice, vision, unified API, client shells (6.9), ambient presence tier (6.10). 6.1–6.6 self-flagged as stale pre-Stage-3 drafts |
 

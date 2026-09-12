@@ -184,6 +184,7 @@ jarvis_data/conversations/*.lock
 #                            repeated it without re-verifying.
 jarvis_data/cognitive_index.sqlite3
 jarvis_data/behavioral_state_model.jsonl
+jarvis_data/graph_index.json
 
 # -- Domain labels (2026-09-08) -----------------------------------------------
 # The AUTHORITATIVE domain label per captured turn, from the embedding classifier.

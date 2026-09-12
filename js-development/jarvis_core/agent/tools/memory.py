@@ -126,6 +126,64 @@ class MemoryToolBase(Tool):
 
 
 # =============================================================================
+# Part 1b: GraphRAG — explicit fact relationships, no vector store required
+# =============================================================================
+
+class MemoryGraphSearchInput(ToolInput):
+    query: str = Field(description="Question or topic used to find canonical fact seeds.")
+    k: int = Field(default=8, ge=1, le=30, description="Maximum related facts to return.")
+    depth: int = Field(default=2, ge=0, le=4, description="Maximum explicit relationship hops.")
+
+
+@Tool.register("memory_graph_search")
+class MemoryGraphSearchTool(Tool):
+    """Traverse evidence-backed GraphRAG links across JARVIS decisions and commitments."""
+
+    name = "memory_graph_search"
+    description = (
+        "GraphRAG retrieval over explicit, auditable links between JARVIS knowledge-base "
+        "facts and commitments. Use when the question is about what constrains, cites, "
+        "or follows from a past decision. It never treats mere topical similarity as an edge."
+    )
+    input_schema = MemoryGraphSearchInput
+
+    @property
+    def is_concurrency_safe(self) -> bool:
+        return True
+
+    async def invoke(self, tool_input: MemoryGraphSearchInput) -> ToolResult:
+        from jarvis_core.config import GRAPH_INDEX_PATH
+        from jarvis_core.memory.graph import graph_search
+
+        if not GRAPH_INDEX_PATH.is_file():
+            return ToolResult(error="GraphRAG index is missing; run scripts/build_graphrag.py first.")
+        try:
+            results = graph_search(tool_input.query, k=tool_input.k, depth=tool_input.depth)
+        except Exception as error:
+            return ToolResult(error=f"graph_search failed: {type(error).__name__}: {error}")
+        hits = []
+        for result in results:
+            hits.append({
+                "id": result.node_id,
+                "content": f"{result.kind} {result.source_id} ({result.entry_type or 'untyped'})",
+                "metadata": {
+                    "kind": result.kind,
+                    "source_id": result.source_id,
+                    "entry_type": result.entry_type,
+                    "timestamp": result.timestamp,
+                    "tags": list(result.tags),
+                    "path": [
+                        {"source": edge.source, "target": edge.target,
+                         "relation": edge.relation, "evidence": edge.evidence}
+                        for edge in result.path
+                    ],
+                },
+                "score": result.score,
+            })
+        return ToolResult(output=_hits_shape(hits))
+
+
+# =============================================================================
 # Part 2: UNIFORM OUTPUT NORMALIZER
 # =============================================================================
 

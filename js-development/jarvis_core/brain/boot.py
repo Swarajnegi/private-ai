@@ -173,7 +173,7 @@ def full_toolset(
     from jarvis_core.agent.tools.cognitive import BearCaseDevilTool, WritingVoiceCheckTool
     from jarvis_core.agent.tools.memory import (
         MemoryMMRSearchTool, MemoryBM25SearchTool, MemoryHybridSearchTool,
-        MemoryRerankTool, MemoryUnifiedRetrieveTool,
+        MemoryRerankTool, MemoryUnifiedRetrieveTool, MemoryGraphSearchTool,
     )
     from jarvis_core.agent.tools.finance import (
         PortfolioStateTool, TriggerMonitorTool, IncentivePlannerTool,
@@ -193,6 +193,7 @@ def full_toolset(
         ("cognitive_mirror", lambda: CognitiveMirrorTool(kb_path=kb_path)),
         ("writing_voice_check", lambda: WritingVoiceCheckTool(kb_path=kb_path)),
         ("bear_case_devil", lambda: BearCaseDevilTool(kb_path=kb_path, llm_call=llm_call)),
+        ("memory_graph_search", lambda: MemoryGraphSearchTool()),
         ("portfolio_state", lambda: PortfolioStateTool(strategy_path=strategy_path)),
         ("trigger_monitor", lambda: TriggerMonitorTool(strategy_path=strategy_path)),
         ("incentive_planner", lambda: IncentivePlannerTool(strategy_path=strategy_path)),

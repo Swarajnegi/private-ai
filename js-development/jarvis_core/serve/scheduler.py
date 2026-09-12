@@ -221,6 +221,12 @@ def default_jobs(python: Optional[str] = None,
             timeout_seconds=1800.0,
             initial_delay_seconds=300.0,
             description="re-embed the knowledge base into chromadb when stale"),
+        Job(name="rebuild_graphrag",
+            argv=(py, str(scripts / "build_graphrag.py"), "--stats"),
+            interval_seconds=6 * HOUR,
+            timeout_seconds=300.0,
+            initial_delay_seconds=360.0,
+            description="rebuild the derived evidence-backed GraphRAG index from canonical JSONL facts"),
         # --- Added 2026-09-10: the Codex migration (ROADMAP 6.8.3) ---
         Job(name="ingest_codex",
             argv=(py, str(scripts / "ingest_codex_sessions.py")),
@@ -247,7 +253,14 @@ def default_jobs(python: Optional[str] = None,
             description="regenerate activity_digest.md — found 2.5 MONTHS "
                         "stale on 2026-09-10 because nothing had ever "
                         "scheduled this; Antigravity reads it at every boot"),
-    ]
+    ] + ([
+        Job(name="sync_remote_memory",
+            argv=(py, str(scripts / "sync_remote_memory.py")),
+            interval_seconds=15 * 60.0,
+            timeout_seconds=600.0,
+            initial_delay_seconds=660.0,
+            description="bidirectional union-sync of authoritative facts with the hosted Context Ledger"),
+    ] if os.environ.get("JARVIS_REMOTE_URL") and os.environ.get("JARVIS_REMOTE_TOKEN") else [])
 
 
 # =============================================================================
@@ -608,10 +621,10 @@ def _run_self_test() -> None:
         # T16: the real default job set is well-formed.
         jobs = default_jobs()
         names = [j.name for j in jobs]
-        check("T16 the default set schedules the original three plus the "
+        check("T16 the default set includes GraphRAG plus the "
               "2026-09-10 Codex-migration trio, in order",
               names == ["consolidate", "refresh_profile", "reindex_memory",
-                       "ingest_codex", "reconcile_codex_memory", "refresh_digest"],
+                       "rebuild_graphrag", "ingest_codex", "reconcile_codex_memory", "refresh_digest"],
               str(names))
         check("T17 consolidate is UNguarded (its whole point is to run anyway)",
               not jobs[0].guard and jobs[1].guard and jobs[2].guard)

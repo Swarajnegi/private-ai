@@ -18,7 +18,7 @@
 | **4.3** | Dynamic Target Management ✅ COMPLETE (2026-07-16) | 3 (Pass B) | Chaos tests: vanished model + budget-90% downshift both route around; fail-closed to free tier |
 | **4.4** | Response Aggregation ✅ COMPLETE (2026-07-20) | 3 (Pass B) | Attributed synthesis from real free-model fan-out; triggers only on escalation |
 | **4.5** | Epistemic Control ✅ COMPLETE (2026-07-20) | 3 (Pass B) | 6/6 engineered conflicts flagged, 0/6 false flags; judge failure proves fail-closed |
-| **4.6** | GraphRAG | — | ⏭ **DEFERRED** — trigger: first KB-logged multi-hop retrieval failure |
+| **4.6** | GraphRAG | — | 🟡 **REQUIRED, NOT BUILT** — promoted 2026-09-08 because the proactive-surfacing moat needs multi-hop retrieval, not only a larger context ledger |
 
 **Pass A → Pass B gate** (from the master roadmap): Router achieves ≥80% routing accuracy on the frozen 50-query labeled set (`js-development/tests/router_eval.jsonl`). Degenerate routers (always-default, always-largest) score ~20% by stratification — both baselines printed in every gate report so the gate can't be vacuous.
 
@@ -32,7 +32,7 @@
 | Kimi K2.6 on RunPod deployment | **Deferred → Stage 5 entry** | ₹0 constraint; the whole brain stack programs against the `LLMCall` seam, so where weights live is invisible to Stage 4 code. **Flag:** ENDGAME §2 VRAM math is internally inconsistent (1T INT4 ≈ ~500GB resident weights does not fit "4×A5000 96GB" or "one A100 80GB") — correct empirically before Stage 5 budgets commit |
 | Speculative decoding (draft 4.3.5) | **Cut → Stage 5** | An inference-server flag, not JARVIS code; meaningless via API |
 | ModernBERT-Large as the first router | **Conditional** | Training data (labeled routing decisions) doesn't exist yet — the RoutingLedger built in 4.2 *creates* it. Interim = nearest-prototype classifier (proven `domain_classifier.py` pattern). ModernBERT fires only if the gate fails <80%, else lands as Stage 5 specialist #1 |
-| 4.6 GraphRAG | **Deferred with trigger** | 324 KB entries don't need a graph; no multi-hop retrieval failure has ever been logged (past retrieval failures were classification-quality — already fixed). Builds in `jarvis_core/memory/graph.py` when the trigger fires |
+| 4.6 GraphRAG | **Required follow-on** | The original incident trigger did not fire, but the architecture changed: an always-reachable Context Ledger makes stored facts reachable, while GraphRAG is what can connect distant facts when neither was named in a query. Builds in `jarvis_core/memory/graph.py` after the ledger foundation is proven. |
 | Aggregation as a default path | **Re-scoped: escalation-only** | Fan-out costs N× per query; Single-Model-First holds. Triggers: gate failure, multi-domain label, explicit flag |
 | *(new)* Per-model protocol layer | **Added as 4.1** | L322: mirror burial, tool-format dialects, empty reasoning-channel content, 429 storms — observed across 4 models in one afternoon. Not theoretical |
 
@@ -178,7 +178,7 @@
 
 ---
 
-## Sub-Phase 4.6: GraphRAG ⏭ DEFERRED
+## Sub-Phase 4.6: GraphRAG 🟡 REQUIRED, NOT BUILT
 
 Row kept for master-roadmap traceability. **Trigger:** first KB-logged retrieval failure requiring entity-hop reasoning. Lands in `jarvis_core/memory/graph.py` (NetworkX in-process; no graph database at this corpus size). Rationale: 324 KB entries, zero logged multi-hop failures — every past retrieval failure was classification-quality, already fixed by `domain_classifier.py`.
 
@@ -215,7 +215,7 @@ Row kept for master-roadmap traceability. **Trigger:** first KB-logged retrieval
 | 4.3 Dynamic Target Management | 3 (Pass B) | ✅ Complete (2026-07-16; rolling stats persistence + budget governor + catalog drift; 38/38 model_pool, 20/20 llm_client) | 3/3 |
 | 4.4 Response Aggregation | 3 (Pass B) | ✅ Complete (2026-07-20; bounded fan-out + voting/synthesis + quality filter; 18/18 aggregator.py) | 3/3 |
 | 4.5 Epistemic Control | 3 (Pass B) | ✅ Complete (2026-07-20; divergence gate 6/6+6/6 exact + fail-closed contradiction judge + escalation policy; 20/20 confidence.py, 48/48 reasoning.py, 91/91 orchestrator.py) | 3/3 |
-| 4.6 GraphRAG | — | ⏭ Deferred (trigger documented) | — |
+| 4.6 GraphRAG | — | 🟡 Required after Context Ledger foundation | — |
 | Final Boss | 3 (Pass B closing) | ✅ Complete (2026-07-27; offline 8/8 PASS in `orchestrator.py`; 91/91 full regression held; `--live` variant built, not assistant-run) | 8/8 |
 
 ---
@@ -230,7 +230,7 @@ Row kept for master-roadmap traceability. **Trigger:** first KB-logged retrieval
 | Speculative decoding | Stage 5+ | vLLM server-side flag on owned pods |
 | outlines / constrained generation | Stage 5 | Needs logit access (vLLM `guided_json`); impossible via OpenRouter |
 | MCP publishing (L237) | Stage 5+ | External consumers exist |
-| GraphRAG | trigger-based | First logged multi-hop retrieval failure → `jarvis_core/memory/graph.py` |
+| GraphRAG | required follow-on | Context Ledger proves remote facts are authoritative; GraphRAG then enables multi-hop proactive retrieval over them → `jarvis_core/memory/graph.py` |
 | Voice/vision (Interface), always-on daemons, agent swarms | Stage 6 | Stage 6 reuses `ensure_ready()/release()` as its cold-wake primitive |
 | $10 OpenRouter limit-raise (50 → 1000 req/day) | when 429s bite | The only recommended spend before the Final Boss, and optional |
 

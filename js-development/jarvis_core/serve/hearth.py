@@ -72,6 +72,7 @@ STEP 6: The AskResult's answer + verdict + ledger go out as the terminal event,
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import hmac
 import json
 import os
@@ -86,6 +87,7 @@ from typing import Any, Awaitable, Callable, Dict, List, Optional, Tuple
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))  # standalone-run safety
 
 from jarvis_core.config import DATA_ROOT
+from jarvis_core.locking import exclusive_lock
 
 TOKEN_PATH = Path(DATA_ROOT) / ".hearth_token"
 
@@ -346,6 +348,11 @@ class Hearth:
                     supplied = part[6:].strip()
                     break
 
+        sync_token = os.environ.get("JARVIS_REMOTE_SYNC_TOKEN", "").strip()
+        if path.startswith("/v1/memory/") and sync_token and supplied:
+            if hmac.compare_digest(supplied, sync_token):
+                return None
+
         if not self._cfg.token:
             return "hearth has no token configured"
         if not supplied or not hmac.compare_digest(supplied, self._cfg.token):
@@ -389,6 +396,12 @@ _STATIC_CONTENT_TYPES = {
     ".png": b"image/png",
     ".ico": b"image/x-icon",
 }
+
+_REMOTE_LEDGER_LOGS = frozenset({
+    "knowledge_base.jsonl",
+    "observation_queue.jsonl",
+    "commitments.jsonl",
+})
 
 
 def _list_sessions(conv_dir: Path) -> List[Dict[str, Any]]:
@@ -465,6 +478,61 @@ def _get_session_turns(conv_dir: Path, session_id: str) -> Optional[List[Dict[st
     except OSError:
         return None
     return turns
+
+
+def _remote_ledger_path(name: str) -> Optional[Path]:
+    """Return one allowlisted authoritative log; never turn a URL into a path."""
+    return Path(DATA_ROOT) / name if name in _REMOTE_LEDGER_LOGS else None
+
+
+def _remote_ledger_lines(name: str) -> Optional[List[str]]:
+    """Read valid records from one authoritative JSONL log without repairing it."""
+    path = _remote_ledger_path(name)
+    if path is None:
+        return None
+    try:
+        with path.open("r", encoding="utf-8") as handle:
+            return [line.strip() for line in handle if line.strip()]
+    except FileNotFoundError:
+        return []
+    except OSError:
+        return None
+
+
+def _merge_remote_ledger(name: str, lines: List[Any]) -> Optional[int]:
+    """Append only unseen, valid JSONL records. Retries are idempotent."""
+    path = _remote_ledger_path(name)
+    if path is None:
+        return None
+    accepted: List[str] = []
+    for value in lines:
+        if not isinstance(value, str) or not value.strip():
+            continue
+        try:
+            if not isinstance(json.loads(value), dict):
+                continue
+        except (TypeError, ValueError):
+            continue
+        accepted.append(value.strip())
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with exclusive_lock(path):
+            existing = set(_remote_ledger_lines(name) or [])
+            fresh = [line for line in accepted if line not in existing]
+            if not fresh:
+                return 0
+            with path.open("a+", encoding="utf-8") as handle:
+                handle.seek(0, 2)
+                if handle.tell():
+                    handle.seek(handle.tell() - 1)
+                    if handle.read(1) != "\n":
+                        handle.write("\n")
+                handle.write("\n".join(fresh) + "\n")
+                handle.flush()
+                os.fsync(handle.fileno())
+            return len(fresh)
+    except OSError:
+        return None
 
 
 async def _serve_static(send: Send, file_path: Path) -> None:
@@ -601,13 +669,41 @@ def build_app(hearth: Hearth) -> Callable[..., Awaitable[None]]:
             await _respond(send, 200, _json_bytes({"ok": True, "session_id": session_id, "messages": turns, "count": len(turns)}))
             return
 
+        if path.startswith("/v1/memory/") and method == "GET":
+            name = path[len("/v1/memory/"):].strip()
+            lines = _remote_ledger_lines(name)
+            if lines is None:
+                await _respond(send, 404, _json_bytes({"ok": False, "error": "unknown or unreadable memory log"}))
+                return
+            digest = hashlib.sha256("\n".join(lines).encode("utf-8")).hexdigest()
+            await _respond(send, 200, _json_bytes({"ok": True, "name": name, "lines": lines, "digest": digest}))
+            return
+
+        if path.startswith("/v1/memory/") and method == "POST":
+            name = path[len("/v1/memory/"):].strip()
+            try:
+                raw = await _read_body(receive)
+                payload = json.loads(raw or b"{}")
+                lines = payload.get("lines") if isinstance(payload, dict) else None
+                if not isinstance(lines, list):
+                    raise ValueError("field 'lines' must be a JSON array")
+            except (ValueError, json.JSONDecodeError, ConnectionError) as error:
+                await _respond(send, 400, _json_bytes({"ok": False, "error": str(error)}))
+                return
+            added = _merge_remote_ledger(name, lines)
+            if added is None:
+                await _respond(send, 404, _json_bytes({"ok": False, "error": "unknown or unwritable memory log"}))
+                return
+            await _respond(send, 200, _json_bytes({"ok": True, "name": name, "added": added}))
+            return
+
         if path == "/v1/ask" and method == "POST":
             await _handle_ask(hearth, scope, receive, send)
             return
 
         await _respond(send, 404, _json_bytes(
             {"ok": False, "error": f"no route for {method} {path}",
-             "routes": ["GET /", "GET /ui", "GET /v1/health", "GET /v1/sessions", "POST /v1/ask"]}))
+             "routes": ["GET /", "GET /ui", "GET /v1/health", "GET /v1/sessions", "GET|POST /v1/memory/{allowlisted-log}", "POST /v1/ask"]}))
 
     return app
 

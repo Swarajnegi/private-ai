@@ -4,14 +4,14 @@
 > Written 2026-08-26 because "gather until the corpus is rich" had no stopping criterion — a
 > condition that cannot be met by observation is not a plan. This replaces it with numbers.
 >
-> **Status (2026-09-10): BUILT — `scripts/build_sft_pairs.py`. 440 pairs (397 train + 43 held-out).**
+> **Status (2026-09-12): BUILT — `scripts/build_sft_pairs.py`. 459 source pairs (414 train + 45 held-out).**
 >
 > | Bucket | Target | Built | |
 > |---|---|---|---|
-> | Engineer | 400 | **359** | 90% — mechanical sources nearly exhausted |
-> | Personalization | 200 | **81** | 40% — §5's "actual bottleneck", confirmed empirically |
+> | Engineer | 400 | **360** | 90% — mechanical sources nearly exhausted |
+> | Personalization | 200 | **99** | 50% — three public Substack essays imported; decision-explanation sessions remain the bottleneck |
 >
-> Every §8 criterion is met except the counts: `source_path` on all 440, `messages` format,
+> Every §8 criterion is met except the counts: `source_path` on all 459, `messages` format,
 > a stratified 10% held-out slice carved before training with a fixed seed, zero train/heldout leakage.
 >
 > **The measurement that matters, and it is not good news.** Adding these pairs moves the
@@ -127,7 +127,7 @@ judgment, their reasoning — as the assistant side. That material is far scarce
 
 | Source | State | Pairs |
 |---|---|---|
-| **Substack essays** (3, circa 2024) | **NOT IN THE CORPUS AT ALL** — see below | 40 |
+| **Substack essays** (3, 2024–2025) | **IMPORTED 2026-09-12** by `scripts/import_substack_essays.py`; 18 section-level pairs after dedup | 40 |
 | Long explanatory conversation turns | ~a handful today; grows per session | 60 |
 | `experience_map.md` | Created, **largely unfilled** | 40 |
 | `personal_life.md` | 1 record | 20 |
@@ -139,10 +139,10 @@ judgment, their reasoning — as the assistant side. That material is far scarce
 `swarajnegi.substack.com` holds **three published essays** — *The Detective of Unseen Graves*,
 *Chasing Death to Truly Live*, and one further piece (KB entry, `substack, literature, identity`).
 
-They are **long-form prose, in the user's own voice, already written**, and they are **nowhere in
-this repository** — only *referenced* in a KB entry and in `conversation_topics.md`. Retrieving them
-costs minutes and yields the highest-quality personalization material available, without a single
-new conversation. **Do this before any gathering session.**
+They are **long-form prose, in the user's own voice, already written**. They were imported on
+2026-09-12 into `knowledge/literature/` from their explicit public URLs by the repeatable
+`scripts/import_substack_essays.py` importer. The import yielded 18 section-level pairs after
+deduplication—valuable but not enough to close the personalization gap.
 
 ### The trap
 

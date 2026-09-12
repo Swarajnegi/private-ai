@@ -701,10 +701,12 @@ replaced `domain_guess` (a keyword hint) with `domain_labels.jsonl` (an explicit
 **Tier 1 — a commitment registry (build this first; it is the cheap part).**
 When a decision defers something, write it as a structured record rather than prose: what was
 deferred, the condition that would resolve it, and a review horizon. The repo *already does this
-informally* and those cases are machine-checkable today — `ROADMAP.md`'s `4.6 GraphRAG ⏭ DEFERRED
-(trigger-gated: first KB-logged multi-hop retrieval failure)` is a real open loop with an explicit
-trigger. Make that shape first-class and absence detection becomes a boring scan with no inference
-and no false positives. Stop inferring what you can record.
+informally* and those cases are machine-checkable today — GraphRAG was originally a trigger-gated
+open loop and is now a required follow-on behind the always-reachable Context Ledger foundation.
+That reversal is itself why the registry matters: the new fact and its revised resolution condition
+are recorded instead of leaving stale prose to be inferred. Make that shape first-class and absence
+detection becomes a boring scan with no inference and no false positives. Stop inferring what you
+can record.
 
 **Tier 2 — a dormancy detector over that registry**, mirroring `tension.py`'s proven architecture:
 candidate selection → LLM judge with an **abstention option** → confidence floor → append-only

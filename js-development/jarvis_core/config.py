@@ -104,6 +104,12 @@ SPECIALIST_CORPUS_ROOT: Path = DATA_ROOT / "training_corpus"
 # the KB — never committed; see .gitignore. KB stays the source of truth.
 COGNITIVE_INDEX_PATH: Path = DATA_ROOT / "cognitive_index.sqlite3"
 
+# Relationship projection over the authoritative JSONL facts.  Like ChromaDB
+# and the cognitive SQLite index, this is disposable: graph_index.json holds
+# only IDs, metadata, and evidence-backed edges, and is rebuilt from the KB
+# and commitment registry by scripts/build_graphrag.py.
+GRAPH_INDEX_PATH: Path = DATA_ROOT / "graph_index.json"
+
 # One JSONL per real `--ask` session. This is the ONLY record of JARVIS being
 # USED rather than BUILT, and until 2026-09-06 nothing read it — every other
 # instrument in this repo counts construction (roadmap rows, corpus records, KB
