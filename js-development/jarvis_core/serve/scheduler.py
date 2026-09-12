@@ -318,6 +318,24 @@ async def _subprocess_runner(argv: Sequence[str], timeout: float) -> Tuple[int, 
             stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT,
             env={**os.environ, "PYTHONUNBUFFERED": "1"})
     except (OSError, ValueError) as e:
+        # Some managed Windows hosts deny a Python process spawning another
+        # Python process (WinError 5), despite allowing the same entry point
+        # from an interactive shell.  GraphRAG rebuild is the one scheduled
+        # job that is a small, deterministic, side-effect-contained projection;
+        # safely rebuild it in-process rather than silently leaving it stale.
+        # Do NOT generalize this to consolidating, capture, or model work: their
+        # subprocess isolation is intentionally load-bearing.
+        if isinstance(e, PermissionError) and any(
+            Path(part).name == "build_graphrag.py" for part in argv
+        ):
+            try:
+                from jarvis_core.memory.graph import build_graph
+                stats = build_graph()
+                return 0, (f"in-process fallback after WinError 5: "
+                           f"{stats.nodes} nodes, {stats.edges} edges -> {stats.path}")
+            except Exception as fallback_error:
+                return 127, (f"spawn failed: {type(e).__name__}: {e}; "
+                             f"GraphRAG fallback failed: {type(fallback_error).__name__}: {fallback_error}")
         return 127, f"spawn failed: {type(e).__name__}: {e}"
     try:
         out, _ = await asyncio.wait_for(proc.communicate(), timeout=timeout)
