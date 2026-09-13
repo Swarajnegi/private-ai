@@ -459,11 +459,16 @@ class ReActLoop:
                     # parser handed back a ParseError. Never surface raw tool-call
                     # JSON as the answer (live repro 2026-06-12); repair instead.
                     stripped = parsable_raw.strip()
-                    attempted_call = (
-                        stripped.startswith("{") or stripped.startswith("[")
-                        or stripped.startswith("```") or "<tool_call" in stripped
-                        or stripped.startswith("<")
-                    ) and any(isinstance(p, ParseError) for p in parsed)
+                    has_tool_shape = (
+                        stripped.startswith("{")
+                        or stripped.startswith("[")
+                        or stripped.startswith("```")
+                        or "<tool_call" in stripped
+                        or "<tool" in stripped
+                        or ('"name"' in stripped and ('"arguments"' in stripped or '"args"' in stripped))
+                        or ('"function"' in stripped and ('"arguments"' in stripped or '"args"' in stripped))
+                    )
+                    attempted_call = has_tool_shape and any(isinstance(p, ParseError) for p in parsed)
 
                     if attempted_call and repair_attempts < _MAX_TOOLCALL_REPAIRS:
                         repair_attempts += 1
@@ -899,11 +904,12 @@ class ReActLoop:
         lines = [
             "TOOLS — you may call these. To call a tool, reply with ONLY a JSON "
             "object: {\"name\": \"<tool_name>\", \"arguments\": {...}} (or a JSON "
-            "array of such objects for multiple calls). The arguments MUST use the "
-            "EXACT field names from each tool's input schema — copy them verbatim "
-            "from the `example` below; do not invent or rename fields. After you "
-            "receive the tool result, either call another tool or reply with your "
-            "final answer as plain text (no JSON).",
+            "array of such objects for multiple calls). When calling a tool, do NOT "
+            "include conversational chit-chat, markdown reasoning preamble, or explanations "
+            "outside the JSON. The arguments MUST use the EXACT field names from each tool's "
+            "input schema — copy them verbatim from the `example` below; do not invent or "
+            "rename fields. After you receive the tool result, either call another tool or "
+            "reply with your final answer as plain text (no JSON).",
         ]
         for name in sorted(self._tools):
             try:
@@ -1088,10 +1094,21 @@ class ReActLoop:
         return payload
 
     def _strip_reflection(self, raw: str) -> str:
-        """Remove the <mirror>...</mirror> reflection block from the
-        user-facing final text. Best-effort; keeps the rest verbatim."""
+        """Remove <mirror>...</mirror>, <thought>...</thought>, <think>...</think>,
+        <reasoning>...</reasoning>, and <cot>...</cot> blocks from text before parsing
+        and before returning user-facing text. Best-effort; keeps the rest verbatim."""
         import re as _re
-        return _re.sub(r"<mirror>.*?</mirror>", "", raw, flags=_re.DOTALL).strip()
+        text = raw
+        patterns = [
+            r"<mirror>.*?</mirror>",
+            r"<thought>.*?</thought>",
+            r"<think>.*?</think>",
+            r"<reasoning>.*?</reasoning>",
+            r"<cot>.*?</cot>",
+        ]
+        for pat in patterns:
+            text = _re.sub(pat, "", text, flags=_re.DOTALL)
+        return text.strip()
 
     async def _publish(self, step_type: StepType, payload: Dict[str, Any]) -> None:
         if self._bus is None:

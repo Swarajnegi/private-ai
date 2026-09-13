@@ -241,6 +241,8 @@ def _is_unparsed_answer(text: str) -> bool:
         return True
     if s.startswith("{") and ('"name"' in s or '"arguments"' in s or '"tool"' in s or '"function"' in s):
         return True
+    if s.startswith("```") and ('"name"' in s or '"arguments"' in s or '"tool"' in s or '"function"' in s):
+        return True
     return False
 
 
