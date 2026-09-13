@@ -93,6 +93,7 @@ const server = http.createServer(async (req, res) => {
       { role: "assistant", content: longAnswer },
     );
     res.writeHead(200, { "Content-Type": "text/event-stream" });
+    if (data.question === "A new thought") await new Promise(resolve => setTimeout(resolve, 1800));
     // Deliberately split event headers, JSON, and the multi-byte Unicode tail.
     for (const piece of [
       "eve",
@@ -149,6 +150,9 @@ const server = http.createServer(async (req, res) => {
     });
     const errors = [];
     page.on("pageerror", (error) => errors.push(error.message));
+    page.on("console", message => {
+      if (message.text().includes("JARVIS core:")) errors.push(message.text());
+    });
     const base = `http://127.0.0.1:${server.address().port}`;
     await page.goto(base);
     await page.locator("#settings[open]").waitFor();
@@ -165,6 +169,29 @@ const server = http.createServer(async (req, res) => {
     await page.getByRole("button", {name: "Pause core animation", exact: true}).click();
     assert.equal(await page.locator("#motion-toggle").getAttribute("aria-pressed"), "true");
     await page.getByRole("button", {name: "Play core animation", exact: true}).click();
+    await page.waitForTimeout(3400);
+    assert.equal(await page.locator(".living-core.core-fallback").count(), 0, "The actual hologram must render, not just its fallback");
+    const core = page.locator(".living-core");
+    const moving = await core.screenshot();
+    await page.waitForTimeout(150);
+    assert.ok(!(await core.screenshot()).equals(moving), "Hologram geometry must animate");
+    await page.getByRole("button", {name: "Pause core animation", exact: true}).click();
+    const frozen = await core.screenshot();
+    await page.waitForTimeout(150);
+    assert.ok((await core.screenshot()).equals(frozen), "Pause must stop every rendered signal");
+    await page.emulateMedia({reducedMotion: "reduce"});
+    await page.getByRole("button", {name: "Play core animation", exact: true}).waitFor();
+    assert.equal(await page.evaluate(() => window.JarvisCore.paused), true);
+    await page.emulateMedia({reducedMotion: "no-preference"});
+    await page.getByRole("button", {name: "Pause core animation", exact: true}).waitFor();
+    await core.evaluate(canvas => {
+      window.coreRecovery = canvas.getContext("webgl").getExtension("WEBGL_lose_context");
+      window.coreRecovery.loseContext();
+    });
+    await page.locator(".living-core.core-fallback").waitFor();
+    await page.screenshot({path: path.join(screenshotRoot, "core-fallback.png")});
+    await page.evaluate(() => window.coreRecovery.restoreContext());
+    await page.waitForFunction(() => !document.querySelector(".living-core").classList.contains("core-fallback"));
     await page.screenshot({
       path: path.join(screenshotRoot, "home-desktop.png"),
     });
@@ -188,6 +215,10 @@ const server = http.createServer(async (req, res) => {
     await page.locator("#new-chat").click();
     await page.locator("#prompt").fill("A new thought");
     await page.locator("#send").click();
+    await page.locator("#working:not([hidden])").waitFor();
+    await page.waitForTimeout(500);
+    assert.equal(await page.locator(".thinking-core.core-fallback").count(), 0);
+    await page.screenshot({path: path.join(screenshotRoot, "thinking-desktop.png")});
     await page.getByRole("button", { name: "Raw", exact: true }).waitFor();
     await page.getByRole("button", { name: "Raw", exact: true }).click();
     assert.equal(
@@ -229,6 +260,7 @@ const server = http.createServer(async (req, res) => {
     assert.equal(await page.locator("#prompt").inputValue(), "A draft to keep");
     await page.locator("#prompt").fill("");
     await page.setViewportSize({ width: 390, height: 844 });
+    await page.waitForTimeout(3400);
     await page.screenshot({
       path: path.join(screenshotRoot, "home-mobile.png"),
       animations: "disabled",
@@ -263,6 +295,7 @@ const server = http.createServer(async (req, res) => {
       );
       await live.goto("http://127.0.0.1:8756");
       await live.locator(".session").first().waitFor();
+      await live.waitForTimeout(3400);
       console.log(
         "Live saved sessions displayed:",
         await live.locator(".session").count(),

@@ -845,7 +845,7 @@
   boot();
   setSidebar(false);
   addEventListener("resize", () => { if (innerWidth > 760) setSidebar(false); else $("sidebar").inert = !$("sidebar").classList.contains("open"); });
-  matchMedia("(prefers-reduced-motion: reduce)").addEventListener("change", syncCore);
+  document.addEventListener("jarvis:motionchange", syncCore);
   setInterval(() => {
     if (!document.hidden) checkHealth();
   }, 20000);

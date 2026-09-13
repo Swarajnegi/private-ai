@@ -93,6 +93,8 @@ env/
 *.key
 
 # -- Regenerable build noise --------------------------------------------------
+# Local reference frames, browser screenshots and one-off validator cache.
+.tmp/core-reference/
 __pycache__/
 *.py[cod]
 *$py.class
