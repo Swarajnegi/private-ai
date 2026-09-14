@@ -89,6 +89,7 @@ from typing import Any, Dict, Generator, Optional
 from jarvis_core.agent.capture import redact
 from jarvis_core.config import DATA_ROOT, JARVIS_ROOT, KB_PATH, SPECIALIST_CORPUS_ROOT
 from jarvis_core.memory.chunking import RecursiveWordChunker
+from jarvis_core.specialists.text_hygiene import corpus_admits
 
 
 # =============================================================================
@@ -540,6 +541,18 @@ def iter_error_log_records() -> Generator[CorpusRecord, None, None]:
 # Part 8: ASSEMBLY — MERGE ALL SOURCES, WRITE ONE JSONL FILE
 # =============================================================================
 
+# SCOPE, and it is deliberately narrow. This corpus contains SOURCE CODE, KB
+# entries and client documents on purpose — "machine text" is exactly what the
+# Engineer specialist is meant to learn there, so running the hygiene gate over
+# every source is wrong. Measured on the first attempt: it took jarvis_core_code
+# from 417 records to 31.
+#
+# Only conversational sources get filtered, because only they carry `user_text`,
+# and `user_text` is the field named for where text ARRIVED rather than who
+# wrote it — the defect q_003 found.
+_HYGIENE_SOURCES = frozenset({"chat_history"})
+_MIN_RECORD_CHARS = 100
+
 _SOURCE_ITERATORS = (
     ("jarvis_core_code", lambda dropped: iter_jarvis_core_records()),
     ("kb_entry", lambda dropped: iter_kb_records(dropped=dropped)),
@@ -576,6 +589,13 @@ def assemble_corpus(output_path: Optional[Path] = None) -> CorpusStats:
     with path.open("w", encoding="utf-8") as handle:
         for source_name, iterator_fn in _SOURCE_ITERATORS:
             for record in iterator_fn(dropped):
+                admit = True
+                if source_name in _HYGIENE_SOURCES:
+                    admit, _ = corpus_admits(record.text, min_chars=_MIN_RECORD_CHARS)
+                if not admit:
+                    dropped[f"{source_name}:hygiene"] = (
+                        dropped.get(f"{source_name}:hygiene", 0) + 1)
+                    continue
                 handle.write(json.dumps({
                     "source_type": record.source_type,
                     "source_path": record.source_path,

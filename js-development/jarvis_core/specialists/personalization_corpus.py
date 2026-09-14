@@ -92,6 +92,7 @@ from jarvis_core.memory.cognitive_index import (
     query_by_tag,
     rebuild_index,
 )
+from jarvis_core.specialists.text_hygiene import corpus_admits
 
 
 # =============================================================================
@@ -613,6 +614,13 @@ def iter_user_voice_records(
 # Part 5: ASSEMBLY
 # =============================================================================
 
+# SCOPE. Same reasoning as the Engineer corpus: only the conversational source
+# reads `user_text`, so only it can contain a pasted terminal session. The
+# KB-derived sources are filtered by their own extractors, and `literature` is
+# the user's published prose, which must never be second-guessed by a heuristic.
+_HYGIENE_SOURCES = frozenset({"user_voice"})
+_MIN_RECORD_CHARS = 100
+
 _SOURCE_ITERATORS = (
     ("personal_life", lambda dropped: iter_personal_life_records()),
     ("kb_identity", lambda dropped: iter_kb_identity_records()),
@@ -646,6 +654,13 @@ def assemble_corpus(output_path: Optional[Path] = None) -> CorpusStats:
     with path.open("w", encoding="utf-8") as handle:
         for source_name, iterator_fn in _SOURCE_ITERATORS:
             for record in iterator_fn(dropped):
+                admit = True
+                if source_name in _HYGIENE_SOURCES:
+                    admit, _ = corpus_admits(record.text, min_chars=_MIN_RECORD_CHARS)
+                if not admit:
+                    dropped[f"{source_name}:hygiene"] = (
+                        dropped.get(f"{source_name}:hygiene", 0) + 1)
+                    continue
                 handle.write(json.dumps({
                     "source_type": record.source_type,
                     "source_path": record.source_path,

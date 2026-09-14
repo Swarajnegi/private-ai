@@ -91,6 +91,9 @@ _REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(_REPO_ROOT / "js-development"))
 
 from jarvis_core.config import DATA_ROOT, JARVIS_ROOT, KB_PATH  # noqa: E402
+from jarvis_core.specialists.text_hygiene import (  # noqa: E402
+    MACHINE_TEXT, OWNER_PROSE, classify,
+)
 
 CORPUS_ROOT = Path(DATA_ROOT) / "training_corpus"
 OUT_PATH = CORPUS_ROOT / "sft_pairs.jsonl"
@@ -177,6 +180,15 @@ def passes_quality(pair: SFTPair) -> Tuple[bool, str]:
     a, q = pair.assistant.strip(), pair.user.strip()
     if len(q) < _MIN_QUESTION_CHARS:
         return False, "question too short"
+    # Defence in depth, added after q_003 (2026-09-11). The extractor that
+    # produced the corrupted pairs now filters at source, but a target made of
+    # machine text is wrong from EVERY source, so the check also lives here
+    # where no future extractor can route around it. Only MACHINE_TEXT is
+    # enforced globally: DIRECTIVE is a judgement about voice that is correct
+    # for personalization targets and meaningless for an engineer lesson.
+    verdict, reason = classify(a)
+    if verdict == MACHINE_TEXT:
+        return False, f"assistant target is machine text — {reason}"
     floor = _MIN_ANSWER_CHARS if pair.bucket == "engineer" else _MIN_VOICE_CHARS
     if len(a) < floor:
         return False, "answer too short"
@@ -218,15 +230,48 @@ def _split_md_sections(text: str, level: str = "### ") -> Iterator[Tuple[str, st
         yield heading, "\n".join(body).strip()
 
 
+# q_003 issue 3: 254 of 324 engineer pairs opened with the SAME seven words, so
+# the prompt distribution was a single template rather than a distribution. The
+# rotation is keyed on a hash of the heading, not on a counter or RNG, so a
+# given lesson always draws the same phrasing across machines and re-runs —
+# reproducibility matters more here than novelty.
+_QUESTION_TEMPLATES = (
+    "What do I need to know about {h}?",
+    "Walk me through {h}.",
+    "Explain {h} — what actually happens, and why?",
+    "What's the practical lesson on {h}?",
+    "Tell me what matters about {h}.",
+    "{H} — what should I keep in mind here?",
+    "Why does {h} bite people, and what do I do about it?",
+)
+
+
+def _decapitalise(h: str) -> str:
+    """Lowercase a leading ordinary word; leave acronyms alone.
+
+    `"CSV Ingestion..."[0].lower() + [1:]` yields "cSV Ingestion", which is how
+    q_003 came to quote a question about "cSV Ingestion Makes Everything
+    STRING". An all-caps opening run is an acronym, not a capitalised sentence.
+    """
+    first = h.split(" ", 1)[0]
+    if len(first) > 1 and first[:2].isupper():
+        return h
+    return h[0].lower() + h[1:]
+
+
 def _as_question(heading: str) -> str:
     """A heading is an answer's title; make it the question it answers."""
     h = heading.strip().rstrip(".:").lstrip("#").strip()
     h = re.sub(r"^\d+[\.\)]\s*", "", h)
+    if not h:
+        return ""
     if h.endswith("?"):
         return h
     if re.match(r"^(how|why|what|when|where|which|who)\b", h, re.IGNORECASE):
         return h + "?"
-    return f"What do I need to know about {h[0].lower() + h[1:]}?"
+    slot = int(hashlib.sha256(h.encode("utf-8")).hexdigest(), 16) % len(_QUESTION_TEMPLATES)
+    lowered = _decapitalise(h)
+    return _QUESTION_TEMPLATES[slot].format(h=lowered, H=h)
 
 
 def extract_de_lessons() -> Iterator[SFTPair]:
@@ -343,28 +388,34 @@ _ATTRIBUTED_QUOTE = re.compile(
     r"user wrote|in their own words|user's words)\s*[:\-—]?\s*"
     r"['\"“]((?:[^'\"”]|'(?=[a-z])){40,1200})", re.IGNORECASE)
 
-# Interrogative or imperative openers: a turn that ASKS or ORDERS is not the user
-# explaining their reasoning, and its text cannot serve as an assistant answer.
-_NOT_EXPLANATORY = re.compile(
-    r"^\s*(?:what|how|why|when|where|which|who|is|are|can|could|should|would|do|does|"
-    r"did|will|explain|tell me|give me|show me|build|make|create|write|add|fix|run|"
-    r"go ahead|continue|do it|alright|ok(?:ay)?)\b", re.IGNORECASE)
-# First-person reasoning is the signal that the turn carries the user's own position.
-_FIRST_PERSON = re.compile(
-    r"\b(I think|I want|I feel|I believe|I know|I don'?t|I'?m|my |me |I have|I had|"
-    r"I was|I would|I'?ve|I decided|I realised|I realized)\b")
-
 _MIN_EXPLANATION_CHARS = 320
+
+
+_EXPLANATION_PROMPTS = (
+    "Explain your own thinking on this, in your own words and at the length it deserves.",
+    "What's your actual position here? Say it the way you'd say it, not the tidy version.",
+    "Talk this through the way you'd talk it through out loud.",
+    "Give me your reasoning on this — the whole shape of it, not a summary.",
+    "How do you actually see this? Use your own words.",
+)
 
 
 def extract_user_explanations() -> Iterator[SFTPair]:
     """Long turns where the user EXPLAINS rather than asks (spec §5, 60 pairs).
 
-    The assistant side must be the user's own reasoning, so interrogative and
-    imperative turns are excluded: "build the guard" is an instruction, not a
-    position. What survives is the shape the spec calls out as ideal -- the
-    "unreasonable men" turn, which worked because the user answered at length in
-    their own voice.
+    THE FILTER HERE WAS THE SUBJECT OF q_003 AND IT WAS BADLY INSUFFICIENT.
+    It excluded interrogative and imperative openers by matching a word list at
+    OFFSET ZERO, which meant "add a checklist" was caught and "also add a
+    checklist" was not. Worse, it never asked whether the text was the user's
+    PROSE at all: `user_text` is named for where text arrived, not who wrote it,
+    so pasted shell transcripts, IDE context blocks and `<task-notification>`
+    envelopes all became assistant targets. Measured against the 41 pairs this
+    produced: 30 were corrupt.
+
+    The judgement now lives in `specialists/text_hygiene.py`, which matches
+    machine FORMS (closed grammars) rather than marker strings, and grades mood
+    by a first/second-person ratio rather than a verb list. Validated at 41/41
+    against the hand-labelled rows from that audit.
     """
     queue = Path(DATA_ROOT) / "observation_queue.jsonl"
     try:
@@ -381,16 +432,14 @@ def extract_user_explanations() -> Iterator[SFTPair]:
             except json.JSONDecodeError:
                 continue
             text = str(rec.get("user_text", "")).strip()
-            if len(text) < _MIN_EXPLANATION_CHARS:
-                continue
-            if _NOT_EXPLANATORY.match(text) or not _FIRST_PERSON.search(text):
+            if classify(text, min_chars=_MIN_EXPLANATION_CHARS)[0] != OWNER_PROSE:
                 continue
             if text.count("?") > 2:          # mostly an interrogation, not a position
                 continue
             ts = str(rec.get("ts", ""))
+            slot = int(hashlib.sha256(ts.encode("utf-8")).hexdigest(), 16)
             yield SFTPair(
-                user=("Explain your own thinking on this, in your own words and at "
-                      "the length it deserves."),
+                user=_EXPLANATION_PROMPTS[slot % len(_EXPLANATION_PROMPTS)],
                 assistant=text[:_MAX_ANSWER_CHARS],
                 bucket="personalization", source_type="sft_personalization",
                 source_path=f"observation_queue.jsonl#{ts}",
