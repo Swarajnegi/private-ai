@@ -437,12 +437,21 @@ class JarvisMemoryStore:
         # This is the key upgrade from add().
         # Re-running ingest on the same PDF now reflects any updated metadata
         # (e.g., new 'specialist' field) without requiring a collection wipe.
-        collection.upsert(
-            embeddings=embeddings,
-            documents=documents,
-            metadatas=metadatas,
-            ids=ids,
-        )
+        try:
+            collection.upsert(
+                embeddings=embeddings,
+                documents=documents,
+                metadatas=metadatas,
+                ids=ids,
+            )
+        except Exception as exc:
+            err_msg = str(exc).lower()
+            if "compaction" in err_msg or "metadata segment" in err_msg or "failed to apply logs" in err_msg:
+                print(
+                    f"[MemoryStore] ChromaDB internal compaction failure on collection '{collection_name}': {exc}"
+                )
+            raise
+
 
         count_after: int = collection.count()
         new_chunks: int = count_after - count_before

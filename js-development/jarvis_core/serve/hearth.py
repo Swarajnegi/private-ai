@@ -86,7 +86,7 @@ from typing import Any, Awaitable, Callable, Dict, List, Optional, Tuple
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))  # standalone-run safety
 
-from jarvis_core.config import DATA_ROOT
+from jarvis_core.config import DATA_ROOT, MODEL_CATALOG_PATH
 from jarvis_core.locking import exclusive_lock
 
 TOKEN_PATH = Path(DATA_ROOT) / ".hearth_token"
@@ -147,6 +147,10 @@ class HearthConfig:
     token: str = ""
     allow_remote: bool = False
     ask_kwargs: Dict[str, Any] = field(default_factory=dict)
+    # None means the hearth does not impose a surface-level deadline. Provider
+    # transport failures still surface through the client, but a serious task
+    # is not killed merely because it takes longer than an arbitrary UI timer.
+    ask_timeout_seconds: Optional[float] = None
 
 
 @dataclass
@@ -264,14 +268,29 @@ class Hearth:
 
         ask_fn = self._resolve_ask()
 
+        # The request owns a dedicated event loop in a worker thread.  A caller
+        # may configure a deadline for an unattended deployment, but the local
+        # interactive hearth deliberately has no arbitrary two-minute cutoff.
         def invoke() -> Any:
-            return asyncio.run(ask_fn(question, **kwargs))
+            call = ask_fn(question, **kwargs)
+            if self._cfg.ask_timeout_seconds is None:
+                return asyncio.run(call)
+            return asyncio.run(asyncio.wait_for(call, timeout=self._cfg.ask_timeout_seconds))
 
         task = asyncio.create_task(asyncio.to_thread(invoke))
         try:
             async for line in self._drain(queue, task):
                 await emit("log", {"line": line})
             result = await task
+        except asyncio.TimeoutError:
+            deadline = self._cfg.ask_timeout_seconds
+            self.last_error = (
+                f"request exceeded {deadline:.0f}s and was cancelled"
+            )
+            return {"ok": False,
+                    "error": f"JARVIS stopped this request after {deadline:.0f}s "
+                             "because this deployment explicitly configured a deadline.",
+                    "answer": "", "denials": [d.tool for d in denials]}
         except Exception as e:                 # a crash is an answer, not a hang
             self.last_error = f"{type(e).__name__}: {e}"
             return {"ok": False, "error": self.last_error, "answer": "",
@@ -480,6 +499,44 @@ def _get_session_turns(conv_dir: Path, session_id: str) -> Optional[List[Dict[st
     return turns
 
 
+def _list_models() -> List[Dict[str, Any]]:
+    """Return a safe, UI-sized model catalog without exposing provider secrets.
+
+    The catalog is refreshed by the normal model-catalog workflow and is local
+    data, so the UI can offer explicit model pinning instead of hiding the
+    underlying model selected by ``openrouter/free``.
+    """
+    try:
+        rows = json.loads(Path(MODEL_CATALOG_PATH).read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return [{"id": "openrouter/free", "name": "OpenRouter free router", "free": True}]
+    if not isinstance(rows, list):
+        return []
+    models = []
+    avoid = ("alpha", "beta", "preview", "clip", "lyria", "owl")
+    for row in rows:
+        if not isinstance(row, dict) or not row.get("id"):
+            continue
+        cost_in = float(row.get("cost_input_1m", 1) or 0)
+        cost_out = float(row.get("cost_output_1m", 1) or 0)
+        # The selector is intentionally free-only: choosing a model in the UI
+        # must never surprise the user with paid inference, and media/preview
+        # endpoints do not implement JARVIS's text/tool contract.
+        if cost_in != 0.0 or cost_out != 0.0 or any(s in str(row["id"]).lower() for s in avoid):
+            continue
+        models.append({
+            "id": str(row["id"]),
+            "name": str(row.get("name") or row["id"]),
+            "vendor": str(row.get("vendor") or ""),
+            "free": cost_in == 0.0 and cost_out == 0.0,
+            "context_length": int(row.get("context_length", 0) or 0),
+        })
+    models.sort(key=lambda m: m["name"].lower())
+    return [{"id": "openrouter/free", "name": "OpenRouter free router", "free": True}] + [
+        m for m in models if m["id"] != "openrouter/free"
+    ]
+
+
 def _remote_ledger_path(name: str) -> Optional[Path]:
     """Return one allowlisted authoritative log; never turn a URL into a path."""
     return Path(DATA_ROOT) / name if name in _REMOTE_LEDGER_LOGS else None
@@ -653,6 +710,10 @@ def build_app(hearth: Hearth) -> Callable[..., Awaitable[None]]:
             await _respond(send, 200, _json_bytes({"ok": True, "authenticated": True}))
             return
 
+        if path == "/v1/models" and method == "GET":
+            await _respond(send, 200, _json_bytes({"ok": True, "models": _list_models()}))
+            return
+
         if path == "/v1/sessions" and method == "GET":
             conv_dir = Path(DATA_ROOT) / "conversations"
             sessions = _list_sessions(conv_dir)
@@ -746,6 +807,9 @@ async def _handle_ask(hearth: Hearth, scope: Dict[str, Any],
     targets = [str(model)] if model else body.get("targets")
     full = bool(body.get("full", False))
     allow_all = bool(body.get("allow_all", False))
+    # No browser-specific reasoning ceiling.  When omitted, the orchestrator
+    # resolves the selected model's own operating profile; an explicit value is
+    # still honoured for a caller deliberately choosing a bounded run.
     max_iterations = body.get("max_iterations")
     budget_usd = body.get("budget_usd")
     reasoning_effort = body.get("reasoning_effort")

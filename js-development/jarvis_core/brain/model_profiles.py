@@ -81,7 +81,10 @@ class ModelProfile:
     """How JARVIS should CONDUCT a given brain. Conduct only — never catalog facts."""
     mirror_ok: bool = False          # MIRROR-lite safe? (False = the proven floor)
     enable_monitor: bool = True      # CoT instability monitor on?
-    max_iterations: int = 8          # ReAct iteration ceiling for this brain
+    # Normal models inherit the spine's deep-run allowance. A lower value is
+    # only an evidence-backed per-model override for a known malformed tool
+    # dialect, never a quiet default that makes ordinary thinking shallow.
+    max_iterations: int = 40         # ReAct iteration ceiling for this brain
     reasoning_channel: bool = False  # Wave-1 DOC ONLY: empty-content retry already
                                      # handles this unconditionally; not yet enforced.
     notes: str = ""                  # why this conduct (cite the live observation)
@@ -92,8 +95,8 @@ class ModelProfile:
 
 
 DEFAULT_PROFILE = ModelProfile(
-    mirror_ok=False, enable_monitor=True, max_iterations=8,
-    notes="conservative default (mirror off, monitor on) — the live-proven-safe floor",
+    mirror_ok=False, enable_monitor=True, max_iterations=40,
+    notes="deep-run default (mirror off, monitor on)",
 )
 
 
@@ -201,10 +204,11 @@ def _run_self_test() -> None:
     check("T4 longest family substring wins",
           src4 == "family:nemotron-3-super" and p4.max_iterations == 10, src4)
 
-    # T5: unknown model -> DEFAULT, safe floor
+    # T5: unknown model -> DEFAULT, deep-run floor
     p5, src5 = reg.get("acme/totally-unknown-model")
     check("T5 unknown -> default", src5 == "default"
-          and p5.mirror_ok is False and p5.enable_monitor is True)
+          and p5.mirror_ok is False and p5.enable_monitor is True
+          and p5.max_iterations == 40)
 
     # T6: empty / None id -> default, no crash
     check("T6 empty id -> default", reg.get("")[1] == "default" and reg.get(None)[1] == "default")

@@ -95,6 +95,7 @@ env/
 # -- Regenerable build noise --------------------------------------------------
 # Local reference frames, browser screenshots and one-off validator cache.
 .tmp/core-reference/
+artifacts/jarvis-ui/
 __pycache__/
 *.py[cod]
 *$py.class
@@ -136,6 +137,8 @@ desktop.ini
 # which is how the KB/index count drift (544 vs 533) went unnoticed.
 jarvis_data/token_ratios.json
 jarvis_data/token_ratios.json.lock
+jarvis_data/model_stats.jsonl
+inspect_conv.py
 
 # -- Context Ledger (per-session verbatim archive of evicted context) --------
 # Append-only spans written before compaction evicts them, keyed by

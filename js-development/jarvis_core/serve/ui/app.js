@@ -131,6 +131,7 @@
     $("inspector-button").setAttribute("aria-expanded", String(show));
   }
   function syncCore() {
+    window.JarvisCore?.setBusy(state.busy || Boolean(state.health?.busy));
     if ($("core-caption")) $("core-caption").textContent = filePreview ? "Design preview · connect on the live app" : state.busy ? "Thinking with you" : state.health ? "Online. Ready when you are." : "Awaiting connection";
     const button = $("motion-toggle");
     if (button) {
@@ -142,18 +143,22 @@
     }
   }
   async function checkHealth() {
-    if (!state.token) return;
+    if (!state.token || state.checkingHealth) return;
+    state.checkingHealth = true;
+    const started = performance.now();
     try {
       const h = await api("/v1/health");
+      const degraded = h.ok === false || (h.jobs || []).some(job => /^(error|fail)/i.test(job.status || ""));
       state.health = h;
-      document.body.dataset.connection = "online";
+      document.body.dataset.connection = degraded ? "degraded" : "online";
+      document.dispatchEvent(new CustomEvent("jarvis:health", { detail: { health: h, degraded, latency: Math.round(performance.now() - started) } }));
       syncCore();
       $("status-light").className =
-        `status-light ${h.busy ? "busy" : "online"}`;
+        `status-light ${degraded ? "degraded" : h.busy ? "busy" : "online"}`;
       $("status-text").textContent = h.busy
         ? "JARVIS is thinking"
-        : "System online";
-      $("pulse-state").textContent = h.busy ? "Thinking in progress" : "System online";
+        : degraded ? "Background job needs attention" : "System online";
+      $("pulse-state").textContent = degraded ? "Online · needs attention" : h.busy ? "Thinking in progress" : "System online";
       $("uptime").textContent =
         `${Math.floor(h.uptime_seconds / 3600)}h ${Math.floor(h.uptime_seconds / 60) % 60}m uptime`;
       $("metric-requests").textContent = h.requests_served;
@@ -164,21 +169,24 @@
         ingest_codex: "Conversation capture",
         reconcile_codex_memory: "Memory reconciliation",
         refresh_digest: "Activity digest",
+        rebuild_graphrag: "Graph memory",
       };
       $("jobs").replaceChildren();
       for (const job of h.jobs || []) {
         const row = document.createElement("div");
-        row.className = `job ${job.status?.startsWith("error") ? "error" : ""}`;
+        row.className = `job ${/^(error|fail)/i.test(job.status || "") ? "error" : ""}`;
         row.innerHTML = `<span class="job-dot"></span><div><strong>${escape(names[job.name] || job.name.replaceAll("_", " "))}</strong><small>${escape(job.status || "Waiting")} · ${age(job.last_run_age_s)}</small></div>`;
         $("jobs").append(row);
       }
     } catch (error) {
+      document.dispatchEvent(new CustomEvent("jarvis:health", { detail: { health: null } }));
+      document.body.dataset.connection = "offline";
       // An ask can be actively running while a short status probe is delayed.
       // Do not overwrite the truthful in-flight state with a false disconnect.
       if (state.busy) {
         $("status-light").className = "status-light busy";
-        $("status-text").textContent = "JARVIS is still working";
-        $("pulse-state").textContent = "Checking connection…";
+        $("status-text").textContent = "Response pending · status unavailable";
+        $("pulse-state").textContent = "Health check unavailable";
         return;
       }
       state.health = null;
@@ -190,6 +198,8 @@
       state.health = null;
       document.body.dataset.connection = "offline";
       syncCore();
+    } finally {
+      state.checkingHealth = false;
     }
   }
   async function loadSessions() {
@@ -431,6 +441,13 @@
         raw.textContent = showRaw ? "Formatted" : "Raw";
       };
       heading.lastElementChild.append(raw);
+      if ("speechSynthesis" in window) {
+        const listen = document.createElement("button");
+        listen.textContent = "Listen";
+        listen.setAttribute("aria-label", "Read answer aloud with browser voice");
+        listen.onclick = () => document.dispatchEvent(new CustomEvent("jarvis:speak", { detail: { text: body.innerText } }));
+        heading.lastElementChild.append(listen);
+      }
     }
     row.append(heading, body);
     if (message.telemetry) {
@@ -518,7 +535,7 @@
     event.preventDefault();
     const question = $("prompt").value.trim();
     if (!question || state.busy) return;
-    if (filePreview) { notice("This is a design preview. Open https://jarvis-hearth-production.up.railway.app to talk to JARVIS."); return; }
+    if (filePreview) { notice("This is a design preview. Open http://127.0.0.1:8756/ to talk to your local JARVIS."); return; }
     if (!state.token) {
       $("settings").showModal();
       return;
@@ -778,10 +795,15 @@
     link.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
-  for (const id of ["model", "reasoning", "tools"]) {
+  // Model and reasoning are deliberate working preferences. Preserve them
+  // across browser reloads so a serious conversation does not silently fall
+  // back to a weaker configuration.  Gated tools remain opt-in per request:
+  // persistence must never turn a later conversational turn into an action.
+  for (const id of ["model", "reasoning"]) {
     $(id).value = readLocal(`jarvis.${id}`, $(id).value);
     $(id).onchange = () => writeLocal(`jarvis.${id}`, $(id).value);
   }
+  $("tools").value = "default";
   document.onkeydown = (event) => {
     if (event.key === "Tab" && innerWidth <= 760 && $("sidebar").classList.contains("open")) {
       const controls = [...$("sidebar").querySelectorAll('a,button,input')].filter(el => !el.hidden && el.getClientRects().length);
@@ -805,7 +827,7 @@
     syncCore();
     if (filePreview) {
       $("status-text").textContent = "Design preview";
-      notice("Design preview only. Open the hosted JARVIS app to connect and load your conversations.");
+      notice("Design preview only. Open http://127.0.0.1:8756/ to connect to your local hearth and conversations.");
       return;
     }
     const url = new URL(location.href);
@@ -848,5 +870,6 @@
   document.addEventListener("jarvis:motionchange", syncCore);
   setInterval(() => {
     if (!document.hidden) checkHealth();
-  }, 20000);
+  }, 5000);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) checkHealth(); });
 })();

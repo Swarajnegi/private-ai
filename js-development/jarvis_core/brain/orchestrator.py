@@ -512,7 +512,10 @@ async def ask(
     sess = resolve_terminal_session(
         window_hours=continue_window_hours, new=new_session, explicit=session,
         state_path=session_state_path)
-    hist = history if history is not None else cstore.load_recent(sess.session_id)
+    # Build a query-aware working-memory pack.  A raw recent-turn tail loses
+    # the instruction that gives a long answer (or a short follow-up) meaning;
+    # this keeps complete exchanges and pages in older relevant ones.
+    hist = history if history is not None else cstore.load_context(sess.session_id, question)
 
     store = store_factory() if store_factory is not None else _open_store(printer)
 

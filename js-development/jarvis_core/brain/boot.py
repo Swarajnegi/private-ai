@@ -260,7 +260,7 @@ def assemble_mind(
     injector: Optional[ContextInjector] = None,
     extra_tools: Optional[Dict[str, Tool]] = None,
     enable_mirror: bool = False,
-    max_iterations: int = 8,
+    max_iterations: int = 40,
     max_iterations_override: Optional[int] = None,
     session_id: Optional[str] = None,
     clock: Optional[Callable[[], datetime]] = None,

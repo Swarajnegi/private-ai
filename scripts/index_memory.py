@@ -168,6 +168,30 @@ def build_records(
             )
 
 
+def ingest_kb_records(
+    store: JarvisMemoryStore,
+    collection_name: str,
+    kb_path: Path,
+    chunker: RecursiveWordChunker,
+) -> int:
+    """Stream and batch-upsert all KB records into the target Chroma collection."""
+    ids: List[str] = []
+    docs: List[str] = []
+    metas: List[Dict[str, Any]] = []
+    total = 0
+    for cid, doc, meta in build_records(kb_path, chunker):
+        ids.append(cid)
+        docs.append(doc)
+        metas.append(meta)
+        if len(ids) >= _BATCH:
+            total += store.ingest_documents(collection_name, docs, metas, ids)
+            print(f"  ... {total} chunks upserted")
+            ids, docs, metas = [], [], []
+    if ids:
+        total += store.ingest_documents(collection_name, docs, metas, ids)
+    return total
+
+
 def main() -> int:
     p = argparse.ArgumentParser(
         description="Index knowledge_base.jsonl into ChromaDB for auto-retrieval.")
@@ -175,6 +199,8 @@ def main() -> int:
                    help="count what would be indexed and write nothing")
     p.add_argument("--collection", default=MEMORY_COLLECTION)
     p.add_argument("--kb", default=str(KB_PATH))
+    p.add_argument("--reset", action="store_true",
+                   help="drop collection and rebuild projection fresh from knowledge base")
     args = p.parse_args()
 
     kb_path = Path(args.kb)
@@ -198,19 +224,22 @@ def main() -> int:
         print("  nothing written")
         return 0
 
-    ids: List[str] = []
-    docs: List[str] = []
-    metas: List[Dict[str, Any]] = []
-    total = 0
     with JarvisMemoryStore() as store:
-        for cid, doc, meta in build_records(kb_path, chunker):
-            ids.append(cid); docs.append(doc); metas.append(meta)
-            if len(ids) >= _BATCH:
-                total += store.ingest_documents(args.collection, docs, metas, ids)
-                print(f"  ... {total} chunks upserted")
-                ids, docs, metas = [], [], []
-        if ids:
-            total += store.ingest_documents(args.collection, docs, metas, ids)
+        if args.reset:
+            print(f"[index_memory] Explicit reset requested: dropping collection '{args.collection}'...")
+            store.delete_collection(args.collection)
+        try:
+            total = ingest_kb_records(store, args.collection, kb_path, chunker)
+        except Exception as exc:
+            err_msg = str(exc).lower()
+            if "compaction" in err_msg or "metadata segment" in err_msg or "failed to apply logs" in err_msg:
+                print(f"[index_memory] WARNING: ChromaDB segment compaction failure: {exc}")
+                print(f"[index_memory] Self-healing projection: dropping '{args.collection}' and re-indexing fresh...")
+                store.delete_collection(args.collection)
+                total = ingest_kb_records(store, args.collection, kb_path, chunker)
+            else:
+                raise
+
     print(f"[index_memory] upserted {total} chunks into '{args.collection}'")
     print("  (a PROJECTION — idempotent, safe to re-run, safe to delete)")
     return 0
@@ -218,3 +247,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+

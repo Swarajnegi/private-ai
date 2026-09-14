@@ -30,6 +30,7 @@ let conversations = {
   ],
 };
 let requests = [];
+let healthOffline = false;
 const jobs = [
   "consolidate",
   "refresh_profile",
@@ -52,6 +53,8 @@ const server = http.createServer(async (req, res) => {
     res.setHeader("Content-Type", "application/json");
     res.end(JSON.stringify(value));
   };
+  if (url.pathname === "/v1/health")
+    if (healthOffline) { res.statusCode = 503; return json({error: "Fixture unavailable"}); }
   if (url.pathname === "/v1/health")
     return json({
       ok: true,
@@ -151,7 +154,7 @@ const server = http.createServer(async (req, res) => {
     const errors = [];
     page.on("pageerror", (error) => errors.push(error.message));
     page.on("console", message => {
-      if (message.text().includes("JARVIS core:")) errors.push(message.text());
+      if (/JARVIS core:|Hologram renderer:/.test(message.text())) errors.push(message.text());
     });
     const base = `http://127.0.0.1:${server.address().port}`;
     await page.goto(base);
@@ -166,6 +169,20 @@ const server = http.createServer(async (req, res) => {
     await page.locator(".session").first().waitFor();
     assert.match(await page.locator(".session").first().textContent(), /A named conversation/);
     assert.equal(await page.locator("#inspector").isVisible(), false);
+    await page.locator('#model-picker').click();
+    assert.ok(await page.locator('.model-option').count() > 15, 'Free and paid choices are present');
+    await page.locator('#model-search').fill('claude');
+    assert.ok(await page.locator('.model-option').count() >= 2);
+    await page.screenshot({path: path.join(screenshotRoot, 'models-desktop.png')});
+    const chosen = await page.locator('.model-option small').first().textContent();
+    await page.locator('#model-search').press('ArrowDown');
+    await page.keyboard.press('Enter');
+    assert.equal(await page.locator('#model').inputValue(), chosen);
+    await page.reload();
+    assert.equal(await page.locator('#model').inputValue(), chosen, 'Selection persists after reload');
+    await page.locator('#model-picker').click();
+    await page.locator('#model-search').fill('openrouter/free');
+    await page.locator('.model-option').click();
     await page.getByRole("button", {name: "Pause core animation", exact: true}).click();
     assert.equal(await page.locator("#motion-toggle").getAttribute("aria-pressed"), "true");
     await page.getByRole("button", {name: "Play core animation", exact: true}).click();
@@ -259,27 +276,37 @@ const server = http.createServer(async (req, res) => {
     await page.reload();
     assert.equal(await page.locator("#prompt").inputValue(), "A draft to keep");
     await page.locator("#prompt").fill("");
-    await page.setViewportSize({ width: 390, height: 844 });
-    await page.waitForTimeout(3400);
-    await page.screenshot({
-      path: path.join(screenshotRoot, "home-mobile.png"),
-      animations: "disabled",
-    });
-    assert.equal(
-      await page.evaluate(
-        () => document.documentElement.scrollWidth > innerWidth,
-      ),
-      false,
-    );
-    await page.locator("#menu").click();
+    for (const viewport of [{width:1920,height:900},{width:1536,height:864},{width:1280,height:720},{width:1100,height:700}]) {
+      await page.setViewportSize(viewport);
+      await page.waitForTimeout(300);
+      const layout = await page.evaluate(() => {
+        const r = document.querySelector('.living-core').getBoundingClientRect(), m = document.querySelector('#messages');
+        return {square: Math.abs(r.width-r.height)<1, overflow:document.documentElement.scrollWidth>innerWidth, welcomeOverflow:m.scrollHeight>m.clientHeight+2};
+      });
+      assert.deepEqual(layout, {square:true,overflow:false,welcomeOverflow:false}, JSON.stringify(viewport));
+      await page.screenshot({path:path.join(screenshotRoot, `home-${viewport.width}.png`)});
+    }
+    await page.setViewportSize({width:1536,height:864});
+    jobs[0].status = 'FAILED rc=1';
+    await page.waitForFunction(() => document.body.dataset.connection === 'degraded');
+    await page.locator('#inspector-button').click();
+    assert.equal(await page.locator('.job.error').count(), 1);
+    await page.screenshot({path: path.join(screenshotRoot, 'health-degraded.png')});
+    healthOffline = true;
+    await page.waitForFunction(() => document.body.dataset.connection === 'offline');
+    assert.match(await page.locator('.pulse-caption').textContent(), /FAILED/);
+    healthOffline = false; jobs[0].status = 'ok';
+    await page.waitForFunction(() => document.body.dataset.connection === 'online');
+    await page.screenshot({path: path.join(screenshotRoot, 'health-live.png')});
+    await page.locator('#close-inspector').click();
     await page.locator(".session").first().click();
     await page.getByText("FINAL MARKER", { exact: false }).first().waitFor();
     await page.screenshot({
-      path: path.join(screenshotRoot, "chat-mobile.png"),
+      path: path.join(screenshotRoot, "chat-desktop.png"),
     });
     assert.deepEqual(errors, []);
     console.log(
-      "PASS: authentication, complete Markdown, XSS handling, long history, chunked SSE, Unicode, session continuity, zero confidence, export, busy recovery, search, drafts, mobile layout.",
+      "PASS: authentication, complete Markdown, XSS handling, long history, chunked SSE, Unicode, session continuity, zero confidence, export, busy recovery, search, drafts, keyboard model picker, model persistence, spherical desktop layout, hologram motion/pause/context recovery, measured health/degraded/offline/reconnect states.",
     );
     console.log(`Screenshots: ${screenshotRoot}`);
     if (process.env.JARVIS_UI_LIVE === "1") {

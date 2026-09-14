@@ -118,8 +118,7 @@ textarea:focus-visible { outline: none; }
 .composer-bottom { display: flex; align-items: center; gap: 12px; padding: 3px 14px 13px 20px; }
 .model-control { display: flex; align-items: center; gap: 9px; min-width: 0; color: var(--blue); }
 .model-control svg { width: 17px; height: 17px; }
-.model-control input { border: 0; background: transparent; color: #bbcee7; width: 220px; max-width: 100%; min-width: 0; font-size: 12px; padding: 7px 0; }
-.model-control input::placeholder { color: #a0b3cd; }
+.model-control select { border: 0; background: transparent; color: #bbcee7; width: 250px; max-width: 100%; min-width: 0; font-size: 12px; padding: 7px 22px 7px 0; }
 .composer-options { margin-left: auto; display: inline-flex; align-items: center; gap: 8px; padding: 9px; border-radius: 7px; color: #a3b4ce; font-size: 12px; }
 .composer-options:hover { background: #20324b; color: white; }
 .composer-options svg { width: 16px; height: 16px; }
@@ -186,7 +185,7 @@ dialog { width: min(520px,calc(100vw - 32px)); max-height: calc(100dvh - 40px); 
   #menu { display: inline-flex; }.topbar { height: 60px; padding: 0 12px; gap: 9px; }.breadcrumb strong { font-size: 13px; }.connection-badge,.action-divider { display: none; }.top-actions { gap: 2px; }.top-actions .icon-button { width: 32px; }
   .messages { padding: 0 20px; }.welcome { padding: 28px 0 18px; }.welcome-heading { padding: 0; }h1 { font-size: 26px; letter-spacing: -.8px; }.core-stage { height: 230px; margin: 0 0 20px; }.living-core { width: 100%; }
   .suggestions { grid-template-columns: 1fr; gap: 9px; }.suggestions button { min-height: 82px; padding: 16px 42px 16px 51px; }.suggestion-icon { position: absolute; left: 17px; top: 19px; margin: 0; }.suggestions strong { font-size: 14px; }.suggestions p { font-size: 12px; margin-top: 4px; }.suggestion-arrow { top: 19px; right: 17px; }
-  .composer-zone { padding: 10px 14px max(14px,env(safe-area-inset-bottom)); }.composer-caption { display: none; }textarea { padding: 16px 16px 6px; min-height: 72px; font-size: 16px; }.composer-bottom { padding: 2px 11px 11px 16px; gap: 6px; }.composer-options > span:last-child { display: none; }.model-control input { width: min(42vw,190px); }.send { width: 36px; height: 36px; }
+  .composer-zone { padding: 10px 14px max(14px,env(safe-area-inset-bottom)); }.composer-caption { display: none; }textarea { padding: 16px 16px 6px; min-height: 72px; font-size: 16px; }.composer-bottom { padding: 2px 11px 11px 16px; gap: 6px; }.composer-options > span:last-child { display: none; }.model-control select { width: min(42vw,190px); }.send { width: 36px; height: 36px; }
   .message { margin: 25px 0 35px; }.message-content { padding-left: 0; font-size: 16px; }.message-meta { margin-left: 0; }.message-heading { gap: 8px; }.message-actions button { font-size: 11px; }.inspector { top: 60px; width: min(320px,92vw); }.notice { margin: 12px 14px 0; }.jump-bottom { bottom: 154px; }.working { min-height: 54px; }dialog { padding: 24px; }
 }
 @media (max-height: 740px) and (min-width: 761px) {

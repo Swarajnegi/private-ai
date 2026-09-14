@@ -10,9 +10,9 @@
 <script>
   // Direct file preview uses adjacent assets; authenticated API calls require HTTP.
   const assetRoot = location.protocol === "file:" ? "./" : "/ui/";
-  document.write('<link rel="stylesheet" href="' + assetRoot + 'app.css?v=20260913-hologram">');
-  for (const file of ["marked.umd.js", "core.js", "app.js"])
-    document.write('<script defer src="' + assetRoot + file + '?v=20260913-hologram"><\/script>');
+  document.write('<link rel="stylesheet" href="' + assetRoot + 'desktop.css?v=20260914-atelier">');
+  for (const file of ["marked.umd.js", "hologram.js", "app.js", "desktop.js"])
+    document.write('<script defer src="' + assetRoot + file + '?v=20260914-atelier"><\/script>');
 </script>
 </head>
 <body data-connection="offline">
@@ -41,10 +41,10 @@
         <div id="notice" class="notice" role="status" hidden></div>
         <div id="messages" class="messages" tabindex="0" aria-label="Conversation messages">
           <section id="welcome" class="welcome">
-            <div class="welcome-heading"><p class="eyebrow">YOUR MIND, EXTENDED</p><h1>Welcome back, Swaraj<span>.</span></h1></div>
+            <div class="welcome-heading"><p class="eyebrow">PERSONAL INTELLIGENCE / J.A.R.V.I.S.</p><h1>At your service, Swaraj<span>.</span></h1></div>
             <div class="core-stage">
               <div class="core-guide guide-left" aria-hidden="true"><span>J.A.R.V.I.S</span><i></i><span>COGNITIVE CORE</span></div>
-              <canvas class="living-core" data-core="hero" aria-label="Animated amber JARVIS hologram with rotating circuit paths"></canvas>
+              <div class="core-viewport"><canvas class="living-core" data-core="hero" aria-label="Amber holographic JARVIS core with layered orbital circuits and a luminous centre"></canvas></div>
               <div class="core-guide guide-right" aria-hidden="true"><span>PERSONAL</span><i></i><span>INTELLIGENCE</span></div>
               <div class="core-caption"><span class="core-caption-dot"></span><span id="core-caption">Awaiting connection</span><button id="motion-toggle" type="button" class="motion-toggle" aria-label="Pause core animation" title="Pause core animation" aria-pressed="false"><span data-icon="pause"></span></button></div>
             </div>
@@ -60,7 +60,7 @@
           <div id="working" class="working" role="status" hidden><canvas data-core="thinking" class="thinking-core" aria-hidden="true"></canvas><span><strong id="working-text">JARVIS is thinking</strong><small>Making the connections.</small></span><time id="elapsed">0s</time></div>
           <form id="composer" class="composer" novalidate>
             <label class="sr-only" for="prompt">Message JARVIS</label><textarea id="prompt" rows="2" placeholder="What's on your mind?" style="resize: none"></textarea>
-            <div class="composer-bottom"><div class="model-control"><span data-icon="spark"></span><label class="sr-only" for="model">Model</label><input id="model" list="model-options" placeholder="Default intelligence" aria-label="Model override"><datalist id="model-options"><option value="openrouter/free">Free models</option></datalist></div><button id="options-button" class="composer-options" type="button" aria-label="Configure request" aria-expanded="false"><span data-icon="sliders"></span><span>Configure</span></button><button id="send" class="send" type="submit" aria-label="Send message"><span data-icon="arrow"></span></button></div>
+            <div class="composer-bottom"><div class="model-control"><span data-icon="spark"></span><label class="sr-only" for="model">Model</label><select id="model" aria-label="Model"><optgroup label="Free"><option value="openrouter/free">OpenRouter free router</option><option value="nvidia/nemotron-3-ultra-550b-a55b:free">NVIDIA Nemotron 3 Ultra · free</option><option value="nvidia/nemotron-3-super-120b-a12b:free">NVIDIA Nemotron 3 Super · free</option><option value="nvidia/nemotron-3-nano-30b-a3b:free">NVIDIA Nemotron 3 Nano · free</option><option value="nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free">NVIDIA Nemotron 3 Nano Omni · free</option><option value="nvidia/nemotron-nano-9b-v2:free">NVIDIA Nemotron Nano 9B · free</option><option value="nvidia/nemotron-nano-12b-v2-vl:free">NVIDIA Nemotron Nano 12B · free</option><option value="openai/gpt-oss-20b:free">OpenAI GPT-OSS 20B · free</option><option value="google/gemma-4-31b-it:free">Google Gemma 4 31B · free</option><option value="google/gemma-4-26b-a4b-it:free">Google Gemma 4 26B · free</option><option value="cohere/north-mini-code:free">Cohere North Mini Code · free</option><option value="inclusionai/ling-3.0-flash:free">Ling 3 Flash · free</option><option value="poolside/laguna-s-2.1:free">Poolside Laguna S 2.1 · free</option><option value="poolside/laguna-xs-2.1:free">Poolside Laguna XS 2.1 · free</option></optgroup><optgroup label="Curated paid — charged through OpenRouter"><option value="openai/gpt-5.6-luna">OpenAI GPT-5.6 Luna · $0.10 / $0.60 per 1M tokens</option><option value="openai/gpt-5.6-terra">OpenAI GPT-5.6 Terra · $1 / $6 per 1M tokens</option><option value="openai/gpt-5.6-sol">OpenAI GPT-5.6 Sol · $5 / $30 per 1M tokens</option><option value="anthropic/claude-sonnet-5">Anthropic Claude Sonnet 5 · $2 / $10 per 1M tokens</option><option value="anthropic/claude-opus-5">Anthropic Claude Opus 5 · $5 / $25 per 1M tokens</option><option value="moonshotai/kimi-k2.6">Moonshot Kimi K2.6 · $0.95 / $4 per 1M tokens</option><option value="moonshotai/kimi-k2.7-code">Moonshot Kimi K2.7 Code · $0.73 / $3.50 per 1M tokens</option><option value="deepseek/deepseek-v4-flash">DeepSeek V4 Flash · $0.14 / $0.28 per 1M tokens</option><option value="deepseek/deepseek-v4-pro">DeepSeek V4 Pro · $0.435 / $0.87 per 1M tokens</option><option value="x-ai/grok-4.5">xAI Grok 4.5 · $2 / $6 per 1M tokens</option></optgroup></select></div><button id="options-button" class="composer-options" type="button" aria-label="Configure request" aria-expanded="false"><span data-icon="sliders"></span><span>Configure</span></button><button id="send" class="send" type="submit" aria-label="Send message"><span data-icon="arrow"></span></button></div>
             <div id="options" class="options" hidden><label>Reasoning<select id="reasoning"><option value="">Model default</option><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option></select></label><label>Tools<select id="tools"><option value="default">Standard</option><option value="full">Full toolkit</option></select></label><label class="permission-option"><input id="allow-all" type="checkbox">Allow gated tools<span>Permits code, shell and file actions for this request.</span></label></div>
           </form>
           <div class="composer-caption"><span>One continuous conversation with your intelligence.</span><span><kbd>Enter</kbd> to send <b>·</b> <kbd>Shift Enter</kbd> for a new line</span></div>
@@ -68,7 +68,7 @@
       </section>
       <aside id="inspector" class="inspector" aria-label="System activity" hidden>
         <div class="inspector-header"><div><p class="eyebrow">BEHIND THE THOUGHT</p><h2>System activity</h2></div><button id="close-inspector" class="icon-button" type="button" aria-label="Close system panel"><span data-icon="close"></span></button></div>
-        <div class="pulse-visual" aria-hidden="true"><svg viewBox="0 0 240 60"><path d="M0 32h50l9-9 10 20 13-35 15 45 12-21h35l8-8 9 16 8-12 8 4h63"/></svg></div>
+        <div class="pulse-visual"><canvas id="health-pulse" aria-label="Hearth heartbeat: a pulse appears for each successful health check"></canvas></div>
         <div class="pulse-summary"><span id="pulse-state">Awaiting connection</span><span id="uptime">—</span></div>
         <div class="metric-row"><span>Conversations</span><strong id="metric-sessions">—</strong></div><div class="metric-row"><span>Requests this run</span><strong id="metric-requests">—</strong></div>
         <p class="eyebrow jobs-title">BACKGROUND ACTIVITY</p><div id="jobs" class="jobs"><p class="muted">Connect to see background activity.</p></div>
