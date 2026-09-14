@@ -220,6 +220,55 @@ wc -l jarvis_data/observation_queue.jsonl          # how many turns are captured
 tail -1 jarvis_data/observation_queue.jsonl | python3 -m json.tool   # the live schema
 ```
 
+### 2.4 Curation — what decides a turn is FOR (added 2026-09-14)
+
+Capture answers *what happened*. Until this shipped, **nothing answered *what it was for***, and the
+consequence was not subtle: `engineer_corpus` and `personalization_corpus` read the **same**
+`observation_queue.jsonl`, so **every captured turn went into both**. The only difference was which
+half of the exchange each took. The sole thing standing between a three-word `continue` and the
+training corpus was a character-count floor — and `continue` appears 35 times in the queue, `go` 13,
+`hi` 9.
+
+`jarvis_core/agent/curator.py` decides four things per turn, **with the conversation in hand**:
+
+| field | what it settles |
+|---|---|
+| `corpora` | `engineer` / `personalization` / `none` — `none` is a real and common answer |
+| `domain` | the same label set as `domain_classifier.py`, so the two are comparable |
+| `trainable` | whether a model should learn from this turn at all |
+| `responds_to` | one sentence: what the user's prompt was **replying to** |
+
+**Why an agent and not a better classifier.** `relabel_domains.py` marks 314 of 583 turns `unknown`,
+which looks broken and is not — it scores 89% against its gold set, above its 80% bar. It is
+*abstaining*, correctly, and its own header predicted this and prescribed the cure: *"No classifier
+reading one turn alone can label those… the fix is to classify a turn WITH its session neighbours —
+not to lower the threshold."* All three of its gold-set misses are that shape. The agent in the
+conversation already holds that context and is the only participant that knows what a prompt was
+replying to. Worked example from the live log: `"What is wrong in my first ans"` is meaningless
+alone; `responds_to` resolved it to *"feedback on their mistake about PySpark's withColumnRenamed"*.
+
+**Verdicts are appended, never edited.** `jarvis_data/turn_curation.jsonl` is an event log folded on
+read — newest verdict per `(ts, session_id)` wins, every superseded one stays readable **with its
+author**. That is what makes *"check whether JARVIS routed this correctly"* a real operation. The
+embedding label rides **alongside** the agent's verdict rather than replacing it, so disagreement is
+a query rather than something a human must happen to notice.
+
+**It is TRACKED**, and `*.jsonl` already carries `merge=union`, so both laptops curate independently
+without conflicting. It is a *judgement*, not a projection: regenerating it costs model calls, so
+losing it is not free. Known property — after a union merge, if both machines curated the same turn
+the winner is whichever line sorts last, not whichever was written later. Harmless, because both are
+genuine verdicts; it would **not** be harmless for facts, which is why the queue itself is never
+written here.
+
+**Uncurated turns are ADMITTED, not dropped.** Absence means "nobody has looked yet". Defaulting to
+exclusion would silently collapse the corpus to whatever the backlog had reached.
+
+```bash
+python3 scripts/curate_turns.py --status     # how much is curated
+python3 scripts/curate_turns.py --routing    # what routing actually results
+python3 scripts/curate_turns.py --review     # disagreements + low confidence: where to look
+```
+
 ---
 
 ## 3. The adapter contract — porting to a host with no hooks
@@ -534,8 +583,29 @@ grep -oP 'Job\(name="\K[^"]+' js-development/jarvis_core/serve/scheduler.py
 ```
 
 Roughly: `consolidate` (the pulse for the surfacing organ), `refresh_profile` and `reindex_memory`
-(guarded), `ingest_codex` (capture on a hookless host), `reconcile_codex_memory`, and
-`refresh_digest`.
+(guarded), `rebuild_graphrag`, `ingest_codex` (capture on a hookless host),
+`reconcile_codex_memory`, `refresh_digest`, and — added 2026-09-14 — `curate_turns` and
+`relabel_domains`.
+
+**`curate_turns` is the one that decides what your turns are FOR** (§2.4). It is scheduled rather
+than agent-invoked for a reason this repo has already paid for: Antigravity's manual `/memory` is
+the control experiment and it produced **zero** records in months. Anything that must be *remembered*
+every turn returns nothing.
+
+**`relabel_domains` is scheduled because it is the curator's reviewer**, and it was found six days
+stale covering 583 of 989 turns on 2026-09-14 with nothing scheduling it at all — so the independent
+second opinion the agent verdict gets checked against was silently degrading. A scheduler smoke test
+now asserts **both** are present, because shipping the curator without its reviewer is exactly how
+that staleness happened the first time.
+
+> **THE HEARTH RUNS THE CODE IT BOOTED WITH.** Adding a job to `default_jobs()` does nothing to a
+> running hearth — and `--status` looks perfectly healthy while the new job silently does not exist.
+> This bit twice on 2026-09-14 alone: once after pulling Codex's `rebuild_graphrag`, once after
+> adding `curate_turns`. **After any scheduler change, restart it and confirm the job is listed:**
+> ```bash
+> python3 scripts/hearth.py --stop && python3 scripts/hearth.py --background
+> python3 scripts/hearth.py --status          # the new job MUST appear here
+> ```
 
 **Why guard scoping is load-bearing.** Guarded jobs run `check_projections.py --only <artifact>`
 first; exit 0 means "nothing to do" and the job is skipped. A *shared, unscoped* guard was measured
@@ -639,12 +709,28 @@ A stale `.hearth_jobs.json` reports the last tick, which may be weeks old — th
 
 ## 7. What is not built
 
-### 7.1 An Antigravity capture adapter
+### 7.1 An Antigravity capture adapter — **UNBLOCKED 2026-09-11, still unbuilt**
 
-**Blocked on a question, not on architecture:** does Antigravity persist a readable transcript to
-disk at all? If it does, the adapter is a near-copy of the Codex one and the contract in §2 already
-proves it generalizes. If it does not, capture there cannot be automated after the fact and the
-honest answer is to keep §5.3's degraded-mode statement.
+**The question this was blocked on has been answered.** It used to read *"does Antigravity persist a
+readable transcript to disk at all?"* — asked through `agents_converse/q_001.md` and answered in
+`a_001.md` by Antigravity itself. **It does.** Concretely:
+
+```
+C:\Users\lenovo\.gemini\antigravity-ide\brain\<conversation-id>\.system_generated\logs\
+├── transcript.jsonl        ← token-efficient; large outputs truncated
+└── transcript_full.jsonl   ← complete, use this one
+```
+
+JSONL, one JSON object per line. The turn mapping is already worked out in `a_001.md`: a user turn
+is `{"type": "USER_INPUT", "source": "USER_EXPLICIT"}` with the prompt wrapped in
+`<USER_REQUEST>…</USER_REQUEST>`; an assistant turn is `{"type": "PLANNER_RESPONSE", "source":
+"MODEL"}`. `EXEC_COMMAND` / `LIST_DIRECTORY` / `SYSTEM_MESSAGE` / `CHECKPOINT` lines are ignorable.
+
+**So this is now a scoping-free implementation task, and it is the single highest-value unbuilt
+thing in the repo.** Antigravity is the only host with no automatic capture, its manual `/memory`
+path has produced **zero** records in months, and every turn the user spends there is currently lost
+to the corpus. Read `agents_converse/a_001.md` in full before starting — it carries a redacted
+sample exchange and the exact field table.
 
 **If you build it, follow the shape that worked:**
 1. Find the transcript. Confirm the real on-disk format by *reading actual files* — do not build a
