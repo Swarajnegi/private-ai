@@ -135,9 +135,16 @@ _MACHINE_LINE_FORMS: Tuple[Tuple[str, re.Pattern], ...] = (
     # meeting transcript IS fluent first-person English. The give-away is
     # structural — a speaker-attribution line, or a bare media timestamp on its
     # own line — not anything about the words.
+    # NOTE THE ABSENT \b AFTER `seconds?`. The first version ended
+    # `seconds?\b` and did not match the real data, because the exporter emits
+    # "2 minutes 38 seconds2:38" — the duration and the timecode are run
+    # together with no separator, so there is no word boundary between
+    # "seconds" and "2". The smoke test passed anyway because I wrote the
+    # fixture from the SHAPE of the record instead of its bytes, and tidied it
+    # on the way. Both transcripts stayed in the corpus with the rule green.
     ("transcript_timecode", re.compile(
         r"^\s*\d{1,2}:\d{2}(?::\d{2})?\s*$|"
-        r"^\s*\d+\s+minutes?\s+\d+\s+seconds?\b|"
+        r"^\s*\d+\s+minutes?\s+\d+\s+seconds?|"
         r"^\s*\[?\d{1,2}:\d{2}(?::\d{2})?\]?\s+\w+\s*:")),
 )
 
@@ -496,10 +503,13 @@ def _smoke() -> int:
                                for n in range(40)))[0], MACHINE_TEXT)
     # T34: a meeting transcript is fluent first-person English, so only its
     # timecode lines betray it. Two of these reached the corpus undetected.
-    check("T34 pasted meeting transcript",
-          classify("Sanket Kumar\n2 minutes 38 seconds2:38\nThanks so Raj.\n\n"
-                   "Swaraj Negi\n3 minutes 10 seconds\nYeah I think my read on the "
-                   "migration is that we should hold until I have the numbers.")[0],
+    # VERBATIM BYTES from the record this rule missed, not a tidied retelling
+    # of it. The duration and timecode run together ("seconds2:38") and that
+    # exact join is what defeated the first pattern.
+    check("T34 pasted meeting transcript, exactly as the exporter writes it",
+          classify("Speaker One\n2 minutes 38 seconds2:38\nSpeaker One 2 minutes 38 "
+                   "seconds\nThanks.\n\nSpeaker Two\n2 minutes 41 seconds2:41\n"
+                   "Speaker Two 2 minutes 41 seconds\nI will say.")[0],
           MACHINE_TEXT)
     check("T35 'I want you to ...' is an order despite the first person",
           classify("I want you to do an overhaul of the UI of this app completely. "
