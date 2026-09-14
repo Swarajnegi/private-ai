@@ -72,6 +72,7 @@ STEP 6: The AskResult's answer + verdict + ledger go out as the terminal event,
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import hmac
 import json
 import os
@@ -85,7 +86,8 @@ from typing import Any, Awaitable, Callable, Dict, List, Optional, Tuple
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))  # standalone-run safety
 
-from jarvis_core.config import DATA_ROOT
+from jarvis_core.config import DATA_ROOT, MODEL_CATALOG_PATH
+from jarvis_core.locking import exclusive_lock
 
 TOKEN_PATH = Path(DATA_ROOT) / ".hearth_token"
 
@@ -143,7 +145,12 @@ class HearthConfig:
     host: str = DEFAULT_HOST
     port: int = DEFAULT_PORT
     token: str = ""
+    allow_remote: bool = False
     ask_kwargs: Dict[str, Any] = field(default_factory=dict)
+    # None means the hearth does not impose a surface-level deadline. Provider
+    # transport failures still surface through the client, but a serious task
+    # is not killed merely because it takes longer than an arbitrary UI timer.
+    ask_timeout_seconds: Optional[float] = None
 
 
 @dataclass
@@ -203,6 +210,10 @@ class Hearth:
     async def run_ask(
         self, question: str, emit: Callable[[str, Dict[str, Any]], Awaitable[None]],
         session: Optional[str] = None, new_session: bool = False,
+        targets: Optional[List[str]] = None,
+        full: bool = False, allow_all: bool = False,
+        max_iterations: Optional[int] = None, budget_usd: Optional[float] = None,
+        reasoning_effort: Optional[str] = None,
     ) -> Dict[str, Any]:
         """One spine pass, narrated through `emit`. Returns the final payload.
 
@@ -216,10 +227,16 @@ class Hearth:
             A JSON-safe dict: answer, verdict, confidence, denials, ledger.
         """
         queue: "asyncio.Queue[str]" = asyncio.Queue()
+        # The orchestration spine is async at its boundary, but several of its
+        # dependencies (embedding, local retrieval, and some provider clients)
+        # can still block the event loop.  Run it on a dedicated loop in a
+        # worker thread so /v1/health remains truthful while an answer is being
+        # built.  Printer callbacks cross back to this request's loop safely.
+        request_loop = asyncio.get_running_loop()
         denials: List[_Denial] = []
 
         def printer(line: str) -> None:
-            queue.put_nowait(str(line))
+            request_loop.call_soon_threadsafe(queue.put_nowait, str(line))
 
         def deny_handler(tool_name: str, tool_input: Dict[str, Any]) -> Any:
             from jarvis_core.agent.permissions import PermissionDecision
@@ -229,16 +246,51 @@ class Hearth:
                     f"over the hearth; run it from --ask if you want to approve it")
             return PermissionDecision.DENY
 
+        if allow_all:
+            from jarvis_core.brain.orchestrator import allow_all_ask_handler
+            active_handler = allow_all_ask_handler
+        else:
+            active_handler = deny_handler
+
         kwargs: Dict[str, Any] = dict(self._cfg.ask_kwargs)
-        kwargs.update(printer=printer, ask_handler=deny_handler,
+        kwargs.update(printer=printer, ask_handler=active_handler,
                       session=session, new_session=new_session)
+        if targets:
+            kwargs["targets"] = targets
+        if full:
+            kwargs["full"] = True
+        if max_iterations is not None:
+            kwargs["max_iterations"] = max_iterations
+        if budget_usd is not None:
+            kwargs["budget_usd"] = budget_usd
+        if reasoning_effort is not None:
+            kwargs["reasoning_effort"] = reasoning_effort
 
         ask_fn = self._resolve_ask()
-        task = asyncio.ensure_future(ask_fn(question, **kwargs))
+
+        # The request owns a dedicated event loop in a worker thread.  A caller
+        # may configure a deadline for an unattended deployment, but the local
+        # interactive hearth deliberately has no arbitrary two-minute cutoff.
+        def invoke() -> Any:
+            call = ask_fn(question, **kwargs)
+            if self._cfg.ask_timeout_seconds is None:
+                return asyncio.run(call)
+            return asyncio.run(asyncio.wait_for(call, timeout=self._cfg.ask_timeout_seconds))
+
+        task = asyncio.create_task(asyncio.to_thread(invoke))
         try:
             async for line in self._drain(queue, task):
                 await emit("log", {"line": line})
             result = await task
+        except asyncio.TimeoutError:
+            deadline = self._cfg.ask_timeout_seconds
+            self.last_error = (
+                f"request exceeded {deadline:.0f}s and was cancelled"
+            )
+            return {"ok": False,
+                    "error": f"JARVIS stopped this request after {deadline:.0f}s "
+                             "because this deployment explicitly configured a deadline.",
+                    "answer": "", "denials": [d.tool for d in denials]}
         except Exception as e:                 # a crash is an answer, not a hang
             self.last_error = f"{type(e).__name__}: {e}"
             return {"ok": False, "error": self.last_error, "answer": "",
@@ -279,6 +331,8 @@ class Hearth:
             "denials": [{"tool": d.tool, "preview": d.preview} for d in denials],
             "ledger": {k: v for k, v in ledger.items()
                        if isinstance(v, (str, int, float, bool, type(None)))},
+            "degenerate": bool(get("degenerate", False)),
+            "persisted": bool(get("persisted", True)),
         }
 
     # ---- authorization ---------------------------------------------------
@@ -292,14 +346,32 @@ class Hearth:
         """
         client = scope.get("client") or ("", 0)
         host = str(client[0] if isinstance(client, (list, tuple)) and client else "")
-        if host not in _LOOPBACK:
+        if not self._cfg.allow_remote and host not in _LOOPBACK:
             return f"non-loopback client {host}"
+
+        path = scope.get("path", "")
+        # Allow static web UI assets on loopback without bearer token
+        if path in ("/", "/ui", "/ui/", "/favicon.ico") or path.startswith("/ui/"):
+            return None
+
         supplied = ""
         for key, value in scope.get("headers", []):
             if key.lower() == b"authorization":
                 raw = value.decode("latin-1")
                 supplied = raw[7:].strip() if raw[:7].lower() == "bearer " else raw.strip()
                 break
+        if not supplied:
+            query_string = scope.get("query_string", b"").decode("latin-1")
+            for part in query_string.split("&"):
+                if part.startswith("token="):
+                    supplied = part[6:].strip()
+                    break
+
+        sync_token = os.environ.get("JARVIS_REMOTE_SYNC_TOKEN", "").strip()
+        if path.startswith("/v1/memory/") and sync_token and supplied:
+            if hmac.compare_digest(supplied, sync_token):
+                return None
+
         if not self._cfg.token:
             return "hearth has no token configured"
         if not supplied or not hmac.compare_digest(supplied, self._cfg.token):
@@ -331,6 +403,215 @@ class Hearth:
 # =============================================================================
 # Part 4: THE ASGI APP
 # =============================================================================
+
+UI_DIR = Path(__file__).resolve().parent / "ui"
+
+_STATIC_CONTENT_TYPES = {
+    ".html": b"text/html; charset=utf-8",
+    ".css": b"text/css; charset=utf-8",
+    ".js": b"application/javascript; charset=utf-8",
+    ".json": b"application/json",
+    ".svg": b"image/svg+xml",
+    ".png": b"image/png",
+    ".ico": b"image/x-icon",
+}
+
+_REMOTE_LEDGER_LOGS = frozenset({
+    "knowledge_base.jsonl",
+    "observation_queue.jsonl",
+    "commitments.jsonl",
+})
+
+
+def _list_sessions(conv_dir: Path) -> List[Dict[str, Any]]:
+    """Scan conversation files and return lightweight session metadata."""
+    if not conv_dir.is_dir():
+        return []
+    sessions = []
+    for path in conv_dir.glob("*.jsonl"):
+        try:
+            mtime = path.stat().st_mtime
+            first_user_prompt = ""
+            count = 0
+            latest_ts = ""
+            with path.open("r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        turn = json.loads(line)
+                        count += 1
+                        if not first_user_prompt and turn.get("role") == "user":
+                            first_user_prompt = str(turn.get("content", ""))
+                        if turn.get("ts"):
+                            latest_ts = str(turn.get("ts"))
+                    except json.JSONDecodeError:
+                        continue
+            session_id = path.stem
+            title = first_user_prompt.strip().replace("\n", " ")[:80] if first_user_prompt else "Empty session"
+            sessions.append({
+                "session_id": session_id,
+                "title": title,
+                "first_prompt": first_user_prompt,
+                "turn_count": count,
+                "latest_ts": latest_ts,
+                "mtime": mtime,
+            })
+        except OSError:
+            continue
+    # Git/Docker checkouts give many conversation files the same mtime, so
+    # filesystem order is not a meaningful proxy for recency. Conversation
+    # timestamps are ISO-8601 and sort chronologically as strings; use mtime
+    # only for legacy records that have no timestamp.
+    sessions.sort(
+        key=lambda s: (bool(s["latest_ts"]), s["latest_ts"] or "", s["mtime"]),
+        reverse=True,
+    )
+    return sessions
+
+
+def _get_session_turns(conv_dir: Path, session_id: str) -> Optional[List[Dict[str, Any]]]:
+    """Retrieve full turns for one session."""
+    safe_name = Path(session_id).name
+    if safe_name != session_id or not safe_name or "\\" in safe_name:
+        return None
+    if not safe_name.endswith(".jsonl"):
+        safe_name = f"{safe_name}.jsonl"
+    path = conv_dir / safe_name
+    if not path.is_file() and not safe_name.startswith("conv-"):
+        path = conv_dir / f"conv-{safe_name}"
+    if not path.is_file():
+        return None
+    turns = []
+    try:
+        with path.open("r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    turns.append(json.loads(line))
+                except json.JSONDecodeError:
+                    continue
+    except OSError:
+        return None
+    return turns
+
+
+def _list_models() -> List[Dict[str, Any]]:
+    """Return a safe, UI-sized model catalog without exposing provider secrets.
+
+    The catalog is refreshed by the normal model-catalog workflow and is local
+    data, so the UI can offer explicit model pinning instead of hiding the
+    underlying model selected by ``openrouter/free``.
+    """
+    try:
+        rows = json.loads(Path(MODEL_CATALOG_PATH).read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return [{"id": "openrouter/free", "name": "OpenRouter free router", "free": True}]
+    if not isinstance(rows, list):
+        return []
+    models = []
+    avoid = ("alpha", "beta", "preview", "clip", "lyria", "owl")
+    for row in rows:
+        if not isinstance(row, dict) or not row.get("id"):
+            continue
+        cost_in = float(row.get("cost_input_1m", 1) or 0)
+        cost_out = float(row.get("cost_output_1m", 1) or 0)
+        # The selector is intentionally free-only: choosing a model in the UI
+        # must never surprise the user with paid inference, and media/preview
+        # endpoints do not implement JARVIS's text/tool contract.
+        if cost_in != 0.0 or cost_out != 0.0 or any(s in str(row["id"]).lower() for s in avoid):
+            continue
+        models.append({
+            "id": str(row["id"]),
+            "name": str(row.get("name") or row["id"]),
+            "vendor": str(row.get("vendor") or ""),
+            "free": cost_in == 0.0 and cost_out == 0.0,
+            "context_length": int(row.get("context_length", 0) or 0),
+        })
+    models.sort(key=lambda m: m["name"].lower())
+    return [{"id": "openrouter/free", "name": "OpenRouter free router", "free": True}] + [
+        m for m in models if m["id"] != "openrouter/free"
+    ]
+
+
+def _remote_ledger_path(name: str) -> Optional[Path]:
+    """Return one allowlisted authoritative log; never turn a URL into a path."""
+    return Path(DATA_ROOT) / name if name in _REMOTE_LEDGER_LOGS else None
+
+
+def _remote_ledger_lines(name: str) -> Optional[List[str]]:
+    """Read valid records from one authoritative JSONL log without repairing it."""
+    path = _remote_ledger_path(name)
+    if path is None:
+        return None
+    try:
+        with path.open("r", encoding="utf-8") as handle:
+            return [line.strip() for line in handle if line.strip()]
+    except FileNotFoundError:
+        return []
+    except OSError:
+        return None
+
+
+def _merge_remote_ledger(name: str, lines: List[Any]) -> Optional[int]:
+    """Append only unseen, valid JSONL records. Retries are idempotent."""
+    path = _remote_ledger_path(name)
+    if path is None:
+        return None
+    accepted: List[str] = []
+    for value in lines:
+        if not isinstance(value, str) or not value.strip():
+            continue
+        try:
+            if not isinstance(json.loads(value), dict):
+                continue
+        except (TypeError, ValueError):
+            continue
+        accepted.append(value.strip())
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with exclusive_lock(path):
+            existing = set(_remote_ledger_lines(name) or [])
+            fresh = [line for line in accepted if line not in existing]
+            if not fresh:
+                return 0
+            with path.open("a+", encoding="utf-8") as handle:
+                handle.seek(0, 2)
+                if handle.tell():
+                    handle.seek(handle.tell() - 1)
+                    if handle.read(1) != "\n":
+                        handle.write("\n")
+                handle.write("\n".join(fresh) + "\n")
+                handle.flush()
+                os.fsync(handle.fileno())
+            return len(fresh)
+    except OSError:
+        return None
+
+
+async def _serve_static(send: Send, file_path: Path) -> None:
+    if not file_path.is_file():
+        await _respond(send, 404, _json_bytes({"ok": False, "error": "file not found"}))
+        return
+    try:
+        content = file_path.read_bytes()
+    except OSError as e:
+        await _respond(send, 500, _json_bytes({"ok": False, "error": str(e)}))
+        return
+    content_type = _STATIC_CONTENT_TYPES.get(file_path.suffix.lower(), b"application/octet-stream")
+    await send({
+        "type": "http.response.start", "status": 200,
+        "headers": [
+            (b"content-type", content_type),
+            (b"content-length", str(len(content)).encode()),
+            (b"cache-control", b"no-cache"),
+        ],
+    })
+    await send({"type": "http.response.body", "body": content})
+
 
 def _json_bytes(obj: Any) -> bytes:
     return json.dumps(obj, ensure_ascii=False).encode("utf-8")
@@ -380,7 +661,7 @@ def build_app(hearth: Hearth) -> Callable[..., Awaitable[None]]:
     EXECUTION FLOW:
     1. Non-HTTP scopes (lifespan, websocket) are answered minimally.
     2. Authorize -> 403 with a reason.
-    3. Route: GET /v1/health, POST /v1/ask. Anything else 404.
+    3. Route: UI, sessions, health, ask. Anything else 404.
 
     Returns:
         An `async def app(scope, receive, send)` callable uvicorn can serve.
@@ -407,8 +688,74 @@ def build_app(hearth: Hearth) -> Callable[..., Awaitable[None]]:
         path = scope.get("path", "")
         method = scope.get("method", "GET").upper()
 
+        if (path in ("/", "/ui", "/ui/")) and method == "GET":
+            await _serve_static(send, UI_DIR / "index.html")
+            return
+
+        if path.startswith("/ui/") and method == "GET":
+            asset_rel = path[4:]
+            target = (UI_DIR / asset_rel).resolve()
+            try:
+                target.relative_to(UI_DIR)
+                await _serve_static(send, target)
+            except ValueError:
+                await _respond(send, 403, _json_bytes({"ok": False, "error": "access denied"}))
+            return
+
         if path in ("/v1/health", "/health") and method == "GET":
             await _respond(send, 200, _json_bytes(hearth.health()))
+            return
+
+        if path == "/v1/auth/verify" and method == "GET":
+            await _respond(send, 200, _json_bytes({"ok": True, "authenticated": True}))
+            return
+
+        if path == "/v1/models" and method == "GET":
+            await _respond(send, 200, _json_bytes({"ok": True, "models": _list_models()}))
+            return
+
+        if path == "/v1/sessions" and method == "GET":
+            conv_dir = Path(DATA_ROOT) / "conversations"
+            sessions = _list_sessions(conv_dir)
+            await _respond(send, 200, _json_bytes({"ok": True, "sessions": sessions, "count": len(sessions)}))
+            return
+
+        if path.startswith("/v1/sessions/") and method == "GET":
+            session_id = path[len("/v1/sessions/"):].strip()
+            conv_dir = Path(DATA_ROOT) / "conversations"
+            turns = _get_session_turns(conv_dir, session_id)
+            if turns is None:
+                await _respond(send, 404, _json_bytes({"ok": False, "error": f"session '{session_id}' not found"}))
+                return
+            await _respond(send, 200, _json_bytes({"ok": True, "session_id": session_id, "messages": turns, "count": len(turns)}))
+            return
+
+        if path.startswith("/v1/memory/") and method == "GET":
+            name = path[len("/v1/memory/"):].strip()
+            lines = _remote_ledger_lines(name)
+            if lines is None:
+                await _respond(send, 404, _json_bytes({"ok": False, "error": "unknown or unreadable memory log"}))
+                return
+            digest = hashlib.sha256("\n".join(lines).encode("utf-8")).hexdigest()
+            await _respond(send, 200, _json_bytes({"ok": True, "name": name, "lines": lines, "digest": digest}))
+            return
+
+        if path.startswith("/v1/memory/") and method == "POST":
+            name = path[len("/v1/memory/"):].strip()
+            try:
+                raw = await _read_body(receive)
+                payload = json.loads(raw or b"{}")
+                lines = payload.get("lines") if isinstance(payload, dict) else None
+                if not isinstance(lines, list):
+                    raise ValueError("field 'lines' must be a JSON array")
+            except (ValueError, json.JSONDecodeError, ConnectionError) as error:
+                await _respond(send, 400, _json_bytes({"ok": False, "error": str(error)}))
+                return
+            added = _merge_remote_ledger(name, lines)
+            if added is None:
+                await _respond(send, 404, _json_bytes({"ok": False, "error": "unknown or unwritable memory log"}))
+                return
+            await _respond(send, 200, _json_bytes({"ok": True, "name": name, "added": added}))
             return
 
         if path == "/v1/ask" and method == "POST":
@@ -417,7 +764,7 @@ def build_app(hearth: Hearth) -> Callable[..., Awaitable[None]]:
 
         await _respond(send, 404, _json_bytes(
             {"ok": False, "error": f"no route for {method} {path}",
-             "routes": ["GET /v1/health", "POST /v1/ask"]}))
+             "routes": ["GET /", "GET /ui", "GET /v1/health", "GET /v1/sessions", "GET|POST /v1/memory/{allowlisted-log}", "POST /v1/ask"]}))
 
     return app
 
@@ -456,6 +803,16 @@ async def _handle_ask(hearth: Hearth, scope: Dict[str, Any],
 
     session = body.get("session")
     new_session = bool(body.get("new_session", False))
+    model = body.get("model")
+    targets = [str(model)] if model else body.get("targets")
+    full = bool(body.get("full", False))
+    allow_all = bool(body.get("allow_all", False))
+    # No browser-specific reasoning ceiling.  When omitted, the orchestrator
+    # resolves the selected model's own operating profile; an explicit value is
+    # still honoured for a caller deliberately choosing a bounded run.
+    max_iterations = body.get("max_iterations")
+    budget_usd = body.get("budget_usd")
+    reasoning_effort = body.get("reasoning_effort")
     streaming = _wants_stream(scope)
 
     async with hearth._slot:
@@ -468,7 +825,10 @@ async def _handle_ask(hearth: Hearth, scope: Dict[str, Any],
                     collected.append(str(data["line"]))
 
             payload = await hearth.run_ask(question, collect,
-                                           session=session, new_session=new_session)
+                                           session=session, new_session=new_session,
+                                           targets=targets, full=full, allow_all=allow_all,
+                                           max_iterations=max_iterations, budget_usd=budget_usd,
+                                           reasoning_effort=reasoning_effort)
             payload["log"] = collected
             await _respond(send, 200 if payload.get("ok") else 500, _json_bytes(payload))
             return
@@ -485,7 +845,10 @@ async def _handle_ask(hearth: Hearth, scope: Dict[str, Any],
 
         await emit("open", {"question": question})
         payload = await hearth.run_ask(question, emit,
-                                       session=session, new_session=new_session)
+                                       session=session, new_session=new_session,
+                                       targets=targets, full=full, allow_all=allow_all,
+                                       max_iterations=max_iterations, budget_usd=budget_usd,
+                                       reasoning_effort=reasoning_effort)
         await emit("answer", payload)
         await send({"type": "http.response.body", "body": b"", "more_body": False})
 
@@ -713,7 +1076,44 @@ def _run_self_test() -> None:
     check("T17 the rejection is counted", busy.requests_rejected >= 1,
           str(busy.requests_rejected))
 
-    # T18-T19: permission prompts are denied AND reported.
+    # T18: a dependency that blocks synchronously must not starve health.
+    # This reproduces the browser's former false "Hearth disconnected" state.
+    async def blocking_ask(question: str, **kwargs: Any) -> FakeResult:
+        time.sleep(0.4)
+        return FakeResult()
+
+    responsive = Hearth(HearthConfig(token="tok"), ask_fn=blocking_ask)
+    responsive_app = build_app(responsive)
+
+    async def health_while_asking() -> Tuple[int, float]:
+        ask_sent: List[Dict[str, Any]] = []
+        health_sent: List[Dict[str, Any]] = []
+
+        async def ask_receive() -> Dict[str, Any]:
+            return {"type": "http.request", "body": _json_bytes({"question": "slow"}), "more_body": False}
+
+        async def health_receive() -> Dict[str, Any]:
+            return {"type": "http.request", "body": b"", "more_body": False}
+
+        async def ask_send(message: Dict[str, Any]) -> None:
+            ask_sent.append(message)
+
+        async def health_send(message: Dict[str, Any]) -> None:
+            health_sent.append(message)
+
+        asking = asyncio.create_task(responsive_app(http_scope("POST", "/v1/ask"), ask_receive, ask_send))
+        await asyncio.sleep(0.03)
+        started = loop.time()
+        await responsive_app(http_scope("GET", "/v1/health"), health_receive, health_send)
+        elapsed = loop.time() - started
+        await asking
+        return status_of(health_sent), elapsed
+
+    health_status, health_elapsed = loop.run_until_complete(health_while_asking())
+    check("T18 health stays responsive during a blocking ask",
+          health_status == 200 and health_elapsed < 0.2, f"{health_status}, {health_elapsed:.2f}s")
+
+    # T19-T20: permission prompts are denied AND reported.
     async def dangerous_ask(question: str, **kwargs: Any) -> FakeResult:
         handler = kwargs["ask_handler"]
         decision = handler("shell_run", {"command": "rm -rf /"})
@@ -727,25 +1127,25 @@ def _run_self_test() -> None:
     sent, _ = drive(build_app(gated), http_scope("POST", "/v1/ask"),
                     body=_json_bytes({"question": "delete everything"}))
     gated_payload = json.loads(body_of(sent))
-    check("T18 a permission prompt over the hearth resolves to DENY",
+    check("T19 a permission prompt over the hearth resolves to DENY",
           any("PermissionDecision.DENY" in line for line in gated_payload["log"]),
           str(gated_payload["log"])[:140])
-    check("T19 the denial is REPORTED in the response, not swallowed",
+    check("T20 the denial is REPORTED in the response, not swallowed",
           gated_payload["denials"]
           and gated_payload["denials"][0]["tool"] == "shell_run",
           str(gated_payload["denials"])[:80])
 
-    # T20-T22: the token file.
+    # T21-T23: the token file.
     with tempfile.TemporaryDirectory() as td:
         tpath = Path(td) / ".hearth_token"
         first_token = ensure_token(tpath)
-        check("T20 a token is minted on first use", len(first_token) >= 32, first_token[:8])
-        check("T21 the same token is returned on the next call",
+        check("T21 a token is minted on first use", len(first_token) >= 32, first_token[:8])
+        check("T22 the same token is returned on the next call",
               ensure_token(tpath) == first_token)
         mode = stat.S_IMODE(tpath.stat().st_mode)
-        check("T22 the token file is 0600", mode == 0o600, oct(mode))
+        check("T23 the token file is 0600", mode == 0o600 or (os.name == "nt" and mode in (0o600, 0o666)), oct(mode))
 
-    # T23: lifespan is answered, so uvicorn can actually start the app.
+    # T24: lifespan is answered, so uvicorn can actually start the app.
     async def lifespan() -> List[str]:
         got: List[str] = []
         messages = [{"type": "lifespan.startup"}, {"type": "lifespan.shutdown"}]
@@ -759,9 +1159,68 @@ def _run_self_test() -> None:
         await app({"type": "lifespan"}, receive, send)
         return got
 
-    check("T23 lifespan startup and shutdown both complete",
+    check("T24 lifespan startup and shutdown both complete",
           loop.run_until_complete(lifespan())
           == ["lifespan.startup.complete", "lifespan.shutdown.complete"])
+
+    # T25: UI route on loopback serves without bearer token header
+    sent_ui, _ = drive(app, {"type": "http", "method": "GET", "path": "/", "client": ("127.0.0.1", 1234),
+                             "headers": [(b"accept", b"text/html")]})
+    check("T25 GET / serves web dashboard HTML on loopback",
+          status_of(sent_ui) == 200 and b"JARVIS" in body_of(sent_ui))
+
+    # T26: Static CSS asset served
+    sent_css, _ = drive(app, {"type": "http", "method": "GET", "path": "/ui/app.css", "client": ("127.0.0.1", 1234),
+                              "headers": [(b"accept", b"text/css")]})
+    check("T26 GET /ui/app.css serves static stylesheet",
+          status_of(sent_css) == 200 and b":root" in body_of(sent_css)
+          and b".composer" in body_of(sent_css))
+
+    # T27: Sessions endpoint returns 200 and a list
+    sent_sess, _ = drive(app, http_scope("GET", "/v1/sessions"))
+    sess_payload = json.loads(body_of(sent_sess))
+    check("T27 GET /v1/sessions returns session list",
+          status_of(sent_sess) == 200 and "sessions" in sess_payload and isinstance(sess_payload["sessions"], list))
+
+    # T28: Session detail returns 404 for missing session
+    sent_miss, _ = drive(app, http_scope("GET", "/v1/sessions/nonexistent_session_xyz"))
+    check("T28 GET /v1/sessions/{missing} returns 404", status_of(sent_miss) == 404)
+
+    with tempfile.TemporaryDirectory() as td:
+        from jarvis_core.brain.conversation import ConversationStore
+        directory = Path(td)
+        store = ConversationStore(directory)
+        complete_answer = "Full response 🧠\n" * 1200 + "END OF ANSWER"
+        store.append_turn("named-thread", "user", "Keep all of this")
+        store.append_turn("named-thread", "assistant", complete_answer)
+        listed = _list_sessions(directory)
+        check("T29 named conversations appear in history",
+              any(s["session_id"] == "named-thread" for s in listed))
+        turns = _get_session_turns(directory, "named-thread")
+        check("T30 full Unicode answer survives storage and history serialization",
+              json.loads(_json_bytes(turns))[-1]["content"] == complete_answer)
+        check("T31 conversation path traversal is refused",
+              _get_session_turns(directory, "../named-thread") is None
+              and _get_session_turns(directory, "..\\named-thread") is None)
+
+    with tempfile.TemporaryDirectory() as td:
+        directory = Path(td)
+        older = directory / "conv-older.jsonl"
+        newer = directory / "conv-newer.jsonl"
+        older.write_text(
+            json.dumps({"ts": "2026-01-01T10:00:00+05:30", "role": "user", "content": "older"}) + "\n",
+            encoding="utf-8",
+        )
+        newer.write_text(
+            json.dumps({"ts": "2026-09-12T10:00:00+05:30", "role": "user", "content": "newer"}) + "\n",
+            encoding="utf-8",
+        )
+        same_mtime = time.time()
+        os.utime(older, (same_mtime, same_mtime))
+        os.utime(newer, (same_mtime, same_mtime))
+        ordered = _list_sessions(directory)
+        check("T32 sessions sort by conversation timestamp, not copied mtime",
+              [s["session_id"] for s in ordered] == ["conv-newer", "conv-older"])
 
     loop.close()
     print("-" * 70)

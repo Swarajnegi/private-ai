@@ -160,9 +160,13 @@ def _dot(a: List[float], b: List[float]) -> float:
 
 
 def _build_default_embed_fn(model_name: str) -> EmbedFn:
-    """Lazy real embedder — same loader scripts/search_memory.py uses."""
-    from sentence_transformers import SentenceTransformer  # local import: heavy
-    model = SentenceTransformer(model_name)
+    """Lazy real embedder — reuses shared process-level cached encoder."""
+    try:
+        from jarvis_core.memory.store import _get_cached_encoder
+        model = _get_cached_encoder(model_name)
+    except Exception:
+        from sentence_transformers import SentenceTransformer  # fallback
+        model = SentenceTransformer(model_name)
 
     def embed(texts: List[str]) -> List[List[float]]:
         vecs = model.encode(texts, convert_to_numpy=True, normalize_embeddings=True)

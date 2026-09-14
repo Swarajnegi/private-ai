@@ -48,7 +48,9 @@ JARVIS_ROOT: Path = Path(
 # =============================================================================
 
 # The parent folder for ALL system data. Never stored inside the source tree.
-DATA_ROOT: Path = JARVIS_ROOT / "jarvis_data"
+DATA_ROOT: Path = Path(
+    os.environ.get("JARVIS_DATA_ROOT", JARVIS_ROOT / "jarvis_data")
+).resolve()
 
 # ChromaDB persistent vector store.
 # The JarvisMemoryStore reads this path at startup.
@@ -101,6 +103,12 @@ SPECIALIST_CORPUS_ROOT: Path = DATA_ROOT / "training_corpus"
 # 2026-08-10, KB 463/jarvis_core/memory/cognitive_index.py). Regenerable from
 # the KB — never committed; see .gitignore. KB stays the source of truth.
 COGNITIVE_INDEX_PATH: Path = DATA_ROOT / "cognitive_index.sqlite3"
+
+# Relationship projection over the authoritative JSONL facts.  Like ChromaDB
+# and the cognitive SQLite index, this is disposable: graph_index.json holds
+# only IDs, metadata, and evidence-backed edges, and is rebuilt from the KB
+# and commitment registry by scripts/build_graphrag.py.
+GRAPH_INDEX_PATH: Path = DATA_ROOT / "graph_index.json"
 
 # One JSONL per real `--ask` session. This is the ONLY record of JARVIS being
 # USED rather than BUILT, and until 2026-09-06 nothing read it — every other

@@ -153,6 +153,32 @@ _BRACE_PATTERN = re.compile(
 )
 
 
+def _find_matching_bracket(s: str, start_pos: int, open_ch: str = "{", close_ch: str = "}") -> int:
+    """Find index of matching closing bracket, ignoring brackets inside strings and escapes."""
+    depth = 0
+    in_str = False
+    escape = False
+    for i in range(start_pos, len(s)):
+        c = s[i]
+        if escape:
+            escape = False
+            continue
+        if c == "\\":
+            escape = True
+            continue
+        if c == '"':
+            in_str = not in_str
+            continue
+        if not in_str:
+            if c == open_ch:
+                depth += 1
+            elif c == close_ch:
+                depth -= 1
+                if depth == 0:
+                    return i
+    return -1
+
+
 def _extract_json_str(raw: str) -> Optional[str]:
     """
     Extract a JSON string from raw LLM output.
@@ -162,9 +188,14 @@ def _extract_json_str(raw: str) -> Optional[str]:
        raw_decode — reasoning models emit "{call}\\n{call}" or "{call}\\nprose"
        in one turn (live repro 2026-06-12, Gate A autobiography on nemotron);
        treating the whole string as one document made real calls vanish.
-    2. Try markdown fence extraction (most structured models).
-    3. Fall back to the first balanced { ... } brace pair anywhere.
-    4. Return None if no JSON-like content found.
+    2. Try markdown fence extraction (most structured models), including
+       cleaning trailing commas.
+    3. Scan for '{' anywhere in the text via JSONDecoder.raw_decode,
+       prioritizing any dict containing 'name' or 'function'.
+    4. Fall back to bracket-depth matching + trailing comma cleanup if
+       raw_decode stumbled on minor syntax imperfections.
+    5. Fall back to regex brace search as a last resort.
+    6. Return None if no JSON-like content found.
 
     Args:
         raw: Raw LLM output text.
@@ -173,19 +204,78 @@ def _extract_json_str(raw: str) -> Optional[str]:
         Cleaned JSON string, or None if extraction failed.
     """
     stripped = raw.strip()
+    decoder = json.JSONDecoder()
 
     # Fast path: text IS JSON (possibly with a second object / prose after it)
     if stripped.startswith("{"):
         try:
-            _obj, end = json.JSONDecoder().raw_decode(stripped)
-            return stripped[:end]
+            _obj, end = decoder.raw_decode(stripped)
+            if isinstance(_obj, dict):
+                return stripped[:end]
         except json.JSONDecodeError:
-            pass  # malformed head — fall through to fence/brace strategies
+            pass  # malformed head — fall through to fence/bracket strategies
 
     # Try markdown fence: ```json\n{...}\n```
-    fence_match = _FENCE_PATTERN.search(stripped)
-    if fence_match:
-        return fence_match.group(1).strip()
+    for fence_match in _FENCE_PATTERN.finditer(raw):
+        block = fence_match.group(1).strip()
+        if block.startswith("{"):
+            try:
+                _obj, end = decoder.raw_decode(block)
+                if isinstance(_obj, dict):
+                    return block[:end]
+            except json.JSONDecodeError:
+                pass
+            cleaned = re.sub(r",\s*([\]}])", r"\1", block)
+            try:
+                _obj = json.loads(cleaned)
+                if isinstance(_obj, dict):
+                    return cleaned
+            except json.JSONDecodeError:
+                pass
+
+    # Search for '{' anywhere in the text via raw_decode and bracket balancing.
+    # Prioritize any dict containing "name" or "function" (a valid tool call).
+    first_dict: Optional[str] = None
+    idx = 0
+    while True:
+        pos = raw.find("{", idx)
+        if pos == -1:
+            break
+
+        # 1. Try standard raw_decode
+        try:
+            obj, end = decoder.raw_decode(raw[pos:])
+            if isinstance(obj, dict):
+                if "name" in obj or "function" in obj:
+                    return raw[pos : pos + end]
+                if first_dict is None:
+                    first_dict = raw[pos : pos + end]
+                idx = pos + end
+                continue
+        except json.JSONDecodeError:
+            pass
+
+        # 2. Try bracket balancing + trailing comma cleanup
+        close_pos = _find_matching_bracket(raw, pos, "{", "}")
+        if close_pos != -1:
+            candidate = raw[pos : close_pos + 1]
+            cleaned = re.sub(r",\s*([\]}])", r"\1", candidate)
+            try:
+                obj = json.loads(cleaned)
+                if isinstance(obj, dict):
+                    if "name" in obj or "function" in obj:
+                        return cleaned
+                    if first_dict is None:
+                        first_dict = cleaned
+                    idx = close_pos + 1
+                    continue
+            except json.JSONDecodeError:
+                pass
+
+        idx = pos + 1
+
+    if first_dict is not None:
+        return first_dict
 
     # Last resort: find first { ... } block anywhere in the text
     brace_match = _BRACE_PATTERN.search(stripped)
@@ -193,6 +283,35 @@ def _extract_json_str(raw: str) -> Optional[str]:
         return brace_match.group(0)
 
     return None
+
+
+_XML_TOOLCALL_PATTERN = re.compile(
+    r"<tool_call>\s*([a-zA-Z0-9_-]+)(.*?)</tool_call>",
+    re.DOTALL | re.IGNORECASE,
+)
+_XML_ARG_PATTERN = re.compile(
+    r"<arg_key>(.*?)</arg_key>\s*<arg_value>(.*?)</arg_value>",
+    re.DOTALL | re.IGNORECASE,
+)
+
+
+def _extract_xml_tool_calls(raw: str) -> List[ToolCall]:
+    """Extract tool calls formatted in <tool_call>...<arg_key>..</arg_value> markup."""
+    calls: List[ToolCall] = []
+    for match in _XML_TOOLCALL_PATTERN.finditer(raw):
+        name = match.group(1).strip()
+        body = match.group(2)
+        arguments: Dict[str, Any] = {}
+        for k_match, v_match in _XML_ARG_PATTERN.findall(body):
+            k = k_match.strip()
+            v_raw = v_match.strip()
+            try:
+                v = json.loads(v_raw)
+            except Exception:
+                v = v_raw
+            arguments[k] = v
+        calls.append(ToolCall(name=name, arguments=arguments))
+    return calls
 
 
 # =============================================================================
@@ -209,7 +328,7 @@ def parse_tool_call(raw_text: str) -> ToolCall | ParseError:
 
     EXECUTION FLOW:
     1. Extract JSON string from raw text (handles fences, bare JSON).
-    2. json.loads() the extracted string.
+    2. json.loads() the extracted string (with fallback trailing-comma cleanup).
     3. Validate required field: "name" (string).
     4. Normalize argument field (handles "arguments", "args", "input", etc.).
     5. Return ToolCall on success, ParseError on any failure.
@@ -222,6 +341,9 @@ def parse_tool_call(raw_text: str) -> ToolCall | ParseError:
     """
     json_str = _extract_json_str(raw_text)
     if json_str is None:
+        xml_calls = _extract_xml_tool_calls(raw_text)
+        if xml_calls:
+            return xml_calls[0]
         return ParseError(
             message="No JSON object found in LLM output.",
             raw_text=raw_text,
@@ -229,11 +351,15 @@ def parse_tool_call(raw_text: str) -> ToolCall | ParseError:
 
     try:
         data = json.loads(json_str)
-    except json.JSONDecodeError as e:
-        return ParseError(
-            message=f"Invalid JSON: {e}",
-            raw_text=raw_text,
-        )
+    except json.JSONDecodeError:
+        cleaned = re.sub(r",\s*([\]}])", r"\1", json_str)
+        try:
+            data = json.loads(cleaned)
+        except json.JSONDecodeError as e:
+            return ParseError(
+                message=f"Invalid JSON: {e}",
+                raw_text=raw_text,
+            )
 
     if not isinstance(data, dict):
         return ParseError(
@@ -280,12 +406,14 @@ def parse_tool_calls(raw_text: str) -> List[ToolCall | ParseError]:
     Parse one or more tool calls from raw LLM output.
 
     EXECUTION FLOW:
-    1. Try to extract a JSON array of tool calls first.
-    2. If that fails, fall back to single tool call parsing.
+    1. Try to extract a JSON array of tool calls first (fenced or embedded).
+    2. Check for XML tool calls (<tool_call>...</tool_call>).
+    3. Fall back to single tool call parsing.
 
-    This handles two LLM output formats:
+    This handles:
         A) Single call: {"name": "...", "arguments": {...}}
         B) Multi call:  [{"name": "...", ...}, {"name": "...", ...}]
+        C) Mixed prose: "I will execute:\n[{"name": ...}]"
 
     Args:
         raw_text: Raw LLM output text.
@@ -293,26 +421,65 @@ def parse_tool_calls(raw_text: str) -> List[ToolCall | ParseError]:
     Returns:
         List of ToolCall or ParseError instances, one per detected call.
     """
-    stripped = raw_text.strip()
+    decoder = json.JSONDecoder()
 
-    # Check for JSON array (multi-call)
-    # Strip markdown fences first
-    content = stripped
-    fence_match = _FENCE_PATTERN.search(stripped)
-    if fence_match:
+    # Check for markdown fenced JSON array
+    for fence_match in _FENCE_PATTERN.finditer(raw_text):
         content = fence_match.group(1).strip()
+        if content.startswith("["):
+            try:
+                items, _ = decoder.raw_decode(content)
+                if isinstance(items, list) and items and any(
+                    isinstance(x, dict) and ("name" in x or "function" in x) for x in items
+                ):
+                    return [parse_tool_call(json.dumps(item)) for item in items]
+            except json.JSONDecodeError:
+                pass
+            cleaned = re.sub(r",\s*([\]}])", r"\1", content)
+            try:
+                items = json.loads(cleaned)
+                if isinstance(items, list) and items and any(
+                    isinstance(x, dict) and ("name" in x or "function" in x) for x in items
+                ):
+                    return [parse_tool_call(json.dumps(item)) for item in items]
+            except json.JSONDecodeError:
+                pass
 
-    if content.startswith("["):
+    # Search for JSON array '[' anywhere in text
+    idx = 0
+    while True:
+        pos = raw_text.find("[", idx)
+        if pos == -1:
+            break
         try:
-            items = json.loads(content)
-            if isinstance(items, list):
-                results: List[ToolCall | ParseError] = []
-                for item in items:
-                    # Re-serialize each item and parse individually
-                    results.append(parse_tool_call(json.dumps(item)))
-                return results
+            items, _ = decoder.raw_decode(raw_text[pos:])
+            if isinstance(items, list) and items and any(
+                isinstance(x, dict) and ("name" in x or "function" in x) for x in items
+            ):
+                return [parse_tool_call(json.dumps(item)) for item in items]
         except json.JSONDecodeError:
-            pass  # Fall through to single-call parsing
+            pass
+
+        # Try bracket balancing + trailing comma cleanup for array
+        close_pos = _find_matching_bracket(raw_text, pos, "[", "]")
+        if close_pos != -1:
+            candidate = raw_text[pos : close_pos + 1]
+            cleaned = re.sub(r",\s*([\]}])", r"\1", candidate)
+            try:
+                items = json.loads(cleaned)
+                if isinstance(items, list) and items and any(
+                    isinstance(x, dict) and ("name" in x or "function" in x) for x in items
+                ):
+                    return [parse_tool_call(json.dumps(item)) for item in items]
+            except json.JSONDecodeError:
+                pass
+
+        idx = pos + 1
+
+    # Check for XML tool calls (<tool_call>...</tool_call>)
+    xml_calls = _extract_xml_tool_calls(raw_text)
+    if xml_calls:
+        return list(xml_calls)
 
     # Single call
     result = parse_tool_call(raw_text)
@@ -573,6 +740,52 @@ if __name__ == "__main__":
         obs_error = dr_unknown.to_observation()
         print(f"\n  [12] Observation (success): '{obs_success}'")
         print(f"       Observation (error):   '{obs_error}'")
+
+        # --- Test 13: XML tool call parsing ---
+        raw_xml = (
+            '<tool_call>calculator\n'
+            '<arg_key>expression</arg_key>\n'
+            '<arg_value>"5 * 5"</arg_value>\n'
+            '</tool_call>'
+        )
+        xml_res = parse_tool_call(raw_xml)
+        assert isinstance(xml_res, ToolCall)
+        assert xml_res.name == "calculator"
+        assert xml_res.arguments == {"expression": "5 * 5"}
+        print(f"\n  [13] XML tool call parse: {xml_res.name}({xml_res.arguments})")
+
+        # --- Test 14: Deeply nested JSON (3+ levels) surrounded by prose ---
+        raw_nested = 'I will execute this now:\n{"name": "echo", "arguments": {"message": "nested", "options": {"level2": {"level3": True}}}}'
+        # with valid JSON
+        raw_nested_json = 'I will execute this now:\n{"name": "echo", "arguments": {"message": "nested", "options": {"level2": {"level3": true}}}}'
+        nested_res = parse_tool_call(raw_nested_json)
+        assert isinstance(nested_res, ToolCall)
+        assert nested_res.name == "echo"
+        assert nested_res.arguments["options"]["level2"]["level3"] is True
+        print(f"\n  [14] Deeply nested (3+ levels) JSON parse: {nested_res.name}({nested_res.arguments})")
+
+        # --- Test 15: Multi-call JSON array preceded by conversational prose ---
+        raw_multi_prose = 'Let me run these two operations in batch:\n[\n  {"name": "calculator", "arguments": {"expression": "10 + 20"}},\n  {"name": "echo", "arguments": {"message": "prose batch"}}\n]'
+        multi_prose_res = parse_tool_calls(raw_multi_prose)
+        assert len(multi_prose_res) == 2
+        assert all(isinstance(m, ToolCall) for m in multi_prose_res)
+        assert multi_prose_res[0].name == "calculator"
+        assert multi_prose_res[1].name == "echo"
+        print(f"  [15] Multi-call with preceding prose parse: {[m.name for m in multi_prose_res]}")
+
+        # --- Test 16: JSON containing braces in string arguments ---
+        raw_code = 'Calling calculator with code string:\n{"name": "echo", "arguments": {"message": "function foo() { return 1; }"}}'
+        code_res = parse_tool_call(raw_code)
+        assert isinstance(code_res, ToolCall)
+        assert code_res.arguments["message"] == "function foo() { return 1; }"
+        print(f"  [16] JSON with braces in string value: {code_res.arguments}")
+
+        # --- Test 17: Tool call with trailing commas ---
+        raw_trailing = '{"name": "calculator", "arguments": {"expression": "3 * 3",},}'
+        trailing_res = parse_tool_call(raw_trailing)
+        assert isinstance(trailing_res, ToolCall)
+        assert trailing_res.arguments == {"expression": "3 * 3"}
+        print(f"  [17] Trailing comma auto-repair parse: {trailing_res.name}({trailing_res.arguments})")
 
         print("\n" + "=" * 60)
         print("  All smoke tests passed.")

@@ -607,9 +607,18 @@ Use `~/.venv/bin/python3` (an absolute interpreter path) — cron does not inher
 - **Inside WSL** (recommended, and what this repo assumes): identical to the above. `crontab -e`,
   same two lines with that machine's path.
 - **Native Windows Python**: `--background` **cannot work** — it needs `os.fork`, and the script
-  says so and exits. Use Task Scheduler instead: trigger *At log on* **and** *Repeat every 10
-  minutes*, action `wsl.exe -d Ubuntu -e bash -lc "cd /path/to/JARVIS && .venv/bin/python3 scripts/hearth.py --background"`
-  (or the native `python.exe` equivalent running it in the **foreground** in a hidden window).
+  says so and exits. Prefer Task Scheduler when the account permits it. On a managed Windows
+  account where Scheduler is denied, install the tracked per-user fallback once:
+
+  ```powershell
+  python scripts/windows_hearth_watchdog.py --install
+  python scripts/windows_hearth_watchdog.py --status
+  ```
+
+  It writes one `HKCU\\...\\Run` value — no administrator permission, service, or scheduled task —
+  so Windows launches a hidden watchdog directly at logon. The watchdog owns a foreground native
+  `hearth.py` child and restarts it after a crash. It is intentionally per-user: it runs while the
+  user is logged in, not while Windows is powered off. Remove it with `--uninstall`.
 
 **The honest ceiling: "always on" means "whenever the machine is on and WSL is up."** A hearth
 cannot run while the laptop is asleep or shut down, and WSL is not running when no terminal or
@@ -692,10 +701,12 @@ replaced `domain_guess` (a keyword hint) with `domain_labels.jsonl` (an explicit
 **Tier 1 — a commitment registry (build this first; it is the cheap part).**
 When a decision defers something, write it as a structured record rather than prose: what was
 deferred, the condition that would resolve it, and a review horizon. The repo *already does this
-informally* and those cases are machine-checkable today — `ROADMAP.md`'s `4.6 GraphRAG ⏭ DEFERRED
-(trigger-gated: first KB-logged multi-hop retrieval failure)` is a real open loop with an explicit
-trigger. Make that shape first-class and absence detection becomes a boring scan with no inference
-and no false positives. Stop inferring what you can record.
+informally* and those cases are machine-checkable today — GraphRAG was originally a trigger-gated
+open loop and is now a required follow-on behind the always-reachable Context Ledger foundation.
+That reversal is itself why the registry matters: the new fact and its revised resolution condition
+are recorded instead of leaving stale prose to be inferred. Make that shape first-class and absence
+detection becomes a boring scan with no inference and no false positives. Stop inferring what you
+can record.
 
 **Tier 2 — a dormancy detector over that registry**, mirroring `tension.py`'s proven architecture:
 candidate selection → LLM judge with an **abstention option** → confidence floor → append-only

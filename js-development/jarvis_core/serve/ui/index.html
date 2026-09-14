@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#060911">
+<meta name="color-scheme" content="dark">
+<title>JARVIS | Personal intelligence</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='12' fill='%230b0c0e' stroke='%23ffb43c'/%3E%3Cellipse cx='16' cy='16' rx='6' ry='12' fill='none' stroke='%23ffb43c'/%3E%3Cpath d='M4 16h24M7 9h18M7 23h18' stroke='%23ffb43c'/%3E%3C/svg%3E">
+<script>
+  // Direct file preview uses adjacent assets; authenticated API calls require HTTP.
+  const assetRoot = location.protocol === "file:" ? "./" : "/ui/";
+  document.write('<link rel="stylesheet" href="' + assetRoot + 'desktop.css?v=20260914-atelier">');
+  for (const file of ["marked.umd.js", "hologram.js", "app.js", "desktop.js"])
+    document.write('<script defer src="' + assetRoot + file + '?v=20260914-atelier"><\/script>');
+</script>
+</head>
+<body data-connection="offline">
+<a class="skip-link" href="#prompt">Skip to message</a>
+<div class="workspace">
+  <aside id="sidebar" class="sidebar" aria-label="Conversations">
+    <a class="brand" href="/" aria-label="JARVIS home"><span class="brand-orb" aria-hidden="true"></span><span class="brand-word">JARVIS<small>PERSONAL INTELLIGENCE</small></span></a>
+    <button id="new-chat" class="new-chat" type="button"><span data-icon="plus"></span><span>New conversation</span><kbd>Alt N</kbd></button>
+    <div class="search"><span data-icon="search"></span><input id="search" type="search" placeholder="Search conversations" aria-label="Search conversations" autocomplete="off"><button id="clear-search" class="icon-button" type="button" aria-label="Clear search" hidden><span data-icon="close"></span></button><kbd id="search-shortcut">/</kbd></div>
+    <div class="history-heading"><span>Conversations</span><span id="session-count">0</span><button id="refresh" class="icon-button" type="button" aria-label="Refresh conversations" title="Refresh conversations"><span data-icon="refresh"></span></button></div>
+    <nav id="sessions" class="sessions" aria-label="Saved conversations"><p class="empty-list">Connect to load your conversations.</p></nav>
+    <div class="sidebar-bottom">
+      <button id="system-toggle" class="system-button" type="button"><span class="status-light" id="status-light"></span><span id="status-text">Not connected</span><span data-icon="chevron"></span></button>
+      <div class="profile-row"><span class="avatar">SN</span><span>Swaraj Negi<small>Personal workspace</small></span><button id="settings-button" class="icon-button" type="button" aria-label="Connection settings" title="Connection settings"><span data-icon="settings"></span></button></div>
+    </div>
+  </aside>
+  <button id="scrim" class="scrim" type="button" aria-label="Close navigation" hidden></button>
+  <main class="main">
+    <header class="topbar">
+      <button id="menu" class="icon-button" type="button" aria-label="Toggle navigation"><span data-icon="menu"></span></button>
+      <div class="breadcrumb"><span class="crumb-core">WORKSPACE</span><span class="crumb-divider">/</span><strong id="chat-title">New conversation</strong></div>
+      <div class="top-actions"><span class="connection-badge"><span class="connection-dot"></span><span id="connection-label">PRIVATE CONNECTION</span></span><span class="action-divider"></span><button id="export" class="icon-button" type="button" aria-label="Export full conversation" title="Export full conversation"><span data-icon="download"></span></button><button id="inspector-button" class="icon-button" type="button" aria-label="Toggle system panel" title="System activity" aria-expanded="false"><span data-icon="activity"></span></button></div>
+    </header>
+    <div class="stage">
+      <section class="conversation" aria-label="JARVIS chat">
+        <div id="notice" class="notice" role="status" hidden></div>
+        <div id="messages" class="messages" tabindex="0" aria-label="Conversation messages">
+          <section id="welcome" class="welcome">
+            <div class="welcome-heading"><p class="eyebrow">PERSONAL INTELLIGENCE / J.A.R.V.I.S.</p><h1>At your service, Swaraj<span>.</span></h1></div>
+            <div class="core-stage">
+              <div class="core-guide guide-left" aria-hidden="true"><span>J.A.R.V.I.S</span><i></i><span>COGNITIVE CORE</span></div>
+              <div class="core-viewport"><canvas class="living-core" data-core="hero" aria-label="Amber holographic JARVIS core with layered orbital circuits and a luminous centre"></canvas></div>
+              <div class="core-guide guide-right" aria-hidden="true"><span>PERSONAL</span><i></i><span>INTELLIGENCE</span></div>
+              <div class="core-caption"><span class="core-caption-dot"></span><span id="core-caption">Awaiting connection</span><button id="motion-toggle" type="button" class="motion-toggle" aria-label="Pause core animation" title="Pause core animation" aria-pressed="false"><span data-icon="pause"></span></button></div>
+            </div>
+            <div class="suggestions" aria-label="Conversation starters">
+              <button type="button" data-prompt="What past JARVIS decisions constrain the task I am starting today?"><span class="suggestion-icon" data-icon="layers"></span><strong>Pick up the thread</strong><p>Return to what matters.</p><span class="suggestion-arrow" data-icon="diagonal"></span></button>
+              <button type="button" data-prompt="Help me think through a new idea. Start by asking me what I have in mind."><span class="suggestion-icon" data-icon="spark"></span><strong>Explore an idea</strong><p>A little space to think bigger.</p><span class="suggestion-arrow" data-icon="diagonal"></span></button>
+              <button type="button" data-prompt="Review the current JARVIS roadmap and help me identify the most useful next step."><span class="suggestion-icon" data-icon="compass"></span><strong>Find the next move</strong><p>From a bigger picture to a clear step.</p><span class="suggestion-arrow" data-icon="diagonal"></span></button>
+            </div>
+          </section>
+        </div>
+        <button id="jump-bottom" class="jump-bottom" type="button" hidden>↓ Latest message</button>
+        <div class="composer-zone">
+          <div id="working" class="working" role="status" hidden><canvas data-core="thinking" class="thinking-core" aria-hidden="true"></canvas><span><strong id="working-text">JARVIS is thinking</strong><small>Making the connections.</small></span><time id="elapsed">0s</time></div>
+          <form id="composer" class="composer" novalidate>
+            <label class="sr-only" for="prompt">Message JARVIS</label><textarea id="prompt" rows="2" placeholder="What's on your mind?" style="resize: none"></textarea>
+            <div class="composer-bottom"><div class="model-control"><span data-icon="spark"></span><label class="sr-only" for="model">Model</label><select id="model" aria-label="Model"><optgroup label="Free"><option value="openrouter/free">OpenRouter free router</option><option value="nvidia/nemotron-3-ultra-550b-a55b:free">NVIDIA Nemotron 3 Ultra · free</option><option value="nvidia/nemotron-3-super-120b-a12b:free">NVIDIA Nemotron 3 Super · free</option><option value="nvidia/nemotron-3-nano-30b-a3b:free">NVIDIA Nemotron 3 Nano · free</option><option value="nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free">NVIDIA Nemotron 3 Nano Omni · free</option><option value="nvidia/nemotron-nano-9b-v2:free">NVIDIA Nemotron Nano 9B · free</option><option value="nvidia/nemotron-nano-12b-v2-vl:free">NVIDIA Nemotron Nano 12B · free</option><option value="openai/gpt-oss-20b:free">OpenAI GPT-OSS 20B · free</option><option value="google/gemma-4-31b-it:free">Google Gemma 4 31B · free</option><option value="google/gemma-4-26b-a4b-it:free">Google Gemma 4 26B · free</option><option value="cohere/north-mini-code:free">Cohere North Mini Code · free</option><option value="inclusionai/ling-3.0-flash:free">Ling 3 Flash · free</option><option value="poolside/laguna-s-2.1:free">Poolside Laguna S 2.1 · free</option><option value="poolside/laguna-xs-2.1:free">Poolside Laguna XS 2.1 · free</option></optgroup><optgroup label="Curated paid — charged through OpenRouter"><option value="openai/gpt-5.6-luna">OpenAI GPT-5.6 Luna · $0.10 / $0.60 per 1M tokens</option><option value="openai/gpt-5.6-terra">OpenAI GPT-5.6 Terra · $1 / $6 per 1M tokens</option><option value="openai/gpt-5.6-sol">OpenAI GPT-5.6 Sol · $5 / $30 per 1M tokens</option><option value="anthropic/claude-sonnet-5">Anthropic Claude Sonnet 5 · $2 / $10 per 1M tokens</option><option value="anthropic/claude-opus-5">Anthropic Claude Opus 5 · $5 / $25 per 1M tokens</option><option value="moonshotai/kimi-k2.6">Moonshot Kimi K2.6 · $0.95 / $4 per 1M tokens</option><option value="moonshotai/kimi-k2.7-code">Moonshot Kimi K2.7 Code · $0.73 / $3.50 per 1M tokens</option><option value="deepseek/deepseek-v4-flash">DeepSeek V4 Flash · $0.14 / $0.28 per 1M tokens</option><option value="deepseek/deepseek-v4-pro">DeepSeek V4 Pro · $0.435 / $0.87 per 1M tokens</option><option value="x-ai/grok-4.5">xAI Grok 4.5 · $2 / $6 per 1M tokens</option></optgroup></select></div><button id="options-button" class="composer-options" type="button" aria-label="Configure request" aria-expanded="false"><span data-icon="sliders"></span><span>Configure</span></button><button id="send" class="send" type="submit" aria-label="Send message"><span data-icon="arrow"></span></button></div>
+            <div id="options" class="options" hidden><label>Reasoning<select id="reasoning"><option value="">Model default</option><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option></select></label><label>Tools<select id="tools"><option value="default">Standard</option><option value="full">Full toolkit</option></select></label><label class="permission-option"><input id="allow-all" type="checkbox">Allow gated tools<span>Permits code, shell and file actions for this request.</span></label></div>
+          </form>
+          <div class="composer-caption"><span>One continuous conversation with your intelligence.</span><span><kbd>Enter</kbd> to send <b>·</b> <kbd>Shift Enter</kbd> for a new line</span></div>
+        </div>
+      </section>
+      <aside id="inspector" class="inspector" aria-label="System activity" hidden>
+        <div class="inspector-header"><div><p class="eyebrow">BEHIND THE THOUGHT</p><h2>System activity</h2></div><button id="close-inspector" class="icon-button" type="button" aria-label="Close system panel"><span data-icon="close"></span></button></div>
+        <div class="pulse-visual"><canvas id="health-pulse" aria-label="Hearth heartbeat: a pulse appears for each successful health check"></canvas></div>
+        <div class="pulse-summary"><span id="pulse-state">Awaiting connection</span><span id="uptime">—</span></div>
+        <div class="metric-row"><span>Conversations</span><strong id="metric-sessions">—</strong></div><div class="metric-row"><span>Requests this run</span><strong id="metric-requests">—</strong></div>
+        <p class="eyebrow jobs-title">BACKGROUND ACTIVITY</p><div id="jobs" class="jobs"><p class="muted">Connect to see background activity.</p></div>
+        <details id="trace-details" class="trace-details"><summary>Execution trace <span id="trace-count">0</span></summary><pre id="trace">Activity from your next message will appear here.</pre></details><p class="inspector-foot">Powered by your JARVIS hearth</p>
+      </aside>
+    </div>
+  </main>
+</div>
+<dialog id="settings" aria-labelledby="settings-title">
+  <form id="connection-form" novalidate>
+    <div class="dialog-heading"><div><p class="eyebrow">A PRIVATE CONNECTION</p><h2 id="settings-title">Connect to JARVIS</h2></div><button type="button" id="close-settings" class="icon-button" aria-label="Close settings"><span data-icon="close"></span></button></div>
+    <p>Your workspace is protected with a hearth token. Use the token for this server to access your conversations.</p>
+    <label for="token">Hearth token</label><div class="token-input"><input id="token" type="password" autocomplete="off" placeholder="Enter your connection token" aria-describedby="token-help connection-error"><button id="show-token" type="button" aria-label="Show token" class="icon-button"><span data-icon="eye"></span></button></div>
+    <p id="token-help" class="token-help">This is separate from your model provider API key. It stays in this browser tab for the session.</p>
+    <label class="token-file">Or choose a token file<input id="token-file" type="file" aria-label="Choose local hearth token file"></label>
+    <p id="connection-error" role="alert"></p><button class="connect-button" type="submit">Connect workspace <span data-icon="diagonal"></span></button>
+  </form>
+</dialog>
+<div id="toast" class="toast" role="status" hidden></div>
+</body>
+</html>

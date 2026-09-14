@@ -60,6 +60,15 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
+if sys.platform == "win32":
+    try:
+        if hasattr(sys.stdout, "reconfigure"):
+            sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        if hasattr(sys.stderr, "reconfigure"):
+            sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))  # standalone-run safety
 
 from jarvis_core.config import KB_PATH, JARVIS_ROOT
@@ -159,6 +168,8 @@ class AskResult:
     conflict_detected: bool = False
     conflict_detail: str = ""
     escalation_question: str = ""
+    degenerate: bool = False
+    persisted: bool = True
 
 
 # =============================================================================
@@ -226,9 +237,11 @@ def _is_unparsed_answer(text: str) -> bool:
     s = (text or "").strip()
     if not s:
         return True
-    if s.startswith("["):
+    if s.startswith("[") and ('"name"' in s or '"arguments"' in s or '"tool"' in s or '"function"' in s):
         return True
-    if s.startswith("{") and ('"name"' in s or '"arguments"' in s):
+    if s.startswith("{") and ('"name"' in s or '"arguments"' in s or '"tool"' in s or '"function"' in s):
+        return True
+    if s.startswith("```") and ('"name"' in s or '"arguments"' in s or '"tool"' in s or '"function"' in s):
         return True
     return False
 
@@ -499,7 +512,10 @@ async def ask(
     sess = resolve_terminal_session(
         window_hours=continue_window_hours, new=new_session, explicit=session,
         state_path=session_state_path)
-    hist = history if history is not None else cstore.load_recent(sess.session_id)
+    # Build a query-aware working-memory pack.  A raw recent-turn tail loses
+    # the instruction that gives a long answer (or a short follow-up) meaning;
+    # this keeps complete exchanges and pages in older relevant ones.
+    hist = history if history is not None else cstore.load_context(sess.session_id, question)
 
     store = store_factory() if store_factory is not None else _open_store(printer)
 
@@ -568,7 +584,11 @@ async def ask(
     for tc, tr in result.react.tool_calls:
         out = str(tr.error) if getattr(tr, "error", None) else str(tr.output)
         tag = "tool!ERR" if getattr(tr, "error", None) else "tool    "
-        printer(f"  {tag}: {tc.name} -> {out[:140]}{'...' if len(out) > 140 else ''}")
+        try:
+            printer(f"  {tag}: {tc.name} -> {out[:140]}{'...' if len(out) > 140 else ''}")
+        except Exception:
+            safe_out = out[:140].encode("ascii", errors="replace").decode("ascii")
+            printer(f"  {tag}: {tc.name} -> {safe_out}{'...' if len(out) > 140 else ''}")
 
     # Structural safety gate: a degenerate (raw/empty/tool-shaped) emission is
     # never presented, stored, or distilled as an answer. The honest fallback
@@ -847,6 +867,8 @@ async def ask(
         reasoning_verdict=rreport.verdict, reasoning_flaw=rreport.flaw,
         conflict_detected=conflict_detected, conflict_detail=conflict_detail,
         escalation_question=escalation_question,
+        degenerate=degenerate,
+        persisted=not degenerate,
     )
 
 
@@ -2117,7 +2139,11 @@ def _run_self_test() -> None:
 
 
 def _ask_via_hearth(question: str, session: Optional[str] = None,
-                    new_session: bool = False) -> int:
+                    new_session: bool = False,
+                    full: bool = False, allow_all: bool = False,
+                    reasoning_effort: Optional[str] = None,
+                    max_iterations: Optional[int] = None,
+                    budget: Optional[float] = None) -> int:
     """Delegate one question to the always-on hearth instead of booting here.
 
     EXECUTION FLOW:
@@ -2148,7 +2174,10 @@ def _ask_via_hearth(question: str, session: Optional[str] = None,
           f"(one process owns the state; this terminal is an adapter)")
     payload = jarvis_client.ask_streaming(
         question, jarvis_client.DEFAULT_URL, token,
-        session=session, new_session=new_session)
+        session=session, new_session=new_session,
+        full=full, allow_all=allow_all,
+        reasoning_effort=reasoning_effort,
+        max_iterations=max_iterations, budget=budget)
     if not payload.get("ok"):
         print(f"\n  ERROR: {payload.get('error', 'unknown')}")
         return 1
@@ -2263,7 +2292,11 @@ def main() -> int:
     if args.awareness:
         return asyncio.run(_awareness())
     if args.ask and args.via_hearth:
-        return _ask_via_hearth(args.ask, session=args.session, new_session=args.new)
+        return _ask_via_hearth(args.ask, session=args.session, new_session=args.new,
+                               full=args.full, allow_all=args.allow_all,
+                               reasoning_effort=args.reasoning_effort,
+                               max_iterations=args.max_iterations,
+                               budget=args.budget)
     if args.ask:
         handler = allow_all_ask_handler if (args.full and args.allow_all) else None
         tgts = [m.strip() for m in args.targets.split(",")] if args.targets else None

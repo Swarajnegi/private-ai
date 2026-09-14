@@ -93,6 +93,9 @@ env/
 *.key
 
 # -- Regenerable build noise --------------------------------------------------
+# Local reference frames, browser screenshots and one-off validator cache.
+.tmp/core-reference/
+artifacts/jarvis-ui/
 __pycache__/
 *.py[cod]
 *$py.class
@@ -133,6 +136,9 @@ desktop.ini
 # repeat the mistake of git-tracking cognitive_index.sqlite3 and chromadb/,
 # which is how the KB/index count drift (544 vs 533) went unnoticed.
 jarvis_data/token_ratios.json
+jarvis_data/token_ratios.json.lock
+jarvis_data/model_stats.jsonl
+inspect_conv.py
 
 # -- Context Ledger (per-session verbatim archive of evicted context) --------
 # Append-only spans written before compaction evicts them, keyed by
@@ -140,6 +146,7 @@ jarvis_data/token_ratios.json
 # authoritative record is knowledge_base.jsonl. Grows with session length and
 # is meaningless on another device (session ids are per-process).
 jarvis_data/context/
+jarvis_data/conversations/*.lock
 
 # -- Local-only PROJECTIONS (2026-09-08) --------------------------------------
 # Derived from knowledge_base.jsonl and rebuilt where they are read, so syncing
@@ -182,6 +189,7 @@ jarvis_data/context/
 #                            repeated it without re-verifying.
 jarvis_data/cognitive_index.sqlite3
 jarvis_data/behavioral_state_model.jsonl
+jarvis_data/graph_index.json
 
 # -- Domain labels (2026-09-08) -----------------------------------------------
 # The AUTHORITATIVE domain label per captured turn, from the embedding classifier.
@@ -205,6 +213,7 @@ jarvis_data/.hearth_token
 jarvis_data/.hearth.pid
 jarvis_data/.hearth_jobs.json
 jarvis_data/hearth.log
+jarvis_data/hearth_watchdog.log
 
 # -- chromadb/ — UNTRACKED as of 2026-09-11 (this REVERSES a recorded decision)
 # The prior decision was "chromadb/ stays tracked": a ~22 MB regenerable index
@@ -245,6 +254,11 @@ jarvis_data/chromadb/
 # with the user from being raised again elsewhere.
 jarvis_data/.codex_ingest_watermark.jsonl
 
+# -- Commitment registry lock -------------------------------------------------
+# commitments.jsonl is a tracked fact. Its sibling lock only serializes writers
+# on one machine and has no meaning after a pull.
+jarvis_data/commitments.jsonl.lock
+
 # -- rfm/ — A SEPARATE REPO, NOT JARVIS CONTENT (2026-09-08) ------------------
 # Working clone of https://github.com/Swarajnegi/dadfinanceapp.git — the user's
 # personal finance app, built primarily on the personal laptop (Antigravity +
@@ -260,3 +274,4 @@ jarvis_data/.codex_ingest_watermark.jsonl
 #
 # Also 9.5 MB of built .apk at the repo root, which is its own reason.
 rfm/
+dadfinanceapp/

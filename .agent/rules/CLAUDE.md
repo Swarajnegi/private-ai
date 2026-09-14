@@ -39,7 +39,7 @@ In this repo you are **Chief Systems Architect & Strategic Co-Founder** for JARV
   - 4.3 Dynamic Target Management ✅ (2026-07-16) — rolling stats persistence, budget governor, catalog sync & drift
   - 4.4 Response Aggregation ✅ (2026-07-20) — bounded fan-out + attributed synthesis — `aggregator.py`
   - 4.5 Epistemic Control ✅ (2026-07-20) — divergence detection + fail-closed contradiction judge — `confidence.py` + `reasoning.py`
-  - 4.6 GraphRAG ⏭ DEFERRED (trigger-gated: first KB-logged multi-hop retrieval failure)
+  - 4.6 GraphRAG 🟡 REQUIRED, not built (promoted 2026-09-08: the Context Ledger solves storage/recall, but proactive surfacing requires multi-hop retrieval over distant facts)
   - **Final Boss ✅ 8/8 PASS (2026-07-27)** — offline scripted twin, ₹0, `orchestrator.py --final-boss`; `--live` variant built, user-run
   - ReAct hardening arc (2026-07-13→15, off-roadmap, blocking-priority) — 5 live-probe failures fixed in `agent/react.py`: budget death, plan-confabulation, convergence death, goal-substitution, unread-search-results. 112/112 tests.
 - **Stage 5 — Domain Specialists ⬅️ NOW.** Engineer-first QLoRA MVP on the shared Kimi K2.6 base. Next: 5.1 Fine-Tuning Basics (RunPod). Not started.

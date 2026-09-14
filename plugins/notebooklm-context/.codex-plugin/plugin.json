@@ -1,0 +1,19 @@
+{
+  "name": "notebooklm-context",
+  "version": "0.1.0",
+  "description": "A durable local context vault for NotebookLM notes and Codex retrieval.",
+  "author": {
+    "name": "Swaraj Negi"
+  },
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "NotebookLM Context Vault",
+    "shortDescription": "Store, search, and export durable NotebookLM context.",
+    "longDescription": "A local-first context bridge for NotebookLM workflows. Paste or export NotebookLM material into the vault, then let Codex search precise excerpts or assemble a bounded context pack for the task at hand. NotebookLM remains an external source; this plugin never claims infinite storage or hidden access to your notebooks.",
+    "developerName": "Swaraj Negi",
+    "category": "Productivity",
+    "capabilities": ["Search", "Write", "Export"],
+    "defaultPrompt": "Save, search, or export context from my NotebookLM Context Vault."
+  },
+  "mcpServers": "./.mcp.json"
+}

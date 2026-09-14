@@ -39,6 +39,15 @@ from typing import Any, Dict, Optional
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(_REPO_ROOT / "js-development"))
 
+if sys.platform == "win32":
+    try:
+        if hasattr(sys.stdout, "reconfigure"):
+            sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        if hasattr(sys.stderr, "reconfigure"):
+            sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 from jarvis_core.config import DATA_ROOT                    # noqa: E402
 
 DEFAULT_URL = "http://127.0.0.1:8756"
@@ -75,6 +84,12 @@ def health(base_url: str, token: str, timeout: float = 10.0) -> Dict[str, Any]:
 
 def ask_streaming(question: str, base_url: str, token: str,
                   session: Optional[str] = None, new_session: bool = False,
+                  model: Optional[str] = None,
+                  full: bool = False,
+                  allow_all: bool = False,
+                  reasoning_effort: Optional[str] = None,
+                  max_iterations: Optional[int] = None,
+                  budget: Optional[float] = None,
                   timeout: float = 900.0,
                   printer: Any = print) -> Dict[str, Any]:
     """POST /v1/ask as SSE; print each log frame; return the answer payload.
@@ -90,8 +105,21 @@ def ask_streaming(question: str, base_url: str, token: str,
         The final payload dict, or {"ok": False, "error": ...} if the stream
         ended without one — a truncated stream must not look like success.
     """
-    body = json.dumps({"question": question, "session": session,
-                       "new_session": new_session}).encode("utf-8")
+    req_data: Dict[str, Any] = {"question": question, "session": session,
+                                "new_session": new_session}
+    if model:
+        req_data["model"] = model
+    if full:
+        req_data["full"] = True
+    if allow_all:
+        req_data["allow_all"] = True
+    if reasoning_effort is not None:
+        req_data["reasoning_effort"] = reasoning_effort
+    if max_iterations is not None:
+        req_data["max_iterations"] = max_iterations
+    if budget is not None:
+        req_data["budget_usd"] = budget
+    body = json.dumps(req_data).encode("utf-8")
     req = urllib.request.Request(
         f"{base_url}/v1/ask", data=body, method="POST",
         headers={"Authorization": f"Bearer {token}",
@@ -123,10 +151,29 @@ def ask_streaming(question: str, base_url: str, token: str,
 
 def ask_buffered(question: str, base_url: str, token: str,
                  session: Optional[str] = None, new_session: bool = False,
+                 model: Optional[str] = None,
+                 full: bool = False,
+                 allow_all: bool = False,
+                 reasoning_effort: Optional[str] = None,
+                 max_iterations: Optional[int] = None,
+                 budget: Optional[float] = None,
                  timeout: float = 900.0) -> Dict[str, Any]:
     """POST /v1/ask and wait for one JSON body. For scripts, not for humans."""
-    body = json.dumps({"question": question, "session": session,
-                       "new_session": new_session}).encode("utf-8")
+    req_data: Dict[str, Any] = {"question": question, "session": session,
+                                "new_session": new_session}
+    if model:
+        req_data["model"] = model
+    if full:
+        req_data["full"] = True
+    if allow_all:
+        req_data["allow_all"] = True
+    if reasoning_effort is not None:
+        req_data["reasoning_effort"] = reasoning_effort
+    if max_iterations is not None:
+        req_data["max_iterations"] = max_iterations
+    if budget is not None:
+        req_data["budget_usd"] = budget
+    body = json.dumps(req_data).encode("utf-8")
     req = urllib.request.Request(
         f"{base_url}/v1/ask", data=body, method="POST",
         headers={"Authorization": f"Bearer {token}",
@@ -150,6 +197,14 @@ def main() -> int:
                    help="wait for one JSON body instead of streaming progress")
     p.add_argument("--session", default=None, help="continue a specific session id")
     p.add_argument("--new", action="store_true", help="start a fresh session")
+    p.add_argument("--model", "--brain", default=None,
+                   help="model to route to (e.g. google/gemini-3.6-flash)")
+    p.add_argument("--full", action="store_true", help="Enable full toolset")
+    p.add_argument("--allow-all", action="store_true", help="Auto-allow all tool executions")
+    p.add_argument("--reasoning-effort", choices=["low", "medium", "high"], default=None,
+                   help="Reasoning/thinking effort level")
+    p.add_argument("--max-iterations", type=int, default=None, help="ReAct iteration ceiling")
+    p.add_argument("--budget", type=float, default=None, help="Spend ceiling (USD)")
     p.add_argument("--json", action="store_true", help="print the raw payload")
     args = p.parse_args()
 
@@ -169,7 +224,10 @@ def main() -> int:
             p.error("a question is required (or --health)")
 
         payload = (ask_buffered if args.no_stream else ask_streaming)(
-            question, args.url, token, session=args.session, new_session=args.new)
+            question, args.url, token, session=args.session, new_session=args.new,
+            model=args.model, full=args.full, allow_all=args.allow_all,
+            reasoning_effort=args.reasoning_effort, max_iterations=args.max_iterations,
+            budget=args.budget)
     except urllib.error.HTTPError as e:
         detail = e.read().decode("utf-8", errors="replace")[:400]
         print(f"hearth refused the request: HTTP {e.code} {detail}", file=sys.stderr)

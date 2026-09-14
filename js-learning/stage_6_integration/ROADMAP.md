@@ -162,6 +162,14 @@ and refactor a module with full dependency awareness.
 
 ## Sub-Phase 6.7: Always-Reachable Memory Backend ⬜
 
+> **Implementation state (2026-09-12):** a first, deliberately narrow vertical
+> slice is built but not yet deployed: the hearth now exposes authenticated,
+> allowlisted JSONL-ledger read/union-write endpoints and
+> `scripts/sync_remote_memory.py` batches local facts to the Railway-mounted
+> durable volume. It still needs a separate sync bearer token configured in
+> Railway, a deployed build, scheduled sync on each host, and the 6.7.3
+> cross-device continuity proof before this row can be called complete.
+
 **Goal:** Today, "portable across machines" means git push/pull between exactly two known
 laptops, with an explicit single-user-at-a-time constraint. That's a real, working mechanism for
 a solo project, but it isn't "always aware on any system" — it requires a manual sync step, and
@@ -243,7 +251,7 @@ repeating yourself once.
 
 ---
 
-## Sub-Phase 6.11: General Perception of Absence ⬜ **spec written, not built**
+## Sub-Phase 6.11: General Perception of Absence 🟡 **Tier 1 shipped; Tier 2–3 gated**
 
 **Goal:** the sibling of `agent/tension.py`. That organ surfaces *contradiction* over the user's own
 history; this one surfaces *silence* — "you opened this and never closed it." Requested directly by
@@ -470,12 +478,12 @@ The complete system that:
 |-----------|--------|------------------|
 | 6.1 Voice Input | ⬜ Not Started | 0/4 |
 | 6.2 Vision Input | ⬜ Not Started | 0/4 |
-| 6.3 Unified API Layer | ⬜ Not Started | 0/4 |
+| 6.3 Unified API Layer | SHIPPED v0 - hearth | 4/4 core lessons; queueing/client shells remain |
 | 6.4 Conversation Memory | ⬜ Not Started | 0/4 |
 | 6.5 Context Caching (Cloud) | ⬜ Not Started | 0/4 |
 | 6.6 JARVIS MVP | ⬜ Not Started | 0/4 |
-| 6.7 Always-Reachable Memory Backend | ⬜ Not Started | 0/4 |
-| 6.8 Universal Capture Adapter | ⬜ Not Started | 0/4 |
+| 6.7 Always-Reachable Memory Backend | 🔄 v0 ledger sync built; not deployed or cross-device verified | 1/4 |
+| 6.8 Universal Capture Adapter | COMPLETE - 6.8.1-6.8.4 | 4/4 |
 
 ---
 

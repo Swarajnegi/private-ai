@@ -1,0 +1,1988 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stage 2: Memory Layer — Q&A | JARVIS Knowledge Base</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+        rel="stylesheet">
+    <style>
+        :root {
+            --bg-primary: #0a0e17;
+            --bg-secondary: #111827;
+            --bg-card: #1a2332;
+            --bg-code: #0d1117;
+            --text-primary: #e2e8f0;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
+            --accent-blue: #3b82f6;
+            --accent-cyan: #06b6d4;
+            --accent-green: #10b981;
+            --accent-amber: #f59e0b;
+            --accent-red: #ef4444;
+            --accent-purple: #8b5cf6;
+            --border: #1e293b;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.7;
+            display: flex;
+            min-height: 100vh;
+        }
+
+        /* ════════════════════ SIDEBAR / TOC ════════════════════ */
+        .sidebar {
+            width: 280px;
+            background: var(--bg-secondary);
+            border-right: 1px solid var(--border);
+            padding: 1.5rem 0;
+            position: fixed;
+            top: 0;
+            left: 0;
+            bottom: 0;
+            overflow-y: auto;
+            z-index: 100;
+        }
+
+        .sidebar-header {
+            padding: 0 1.2rem 1.2rem;
+            border-bottom: 1px solid var(--border);
+            margin-bottom: 1rem;
+        }
+
+        .sidebar-header h2 {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            color: var(--text-muted);
+            margin-bottom: 0.4rem;
+        }
+
+        .sidebar-header h1 {
+            font-size: 1.1rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, #e2e8f0, var(--accent-blue));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .sidebar-count {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            padding: 0 1.2rem;
+            margin-bottom: 0.6rem;
+        }
+
+        .toc-list {
+            list-style: none;
+        }
+
+        .toc-item a {
+            display: block;
+            padding: 0.55rem 1.2rem;
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: 0.85rem;
+            border-left: 3px solid transparent;
+            transition: all 0.2s;
+        }
+
+        .toc-item a:hover {
+            background: rgba(59, 130, 246, 0.06);
+            color: var(--text-primary);
+            border-left-color: rgba(59, 130, 246, 0.3);
+        }
+
+        .toc-item a.active {
+            background: rgba(59, 130, 246, 0.1);
+            color: var(--accent-blue);
+            border-left-color: var(--accent-blue);
+            font-weight: 500;
+        }
+
+        .toc-number {
+            display: inline-block;
+            width: 22px;
+            height: 22px;
+            background: rgba(59, 130, 246, 0.12);
+            color: var(--accent-blue);
+            border-radius: 6px;
+            text-align: center;
+            line-height: 22px;
+            font-size: 0.7rem;
+            font-weight: 700;
+            margin-right: 0.5rem;
+            flex-shrink: 0;
+        }
+
+        .toc-tag {
+            display: inline-block;
+            background: rgba(139, 92, 246, 0.1);
+            color: var(--accent-purple);
+            padding: 0.05rem 0.4rem;
+            border-radius: 8px;
+            font-size: 0.65rem;
+            margin-left: 0.3rem;
+        }
+
+        /* ════════════════════ MAIN CONTENT ════════════════════ */
+        .main {
+            margin-left: 280px;
+            flex: 1;
+            padding: 2rem 3rem;
+            max-width: 960px;
+        }
+
+        /* ── Q&A Entry ── */
+        .qa-entry {
+            margin-bottom: 4rem;
+            padding-bottom: 3rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .qa-entry:last-child {
+            border-bottom: none;
+        }
+
+        .qa-header {
+            margin-bottom: 2rem;
+            padding: 1.8rem 2rem;
+            background: linear-gradient(135deg, rgba(59, 130, 246, 0.06), rgba(6, 182, 212, 0.06));
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .qa-header::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, var(--accent-blue), var(--accent-cyan), var(--accent-purple));
+        }
+
+        .qa-badge {
+            display: inline-block;
+            background: rgba(59, 130, 246, 0.15);
+            color: var(--accent-blue);
+            padding: 0.2rem 0.8rem;
+            border-radius: 16px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            margin-bottom: 0.6rem;
+        }
+
+        .qa-header h2 {
+            font-size: 1.8rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, #e2e8f0, var(--accent-blue));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 0.4rem;
+        }
+
+        .qa-meta {
+            color: var(--text-muted);
+            font-size: 0.8rem;
+        }
+
+        .qa-meta span {
+            margin-right: 1rem;
+        }
+
+        .tag {
+            display: inline-block;
+            background: rgba(139, 92, 246, 0.1);
+            color: var(--accent-purple);
+            padding: 0.12rem 0.55rem;
+            border-radius: 10px;
+            font-size: 0.7rem;
+            font-weight: 500;
+            margin: 0.2rem 0.15rem;
+        }
+
+        /* ── Sections ── */
+        .section {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1.8rem;
+            margin-bottom: 1.2rem;
+            transition: border-color 0.3s;
+        }
+
+        .section:hover {
+            border-color: rgba(59, 130, 246, 0.25);
+        }
+
+        .section-number {
+            display: inline-block;
+            width: 26px;
+            height: 26px;
+            background: linear-gradient(135deg, var(--accent-blue), var(--accent-cyan));
+            color: white;
+            border-radius: 7px;
+            text-align: center;
+            line-height: 26px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            margin-right: 0.6rem;
+        }
+
+        h3 {
+            font-size: 1.15rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+        }
+
+        h4 {
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: var(--accent-cyan);
+            margin: 1.3rem 0 0.7rem;
+        }
+
+        p {
+            margin-bottom: 0.9rem;
+            color: var(--text-secondary);
+        }
+
+        strong {
+            color: var(--text-primary);
+            font-weight: 600;
+        }
+
+        /* ── Question Box ── */
+        .question-box {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-left: 3px solid var(--accent-amber);
+            border-radius: 12px;
+            padding: 1.2rem 1.5rem;
+            margin-bottom: 1.2rem;
+        }
+
+        .question-box p {
+            font-size: 1.05rem;
+            color: var(--text-primary);
+            margin: 0;
+        }
+
+        /* ── Code ── */
+        pre {
+            background: var(--bg-code);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 1.1rem 1.4rem;
+            overflow-x: auto;
+            margin: 0.8rem 0;
+            position: relative;
+        }
+
+        pre::before {
+            content: attr(data-lang);
+            position: absolute;
+            top: 7px;
+            right: 10px;
+            font-size: 0.6rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        code {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.82rem;
+            line-height: 1.6;
+        }
+
+        .inline-code {
+            background: rgba(59, 130, 246, 0.1);
+            color: var(--accent-cyan);
+            padding: 0.12rem 0.4rem;
+            border-radius: 5px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.78rem;
+        }
+
+        .comment {
+            color: #6a9955;
+        }
+
+        .keyword {
+            color: #c586c0;
+        }
+
+        .function {
+            color: #dcdcaa;
+        }
+
+        .string {
+            color: #ce9178;
+        }
+
+        .number {
+            color: #b5cea8;
+        }
+
+        .variable {
+            color: #9cdcfe;
+        }
+
+        .operator {
+            color: #d4d4d4;
+        }
+
+        .arrow {
+            color: #569cd6;
+        }
+
+        /* ── Tables ── */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 0.8rem 0;
+            font-size: 0.85rem;
+        }
+
+        th {
+            background: rgba(59, 130, 246, 0.06);
+            color: var(--accent-blue);
+            font-weight: 600;
+            text-align: left;
+            padding: 0.7rem 0.9rem;
+            border-bottom: 2px solid var(--border);
+        }
+
+        td {
+            padding: 0.6rem 0.9rem;
+            border-bottom: 1px solid var(--border);
+            color: var(--text-secondary);
+        }
+
+        tr:hover td {
+            background: rgba(59, 130, 246, 0.02);
+        }
+
+        /* ── Callouts ── */
+        .callout {
+            border-radius: 10px;
+            padding: 0.9rem 1.1rem;
+            margin: 0.8rem 0;
+            display: flex;
+            gap: 0.7rem;
+            align-items: flex-start;
+        }
+
+        .callout-icon {
+            font-size: 1.1rem;
+            flex-shrink: 0;
+            margin-top: 1px;
+        }
+
+        .callout p {
+            margin: 0;
+            font-size: 0.85rem;
+        }
+
+        .callout-warning {
+            background: rgba(245, 158, 11, 0.07);
+            border: 1px solid rgba(245, 158, 11, 0.18);
+        }
+
+        .callout-warning .callout-icon {
+            color: var(--accent-amber);
+        }
+
+        .callout-info {
+            background: rgba(59, 130, 246, 0.07);
+            border: 1px solid rgba(59, 130, 246, 0.18);
+        }
+
+        .callout-info .callout-icon {
+            color: var(--accent-blue);
+        }
+
+        .callout-success {
+            background: rgba(16, 185, 129, 0.07);
+            border: 1px solid rgba(16, 185, 129, 0.18);
+        }
+
+        .callout-success .callout-icon {
+            color: var(--accent-green);
+        }
+
+        /* ── Diagram ── */
+        .diagram {
+            background: var(--bg-code);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 1.2rem 1.5rem;
+            margin: 0.8rem 0;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8rem;
+            line-height: 1.5;
+            color: var(--text-secondary);
+            overflow-x: auto;
+            white-space: pre;
+        }
+
+        .diagram .hl {
+            color: var(--accent-cyan);
+            font-weight: 500;
+        }
+
+        .diagram .dim {
+            color: var(--text-muted);
+        }
+
+        .diagram .ok {
+            color: var(--accent-green);
+        }
+
+        .diagram .warn {
+            color: var(--accent-amber);
+        }
+
+        /* ── Formula ── */
+        .formula {
+            background: linear-gradient(135deg, rgba(139, 92, 246, 0.07), rgba(59, 130, 246, 0.07));
+            border: 1px solid rgba(139, 92, 246, 0.18);
+            border-radius: 10px;
+            padding: 1rem 1.3rem;
+            margin: 0.8rem 0;
+            text-align: center;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 1.05rem;
+            color: var(--accent-purple);
+            letter-spacing: 1px;
+        }
+
+        /* ── Scroll spy active highlight ── */
+        .toc-item a {
+            transition: all 0.15s;
+        }
+
+        /* ── Responsive ── */
+        @media (max-width: 900px) {
+            .sidebar {
+                width: 220px;
+            }
+
+            .main {
+                margin-left: 220px;
+                padding: 1.5rem;
+            }
+        }
+
+        @media (max-width: 650px) {
+            .sidebar {
+                position: relative;
+                width: 100%;
+                border-right: none;
+                border-bottom: 1px solid var(--border);
+            }
+
+            .main {
+                margin-left: 0;
+            }
+
+            body {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- ════════════════════ SIDEBAR ════════════════════ -->
+    <nav class="sidebar">
+        <div class="sidebar-header">
+            <h2>JARVIS Q&A</h2>
+            <h1>Stage 2: Memory Layer</h1>
+        </div>
+        <div class="sidebar-count">3 questions</div>
+        <ul class="toc-list">
+            <!-- ── Q1 ── -->
+            <li class="toc-item">
+                <a href="#q1" class="active">
+                    <span class="toc-number">1</span>
+                    L2 Normalization
+                    <span class="toc-tag">math</span>
+                </a>
+            </li>
+            <!-- ── Q2 ── -->
+            <li class="toc-item">
+                <a href="#q2">
+                    <span class="toc-number">2</span>
+                    Embedding Pipeline
+                    <span class="toc-tag">arch</span>
+                </a>
+            </li>
+            <!-- ── Q3 ── -->
+            <li class="toc-item">
+                <a href="#q3">
+                    <span class="toc-number">3</span>
+                    Transformer Architecture
+                    <span class="toc-tag">core</span>
+                </a>
+            </li>
+            <!-- NEW QUESTIONS: Add <li class="toc-item"> entries here -->
+        </ul>
+    </nav>
+
+    <!-- ════════════════════ MAIN ════════════════════ -->
+    <div class="main">
+
+        <!-- ╔═══════════════════════════════════════════════════════════╗ -->
+        <!-- ║  Q1: L2 NORMALIZATION                                     ║ -->
+        <!-- ╚═══════════════════════════════════════════════════════════╝ -->
+        <div class="qa-entry" id="q1">
+            <div class="qa-header">
+                <div class="qa-badge">Q&A #001</div>
+                <h2>L2 Normalization</h2>
+                <div class="qa-meta">
+                    <span>📅 March 7, 2026</span>
+                    <span>📂 Sub-Phase 2.1 — Embeddings & Similarity</span>
+                </div>
+                <div style="margin-top: 0.6rem;">
+                    <span class="tag">math</span>
+                    <span class="tag">embeddings</span>
+                    <span class="tag">cosine-similarity</span>
+                    <span class="tag">vector-search</span>
+                </div>
+            </div>
+
+            <!-- Question -->
+            <div class="question-box">
+                <p>❓ What is L2 normalization and why does JARVIS need it?</p>
+            </div>
+
+            <!-- 1. Intuition -->
+            <div class="section">
+                <h3><span class="section-number">1</span> The Intuition</h3>
+                <p>
+                    L2 normalization <strong>stretches or shrinks a vector so its length becomes exactly 1.0</strong>,
+                    while keeping it pointing in the same direction.
+                </p>
+                <p>
+                    Think of two arrows in space. One is 3 meters long, the other is 10 meters long.
+                    L2 normalization resizes both to exactly 1 meter — now you can fairly compare their
+                    <em>direction</em> without the longer arrow having an unfair advantage.
+                </p>
+
+                <div class="diagram"><span class="dim">Before normalization:</span>
+                    Vector A: [3, 4] → length = √(3² + 4²) = √25 = <span class="hl">5.0</span>
+                    Vector B: [6, 8] → length = √(6² + 8²) = √100 = <span class="hl">10.0</span>
+
+                    <span class="warn">These point in the SAME direction but have different lengths.</span>
+                    dot(A, B) = 3×6 + 4×8 = 50 <span class="dim">(big number, but misleading)</span>
+
+                    <span class="dim">After L2 normalization:</span>
+                    Vector A: [3/5, 4/5] = [<span class="ok">0.6</span>, <span class="ok">0.8</span>] → length = <span
+                        class="ok">1.0</span>
+                    Vector B: [6/10, 8/10] = [<span class="ok">0.6</span>, <span class="ok">0.8</span>] → length = <span
+                        class="ok">1.0</span>
+
+                    <span class="ok">Now they're IDENTICAL — they always pointed the same way.</span>
+                    dot(A, B) = 0.6×0.6 + 0.8×0.8 = <span class="ok">1.0</span> <span class="dim">(= cosine
+                        similarity!)</span>
+                </div>
+
+                <h4>The "L2" Part</h4>
+                <p>
+                    It refers to the <strong>L2 norm (Euclidean norm)</strong> — the formula for vector length.
+                    The "2" means you square each element.
+                </p>
+                <div class="formula">‖v‖₂ = √( v₁² + v₂² + v₃² + … + v₃₈₄² )</div>
+            </div>
+
+            <!-- 2. JARVIS Application -->
+            <div class="section">
+                <h3><span class="section-number">2</span> The JARVIS Application</h3>
+                <p>
+                    Imagine you ask JARVIS: <em>"How do I use async generators?"</em>
+                </p>
+                <p>
+                    JARVIS embeds your query and 5,000 stored document chunks.
+                    <strong>Without normalization:</strong>
+                </p>
+
+                <div class="diagram"><span class="dim">Query embedding: length =</span> <span class="hl">8.2</span>
+                    <span class="dim">Short chunk (1 line): length =</span> <span class="hl">3.1</span>
+                    <span class="dim">Long chunk (200 words): length =</span> <span class="hl">12.7</span>
+
+                    dot(query, short) = 25.4
+                    dot(query, long) = 104.6 <span class="warn">◄── WINS, but only because it's LONGER</span>
+                </div>
+
+                <p>
+                    The long chunk wins purely because its magnitude is bigger — not relevance.
+                    This is <strong>magnitude bias</strong>.
+                </p>
+                <p><strong>After L2 normalization:</strong></p>
+
+                <div class="diagram"><span class="dim">Query embedding: length =</span> <span class="ok">1.0</span>
+                    <span class="dim">Short chunk: length =</span> <span class="ok">1.0</span>
+                    <span class="dim">Long chunk: length =</span> <span class="ok">1.0</span>
+
+                    dot(query, short) = <span class="ok">0.87</span> <span class="ok">◄── ACTUALLY more relevant</span>
+                    dot(query, long) = 0.42
+                </div>
+
+                <div class="callout callout-success">
+                    <span class="callout-icon">✅</span>
+                    <p>Now dot product = cosine similarity. Only <strong>direction</strong> matters.</p>
+                </div>
+
+                <h4>The Performance Win</h4>
+                <table>
+                    <tr>
+                        <th>Search Method</th>
+                        <th>Operations per Query (100K docs)</th>
+                        <th>Speed</th>
+                    </tr>
+                    <tr>
+                        <td>Cosine similarity (unnormalized)</td>
+                        <td>100K dots + 200K norms = <strong>300K ops</strong></td>
+                        <td>Baseline</td>
+                    </tr>
+                    <tr>
+                        <td>Dot product (pre-normalized)</td>
+                        <td>100K dots = <strong>100K ops</strong></td>
+                        <td><strong style="color: var(--accent-green);">3× faster</strong></td>
+                    </tr>
+                </table>
+                <p>ChromaDB normalizes at storage time, then uses fast dot product for search.</p>
+            </div>
+
+            <!-- 3. Code -->
+            <div class="section">
+                <h3><span class="section-number">3</span> The Code</h3>
+
+                <pre
+                    data-lang="Python"><code><span class="keyword">import</span> <span class="variable">numpy</span> <span class="keyword">as</span> <span class="variable">np</span>
+
+<span class="keyword">def</span> <span class="function">l2_normalize</span>(<span class="variable">v</span>: <span class="variable">np</span>.<span class="variable">ndarray</span>) <span class="arrow">-></span> <span class="variable">np</span>.<span class="variable">ndarray</span>:
+    <span class="string">"""
+    Math: v̂ = v / ‖v‖₂
+    After this: ‖v̂‖₂ = 1.0
+    """</span>
+    <span class="variable">norm</span> <span class="operator">=</span> <span class="variable">np</span>.<span class="variable">linalg</span>.<span class="function">norm</span>(<span class="variable">v</span>)   <span class="comment"># √(v₁² + v₂² + … + vₙ²)</span>
+    <span class="keyword">if</span> <span class="variable">norm</span> <span class="operator">==</span> <span class="number">0</span>:
+        <span class="keyword">return</span> <span class="variable">v</span>
+    <span class="keyword">return</span> <span class="variable">v</span> <span class="operator">/</span> <span class="variable">norm</span>
+
+
+<span class="comment"># ─── Demo ────────────────────────────────────────</span>
+<span class="variable">v</span> <span class="operator">=</span> <span class="variable">np</span>.<span class="function">array</span>([<span class="number">3.0</span>, <span class="number">4.0</span>])
+<span class="variable">v_norm</span> <span class="operator">=</span> <span class="function">l2_normalize</span>(<span class="variable">v</span>)
+<span class="function">print</span>(<span class="variable">np</span>.<span class="variable">linalg</span>.<span class="function">norm</span>(<span class="variable">v_norm</span>))  <span class="comment"># 1.0</span>
+
+
+<span class="comment"># ─── The cosine shortcut ─────────────────────────</span>
+<span class="variable">a</span> <span class="operator">=</span> <span class="variable">np</span>.<span class="function">array</span>([<span class="number">3.0</span>, <span class="number">4.0</span>, <span class="number">1.0</span>])
+<span class="variable">b</span> <span class="operator">=</span> <span class="variable">np</span>.<span class="function">array</span>([<span class="number">1.0</span>, <span class="number">2.0</span>, <span class="number">3.0</span>])
+
+<span class="comment"># Full cosine (expensive — 3 operations):</span>
+<span class="variable">cosine</span> <span class="operator">=</span> <span class="variable">np</span>.<span class="function">dot</span>(<span class="variable">a</span>, <span class="variable">b</span>) <span class="operator">/</span> (<span class="variable">np</span>.<span class="variable">linalg</span>.<span class="function">norm</span>(<span class="variable">a</span>) <span class="operator">*</span> <span class="variable">np</span>.<span class="variable">linalg</span>.<span class="function">norm</span>(<span class="variable">b</span>))
+
+<span class="comment"># Pre-normalize once, then dot (cheap — 1 operation):</span>
+<span class="variable">a_n</span> <span class="operator">=</span> <span class="function">l2_normalize</span>(<span class="variable">a</span>)
+<span class="variable">b_n</span> <span class="operator">=</span> <span class="function">l2_normalize</span>(<span class="variable">b</span>)
+<span class="function">print</span>(<span class="variable">np</span>.<span class="function">dot</span>(<span class="variable">a_n</span>, <span class="variable">b_n</span>))  <span class="comment"># Same as cosine!</span></code></pre>
+
+                <h4>In sentence-transformers</h4>
+                <pre data-lang="Python"><code><span class="comment"># Embed WITH normalization (recommended for ChromaDB):</span>
+<span class="variable">embeddings</span> <span class="operator">=</span> <span class="variable">model</span>.<span class="function">encode</span>(<span class="variable">texts</span>, <span class="variable">normalize_embeddings</span><span class="operator">=</span><span class="keyword">True</span>)
+
+<span class="comment"># Now ‖embedding‖₂ = 1.0 for ALL vectors</span>
+<span class="comment"># And np.dot(a, b) = cosine_similarity(a, b)</span></code></pre>
+            </div>
+
+            <!-- 4. Gotchas -->
+            <div class="section">
+                <h3><span class="section-number">4</span> The Gotchas</h3>
+
+                <h4>Zero Vector Division</h4>
+                <div class="callout callout-warning">
+                    <span class="callout-icon">⚠️</span>
+                    <p>If a text produces an all-zero embedding, L2 normalization <strong>divides by zero</strong>.
+                        Guard with <span class="inline-code">if norm &lt; 1e-9</span>.</p>
+                </div>
+
+                <h4>Magnitude Information Lost</h4>
+                <p>
+                    Normalization destroys magnitude. Fine for RAG (you only care about direction),
+                    but bad for anomaly detection where unusual magnitude = unusual input.
+                </p>
+
+                <h4>L2 vs Other Norms</h4>
+                <table>
+                    <tr>
+                        <th>Norm</th>
+                        <th>Formula</th>
+                        <th>Name</th>
+                        <th>JARVIS?</th>
+                    </tr>
+                    <tr>
+                        <td><span class="inline-code">L1</span></td>
+                        <td>|v₁| + |v₂| + … + |vₙ|</td>
+                        <td>Manhattan</td>
+                        <td>No</td>
+                    </tr>
+                    <tr>
+                        <td><span class="inline-code">L2</span> ◀</td>
+                        <td>√(v₁² + v₂² + … + vₙ²)</td>
+                        <td>Euclidean</td>
+                        <td><strong style="color: var(--accent-green);">Yes</strong></td>
+                    </tr>
+                    <tr>
+                        <td><span class="inline-code">L∞</span></td>
+                        <td>max(|v₁|, …, |vₙ|)</td>
+                        <td>Max element</td>
+                        <td>No</td>
+                    </tr>
+                </table>
+                <div class="callout callout-info">
+                    <span class="callout-icon">📌</span>
+                    <p>For embeddings, <strong>always L2</strong>. It's what cosine similarity assumes,
+                        and what <span class="inline-code">sentence-transformers</span> and ChromaDB expect.</p>
+                </div>
+            </div>
+
+            <!-- Summary -->
+            <div class="section" style="border-left: 3px solid var(--accent-green);">
+                <h3>📋 Summary</h3>
+                <table>
+                    <tr>
+                        <th>What</th>
+                        <th>Formula</th>
+                        <th>Result</th>
+                    </tr>
+                    <tr>
+                        <td>L2 norm (length)</td>
+                        <td><span class="inline-code">‖v‖₂ = √(Σ vᵢ²)</span></td>
+                        <td>A single float</td>
+                    </tr>
+                    <tr>
+                        <td>L2 normalize</td>
+                        <td><span class="inline-code">v̂ = v / ‖v‖₂</span></td>
+                        <td>Same direction, length = 1.0</td>
+                    </tr>
+                    <tr>
+                        <td>After normalizing</td>
+                        <td><span class="inline-code">dot(â, b̂) = cos(a, b)</span></td>
+                        <td>3× cheaper search</td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+        <!-- END Q1 -->
+
+        <!-- ╔═══════════════════════════════════════════════════════════╗ -->
+        <!-- ║  Q2: EMBEDDING PIPELINE — TOKENIZATION, TRUNCATION & PERF ║ -->
+        <!-- ╚═══════════════════════════════════════════════════════════╝ -->
+        <div class="qa-entry" id="q2">
+            <div class="qa-header">
+                <div class="qa-badge">Q&amp;A #002</div>
+                <h2>Embedding Pipeline: Tokenization, Truncation &amp; Batch Performance</h2>
+                <div class="qa-meta">
+                    <span>📅 March 7, 2026</span>
+                    <span>📂 Sub-Phase 2.1 — Embeddings &amp; Similarity</span>
+                </div>
+                <div style="margin-top: 0.6rem;">
+                    <span class="tag">architecture</span>
+                    <span class="tag">tokenization</span>
+                    <span class="tag">WordPiece</span>
+                    <span class="tag">positional-embeddings</span>
+                    <span class="tag">truncation</span>
+                    <span class="tag">performance</span>
+                </div>
+            </div>
+
+            <div class="question-box">
+                <p>❓ What does <span class="inline-code">max_seq_length: 256</span> mean? What are <span
+                        class="inline-code">##ron</span> and <span class="inline-code">##ous</span> tokens?
+                    What are positional embeddings? What happens when the model "silently drops" tokens? How do BERT and MiniLM compare? Why is batch encoding 2-4× faster?</p>
+            </div>
+
+
+            <!-- 1. BERT vs MiniLM -->
+            <div class="section">
+                <h3><span class="section-number">1</span> BERT vs all-MiniLM-L6-v2: The Family Tree</h3>
+                <p>
+                    <span class="inline-code">all-MiniLM-L6-v2</span> is <strong>not a separate model
+                        architecture</strong>.
+                    It is a compressed, distilled version of BERT. Think of BERT as the teacher and MiniLM as
+                    the student who learned to do 90% of the teacher's work in 25% of the time.
+                </p>
+                <table>
+                    <tr>
+                        <th>Property</th>
+                        <th>BERT-base</th>
+                        <th>all-MiniLM-L6-v2</th>
+                    </tr>
+                    <tr>
+                        <td>Layers</td>
+                        <td>12</td>
+                        <td><strong>6</strong> (halved)</td>
+                    </tr>
+                    <tr>
+                        <td>Hidden dim</td>
+                        <td>768</td>
+                        <td><strong>384</strong> (halved)</td>
+                    </tr>
+                    <tr>
+                        <td>Parameters</td>
+                        <td>110M</td>
+                        <td><strong>22.7M</strong> (5× smaller)</td>
+                    </tr>
+                    <tr>
+                        <td>Tokenizer</td>
+                        <td>WordPiece (30,522 vocab)</td>
+                        <td><strong>Same WordPiece (30,522 vocab)</strong></td>
+                    </tr>
+                    <tr>
+                        <td>Max tokens</td>
+                        <td>512</td>
+                        <td><strong>256</strong> (halved)</td>
+                    </tr>
+                    <tr>
+                        <td>Output</td>
+                        <td>768-dim embedding</td>
+                        <td><strong>384-dim embedding</strong></td>
+                    </tr>
+                    <tr>
+                        <td>Model size</td>
+                        <td>~440 MB</td>
+                        <td><strong>~80 MB</strong></td>
+                    </tr>
+                    <tr>
+                        <td>Speed</td>
+                        <td>Baseline</td>
+                        <td><strong style="color: var(--accent-green);">~3× faster</strong></td>
+                    </tr>
+                    <tr>
+                        <td>Quality (MTEB)</td>
+                        <td>Baseline</td>
+                        <td><strong>~97% of BERT</strong></td>
+                    </tr>
+                </table>
+                <div class="callout callout-info">
+                    <span class="callout-icon">💡</span>
+                    <p><strong>Key:</strong> They use the <strong>exact same tokenizer</strong> (WordPiece, same
+                        vocabulary).
+                        The difference is in the transformer body, not in how text is split into tokens.
+                        MiniLM just has fewer layers and narrower hidden dimensions.</p>
+                </div>
+
+                <h4>JARVIS Verdict</h4>
+                <p>
+                    For the Memory Layer (Stage 2), <strong>MiniLM wins</strong>. You get 97% of BERT's quality
+                    at 20% of the cost. BERT-base is too heavy for an embedding model that runs on every
+                    document chunk and every user query. You'd only consider BERT-base if you were
+                    <em>fine-tuning</em> for a specific domain (Stage 5+).
+                </p>
+            </div>
+
+            <!-- 2. WordPiece Tokenization -->
+            <div class="section">
+                <h3><span class="section-number">2</span> WordPiece Tokenization (What ## Means)</h3>
+                <p>
+                    Before any text enters the transformer, it must be converted from human-readable words into
+                    <strong>token IDs</strong> — integers that the model can process. This conversion is called
+                    <strong>tokenization</strong>.
+                </p>
+                <p>
+                    Both BERT and MiniLM use the <strong>WordPiece</strong> algorithm. Here's the core idea:
+                </p>
+
+                <h4>The Problem WordPiece Solves</h4>
+                <p>
+                    If the vocabulary only contained whole words, you'd need millions of entries to cover every
+                    word in every language, plus typos, code syntax, technical jargon, etc. That would make the
+                    token embedding table impossibly large.
+                </p>
+                <p>
+                    Instead, WordPiece builds a vocabulary of <strong>30,522 subword pieces</strong>. Common words
+                    like "the", "how", "work" get their own entry. Rare or long words get <strong>split into
+                        known pieces</strong>.
+                </p>
+
+                <h4>The ## Prefix Explained</h4>
+                <p>
+                    The <span class="inline-code">##</span> prefix means <strong>"this piece continues the
+                        previous token — it is NOT a new word."</strong>
+                </p>
+
+                <div class="diagram"><span class="dim">Word:</span> <span class="hl">"asynchronous"</span>
+                    <span class="dim">Not in the 30,522 vocab as a whole word. WordPiece splits it:</span>
+
+                    "as" → Token ID 2004 <span class="ok">(no ## = start of a new word)</span>
+                    "##yn" → Token ID 17589 <span class="warn">(## = continuation of previous word)</span>
+                    "##ch" → Token ID 15387 <span class="warn">(## = still continuing)</span>
+                    "##ron"→ Token ID 6444 <span class="warn">(## = still continuing)</span>
+                    "##ous"→ Token ID 7140 <span class="warn">(## = final piece)</span>
+
+                    <span class="dim">The model sees 5 tokens, but knows they form ONE word because of ##</span>
+
+                    <span class="dim">Compare with a common word:</span>
+                    <span class="hl">"generators"</span> → Token ID 19529 <span class="ok">(single token — it's common
+                        enough)</span>
+                    <span class="hl">"work"</span> → Token ID 2147 <span class="ok">(single token)</span>
+                </div>
+
+                <div class="callout callout-warning">
+                    <span class="callout-icon">⚠️</span>
+                    <p><strong>Critical implication for token counting:</strong> The word "asynchronous" uses
+                        <strong>5 tokens</strong>, not 1. A sentence with many technical/rare words burns through
+                        the 256-token budget much faster than plain English. Code snippets are especially expensive.
+                    </p>
+                </div>
+
+                <h4>More Examples</h4>
+                <div class="diagram"><span class="dim">Common words (1 token each):</span>
+                    "the" → [<span class="ok">the</span>]
+                    "python" → [<span class="ok">python</span>]
+                    "model" → [<span class="ok">model</span>]
+
+                    <span class="dim">Technical words (multiple tokens):</span>
+                    "embedding" → [<span class="ok">em</span>, <span class="warn">##bed</span>, <span
+                        class="warn">##ding</span>] <span class="dim">3 tokens</span>
+                    "backpropagation" → [<span class="ok">back</span>, <span class="warn">##pro</span>, <span
+                        class="warn">##pa</span>, <span class="warn">##gation</span>] <span class="dim">4 tokens</span>
+                    "ChromaDB" → [<span class="ok">chroma</span>, <span class="warn">##db</span>] <span class="dim">2
+                        tokens</span>
+
+                    <span class="dim">Special tokens (always added):</span>
+                    [CLS] → Added at the START of every input <span class="dim">(classification token)</span>
+                    [SEP] → Added at the END of every input <span class="dim">(separator token)</span>
+
+                    <span class="dim">So "Hello world" actually becomes:</span>
+                    [<span class="hl">[CLS]</span>, <span class="ok">hello</span>, <span class="ok">world</span>, <span
+                        class="hl">[SEP]</span>] <span class="dim">= 4 tokens (2 words + 2 special)</span>
+                </div>
+
+                <h4>Token → ID → Embedding</h4>
+                <p>The full pipeline from text to numbers:</p>
+                <div class="diagram"><span class="dim">Step 1:</span> "async generators" → [<span
+                        class="hl">[CLS]</span>, as, ##yn, ##ch, ##ron, ##ous, generators, <span
+                        class="hl">[SEP]</span>]
+                    <span class="dim">Step 2:</span> Token strings → IDs: [<span class="hl">101</span>, 2004, 17589,
+                    15387, 6444, 7140, 19529, <span class="hl">102</span>]
+                    <span class="dim">Step 3:</span> Each ID → lookup in <span class="ok">Token Embedding Table</span>
+                    (30,522 × 384)
+                    ID 2004 → row 2004 of the table → a specific 384-dim vector
+                    ID 17589 → row 17589 → a different 384-dim vector
+                    ...
+                    <span class="dim">Step 4:</span> Each token also gets a <span class="ok">Positional Embedding</span>
+                    added (see next section)
+                </div>
+            </div>
+
+            <!-- 3. Positional Embeddings -->
+            <div class="section">
+                <h3><span class="section-number">3</span> Positional Embeddings — Why Order Matters</h3>
+
+                <h4>The Problem</h4>
+                <p>
+                    Unlike RNNs that process tokens one-by-one (left to right), a Transformer processes
+                    <strong>all tokens simultaneously</strong> in one parallel matrix multiplication. This means
+                    by default, it has <strong>no concept of order</strong>. The sentences "dog bites man" and
+                    "man bites dog" would look identical — same tokens, same embeddings, same result.
+                </p>
+
+                <h4>The Solution: A Position Lookup Table</h4>
+                <p>
+                    The model has a second embedding table — not for <em>what</em> the token is, but for
+                    <em>where</em> it is. This is the <strong>Positional Embedding Table</strong>.
+                </p>
+
+                <div class="diagram"><span class="dim">Two separate lookup tables:</span>
+
+                    <span class="hl">Token Embedding Table</span> (30,522 rows × 384 columns)
+                    Row 2004 → vector for "as" (WHAT this token means)
+                    Row 17589 → vector for "##yn" (WHAT this token means)
+                    Row 19529 → vector for "generators" (WHAT this token means)
+
+                    <span class="hl">Position Embedding Table</span> (512 rows × 384 columns)
+                    Row 0 → vector for "I am the 1st token" (WHERE this token sits)
+                    Row 1 → vector for "I am the 2nd token" (WHERE this token sits)
+                    Row 2 → vector for "I am the 3rd token" (WHERE this token sits)
+                    ...
+                    Row 255 → vector for "I am the 256th token"
+                    <span class="warn">Row 256+ → EXISTS in BERT (512 max) but MiniLM limits to 256</span>
+
+                    <span class="dim">Final input to transformer = Token Embedding + Position Embedding</span>
+                    <span class="ok">token_embed[2004] + position_embed[0]</span> = "as" at position 0
+                    <span class="ok">token_embed[17589] + position_embed[1]</span> = "##yn" at position 1
+                    ...
+                </div>
+
+                <h4>What "Learned" Means</h4>
+                <p>
+                    These position vectors are <strong>not hand-coded</strong>. During training, the model
+                    was shown millions of sentences and <strong>learned</strong> (via backpropagation — the same
+                    gradient descent you already know) what each position vector should be. Position 0
+                    learned "tokens here are usually [CLS] or sentence starters." Position 255 learned
+                    "tokens here are usually near the end of a passage."
+                </p>
+                <p>
+                    <strong>The table has a fixed number of rows</strong> — it was created before training
+                    started with exactly 512 rows (for BERT) or 256 usable rows (for MiniLM). There is no row
+                    257. It's like an array with 256 slots — accessing index 256 is out of bounds.
+                </p>
+
+                <h4>Why MiniLM Uses 256, Not 512</h4>
+                <p>
+                    BERT's position table has 512 rows. MiniLM <em>inherits</em> this table (it was distilled
+                    from BERT), but the <span class="inline-code">sentence-transformers</span> library sets
+                    <span class="inline-code">max_seq_length = 256</span> as a <strong>software limit</strong>.
+                    Why? Because MiniLM was specifically trained/distilled for short text (sentences, paragraphs)
+                    and its quality degrades significantly beyond 256 tokens. The library truncates at 256 to
+                    prevent you from getting bad embeddings from positions the model wasn't optimized for.
+                </p>
+            </div>
+
+            <!-- 4. Silent Truncation -->
+            <div class="section">
+                <h3><span class="section-number">4</span> Silent Truncation — What Actually Happens</h3>
+                <p>
+                    "Silent truncation" means the model <strong>cuts off your text without telling you</strong>.
+                    Here's the exact mechanical sequence:
+                </p>
+
+                <div class="diagram"><span class="dim">You give the model a 400-word document:</span>
+
+                    <span class="hl">Step 1: Tokenize</span>
+                    400 words → WordPiece → <span class="warn">674 tokens</span>
+                    (Technical text often produces more tokens than words due to ## splitting)
+
+                    <span class="hl">Step 2: Truncate (THE SILENT PART)</span>
+                    The tokenizer checks: 674 &gt; max_seq_length (256)
+                    Action: <span class="warn">Keep tokens [0..255], DISCARD tokens [256..673]</span>
+                    No error raised. No warning printed.
+                    (The warning you saw in the script output is from the underlying
+                    HuggingFace tokenizer, but sentence-transformers suppresses it
+                    in normal usage)
+
+                    <span class="hl">Step 3: Process</span>
+                    Only the first 256 tokens enter the transformer.
+                    The transformer produces a 384-dim embedding based on
+                    ONLY what it saw — the first ~200 words.
+
+                    <span class="hl">Step 4: Output</span>
+                    You get back ONE 384-dim vector.
+                    This vector represents the FIRST 200 words only.
+                    The remaining 200 words <span class="warn">do not exist</span> as far as
+                    this embedding is concerned.
+                </div>
+
+                <h4>The Real-World Danger</h4>
+                <div class="diagram"><span class="dim">Imagine a research paper chunk:</span>
+
+                    <span class="dim">Words 1-200 (kept):</span>
+                    "In this paper, we present background information on transformer
+                    architectures. Transformers were introduced by Vaswani et al.
+                    in 2017 and have since become the dominant architecture for
+                    natural language processing tasks..."
+
+                    <span class="dim">Words 201-400 (<span class="warn">SILENTLY DISCARDED</span>):</span>
+                    "Our key finding is that <span class="warn">speculative decoding achieves 2.8× speedup</span>
+                    with zero quality loss when using a 3B draft model paired with
+                    a 70B verifier. This makes real-time inference feasible on
+                    consumer GPUs with 48GB VRAM..."
+
+                    <span class="dim">The embedding captures "background on transformers" but</span>
+                    <span class="warn">completely misses the actual key finding.</span>
+                    <span class="dim">If you search "speculative decoding speedup" → this chunk will NOT be
+                        found.</span>
+                </div>
+
+                <div class="callout callout-warning">
+                    <span class="callout-icon">⚠️</span>
+                    <p><strong>This is the #1 cause of "JARVIS can't find the answer even though it's in the
+                            documents"</strong>
+                        — the answer was in the truncated part of a chunk that was too long.</p>
+                </div>
+            </div>
+
+            <!-- 5. Verification -->
+            <div class="section">
+                <h3><span class="section-number">5</span> See It Yourself in Code</h3>
+                <pre data-lang="Python"><code><span class="keyword">from</span> <span class="variable">sentence_transformers</span> <span class="keyword">import</span> <span class="variable">SentenceTransformer</span>
+
+<span class="variable">model</span> <span class="operator">=</span> <span class="variable">SentenceTransformer</span>(<span class="string">"all-MiniLM-L6-v2"</span>)
+
+<span class="comment"># Check the limits</span>
+<span class="function">print</span>(<span class="variable">model</span>.<span class="variable">max_seq_length</span>)  <span class="comment"># 256</span>
+
+<span class="comment"># Tokenize and count</span>
+<span class="variable">text</span> <span class="operator">=</span> <span class="string">"asynchronous generators"</span>
+<span class="variable">tokens</span> <span class="operator">=</span> <span class="variable">model</span>.<span class="variable">tokenizer</span>.<span class="function">tokenize</span>(<span class="variable">text</span>)
+<span class="function">print</span>(<span class="variable">tokens</span>)
+<span class="comment"># ['as', '##yn', '##ch', '##ron', '##ous', 'generators']</span>
+<span class="comment"># 2 words → 6 tokens (5 for "asynchronous" + 1 for "generators")</span>
+
+<span class="comment"># See what happens with long text</span>
+<span class="variable">long_text</span> <span class="operator">=</span> <span class="string">"word "</span> <span class="operator">*</span> <span class="number">500</span>
+<span class="variable">tokens</span> <span class="operator">=</span> <span class="variable">model</span>.<span class="variable">tokenizer</span>.<span class="function">tokenize</span>(<span class="variable">long_text</span>)
+<span class="function">print</span>(<span class="string">f"Tokens produced: </span>{<span class="function">len</span>(<span class="variable">tokens</span>)}<span class="string">"</span>)  <span class="comment"># 500</span>
+<span class="comment"># But only 256 will enter the model — 244 silently dropped</span></code></pre>
+            </div>
+
+            <!-- 6. Summary -->
+            <div class="section" style="border-left: 3px solid var(--accent-green);">
+                <h3>📋 Summary</h3>
+                <table>
+                    <tr>
+                        <th>Concept</th>
+                        <th>What It Means</th>
+                    </tr>
+                    <tr>
+                        <td><span class="inline-code">##</span> prefix</td>
+                        <td>This subword <strong>continues</strong> the previous token (same word). "asynchronous" → 5
+                            tokens: as + ##yn + ##ch + ##ron + ##ous</td>
+                    </tr>
+                    <tr>
+                        <td>WordPiece</td>
+                        <td>Tokenizer that splits rare words into known subword pieces. 30,522 vocab shared by BERT and
+                            MiniLM</td>
+                    </tr>
+                    <tr>
+                        <td>Token Embedding</td>
+                        <td>Table of 30,522 rows × 384 cols. Maps each token ID → a 384-dim vector (WHAT the token
+                            means)</td>
+                    </tr>
+                    <tr>
+                        <td>Position Embedding</td>
+                        <td>Table of 512 rows × 384 cols. Maps each position → a 384-dim vector (WHERE the token sits).
+                            Added to token embed via vector addition</td>
+                    </tr>
+                    <tr>
+                        <td>Max Seq Length = 256</td>
+                        <td>Software limit set by sentence-transformers. Only positions 0-255 used. Tokens beyond
+                            position 255 are <strong>deleted before processing</strong></td>
+                    </tr>
+                    <tr>
+                        <td>Silent Truncation</td>
+                        <td>Tokens past position 255 are <strong>discarded by the tokenizer</strong> — no error, no
+                            warning. The model never sees them. They don't exist in the embedding</td>
+                    </tr>
+                    <tr>
+                        <td>BERT vs MiniLM</td>
+                        <td>Same tokenizer, same vocab. MiniLM has 6 layers (vs 12), 384 dim (vs 768), 22.7M params (vs
+                            110M). 97% quality at 20% cost</td>
+                    </tr>
+                    <tr>
+                        <td>JARVIS Fix</td>
+                        <td>Chunk all documents to <strong>~200 words</strong> before embedding. Each chunk gets its own
+                            full embedding with nothing lost</td>
+                    </tr>
+                </table>
+            </div>
+            <!-- 6. Batch Encoding Performance (absorbed from old Q2) -->
+            <div class="section">
+                <h3><span class="section-number">6</span> Batch vs Sequential Encoding</h3>
+                <p>
+                    <strong>Sequential</strong> encoding calls the model once per text. Each call has fixed overhead
+                    (Python→C++ bridge, memory allocation, tensor setup). You pay that overhead N times.
+                    <strong>Batch</strong> encoding stacks all texts into <strong>one tensor</strong> and runs the
+                    transformer <strong>once</strong> on the entire batch.
+                </p>
+
+                <div class="diagram"><span class="dim">Sequential (100 texts):</span>
+                    Call 1: [overhead] + [compute for 1 text] → 13ms   × 100 = <span class="warn">1,300ms</span>
+
+                    <span class="dim">Batched (batch_size=32):</span>
+                    Batch 1-3: [overhead] + [compute for 32 texts] → 140ms each
+                    Batch 4:   [overhead] + [compute for 4 texts]  → 50ms
+                    Total: <span class="ok">470ms</span> (= <span class="ok">2.8× faster</span>)
+                </div>
+
+                <p>
+                    Matrix multiplication on GPUs/modern CPUs is <strong>parallelized at the hardware level</strong>.
+                    Multiplying a <span class="inline-code">(32, 256, 384)</span> tensor costs almost the same
+                    wall-clock time as a <span class="inline-code">(1, 256, 384)</span> tensor — the silicon does
+                    32 operations simultaneously.
+                </p>
+
+                <pre data-lang="Python"><code><span class="comment"># SLOW (100 Python→C++ roundtrips):</span>
+<span class="keyword">for</span> <span class="variable">text</span> <span class="keyword">in</span> <span class="variable">texts</span>:
+    <span class="variable">emb</span> <span class="operator">=</span> <span class="variable">model</span>.<span class="function">encode</span>(<span class="variable">text</span>)      <span class="comment"># 13ms each × 100 = 1,300ms</span>
+
+<span class="comment"># FAST (4 roundtrips):</span>
+<span class="variable">embs</span> <span class="operator">=</span> <span class="variable">model</span>.<span class="function">encode</span>(<span class="variable">texts</span>, <span class="variable">batch_size</span><span class="operator">=</span><span class="number">32</span>)  <span class="comment"># ~470ms total</span></code></pre>
+
+                <table>
+                    <tr><th>Method</th><th>Time</th><th>Per Doc</th></tr>
+                    <tr><td>Sequential</td><td>1,369ms</td><td>13.7ms/doc</td></tr>
+                    <tr><td>Batched (32)</td><td>434ms</td><td>4.3ms/doc</td></tr>
+                    <tr><td><strong>Speedup</strong></td><td colspan="2"><strong style="color: var(--accent-green);">3.2×</strong></td></tr>
+                </table>
+                <div class="callout callout-success">
+                    <span class="callout-icon">📌</span>
+                    <p><strong>Rule:</strong> Always batch at ingestion time.
+                        Only encode one-at-a-time at query time (single user question).</p>
+                </div>
+            </div>
+
+            <!-- 7. Summary -->
+            <div class="section" style="border-left: 3px solid var(--accent-green);">
+                <h3>📋 Summary</h3>
+                <table>
+                    <tr><th>Concept</th><th>What It Means</th></tr>
+                    <tr>
+                        <td><span class="inline-code">##</span> prefix</td>
+                        <td>This subword <strong>continues</strong> the previous token (same word). "asynchronous" → 5 tokens: as + ##yn + ##ch + ##ron + ##ous</td>
+                    </tr>
+                    <tr>
+                        <td>WordPiece</td>
+                        <td>Tokenizer that splits rare words into known subword pieces. 30,522 vocab shared by BERT and MiniLM</td>
+                    </tr>
+                    <tr>
+                        <td>Token Embedding</td>
+                        <td>Table of 30,522 rows × 384 cols. Maps each token ID → a 384-dim vector (WHAT the token means)</td>
+                    </tr>
+                    <tr>
+                        <td>Position Embedding</td>
+                        <td>Table of 512 rows × 384 cols. Maps each position → a 384-dim vector (WHERE the token sits). Added via vector addition</td>
+                    </tr>
+                    <tr>
+                        <td>Max Seq Length = 256</td>
+                        <td>Software limit set by sentence-transformers. Only positions 0-255 used. Tokens beyond 255 are <strong>deleted before processing</strong></td>
+                    </tr>
+                    <tr>
+                        <td>Silent Truncation</td>
+                        <td>Tokens past position 255 are <strong>discarded by the tokenizer</strong> — no error, no warning. The model never sees them</td>
+                    </tr>
+                    <tr>
+                        <td>BERT vs MiniLM</td>
+                        <td>Same tokenizer, same vocab. MiniLM has 6 layers (vs 12), 384 dim (vs 768), 22.7M params (vs 110M). 97% quality at 20% cost</td>
+                    </tr>
+                    <tr>
+                        <td>Batch Encoding</td>
+                        <td>Stack N texts into one tensor, run model once. 2.8-3.2× faster than sequential. Always batch at ingestion time</td>
+                    </tr>
+                    <tr>
+                        <td>JARVIS Fix</td>
+                        <td>Chunk all documents to <strong>~200 words</strong> before embedding. Each chunk gets its own full embedding with nothing lost</td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+        <!-- END Q2 -->
+
+        <!-- ╔═══════════════════════════════════════════════════════════╗ -->
+        <!-- ║  Q3: TRANSFORMER ARCHITECTURE — THE COMPLETE DEEP DIVE   ║ -->
+        <!-- ╚═══════════════════════════════════════════════════════════╝ -->
+        <div class="qa-entry" id="q3">
+            <div class="qa-header">
+                <div class="qa-badge">Q&amp;A #003</div>
+                <h2>Transformer Architecture — The Complete Deep Dive</h2>
+                <div class="qa-meta">
+                    <span>📅 March 7–8, 2026</span>
+                    <span>📂 Sub-Phase 2.1 — Embeddings &amp; Similarity</span>
+                    <span>📄 Source: <em>"Attention Is All You Need"</em> (Vaswani et al., 2017) — arXiv:1706.03762</span>
+                </div>
+                <div style="margin-top: 0.6rem;">
+                    <span class="tag">transformer</span>
+                    <span class="tag">attention-math</span>
+                    <span class="tag">Q-K-V</span>
+                    <span class="tag">FFN</span>
+                    <span class="tag">paper-reference</span>
+                    <span class="tag">numerical-walkthrough</span>
+                    <span class="tag">encoder-vs-decoder</span>
+                </div>
+            </div>
+
+            <div class="question-box">
+                <p>❓ Explain transformers end-to-end with actual numerical examples. What are Q, K, V, FFN,
+                LayerNorm (γ, β), residual connections? How are 22.7M parameters calculated? Show every matrix multiplication.
+                Where does the input come from? Why is W<sub>q</sub> shape (384×384)? Is MiniLM's transformer different
+                from Llama/GPT? Reference the original paper.</p>
+            </div>
+
+            <!-- ─── 1. Paper Context ─── -->
+            <div class="section">
+                <h3><span class="section-number">1</span> The Paper That Started It All</h3>
+                <p>
+                    <strong>"Attention Is All You Need"</strong> (Vaswani et al., June 2017, Google Brain)
+                    proposed the Transformer — an architecture using <strong>only attention</strong>, no RNNs,
+                    no convolutions. This single paper is the foundation of GPT, BERT, MiniLM, Llama,
+                    and every modern LLM.
+                </p>
+                <h4>The Original Paper's Architecture Specs</h4>
+                <table>
+                    <tr><th>Hyperparameter</th><th>Paper's Value</th><th>MiniLM's Value</th><th>Meaning</th></tr>
+                    <tr><td>N (layers)</td><td>6</td><td>6</td><td>Number of stacked transformer layers</td></tr>
+                    <tr><td>d<sub>model</sub></td><td>512</td><td>384</td><td>Hidden dimension / embedding size</td></tr>
+                    <tr><td>h (heads)</td><td>8</td><td>6</td><td>Number of parallel attention heads</td></tr>
+                    <tr><td>d<sub>k</sub> = d<sub>v</sub></td><td>64</td><td>64</td><td>Dimension per head (d<sub>model</sub> / h)</td></tr>
+                    <tr><td>d<sub>ff</sub></td><td>2048</td><td>1536</td><td>FFN inner dimension (4× d<sub>model</sub>)</td></tr>
+                    <tr><td>Vocab</td><td>~37,000 (BPE)</td><td>30,522 (WordPiece)</td><td>Number of unique token IDs</td></tr>
+                    <tr><td>Training</td><td>8× P100 GPUs, 12h (base)</td><td>Distilled from BERT</td><td>Hardware used during training</td></tr>
+                </table>
+                <div class="callout callout-info">
+                    <span class="callout-icon">💡</span>
+                    <p><strong>Key difference:</strong> The paper's original transformer had <strong>both
+                    encoder AND decoder</strong> (for translation). BERT/MiniLM use <strong>encoder only</strong>.
+                    GPT/Llama use <strong>decoder only</strong>. Same building blocks, different selection.</p>
+                </div>
+            </div>
+
+            <!-- ─── 2. Where Input Comes From ─── -->
+            <div class="section">
+                <h3><span class="section-number">2</span> Where The Input Actually Comes From</h3>
+                <p>Using the <strong>two-paragraph example</strong> that exposes the critical invisible operation:
+                    the model has <strong>zero awareness of sentence boundaries</strong> inside a string.</p>
+                <pre data-lang="Python"><code><span class="variable">para_1</span> <span class="operator">=</span> <span class="string">"Generators yield values lazily. They save RAM. The OS loves them. Python uses them everywhere. JARVIS needs them."</span>
+<span class="variable">para_2</span> <span class="operator">=</span> <span class="string">"Async adds concurrency. The event loop schedules tasks. Await pauses a coroutine. Gather runs tasks in parallel. Callbacks are legacy. Promises evolved."</span>
+<span class="variable">embeddings</span> <span class="operator">=</span> <span class="variable">model</span>.<span class="function">encode</span>([<span class="variable">para_1</span>, <span class="variable">para_2</span>])
+<span class="comment"># You passed 2 strings. The model sees 2 items — NOT 11 sentences.</span></code></pre>
+
+                <div class="diagram"><span class="hl">STEP 1 — TOKENIZE (each string independently)</span>
+
+<span class="dim">String 0 (para_1 — 5 sentences, but tokenizer doesn't care about "." as boundary):</span>
+  [CLS] generators yield values la ##zi ##ly . they save
+  ram . the os loves them . python uses them every ##where .
+  jar ##vis needs them . [SEP]
+  → <span class="ok">~27 token IDs</span>   <span class="dim">Periods are regular tokens, NOT sentence breaks.</span>
+
+<span class="dim">String 1 (para_2 — 6 sentences):</span>
+  [CLS] as ##yn ##c adds con ##cur ##ren ##cy . the event loop
+  schedules tasks . await pauses a co ##ro ##uti ##ne . gather
+  runs tasks in parallel . call ##back ##s are legacy .
+  promises evolved . [SEP]
+  → <span class="ok">~40 token IDs</span>
+
+<span class="hl">⚠️ INVISIBLE OPERATION: PADDING</span>
+  String 0 has ~27 tokens, String 1 has ~40.
+  String 0 gets <span class="warn">13 [PAD] tokens appended</span> so both have length 40.
+  attention_mask marks real tokens (1) vs padding (0):
+
+  String 0: [CLS, generators, ..., them, ., SEP, PAD, PAD, ..., PAD]
+             ←───── 27 real tokens ─────→ ←──── 13 padding ────→
+  mask:     [1, 1, 1, ..., 1, 1, 1,       0,   0,   ...,   0  ]
+
+  String 1: [CLS, as, ##yn, ##c, ..., evolved, ., SEP]
+             ←────────── 40 real tokens (no padding) ──────────→
+  mask:     [1, 1, 1, 1, ..., 1, 1, 1]
+
+  Combined batch tensor: shape <span class="ok">(2, 40)</span> — 2 strings, 40 token IDs each</div>
+
+                <div class="diagram"><span class="hl">STEP 2 — EMBED (lookup tables)</span>
+
+  Token Embedding Table: <span class="ok">(30,522 rows × 384 cols)</span>
+    Each of the 40 token IDs looks up its 384-dim row.
+
+  Position Embedding Table: <span class="ok">(512 rows × 384 cols)</span>
+    Position 0 → row 0,  Position 1 → row 1, ..., Position 39 → row 39
+    <span class="dim">(Table has 512 rows — BERT inheritance. Sentence-transformers clips at 256.)</span>
+
+  Final = token_embed + position_embed  <span class="dim">(element-wise addition)</span>
+
+  Output: <span class="ok">(2, 40, 384)</span>
+           │   │    └── 384 floats per token
+           │   └── 40 tokens per string (padded)
+           └── 2 strings in the batch
+           ← <span class="warn">THIS enters the transformer</span></div>
+
+                <div class="callout callout-info">
+                    <span class="callout-icon">📄</span>
+                    <p><strong>Paper note (§3.5):</strong> The original paper used <strong>sinusoidal</strong> positional
+                    encodings (sine/cosine waves of different frequencies), not learned lookup tables.
+                    They found learned embeddings produce "nearly identical results" (Table 3, row E).
+                    BERT/MiniLM chose learned embeddings. Modern models like Llama use RoPE (rotary).</p>
+                </div>
+
+                <p><strong>Result:</strong> The input to the transformer is a tensor of shape
+                <span class="inline-code">(2, 40, 384)</span>. Two strings, padded to 40 tokens each,
+                384 floats per token. These are the numbers that Q, K, V projections operate on.</p>
+            </div>
+
+            <!-- ─── 3. Self-Attention Numerical Example ─── -->
+            <div class="section">
+                <h3><span class="section-number">3</span> Self-Attention — Full Numerical Walkthrough</h3>
+                <p>
+                    Using <strong>3 tokens from para_1, 4 dimensions</strong> so every number is visible.
+                    The math is identical to 40 tokens × 384 dims — just bigger matrices.
+                </p>
+                <div class="callout callout-warning">
+                    <span class="callout-icon">⚠️</span>
+                    <p><strong>CRITICAL:</strong> Attention operates <strong>WITHIN each string</strong>,
+                    NOT across strings. String 0's tokens attend ONLY to string 0's other tokens.
+                    String 1's tokens attend ONLY to string 1's other tokens.
+                    The two paragraphs <strong>NEVER see each other</strong>.
+                    The batch dimension (2) is processed in parallel but independently.</p>
+                </div>
+
+                <h4>Step 0: The Input (3 tokens from para_1, after embedding + position)</h4>
+                <div class="diagram"><span class="dim">X = 3 tokens × 4 dimensions (from string 0 / para_1):</span>
+
+               dim0   dim1   dim2   dim3
+"generators" [  0.5    1.0   -0.5    0.2  ]
+"yield"      [ -0.3    0.8    0.4    0.7  ]
+"values"     [  0.6   -0.2    0.9   -0.1  ]
+
+<span class="dim">Shape: (3, 4) — one string only. String 1 runs the same math independently.</span></div>
+
+                <h4>Step 1: Creating Q, K, V — Why (4×4)?</h4>
+                <p>
+                    The model has 3 <strong>weight matrices</strong>: W<sub>q</sub>,
+                    W<sub>k</sub>, W<sub>v</sub>. Each is <span class="inline-code">(4, 4)</span> because
+                    input has 4 dimensions and output has 4 dimensions.
+                    <strong>For MiniLM:</strong> input has 384 dims, output has 384 dims → W<sub>q</sub> is <span class="inline-code">(384, 384)</span>. That's why.
+                </p>
+
+                <h4>What "Learned" Means (Precisely)</h4>
+                <div class="diagram"><span class="dim">Before training:</span>
+  W_q = random values from Gaussian distribution, e.g. N(0, 0.02)
+  W_k = different random values
+  W_v = different random values
+
+<span class="dim">During training (millions of iterations):</span>
+  1. Forward pass: compute attention with current weights
+  2. Compute loss (how bad the embedding/prediction is)
+  3. Backward pass: backprop computes ∂Loss/∂W_q, ∂Loss/∂W_k, ∂Loss/∂W_v
+  4. Update: W_q = W_q - lr × gradient
+
+<span class="dim">After training:</span>
+  Weights converge to values that produce good attention patterns.
+  <span class="ok">Same process as training a CNN. Different architecture, same backprop.</span>
+  <span class="warn">γ, β in LayerNorm are also "learned" this exact same way.</span></div>
+
+                <h4>Step 1b: Actual Matrix Multiplication for Q</h4>
+                <div class="diagram"><span class="dim">W_q (Query weights — learned during training):</span>
+
+          out0   out1   out2   out3
+  in0  [  0.1    0.3   -0.2    0.4  ]
+  in1  [  0.5   -0.1    0.2    0.0  ]
+  in2  [ -0.3    0.4    0.6   -0.1  ]
+  in3  [  0.2    0.0   -0.4    0.3  ]
+
+<span class="hl">Computing Q for "generators" = [0.5, 1.0, -0.5, 0.2] × W_q:</span>
+
+  Q_gen[0] = (0.5×0.1) + (1.0×0.5) + (-0.5×-0.3) + (0.2×0.2)
+           = 0.05 + 0.50 + 0.15 + 0.04 = <span class="ok">0.74</span>
+
+  Q_gen[1] = (0.5×0.3) + (1.0×-0.1) + (-0.5×0.4) + (0.2×0.0)
+           = 0.15 + (-0.10) + (-0.20) + 0.00 = <span class="ok">-0.15</span>
+
+  Q_gen[2] = (0.5×-0.2) + (1.0×0.2) + (-0.5×0.6) + (0.2×-0.4)
+           = -0.10 + 0.20 + (-0.30) + (-0.08) = <span class="ok">-0.28</span>
+
+  Q_gen[3] = (0.5×0.4) + (1.0×0.0) + (-0.5×-0.1) + (0.2×0.3)
+           = 0.20 + 0.00 + 0.05 + 0.06 = <span class="ok">0.31</span>
+
+  Q_gen = [0.74, -0.15, -0.28, 0.31]  <span class="dim">← ONE row of Q</span></div>
+
+                <p>Same multiplication for all tokens produces the full matrices:</p>
+                <div class="diagram"><span class="hl">Full Q matrix</span> = X × W_q (3×4) × (4×4) = <span class="ok">(3×4)</span>:
+            q0     q1     q2     q3
+Q_gen  [ 0.74  -0.15  -0.28   0.31 ]
+Q_yld  [ 0.31   0.42   0.18   0.05 ]
+Q_val  [ 0.02   0.58   0.42  -0.07 ]
+
+<span class="hl">Full K matrix</span> = X × W_k:
+            k0     k1     k2     k3
+K_gen  [ 0.13   0.24  -0.39   0.29 ]
+K_yld  [ 0.15   0.23  -0.21   0.20 ]
+K_val  [ 0.34  -0.11  -0.37   0.38 ]
+
+<span class="hl">Full V matrix</span> = X × W_v:
+            v0     v1     v2     v3
+V_gen  [-0.01   0.55  -0.55   0.40 ]
+V_yld  [ 0.14   0.28   0.47   0.39 ]
+V_val  [ 0.38  -0.21   0.36  -0.01 ]</div>
+
+                <h4>Step 2: Attention Scores — Every Dot Product Shown</h4>
+                <div class="diagram"><span class="hl">Score[gen→gen]</span> = Q_gen · K_gen:
+  = (0.74×0.13) + (-0.15×0.24) + (-0.28×-0.39) + (0.31×0.29)
+  = 0.096 + (-0.036) + 0.109 + 0.090 = <span class="ok">0.259</span>
+
+<span class="hl">Score[gen→yld]</span> = Q_gen · K_yld:
+  = (0.74×0.15) + (-0.15×0.23) + (-0.28×-0.21) + (0.31×0.20)
+  = 0.111 + (-0.035) + 0.059 + 0.062 = <span class="ok">0.197</span>
+
+<span class="hl">Score[gen→val]</span> = Q_gen · K_val:
+  = (0.74×0.34) + (-0.15×-0.11) + (-0.28×-0.37) + (0.31×0.38)
+  = 0.252 + 0.017 + 0.104 + 0.118 = <span class="ok">0.491</span>
+
+<span class="dim">Full Scores matrix Q×K<sup>T</sup> = (3×4) × (4×3) = (3×3):</span>
+             gen     yld     val
+gen →   [ 0.259   0.197   <span class="warn">0.491</span> ]  ← gen attends most to val
+yld →   [ 0.168   0.143   <span class="warn">0.240</span> ]  ← yld attends most to val
+val →   [ 0.312   0.198   <span class="warn">0.521</span> ]  ← val attends most to itself</div>
+
+                <h4>Step 3: Scale by √d<sub>k</sub></h4>
+                <div class="diagram"><span class="dim">d_k = 4, √4 = 2.0. Scaled = Scores / 2.0:</span>
+             gen     yld     val
+gen →   [ 0.130   0.099   0.246 ]
+yld →   [ 0.084   0.072   0.120 ]
+val →   [ 0.156   0.099   0.261 ]</div>
+
+                <div class="callout callout-info">
+                    <span class="callout-icon">📄</span>
+                    <p><strong>Paper §3.2.1:</strong> "for large values of d<sub>k</sub>,
+                    the dot products grow large in magnitude, pushing the softmax function into regions
+                    where it has extremely small gradients." For d<sub>k</sub>=64, dot products would have
+                    std dev = 8. Dividing by √64=8 brings variance back to 1.</p>
+                </div>
+
+                <h4>Step 4: Softmax (Row → Probabilities)</h4>
+                <div class="diagram"><span class="hl">Softmax for row "generators":</span> softmax([0.130, 0.099, 0.246])
+  e<sup>0.130</sup> = 1.139,  e<sup>0.099</sup> = 1.104,  e<sup>0.246</sup> = 1.279,  sum = 3.522
+
+  softmax = [1.139/3.522, 1.104/3.522, 1.279/3.522]
+          = [<span class="ok">0.323</span>,       <span class="ok">0.313</span>,       <span class="ok">0.363</span>]  <span class="dim">sums to 1.0 ✓</span>
+
+<span class="dim">Full Attention Weights:</span>
+              gen     yld     val
+gen →   [ 0.323   0.313   <span class="warn">0.363</span> ]  ← 36.3% attention to "values"
+yld →   [ 0.340   0.333   0.327 ]  ← roughly equal
+val →   [ 0.317   0.292   <span class="warn">0.391</span> ]  ← 39.1% to itself</div>
+
+                <h4>Step 5: Weighted Sum of Values</h4>
+                <div class="diagram"><span class="hl">Output for "generators"</span> = 0.323 × V_gen + 0.313 × V_yld + 0.363 × V_val
+
+  dim0: (0.323×-0.01) + (0.313×0.14) + (0.363×0.38) = <span class="ok">0.179</span>
+  dim1: (0.323×0.55) + (0.313×0.28) + (0.363×-0.21) = <span class="ok">0.190</span>
+  dim2: (0.323×-0.55) + (0.313×0.47) + (0.363×0.36) = <span class="ok">0.100</span>
+  dim3: (0.323×0.40) + (0.313×0.39) + (0.363×-0.01) = <span class="ok">0.247</span>
+
+  Output_gen = [0.179, 0.190, 0.100, 0.247]
+  <span class="warn">"generators" is no longer just "generators".</span>
+  It now carries blended information from the entire sentence.</div>
+
+                <div class="callout callout-info">
+                    <span class="callout-icon">📐</span>
+                    <p><strong>The Formula:</strong>
+                    <span class="inline-code">Attention(Q, K, V) = softmax(Q × K<sup>T</sup> / √d<sub>k</sub>) × V</span>
+                    <br>Each token's output is a <strong>weighted average of ALL other tokens' values</strong>,
+                    weighted by Q·K similarity.</p>
+                </div>
+            </div>
+
+            <!-- ─── 4. Multi-Head ─── -->
+            <div class="section">
+                <h3><span class="section-number">4</span> Multi-Head Attention — Paper's Exact Formula</h3>
+                <p>One attention head learns ONE type of relationship. But language has many:
+                syntactic, semantic, positional. <strong>Solution:</strong> Run multiple heads in parallel:</p>
+
+                <div class="diagram"><span class="dim">Paper §3.2.2 formula:</span>
+
+  MultiHead(Q, K, V) = Concat(head₁, ..., headₕ) × W<sup>O</sup>
+  where headᵢ = Attention(X × Wᵢ<sup>Q</sup>, X × Wᵢ<sup>K</sup>, X × Wᵢ<sup>V</sup>)
+
+<span class="dim">MiniLM: 384-dim, 6 heads → each head: 384 / 6 = 64 dimensions</span>
+
+  Head 1: Q₁(8,64), K₁(8,64), V₁(8,64) → Out₁(8,64)  <span class="dim">[learns syntax]</span>
+  Head 2: Q₂(8,64), K₂(8,64), V₂(8,64) → Out₂(8,64)  <span class="dim">[learns semantics]</span>
+  ...
+  Head 6: Q₆(8,64), K₆(8,64), V₆(8,64) → Out₆(8,64)  <span class="dim">[learns position]</span>
+
+  <span class="hl">Concatenate:</span> [Out₁ | Out₂ | ... | Out₆] → (8, 384)
+  <span class="hl">Output projection:</span> (8, 384) × W<sup>O</sup>(384, 384) = (8, 384)</div>
+            </div>
+
+            <!-- ─── 5. FFN ─── -->
+            <div class="section">
+                <h3><span class="section-number">5</span> FFN — Feed-Forward Network</h3>
+                <div class="diagram"><span class="dim">Paper §3.3 formula:</span>  FFN(x) = max(0, x × W₁ + b₁) × W₂ + b₂
+
+<span class="dim">With actual shapes:</span>
+  x:       (3, 4)       ← 3 tokens, 4 dims
+  W₁:      (4, 16)      ← "up-project" to 4× wider (d_ff = 4 × d_model)
+  hidden:  (3, 16)      ← 4× wider intermediate
+  ReLU:    element-wise  ← negative values → 0
+  W₂:      (16, 4)      ← "down-project" back
+  output:  (3, 4)       ← same shape as input
+
+  <span class="dim">MiniLM: W₁ is (384×1536), W₂ is (1536×384)</span></div>
+
+                <div class="callout callout-warning">
+                    <span class="callout-icon">⚠️</span>
+                    <p><strong>Why FFN exists:</strong> Attention is linear — weighted sums.
+                    Stacking linear operations = still linear. FFN adds <strong>non-linearity</strong> (ReLU/GELU).
+                    Without it, 6 attention layers = 1 attention layer.
+                    <br><strong>Note:</strong> Paper uses ReLU. BERT/MiniLM use GELU. Llama uses SiLU + gating.</p>
+                </div>
+            </div>
+
+            <!-- ─── 6. LayerNorm ─── -->
+            <div class="section">
+                <h3><span class="section-number">6</span> LayerNorm — Every Variable Explained</h3>
+                <div class="diagram"><span class="hl">Formula: output = γ × ((x - μ) / (σ + ε)) + β</span>
+
+<span class="dim">Every variable:</span>
+  x = input vector for ONE token: [0.179, 0.190, 0.100, 0.247]
+
+  <span class="hl">μ</span> (mu) = mean = (0.179 + 0.190 + 0.100 + 0.247) / 4 = <span class="ok">0.179</span>
+  <span class="hl">σ</span> (sigma) = standard deviation = <span class="ok">0.052</span>
+  <span class="hl">ε</span> (epsilon) = 1e-5 <span class="dim">(prevents division by zero)</span>
+
+<span class="dim">Normalize (zero mean, unit variance):</span>
+  x_norm[0] = (0.179 - 0.179) / (0.052 + 1e-5) = <span class="ok"> 0.000</span>
+  x_norm[1] = (0.190 - 0.179) / (0.052 + 1e-5) = <span class="ok"> 0.212</span>
+  x_norm[2] = (0.100 - 0.179) / (0.052 + 1e-5) = <span class="ok">-1.519</span>
+  x_norm[3] = (0.247 - 0.179) / (0.052 + 1e-5) = <span class="ok"> 1.308</span>
+
+<span class="hl">γ</span> (gamma) = LEARNED per-dimension SCALE
+  Init: [1, 1, 1, 1]   After training: [0.93, 1.12, 0.87, 1.05]
+
+<span class="hl">β</span> (beta) = LEARNED per-dimension SHIFT
+  Init: [0, 0, 0, 0]   After training: [0.02, -0.08, 0.05, 0.01]
+
+<span class="dim">Apply scale + shift:</span>
+  output[0] = 0.93 ×  0.000 + 0.02  = <span class="ok"> 0.020</span>
+  output[1] = 1.12 ×  0.212 + (-0.08) = <span class="ok"> 0.157</span>
+  output[2] = 0.87 × (-1.519) + 0.05 = <span class="ok">-1.271</span>
+  output[3] = 1.05 ×  1.308 + 0.01  = <span class="ok"> 1.383</span></div>
+
+                <div class="callout callout-info">
+                    <span class="callout-icon">💡</span>
+                    <p><strong>Why γ and β exist:</strong> Pure normalization forces mean=0, variance=1.
+                    But maybe some dimensions SHOULD have larger values. γ and β give the model the
+                    <strong>option to undo normalization</strong> if optimal.
+                    <br><strong>Params:</strong> 384 (γ) + 384 (β) = 768 params per LayerNorm.</p>
+                </div>
+            </div>
+
+            <!-- ─── 7. Residual Connections ─── -->
+            <div class="section">
+                <h3><span class="section-number">7</span> Residual Connections — The Gradient Highway</h3>
+                <p>From paper §3.1: "the output of each sub-layer is <span class="inline-code">LayerNorm(x + Sublayer(x))</span>"</p>
+
+                <div class="diagram"><span class="dim">Residual = ADD the original input back:</span>
+
+  output = x + f(x)    <span class="warn">NOT just f(x)</span>
+
+<span class="hl">Concrete example:</span>
+  x = [0.42, -0.03, 0.13, -0.26]       ← original token embedding
+  attn_out = [0.179, 0.190, 0.100, 0.247]  ← attention's result
+
+  <span class="hl">RESIDUAL ADD:</span>
+  residual = [0.42+0.179, -0.03+0.190, 0.13+0.100, -0.26+0.247]
+           = [<span class="ok">0.599, 0.160, 0.230, -0.013</span>]
+
+  <span class="hl">THEN LayerNorm</span>(residual) → the γ/β/μ/σ process from section 6</div>
+
+                <h4>Why Residuals Are Critical</h4>
+                <div class="diagram"><span class="hl">Reason 1: Gradient Highway</span>
+  ∂(x + f(x))/∂x = 1 + ∂f(x)/∂x
+  That "1 +" is the highway. Even if ∂f(x)/∂x → 0, gradient ≥ 1.
+
+<span class="hl">Reason 2: Identity Baseline</span>
+  If attention/FFN outputs zeros: output = x + 0 = x
+  The model can't make things WORSE by adding layers.</div>
+
+                <div class="callout callout-info">
+                    <span class="callout-icon">📄</span>
+                    <p><strong>Paper §3.1:</strong> "To facilitate these residual connections, all sub-layers
+                    produce outputs of dimension d<sub>model</sub>=512." This is why <strong>every layer has the same dimension</strong> — the addition x+f(x) requires matching shapes.</p>
+                </div>
+            </div>
+
+            <!-- ─── 8. Parameter Calculation (absorbed from old Q4) ─── -->
+            <div class="section">
+                <h3><span class="section-number">8</span> How Parameters Are Calculated (22.7M)</h3>
+                <p>Parameters = every <strong>learnable number (weight)</strong> in the model. Each is a
+                <span class="inline-code">float32</span> (4 bytes).</p>
+                <table>
+                    <tr><th>Component</th><th>Calculation</th><th>Params</th></tr>
+                    <tr>
+                        <td><strong style="color: var(--accent-cyan);">1. Token Embedding Table</strong><br><span style="color: var(--text-muted); font-size: 0.8rem;">(vocab_size × hidden_dim)</span></td>
+                        <td>30,522 × 384</td>
+                        <td><strong style="color: var(--accent-amber);">11.7M</strong></td>
+                    </tr>
+                    <tr>
+                        <td><strong style="color: var(--accent-cyan);">2. Position Embedding Table</strong></td>
+                        <td>512 × 384</td>
+                        <td>0.2M</td>
+                    </tr>
+                    <tr style="border-top: 2px solid var(--border);">
+                        <td colspan="3" style="color: var(--accent-cyan); font-weight: 600; padding-top: 1rem;">3. Each Transformer Layer:</td>
+                    </tr>
+                    <tr>
+                        <td style="padding-left: 1.5rem;">├─ Q, K, V projections</td>
+                        <td>3 × (384 × 384)</td>
+                        <td>0.44M</td>
+                    </tr>
+                    <tr>
+                        <td style="padding-left: 1.5rem;">├─ Output projection</td>
+                        <td>384 × 384</td>
+                        <td>0.15M</td>
+                    </tr>
+                    <tr>
+                        <td style="padding-left: 1.5rem;">├─ FFN up-project</td>
+                        <td>384 × 1536</td>
+                        <td>0.59M</td>
+                    </tr>
+                    <tr>
+                        <td style="padding-left: 1.5rem;">├─ FFN down-project</td>
+                        <td>1536 × 384</td>
+                        <td>0.59M</td>
+                    </tr>
+                    <tr>
+                        <td style="padding-left: 1.5rem;">└─ LayerNorm (×2)</td>
+                        <td>2 × 384</td>
+                        <td>~768</td>
+                    </tr>
+                    <tr>
+                        <td style="padding-left: 1.5rem;"><strong style="color: var(--accent-green);">× 6 layers:</strong></td>
+                        <td></td>
+                        <td><strong style="color: var(--accent-green);">10.6M</strong></td>
+                    </tr>
+                    <tr style="border-top: 2px solid var(--accent-blue);">
+                        <td><strong style="color: var(--accent-green);">TOTAL</strong></td>
+                        <td></td>
+                        <td><strong style="color: var(--accent-green);">22.7M</strong></td>
+                    </tr>
+                    <tr>
+                        <td style="color: var(--text-muted);">Memory (float32):</td>
+                        <td>22.7M × 4 bytes</td>
+                        <td>~91 MB</td>
+                    </tr>
+                </table>
+                <div class="callout callout-info">
+                    <span class="callout-icon">💡</span>
+                    <p><strong>Key insight:</strong> The token embedding table (30,522 × 384) is <strong>11.7M params
+                    — over half the entire model</strong>.</p>
+                </div>
+            </div>
+
+            <!-- ─── 9. Encoder vs Decoder (absorbed from old Q5) ─── -->
+            <div class="section">
+                <h3><span class="section-number">9</span> Encoder vs Decoder — The Architecture Fork</h3>
+                <table>
+                    <tr><th>Architecture</th><th>What It Sees</th><th>Used For</th><th>Models</th></tr>
+                    <tr>
+                        <td><strong>Encoder-only</strong></td>
+                        <td>ALL tokens (bidirectional)</td>
+                        <td>Understanding → embeddings</td>
+                        <td><strong style="color: var(--accent-green);">BERT, MiniLM</strong></td>
+                    </tr>
+                    <tr>
+                        <td><strong>Decoder-only</strong></td>
+                        <td>Only PREVIOUS tokens (causal)</td>
+                        <td>Generating → chatbots</td>
+                        <td><strong style="color: var(--accent-amber);">GPT-4, Llama, Qwen</strong></td>
+                    </tr>
+                    <tr>
+                        <td><strong>Encoder-Decoder</strong></td>
+                        <td>Encoder sees all, decoder generates</td>
+                        <td>Translation, summarization</td>
+                        <td>T5, BART</td>
+                    </tr>
+                </table>
+
+                <h4>The Key Difference: Causal Masking</h4>
+                <div class="diagram"><span class="hl">ENCODER</span> (BERT/MiniLM) — sees everything:
+  Token "JARVIS" can attend to:
+  <span class="ok">✅ async, generators, power, memory ← ALL tokens</span>
+
+<span class="hl">DECODER</span> (GPT/Llama) — can only look left:
+  Token "JARVIS" can attend to:
+  <span class="ok">✅ async, generators, power</span>
+  <span class="warn">❌ memory ← CANNOT see future tokens (masked with -∞)</span></div>
+
+                <h4>MiniLM vs Llama/GPT — Same Blocks, Different Config</h4>
+                <table>
+                    <tr><th>Component</th><th>MiniLM (Encoder)</th><th>Llama 70B (Decoder)</th><th>Why Different</th></tr>
+                    <tr><td>Attention</td><td>Bidirectional</td><td>Causal (masked)</td><td>Decoder masks future</td></tr>
+                    <tr><td>Layers</td><td>6</td><td>80</td><td>Scale</td></tr>
+                    <tr><td>Hidden dim</td><td>384</td><td>8,192</td><td>Scale</td></tr>
+                    <tr><td>FFN</td><td>Up/Down + GELU</td><td>Up/Gate/Down + SiLU</td><td>Gated FFN</td></tr>
+                    <tr><td>Normalization</td><td>Post-LayerNorm</td><td>Pre-RMSNorm</td><td>RMSNorm = faster</td></tr>
+                    <tr><td>Position encoding</td><td>Learned lookup</td><td>RoPE (rotary)</td><td>Longer sequences</td></tr>
+                    <tr><td>Attention opt.</td><td>Standard</td><td>GQA (Grouped Query)</td><td>Less VRAM</td></tr>
+                    <tr><td>Output</td><td>Mean pool → embedding</td><td>Next token prediction</td><td>Different task</td></tr>
+                </table>
+                <div class="callout callout-success">
+                    <span class="callout-icon">📌</span>
+                    <p><strong>The core Q,K,V attention math is identical.</strong> Differences are
+                    engineering optimizations for scale: RoPE, GQA, Gated FFN, RMSNorm. None change
+                    <em>what</em> attention does — they change <em>how efficiently</em> it does it.</p>
+                </div>
+            </div>
+
+            <!-- ─── 10. Training Details ─── -->
+            <div class="section">
+                <h3><span class="section-number">10</span> Training Details (From the Paper)</h3>
+                <table>
+                    <tr><th>Detail</th><th>Value</th><th>Why It Matters</th></tr>
+                    <tr><td>Optimizer</td><td>Adam (β₁=0.9, β₂=0.98, ε=10<sup>-9</sup>)</td><td>β₂ higher than default 0.999 for stability</td></tr>
+                    <tr><td>Learning rate</td><td>Warmup 4000 steps then decay</td><td>LR = d<sub>model</sub><sup>-0.5</sup> × min(step<sup>-0.5</sup>, step × warmup<sup>-1.5</sup>)</td></tr>
+                    <tr><td>Dropout</td><td>P<sub>drop</sub> = 0.1</td><td>Applied to attention weights AND after each sublayer</td></tr>
+                    <tr><td>Label smoothing</td><td>ε<sub>ls</sub> = 0.1</td><td>Prevents overconfident predictions</td></tr>
+                    <tr><td>Hardware (base)</td><td>8× P100 GPUs, 12 hours</td><td>100K steps, 0.4s per step</td></tr>
+                    <tr><td>Hardware (big)</td><td>8× P100 GPUs, 3.5 days</td><td>300K steps — d<sub>model</sub>=1024, h=16</td></tr>
+                </table>
+            </div>
+
+            <!-- ─── 11. Full Pipeline ─── -->
+            <div class="section">
+                <h3><span class="section-number">11</span> The Complete MiniLM Pipeline (2 Paragraphs)</h3>
+                <div class="diagram"><span class="dim">model.encode([para_1, para_2])</span>
+
+<span class="dim">para_1: "Generators yield values lazily. They save RAM..." (5 sentences)</span>
+<span class="dim">para_2: "Async adds concurrency. The event loop..." (6 sentences)</span>
+          │
+          ▼
+┌─── <span class="hl">TOKENIZE</span> ──────────────────────────────────────┐
+│  para_1 → ~27 tokens: [CLS, generators, yield,     │
+│    values, la, ##zi, ##ly, ., they, ..., SEP]       │
+│  para_2 → ~40 tokens: [CLS, as, ##yn, ##c, adds,   │
+│    con, ##cur, ..., evolved, ., SEP]                 │
+│  <span class="warn">⚠️ PADDING: para_1 gets 13 [PAD] tokens → both 40</span> │
+│  Batch tensor: <span class="ok">(2, 40)</span> token IDs                    │
+└──────────────────────────────────────────────────┘
+          │
+          ▼
+┌─── <span class="hl">EMBED</span> ──────────────────────────────────────────┐
+│  Token Embed (30522×384) + Position Embed (512×384) │
+│  Output: <span class="ok">(2, 40, 384)</span>                                │
+│  2 strings × 40 tokens × 384 dims                   │
+└──────────────────────────────────────────────────┘
+          │
+          ▼
+┌─── <span class="hl">LAYER 1 through LAYER 6</span> ────────────────────────┐
+│  Multi-Head Attention (6 heads × 64 dim)             │
+│  + Residual + LayerNorm + FFN + Residual + LayerNorm │
+│                                                       │
+│  <span class="warn">⚠️ CRITICAL: Attention is WITHIN each string.</span>       │
+│  <span class="warn">para_1 tokens attend ONLY to para_1 tokens.</span>       │
+│  <span class="warn">para_2 tokens attend ONLY to para_2 tokens.</span>       │
+│  <span class="warn">The two paragraphs NEVER see each other.</span>          │
+│  PAD tokens are MASKED OUT (attention_mask = 0).     │
+│                                                       │
+│  Output: <span class="ok">(2, 40, 384)</span> — deeply contextual             │
+└──────────────────────────────────────────────────┘
+          │
+          ▼
+┌─── <span class="hl">MEAN POOL</span> ──────────────────────────────────────┐
+│  para_1: average 27 real token vectors (ignore PAD)  │
+│    → <span class="ok">ONE vector (384,)</span> — all 5 sentences averaged    │
+│  para_2: average 40 real token vectors               │
+│    → <span class="ok">ONE vector (384,)</span> — all 6 sentences averaged    │
+│  Output: <span class="ok">(2, 384)</span>                                    │
+│  <span class="warn">⚠️ 2 embeddings, NOT 11. Sentences are crushed.</span>   │
+└──────────────────────────────────────────────────┘
+          │
+          ▼
+┌─── <span class="hl">L2 NORMALIZE</span> ───────────────────────────────────┐
+│  para_1 vector: ÷ L2 norm → length = 1.0            │
+│  para_2 vector: ÷ L2 norm → length = 1.0            │
+│  Output: <span class="ok">(2, 384)</span> — two unit-length vectors          │
+└──────────────────────────────────────────────────┘
+          │
+          ▼
+    embeddings[0] = para_1's meaning <span class="dim">(5 sentences → 1 averaged vector)</span>
+    embeddings[1] = para_2's meaning <span class="dim">(6 sentences → 1 averaged vector)</span>
+    <span class="ok">Store in ChromaDB. But each is a BLENDED average, not per-sentence.</span>
+    <span class="warn">Fix: Split into sentences BEFORE encoding → 11 precise vectors.</span></div>
+            </div>
+
+            <!-- ─── 12. JARVIS Lifecycle ─── -->
+            <div class="section">
+                <h3><span class="section-number">12</span> JARVIS Lifecycle — Where Transformers Live</h3>
+                <div class="diagram"><span class="dim">You ask JARVIS: "How do async generators work?"</span>
+
+<span class="hl">PHASE 1: EMBEDDING</span> (MiniLM — Encoder Transformer)
+  ├─ Tokenize question → 8 token IDs
+  ├─ Lookup token embeds + add position embeds
+  ├─ Run through 6 transformer layers (attention → FFN × 6)
+  ├─ Mean pool 8 token vectors → 1 vector (384-dim)
+  ├─ L2 normalize → unit length
+  └─ <span class="ok">This vector = your question's "meaning" in numbers</span>
+
+<span class="hl">PHASE 2: RETRIEVAL</span> (ChromaDB — cosine similarity)
+  ├─ Compare question vector vs ALL stored doc chunk vectors
+  ├─ Top 5 most similar chunks retrieved
+  └─ <span class="ok">These are the "relevant context"</span>
+
+<span class="hl">PHASE 3: GENERATION</span> (Llama 70B — Decoder Transformer)
+  ├─ Prompt = "Context: [5 chunks]. Question: ..."
+  ├─ Run through 80 transformer layers (SAME Q,K,V math)
+  │   but with <span class="warn">CAUSAL MASK</span> (can only see previous tokens)
+  ├─ At each step, predict NEXT token
+  └─ <span class="ok">"Async" → "generators" → "are" → ... (the response)</span>
+
+<span class="dim">TWO transformers, TWO roles:</span>
+  MiniLM (encoder): text → vector (for search)
+  Llama (decoder): prompt → text (for response)
+  <span class="ok">Same Q,K,V building blocks. Different mask. Different output.</span></div>
+            </div>
+
+            <!-- ─── 13. Summary ─── -->
+            <div class="section" style="border-left: 3px solid var(--accent-green);">
+                <h3>📋 Summary</h3>
+                <table>
+                    <tr><th>Concept</th><th>What It Is (Precisely)</th></tr>
+                    <tr><td>Input</td><td>Token Embed + Position Embed → (num_tokens, d_model) matrix of floats</td></tr>
+                    <tr><td>Q, K, V</td><td>Input × 3 separate learned weight matrices. Q = "what I'm looking for", K = "what I contain", V = "info I carry"</td></tr>
+                    <tr><td>Attention</td><td>softmax(Q×K<sup>T</sup>/√d_k) × V. Each token blends info from all others</td></tr>
+                    <tr><td>√d_k scaling</td><td>Without scaling, softmax saturates → gradients vanish. ÷√d_k stabilizes (§3.2.1)</td></tr>
+                    <tr><td>Multi-Head</td><td>Split d_model into h heads (6×64=384). Each learns different relationships. Congen → output projection</td></tr>
+                    <tr><td>FFN</td><td>Up-project (×4) → ReLU/GELU → down-project. Adds non-linearity. d_ff=1536</td></tr>
+                    <tr><td>γ / β</td><td>Learned per-dimension scale/shift in LayerNorm. Init: γ=1, β=0. Trained via backprop</td></tr>
+                    <tr><td>Residual</td><td>output = x + sublayer(x). Gradient highway (+1 term). Identity baseline</td></tr>
+                    <tr><td>Parameters</td><td>22.7M total. Token embed = 52% (11.7M). 6 transformer layers = 46% (10.6M)</td></tr>
+                    <tr><td>Encoder vs Decoder</td><td>Encoder = bidirectional (MiniLM). Decoder = causal mask (Llama). JARVIS uses both</td></tr>
+                </table>
+            </div>
+        </div>
+        <!-- END Q3 -->
+
+        <!-- ══════════════════════════════════════════════════════════════ -->
+        <!-- APPEND NEW QUESTIONS ABOVE THIS LINE                          -->
+        <!-- Copy the <div class="qa-entry" id="qN"> block pattern above  -->
+        <!-- and add a matching <li class="toc-item"> in the sidebar       -->
+        <!-- ══════════════════════════════════════════════════════════════ -->
+
+    </div>
+
+    <!-- ════════════════════ SCROLL SPY ════════════════════ -->
+    <script>
+        // Highlight active TOC item on scroll
+        const entries = document.querySelectorAll('.qa-entry');
+        const tocLinks = document.querySelectorAll('.toc-item a');
+
+        const observer = new IntersectionObserver((obs) => {
+            obs.forEach(entry => {
+                if (entry.isIntersecting) {
+                    tocLinks.forEach(l => l.classList.remove('active'));
+                    const id = entry.target.id;
+                    const active = document.querySelector(`.toc-item a[href="#${id}"]`);
+                    if (active) active.classList.add('active');
+                }
+            });
+        }, { rootMargin: '-20% 0px -70% 0px' });
+
+        entries.forEach(e => observer.observe(e));
+    </script>
+</body>
+
+</html>

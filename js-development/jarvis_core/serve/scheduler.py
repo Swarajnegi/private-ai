@@ -88,6 +88,40 @@ _OUTPUT_TAIL_CHARS = 400
 
 HOUR = 3600.0
 
+
+def _runtime_python(base: Path) -> str:
+    """Prefer the repo virtualenv over the watchdog's base interpreter.
+
+    On Windows ``pythonw`` may report the global Python executable even when
+    the watchdog was launched from ``.venv``.  Scheduled jobs then lose the
+    project dependency set and, on managed installs, can fail to spawn the
+    global executable at all.  The repository venv is the explicit runtime
+    contract, so select it when it exists.
+    """
+    candidate = base / ".venv" / ("Scripts/python.exe" if os.name == "nt" else "bin/python3")
+    return str(candidate) if candidate.is_file() else (sys.executable or "python3")
+
+
+def _remote_sync_configured() -> bool:
+    """Whether the local host has both machine-local sync settings.
+
+    On native Windows the watchdog may predate a user environment update. Read
+    HKCU as a narrow fallback so a restart is sufficient; on POSIX normal
+    process environment inheritance remains the only mechanism.
+    """
+    if os.environ.get("JARVIS_REMOTE_URL") and os.environ.get("JARVIS_REMOTE_TOKEN"):
+        return True
+    if os.name != "nt":
+        return False
+    try:
+        import winreg
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Environment") as key:
+            url, _ = winreg.QueryValueEx(key, "JARVIS_REMOTE_URL")
+            token, _ = winreg.QueryValueEx(key, "JARVIS_REMOTE_TOKEN")
+        return bool(str(url).strip() and str(token).strip())
+    except (ImportError, OSError):
+        return False
+
 # An async callable: argv, timeout -> (returncode, output tail)
 Runner = Callable[[Sequence[str], float], Awaitable[Tuple[int, str]]]
 
@@ -182,8 +216,8 @@ def default_jobs(python: Optional[str] = None,
     Returns:
         Jobs with absolute script paths, so cwd cannot change their meaning.
     """
-    py = python or sys.executable or "python3"
     base = Path(root or JARVIS_ROOT)
+    py = python or _runtime_python(base)
     scripts = base / "scripts"
     checker = str(scripts / "check_projections.py")
 
@@ -221,6 +255,12 @@ def default_jobs(python: Optional[str] = None,
             timeout_seconds=1800.0,
             initial_delay_seconds=300.0,
             description="re-embed the knowledge base into chromadb when stale"),
+        Job(name="rebuild_graphrag",
+            argv=(py, str(scripts / "build_graphrag.py"), "--stats"),
+            interval_seconds=6 * HOUR,
+            timeout_seconds=300.0,
+            initial_delay_seconds=360.0,
+            description="rebuild the derived evidence-backed GraphRAG index from canonical JSONL facts"),
         # --- Added 2026-09-10: the Codex migration (ROADMAP 6.8.3) ---
         Job(name="ingest_codex",
             argv=(py, str(scripts / "ingest_codex_sessions.py")),
@@ -247,7 +287,14 @@ def default_jobs(python: Optional[str] = None,
             description="regenerate activity_digest.md — found 2.5 MONTHS "
                         "stale on 2026-09-10 because nothing had ever "
                         "scheduled this; Antigravity reads it at every boot"),
-    ]
+    ] + ([
+        Job(name="sync_remote_memory",
+            argv=(py, str(scripts / "sync_remote_memory.py")),
+            interval_seconds=15 * 60.0,
+            timeout_seconds=600.0,
+            initial_delay_seconds=660.0,
+            description="bidirectional union-sync of authoritative facts with the hosted Context Ledger"),
+    ] if _remote_sync_configured() else [])
 
 
 # =============================================================================
@@ -271,6 +318,24 @@ async def _subprocess_runner(argv: Sequence[str], timeout: float) -> Tuple[int, 
             stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT,
             env={**os.environ, "PYTHONUNBUFFERED": "1"})
     except (OSError, ValueError) as e:
+        # Some managed Windows hosts deny a Python process spawning another
+        # Python process (WinError 5), despite allowing the same entry point
+        # from an interactive shell.  GraphRAG rebuild is the one scheduled
+        # job that is a small, deterministic, side-effect-contained projection;
+        # safely rebuild it in-process rather than silently leaving it stale.
+        # Do NOT generalize this to consolidating, capture, or model work: their
+        # subprocess isolation is intentionally load-bearing.
+        if isinstance(e, PermissionError) and any(
+            Path(part).name == "build_graphrag.py" for part in argv
+        ):
+            try:
+                from jarvis_core.memory.graph import build_graph
+                stats = build_graph()
+                return 0, (f"in-process fallback after WinError 5: "
+                           f"{stats.nodes} nodes, {stats.edges} edges -> {stats.path}")
+            except Exception as fallback_error:
+                return 127, (f"spawn failed: {type(e).__name__}: {e}; "
+                             f"GraphRAG fallback failed: {type(fallback_error).__name__}: {fallback_error}")
         return 127, f"spawn failed: {type(e).__name__}: {e}"
     try:
         out, _ = await asyncio.wait_for(proc.communicate(), timeout=timeout)
@@ -608,10 +673,11 @@ def _run_self_test() -> None:
         # T16: the real default job set is well-formed.
         jobs = default_jobs()
         names = [j.name for j in jobs]
-        check("T16 the default set schedules the original three plus the "
+        check("T16 the default set includes GraphRAG plus the "
               "2026-09-10 Codex-migration trio, in order",
-              names == ["consolidate", "refresh_profile", "reindex_memory",
-                       "ingest_codex", "reconcile_codex_memory", "refresh_digest"],
+              names[:7] == ["consolidate", "refresh_profile", "reindex_memory",
+                            "rebuild_graphrag", "ingest_codex", "reconcile_codex_memory", "refresh_digest"]
+              and (names[7:] in ([], ["sync_remote_memory"])),
               str(names))
         check("T17 consolidate is UNguarded (its whole point is to run anyway)",
               not jobs[0].guard and jobs[1].guard and jobs[2].guard)

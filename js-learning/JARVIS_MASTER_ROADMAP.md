@@ -47,7 +47,7 @@ Parts 3–4.
 ### Stage 4: Multi-Model Orchestration — The Brain ✅ COMPLETE (2026-07-27)
 - **Duration:** 2-3 months
 - **Output:** Router + Aggregator + GraphRAG (replaces flat vector search)
-- **Status:** 4.0-4.5 all ✅, 4.6 GraphRAG ⏭ deferred (trigger documented) · **Final Boss 8/8 PASS (offline, ₹0)** closes the stage 2026-07-27 — see [stage_4_orchestration/ROADMAP.md](stage_4_orchestration/ROADMAP.md) for the full leg-by-leg breakdown
+- **Status:** 4.0-4.5 all ✅; 4.6 GraphRAG is **required but not yet built**. It was originally deferred behind an incident trigger, then promoted on 2026-09-08 because proactive surfacing needs multi-hop retrieval over distant personal facts—not merely more storage. **Final Boss 8/8 PASS (offline, ₹0)** closes the shipped 4.0-4.5 scope on 2026-07-27 — see [stage_4_orchestration/ROADMAP.md](stage_4_orchestration/ROADMAP.md) for the full leg-by-leg breakdown.
 - **Roadmap:** [stage_4_orchestration/ROADMAP.md](stage_4_orchestration/ROADMAP.md)
 
 ### Stage 5: Domain Specialists — The Experts ⬅️ CURRENT
@@ -59,6 +59,7 @@ Parts 3–4.
 - **Duration:** 1-2 months
 - **Output:** Voice + Vision + Context Caching (cloud) + JARVIS MVP + always-reachable memory
   backend (replaces git-sync) + a universal, host-independent capture adapter contract
+- **Verified early delivery:** 6.3's loopback-only hearth v0 and 6.8.1-6.8.4's Codex capture adapter are shipped out of order; the remaining Stage 6 work is still unstarted.
 - **Roadmap:** [stage_6_integration/ROADMAP.md](stage_6_integration/ROADMAP.md)
 
 ---
@@ -125,7 +126,7 @@ Parts 3–4.
 | 4.3 | Dynamic Target Management (rolling stats, budget governor, catalog drift) | ✅ Complete (2026-07-16) |
 | 4.4 | Response Aggregation (escalation-only fan-out, attributed synthesis) | ✅ Complete (2026-07-20) |
 | 4.5 | Epistemic Control (conflict detection, fail-closed judge, human escalation) | ✅ Complete (2026-07-20) |
-| 4.6 | GraphRAG | ⏭ DEFERRED — trigger: first KB-logged multi-hop retrieval failure → `jarvis_core/memory/graph.py` |
+| 4.6 | GraphRAG | 🟡 REQUIRED — not built. Promoted 2026-09-08: the Context Ledger solves storage/recall, but cannot discover a relationship between distant facts the user did not know to query. Implement after the always-reachable ledger foundation, in `jarvis_core/memory/graph.py`. |
 | Final Boss | Stage-4-closing ritual, 8 legs, offline scripted twin | ✅ Complete (2026-07-27; 8/8 PASS, ₹0; `--live` variant built, user-run) |
 
 ---
@@ -154,12 +155,12 @@ Parts 3–4.
 |---|-----------|--------|
 | 6.1 | Voice Input (Whisper) | ⬜ |
 | 6.2 | Vision Input (LLaVA) | ⬜ |
-| 6.3 | Unified API Layer | ⬜ |
+| 6.3 | Unified API Layer | SHIPPED v0 - loopback hearth; client shells/queueing remain |
 | 6.4 | Conversation Memory | ⬜ |
 | 6.5 | Context Caching (optional cloud-assisted code) | ⬜ |
 | 6.6 | JARVIS MVP | ⬜ |
 | 6.7 | Always-Reachable Memory Backend (replaces git-sync; any device, no manual pull) | ⬜ |
-| 6.8 | Universal Capture Adapter (host-independent awareness capture, not per-IDE bespoke) | ⬜ |
+| 6.8 | Universal Capture Adapter (host-independent awareness capture, not per-IDE bespoke) | COMPLETE - 6.8.1-6.8.4 |
 
 ---
 
@@ -170,9 +171,9 @@ Parts 3–4.
 | 1 | Systems Python | ✅ Sufficient |
 | 2 | Memory Layer | ✅ Complete (8/8 sub-phases; Final Boss executed 2026-05-03) |
 | 3 | Agent Framework (`jarvis_core/agent/` from scratch — Decision 2026-05-13) | ✅ Complete (ReAct + tools + errors + STEAL #8/#9/#13) |
-| 4 | Orchestration (Kimi K2.6 brain + 12 QLoRA adapters) | ✅ Complete (4.0-4.5 all shipped; Final Boss 8/8 PASS 2026-07-27; 4.6 GraphRAG deferred, trigger documented) |
+| 4 | Orchestration (Kimi K2.6 brain + 12 QLoRA adapters) | ✅ Shipped scope: 4.0-4.5 and Final Boss 8/8 PASS 2026-07-27. 4.6 GraphRAG is a required follow-on, not yet built; it is no longer trigger-deferred. |
 | 5 | Specialists (Engineer-first MVP) | ⬜ 0% ⬅️ CURRENT |
-| 6 | Integration | ⬜ 0% |
+| 6 | Integration | PARTIAL, out-of-order - 6.3 v0 and 6.8.1-6.8.4 shipped |
 
 ---
 

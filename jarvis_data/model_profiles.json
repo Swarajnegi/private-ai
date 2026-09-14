@@ -35,6 +35,12 @@
       "mirror_ok": false,
       "enable_monitor": true,
       "notes": "Free Llama endpoints 429-saturate under load; conservative conduct, no mirror (L322)."
+    },
+    "gemini": {
+      "mirror_ok": false,
+      "enable_monitor": true,
+      "reasoning_channel": true,
+      "notes": "Gemini family: reasoning channel can consume output tokens; reasoning_channel fallback handles empty content (Stage 4.1)."
     }
   }
 }
