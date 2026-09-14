@@ -89,6 +89,7 @@ from typing import Any, Dict, Generator, Optional
 from jarvis_core.agent.capture import redact
 from jarvis_core.config import DATA_ROOT, JARVIS_ROOT, KB_PATH, SPECIALIST_CORPUS_ROOT
 from jarvis_core.memory.chunking import RecursiveWordChunker
+from jarvis_core.agent.curator import load_routing, routes_to
 from jarvis_core.specialists.text_hygiene import corpus_admits
 
 
@@ -367,6 +368,7 @@ def _iter_observation_queue_records(
     if not _OBSERVATION_QUEUE_PATH.is_file():
         return
     cluster_counts: Dict[str, int] = {}
+    routing = load_routing()
     try:
         handle = _OBSERVATION_QUEUE_PATH.open("r", encoding="utf-8")
     except OSError:
@@ -383,6 +385,18 @@ def _iter_observation_queue_records(
             user_text = obs.get("user_text", "")
             assistant_summary = obs.get("assistant_summary", "")
             if not user_text and not assistant_summary:
+                continue
+
+            # ROUTING. Before 2026-09-14 this line did not exist and every
+            # captured turn landed in BOTH corpora, because nothing had ever
+            # decided which one it belonged to. An UNCURATED turn is still
+            # admitted — absence means "nobody has looked yet", not "exclude".
+            if not routes_to("engineer",
+                             (str(obs.get("ts", "")), str(obs.get("session_id", ""))),
+                             routing):
+                if dropped is not None:
+                    dropped["chat_history:routed_away"] = (
+                        dropped.get("chat_history:routed_away", 0) + 1)
                 continue
 
             key = _cluster_key(user_text)

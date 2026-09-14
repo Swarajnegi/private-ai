@@ -287,6 +287,27 @@ def default_jobs(python: Optional[str] = None,
             description="regenerate activity_digest.md — found 2.5 MONTHS "
                         "stale on 2026-09-10 because nothing had ever "
                         "scheduled this; Antigravity reads it at every boot"),
+        # --- Added 2026-09-14: per-turn curation (the routing decision) ---
+        Job(name="curate_turns",
+            argv=(py, str(scripts / "curate_turns.py"), "--backlog", "40"),
+            interval_seconds=1 * HOUR,
+            timeout_seconds=900.0,
+            initial_delay_seconds=480.0,
+            description="an agent WITH conversation context decides each turn's "
+                        "corpus and domain. On a clock and not on anyone's "
+                        "discipline: Antigravity's manual /memory produced ZERO "
+                        "records in months, which is what per-turn discipline is "
+                        "worth. Batched at 40 so a cold start drains the backlog "
+                        "over hours instead of one enormous bill"),
+        Job(name="relabel_domains",
+            argv=(py, str(scripts / "relabel_domains.py")),
+            interval_seconds=12 * HOUR,
+            timeout_seconds=900.0,
+            initial_delay_seconds=780.0,
+            description="the context-free second opinion the curator is checked "
+                        "against. Found 6 days stale and covering 583 of 989 "
+                        "turns on 2026-09-14 — nothing had ever scheduled it, so "
+                        "the disagreement signal was silently degrading"),
     ] + ([
         Job(name="sync_remote_memory",
             argv=(py, str(scripts / "sync_remote_memory.py")),
@@ -673,12 +694,19 @@ def _run_self_test() -> None:
         # T16: the real default job set is well-formed.
         jobs = default_jobs()
         names = [j.name for j in jobs]
-        check("T16 the default set includes GraphRAG plus the "
-              "2026-09-10 Codex-migration trio, in order",
-              names[:7] == ["consolidate", "refresh_profile", "reindex_memory",
-                            "rebuild_graphrag", "ingest_codex", "reconcile_codex_memory", "refresh_digest"]
-              and (names[7:] in ([], ["sync_remote_memory"])),
+        check("T16 the default set includes GraphRAG, the 2026-09-10 Codex "
+              "trio, and the 2026-09-14 curation pair, in order",
+              names[:9] == ["consolidate", "refresh_profile", "reindex_memory",
+                            "rebuild_graphrag", "ingest_codex", "reconcile_codex_memory",
+                            "refresh_digest", "curate_turns", "relabel_domains"]
+              and (names[9:] in ([], ["sync_remote_memory"])),
               str(names))
+        # T16b: curation and its reviewer must BOTH be scheduled. Shipping the
+        # curator without relabel_domains would leave the agent's verdict with
+        # nothing to be checked against, which is how domain_labels.jsonl came
+        # to be six days stale and unnoticed in the first place.
+        check("T16b the curator and its independent second opinion are both scheduled",
+              {"curate_turns", "relabel_domains"} <= set(names), str(names))
         check("T17 consolidate is UNguarded (its whole point is to run anyway)",
               not jobs[0].guard and jobs[1].guard and jobs[2].guard)
         check("T17b each guarded job scopes its guard to the artifact IT fixes",

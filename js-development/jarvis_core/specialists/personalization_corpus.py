@@ -92,6 +92,7 @@ from jarvis_core.memory.cognitive_index import (
     query_by_tag,
     rebuild_index,
 )
+from jarvis_core.agent.curator import load_routing, routes_to
 from jarvis_core.specialists.text_hygiene import corpus_admits
 
 
@@ -554,6 +555,8 @@ def iter_user_voice_records(
             return False
         return True
 
+    routing = load_routing()
+
     if _CONVERSATIONS_DIR.is_dir():
         for path in sorted(_CONVERSATIONS_DIR.glob("*.jsonl")):
             try:
@@ -597,6 +600,15 @@ def iter_user_voice_records(
                     continue
                 content = obs.get("user_text", "")
                 if not content.strip() or not take(content):
+                    continue
+                # See engineer_corpus for why this exists and why an uncurated
+                # turn is admitted rather than dropped.
+                if not routes_to("personalization",
+                                 (str(obs.get("ts", "")), str(obs.get("session_id", ""))),
+                                 routing):
+                    if dropped is not None:
+                        dropped["user_voice:routed_away"] = (
+                            dropped.get("user_voice:routed_away", 0) + 1)
                     continue
                 yield CorpusRecord(
                     source_type="user_voice",

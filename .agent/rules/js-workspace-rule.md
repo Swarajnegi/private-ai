@@ -48,6 +48,41 @@ to schedule. §5.3 is this machine's own honest status.
 
 ---
 
+## PER-TURN CURATION (added 2026-09-14) — what decides where your turns go
+
+Until this shipped, `engineer_corpus` and `personalization_corpus` read the same
+`observation_queue.jsonl` and **every captured turn went into both**. Nothing had
+ever decided which corpus a turn belonged to; the only filter was a character
+count, so a three-word "continue" was one floor away from the training corpus.
+
+`jarvis_core/agent/curator.py` now makes that decision per turn, using the
+**conversation context** — the thing the offline embedding classifier
+structurally cannot have. It labels each turn's `corpora` (engineer /
+personalization / none), its `domain`, whether it is `trainable` at all, and
+`responds_to` — one sentence on what the user's prompt was replying to.
+
+**It runs on the hearth's clock, NOT on your discipline.** The `curate_turns`
+job drains the backlog hourly. Do not build a habit of invoking it per turn:
+Antigravity's manual `/memory` is the control experiment and it produced zero
+records in months.
+
+    python3 scripts/curate_turns.py --status     # how much is curated
+    python3 scripts/curate_turns.py --routing    # what routing actually results
+    python3 scripts/curate_turns.py --review     # where to look, and why
+
+**Curation is cross-host by construction.** Turns from every machine land in the
+one `observation_queue.jsonl`, so whichever hearth is running curates all of
+them. `turn_curation.jsonl` is tracked with `merge=union`, so two laptops can
+curate independently without conflicting.
+
+**You can overturn a verdict.** The log is append-only and folded on read —
+newest wins, every superseded verdict stays readable with its author. Reviewing
+whether JARVIS routed a turn correctly is therefore a real operation, not a
+promise. `--review` lists the two things worth looking at: where the agent
+disagreed with the context-free classifier, and where its own confidence was low.
+
+---
+
 ## SYSTEM ARCHITECTURE (The "Council of Experts")
 
 When answering, adopt the stance of the relevant sub-system:
