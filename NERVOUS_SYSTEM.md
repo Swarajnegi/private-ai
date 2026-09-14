@@ -727,10 +727,23 @@ is `{"type": "USER_INPUT", "source": "USER_EXPLICIT"}` with the prompt wrapped i
 "MODEL"}`. `EXEC_COMMAND` / `LIST_DIRECTORY` / `SYSTEM_MESSAGE` / `CHECKPOINT` lines are ignorable.
 
 **So this is now a scoping-free implementation task, and it is the single highest-value unbuilt
-thing in the repo.** Antigravity is the only host with no automatic capture, its manual `/memory`
-path has produced **zero** records in months, and every turn the user spends there is currently lost
-to the corpus. Read `agents_converse/a_001.md` in full before starting — it carries a redacted
-sample exchange and the exact field table.
+thing in the repo.** Antigravity is the only host with no automatic capture and its manual `/memory`
+path has produced **zero** records in months. Read `agents_converse/a_001.md` in full before
+starting — it carries a redacted sample exchange and the exact field table.
+
+> **Those turns are UNHARVESTED, not lost.** Antigravity writes `transcript_full.jsonl` whether or
+> not anything reads it — which is how `a_001` could answer at all. So this is a **backfill**, not a
+> race: whenever it ships it picks up everything already on disk. **The one thing that could turn
+> "unharvested" into "lost" is a retention policy**, and nobody has checked whether Antigravity ever
+> prunes old conversation directories. That question is open in `q_006.md` and is worth answering
+> even by someone not building the adapter, because it decides whether there is a deadline at all.
+
+**ASSIGNED TWICE, ON PURPOSE — update this section the moment it works.** `q_004.md` went to Codex,
+then `q_006.md` re-routed the same task to Antigravity because Codex's weekly limit is hit until
+2026-09-19. Mail files are written once and never edited, so **this section is the coordination
+point, not the mail.** Whoever builds it edits §7.1 and `js-workspace-rule.md` in the same commit;
+Codex boots via AGENTS.md into this file, so a §7.1 saying "built" is what stops the work being done
+twice. Half-finished counts — *"in progress, see commit X"* here beats silence.
 
 **If you build it, follow the shape that worked:**
 1. Find the transcript. Confirm the real on-disk format by *reading actual files* — do not build a
