@@ -253,6 +253,7 @@ jarvis_data/chromadb/
 # same facts on every machine — so sharing them stops an insight already raised
 # with the user from being raised again elsewhere.
 jarvis_data/.codex_ingest_watermark.jsonl
+jarvis_data/.antigravity_ingest_watermark.jsonl
 
 # -- Commitment registry lock -------------------------------------------------
 # commitments.jsonl is a tracked fact. Its sibling lock only serializes writers

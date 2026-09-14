@@ -29,22 +29,13 @@ JARVIS's consciousness travels with this repo (Consciousness Portability Contrac
    way with `--ask`. See `agents_converse/README.md`.
 4. For topic context, `python scripts/search_memory.py "<topic>"` as usual.
 
-**Honest limit of this machine, unchanged as of 2026-09-10 — say so if asked whether JARVIS "remembers" this session:** there is still NO per-prompt capture here. Antigravity has no hook system, and — unlike Codex, which persists its own session transcripts to `~/.codex/sessions/` regardless of whether anything reads them — it is not yet established whether Antigravity writes any transcript to disk that an adapter could read after the fact. Until that is checked, this machine's experience enters the corpus only via explicit `/memory` writes through `scripts/kb_append.py`. Be proactive about capturing durable insights; nothing is recording automatically.
+**Capture status on this host (ROADMAP 6.8.3, closed 2026-09-14):** Automatic per-turn capture is now LIVE via `scripts/ingest_antigravity_sessions.py`, scheduled hourly on the hearth (`initial_delay_seconds=240.0`). It reads complete transcripts (`transcript_full.jsonl` / `transcript.jsonl` / `overview.txt`) directly from `~/.gemini/antigravity-ide/brain/`. Transcripts are never pruned by Antigravity; historical backfill of 359 turns from April 2026 onward has been ingested into `observation_queue.jsonl`. You can check or trigger it manually anytime via `python scripts/ingest_antigravity_sessions.py` (with `--status`, `--dry-run`, or `--self-test`).
 
-**The hearth on this machine serves you AND Codex** — it is one per machine, not per agent. It will
-not give you per-turn capture (no adapter exists for this host), but it does keep consolidation, the
-projections and `activity_digest.md` fresh on a clock instead of on someone's memory. If
-`python3 scripts/hearth.py --status` says it is down, start it and make it persistent — see
-NERVOUS_SYSTEM.md §6.2 for the cron/Task-Scheduler recipe. Starting it by hand alone is a one-shot
-that expires at the next reboot; that exact failure went unnoticed for three days on the other
-laptop.
+**The hearth on this machine serves you AND Codex** — it is one per machine, not per agent. It runs both `ingest_codex` and `ingest_antigravity`, keeping experience capture continuous, and keeps consolidation, projections, and `activity_digest.md` fresh on a clock instead of on someone's memory. If `python3 scripts/hearth.py --status` says it is down, start it and make it persistent — see NERVOUS_SYSTEM.md §6.2 for the recipe.
 
-**Read [NERVOUS_SYSTEM.md](../../NERVOUS_SYSTEM.md) §1 and §5.3 once on this machine.** §1 corrects
-four misconceptions that otherwise produce confidently wrong answers about what JARVIS can see —
-most relevant here: a running hearth does **not** give this host capture, because no adapter exists
-to schedule. §5.3 is this machine's own honest status.
+**Read [NERVOUS_SYSTEM.md](../../NERVOUS_SYSTEM.md) §1, §5.3, and §7.1 once on this machine.** §1 corrects four misconceptions that otherwise produce confidently wrong answers about what JARVIS can see. §5.3 and §7.1 detail the native capture adapter implementation.
 
-**The adapter contract itself is no longer theoretical (ROADMAP 6.8.3, closed 2026-09-10):** `scripts/ingest_codex_sessions.py` is a second, real, working implementation — proof that `jarvis_core/agent/capture.py`'s core organ (`build_observation`, `append_observation`, `redact`) genuinely is host-independent, not just designed to be. Building the Antigravity equivalent is now a scoping question (does Antigravity persist a readable transcript at all?), not an architecture question.
+**The adapter contract is fully realized across all three hosts (ROADMAP 6.8.3):** Claude Code (hooks), Codex (`ingest_codex_sessions.py`), and Antigravity (`ingest_antigravity_sessions.py`) all feed into the identical `capture.py` core organ (`build_observation`, `append_observation`, `redact`). Zero hosts are now degraded or uncaptured.
 
 ---
 

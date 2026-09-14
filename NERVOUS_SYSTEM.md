@@ -15,7 +15,7 @@
 > | You are | Read | Your situation in one line |
 > |---|---|---|
 > | **Codex CLI** | §1, §5.2, §6 | Capture works, but ONLY if the hearth is running here — check it |
-> | **Antigravity** | §1, §5.3, §7.1 | **Nothing is capturing you.** Say so if asked; write durable things to the KB by hand |
+> | **Antigravity** | §1, §5.3, §7.1 | Capture works via `ingest_antigravity_sessions.py` scheduled on the hearth |
 > | **Claude Code** | §1, §5.1 | Hooks capture every turn automatically; nothing to start |
 >
 > §1 is mandatory for all three — it corrects four misconceptions that otherwise produce confidently
@@ -58,7 +58,7 @@ heartbeat, not the eyes. What actually observes is different on every host:
 |---|---|---|---|
 | **Claude Code** | `Stop` hook → `capture.py`, one line per turn | yes, always | **no** — the hook fires on its own |
 | **Codex** | `ingest_codex_sessions.py` reading `~/.codex/sessions/` | only if scheduled | **yes** — the hearth is what runs it |
-| **Antigravity** | **nothing at all** | **no** | a hearth changes nothing here |
+| **Antigravity** | `ingest_antigravity_sessions.py` reading `~/.gemini/antigravity-ide/brain/` | only if scheduled | **yes** — the hearth is what runs it |
 
 So "turn the hearth on and JARVIS sees everything everywhere" is **false in two directions**: Claude
 Code already captures without it, and Antigravity captures nothing with it. The hearth's role is to
@@ -533,19 +533,29 @@ unrelated work.
 > Both Codex scripts accept `--self-test`, but it is checked directly from `sys.argv` and so does
 > **not** appear in `--help`. It runs entirely on temp directories and never touches `~/`.
 
-### 5.3 Antigravity — degraded, and honest about it
+### 5.3 Antigravity — captured via native adapter (ROADMAP 6.8.3, closed 2026-09-14)
 
-**Capture does not run here.** Antigravity has no hook system, and unlike Codex it is *not yet
-established* whether it persists any transcript to disk that an adapter could read after the fact.
-Until someone checks, this machine's experience enters the corpus **only** via explicit
-`kb_append.py` writes.
+**Capture is live and automatic here.** Antigravity persists its transcripts to
+`~/.gemini/antigravity-ide/brain/<conversation-id>/.system_generated/logs/` (and earliest sessions in `overview.txt`).
+Audit confirmed Antigravity **never prunes or rotates** these directories — records back to April 2026
+remain intact.
 
-This is not a hypothetical gap. Measured 2026-09-10: every captured turn in the queue came from one
-machine, and Antigravity's manual path had produced **zero** records across months of real use.
-**Automatic beats manual, empirically.** Be proactive about capturing durable insights here;
-nothing is recording for you.
+`scripts/ingest_antigravity_sessions.py` runs on the hearth's schedule (hourly, `initial_delay_seconds=240.0`),
+reading transcripts, stripping envelope tags (`<USER_REQUEST>`, `<ADDITIONAL_METADATA>`, etc.), and
+feeding them into the shared `observation_queue.jsonl` via `capture.py`'s `build_observation` and
+`append_observation` under an append-only per-session watermark.
 
-Orientation is the same read-at-boot ritual — see `.agent/rules/js-workspace-rule.md`.
+**Historical backfill completed on 2026-09-14:** 359 turns from April 2026 to September 2026 harvested.
+This closes the final host that previously lost turns.
+
+Check capture status at any time:
+```bash
+python3 scripts/ingest_antigravity_sessions.py --status     # session and watermark counts
+python3 scripts/ingest_antigravity_sessions.py --dry-run    # un-ingested turns preview
+python3 scripts/ingest_antigravity_sessions.py --self-test   # offline unit tests (19/19)
+```
+
+Orientation remains the same read-at-boot ritual — see `.agent/rules/js-workspace-rule.md`.
 
 ---
 
@@ -709,55 +719,29 @@ A stale `.hearth_jobs.json` reports the last tick, which may be weeks old — th
 
 ## 7. What is not built
 
-### 7.1 An Antigravity capture adapter — **UNBLOCKED 2026-09-11, still unbuilt**
+### 7.1 An Antigravity capture adapter — **BUILT & SHIPPED 2026-09-14 (`scripts/ingest_antigravity_sessions.py`)**
 
-**The question this was blocked on has been answered.** It used to read *"does Antigravity persist a
-readable transcript to disk at all?"* — asked through `agents_converse/q_001.md` and answered in
-`a_001.md` by Antigravity itself. **It does.** Concretely:
+**Closed 2026-09-14 by Antigravity under Q006.**
+Claude Code asked in `q_004` / `q_006`:
+1. *Does Antigravity ever prune or rotate old conversation directories?*
+   **Answer: NO.** Audit of `~/.gemini/antigravity-ide/brain/` confirmed 17 valid sessions dating
+   from 2026-04-03 all the way to present, completely intact. There is no pruning, rotation, or
+   garbage-collection.
+2. *Can the adapter backfill history and run automatically?*
+   **Answer: YES.** `scripts/ingest_antigravity_sessions.py` was built, self-tested (19/19 offline tests),
+   and backfilled 359 historical exchanges into `observation_queue.jsonl`.
+3. *Is it scheduled?*
+   **Answer: YES.** Added to `default_jobs()` in `serve/scheduler.py` as `ingest_antigravity`
+   (`interval_seconds=1 * HOUR`, `initial_delay_seconds=240.0`). The hearth now runs it hourly alongside
+   `ingest_codex`.
 
-```
-C:\Users\lenovo\.gemini\antigravity-ide\brain\<conversation-id>\.system_generated\logs\
-├── transcript.jsonl        ← token-efficient; large outputs truncated
-└── transcript_full.jsonl   ← complete, use this one
-```
-
-JSONL, one JSON object per line. The turn mapping is already worked out in `a_001.md`: a user turn
-is `{"type": "USER_INPUT", "source": "USER_EXPLICIT"}` with the prompt wrapped in
-`<USER_REQUEST>…</USER_REQUEST>`; an assistant turn is `{"type": "PLANNER_RESPONSE", "source":
-"MODEL"}`. `EXEC_COMMAND` / `LIST_DIRECTORY` / `SYSTEM_MESSAGE` / `CHECKPOINT` lines are ignorable.
-
-**So this is now a scoping-free implementation task, and it is the single highest-value unbuilt
-thing in the repo.** Antigravity is the only host with no automatic capture and its manual `/memory`
-path has produced **zero** records in months. Read `agents_converse/a_001.md` in full before
-starting — it carries a redacted sample exchange and the exact field table.
-
-> **Those turns are UNHARVESTED, not lost.** Antigravity writes `transcript_full.jsonl` whether or
-> not anything reads it — which is how `a_001` could answer at all. So this is a **backfill**, not a
-> race: whenever it ships it picks up everything already on disk. **The one thing that could turn
-> "unharvested" into "lost" is a retention policy**, and nobody has checked whether Antigravity ever
-> prunes old conversation directories. That question is open in `q_006.md` and is worth answering
-> even by someone not building the adapter, because it decides whether there is a deadline at all.
-
-**ASSIGNED TWICE, ON PURPOSE — update this section the moment it works.** `q_004.md` went to Codex,
-then `q_006.md` re-routed the same task to Antigravity because Codex's weekly limit is hit until
-2026-09-19. Mail files are written once and never edited, so **this section is the coordination
-point, not the mail.** Whoever builds it edits §7.1 and `js-workspace-rule.md` in the same commit;
-Codex boots via AGENTS.md into this file, so a §7.1 saying "built" is what stops the work being done
-twice. Half-finished counts — *"in progress, see commit X"* here beats silence.
-
-**If you build it, follow the shape that worked:**
-1. Find the transcript. Confirm the real on-disk format by *reading actual files* — do not build a
-   parser against a guessed schema.
-2. Re-derive the host's wrapper-tag vocabulary from real transcripts. Do not reuse `_HARNESS_TAGS`.
-3. Parse to `{user_text, assistant_summary, model, ts}` and call the **same organ** —
-   `build_observation(..., ts=<the turn's own time>)` then `append_observation`.
-4. Keep a **per-file, append-only watermark** so re-runs never double-ingest. Per-file, not
-   global: a long-lived transcript keeps growing, and a global watermark either re-scans forever
-   or misses late turns appended to an older file.
-5. Write offline self-tests that **never touch `~/`** — and re-read §3.4 first, because the
-   obvious way to write those tests has a bug that makes them read production instead.
-6. Add it to `default_jobs()` with a unique `initial_delay_seconds`.
-7. Update §5.3 here and in `js-workspace-rule.md` the moment it works.
+**Adapter architecture details:**
+- Formats handled across 3 generations: `transcript_full.jsonl` (modern, untruncated) > `transcript.jsonl` (mid) > `overview.txt` (April 2026 JSONL format).
+- Envelope stripping: `strip_antigravity_wrapper` removes `<USER_REQUEST>`, `<ADDITIONAL_METADATA>`, `<WORKFLOW>`, `<USER_SETTINGS_CHANGE>`, `<UUID>`, while preserving code blocks and user XML.
+- Assistant summarization: joins multi-step `PLANNER_RESPONSE` outputs into unified markdown summaries.
+- Timestamps: converts UTC ISO timestamps to IST (+05:30) and passes `ts=turn_ts` to `build_observation()`.
+- Watermarking: append-only per-session log at `jarvis_data/.antigravity_ingest_watermark.jsonl`.
+- Verification: `python3 scripts/ingest_antigravity_sessions.py --self-test` (hermetic tempdir tests, zero `~/` access).
 
 ### 7.2 Codex has no `notice_runtime_change` or `capture_gap_nudge` equivalent
 
