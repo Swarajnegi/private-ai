@@ -90,6 +90,7 @@ from typing import Any, Dict, Iterator, List, Optional, Tuple
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(_REPO_ROOT / "js-development"))
 
+from jarvis_core.agent.provenance import ECHO_CEILING, EchoIndex  # noqa: E402
 from jarvis_core.config import DATA_ROOT, JARVIS_ROOT, KB_PATH  # noqa: E402
 from jarvis_core.specialists.text_hygiene import (  # noqa: E402
     MACHINE_TEXT, OWNER_PROSE, classify,
@@ -388,7 +389,14 @@ _ATTRIBUTED_QUOTE = re.compile(
     r"user wrote|in their own words|user's words)\s*[:\-—]?\s*"
     r"['\"“]((?:[^'\"”]|'(?=[a-z])){40,1200})", re.IGNORECASE)
 
-_MIN_EXPLANATION_CHARS = 320
+# WAS 320, lowered to 150 on 2026-09-14. The old floor was doing filtering work
+# that the filter could not do: with only an offset-zero word list guarding the
+# extractor, length was the crude proxy for "probably a real turn". Now that
+# `text_hygiene` rejects machine text on form and `provenance` rejects pasted
+# replies on fact, length can go back to meaning what it says — long enough to
+# carry a thought. Measured: 37 surviving turns at 320, 58 at 150, with the
+# same two gates applied, so the floor alone was suppressing 21 clean pairs.
+_MIN_EXPLANATION_CHARS = 150
 
 
 _EXPLANATION_PROMPTS = (
@@ -422,28 +430,45 @@ def extract_user_explanations() -> Iterator[SFTPair]:
         handle = queue.open("r", encoding="utf-8")
     except (OSError, FileNotFoundError):
         return
+    records: List[Dict[str, Any]] = []
     with handle:
         for line in handle:
             line = line.strip()
             if not line:
                 continue
             try:
-                rec = json.loads(line)
+                records.append(json.loads(line))
             except json.JSONDecodeError:
                 continue
-            text = str(rec.get("user_text", "")).strip()
-            if classify(text, min_chars=_MIN_EXPLANATION_CHARS)[0] != OWNER_PROSE:
-                continue
-            if text.count("?") > 2:          # mostly an interrogation, not a position
-                continue
-            ts = str(rec.get("ts", ""))
-            slot = int(hashlib.sha256(ts.encode("utf-8")).hexdigest(), 16)
-            yield SFTPair(
-                user=_EXPLANATION_PROMPTS[slot % len(_EXPLANATION_PROMPTS)],
-                assistant=text[:_MAX_ANSWER_CHARS],
-                bucket="personalization", source_type="sft_personalization",
-                source_path=f"observation_queue.jsonl#{ts}",
-                metadata={"origin": "authored_by_user", "form": "explanation"})
+
+    # THE ONE PLACE THIS FILE MATERIALISES A SOURCE, and the reason is the echo
+    # check rather than convenience: scoring a turn against EARLIER replies
+    # requires timestamp order, and the queue is not guaranteed to be in it —
+    # a backfilling adapter writes each turn's own timestamp, not ingestion
+    # time (capture.py's `ts` note). Bounded by the capture queue, which is
+    # append-only and currently ~1k records, so this is a real exception to the
+    # lazy-pipeline rule and not a quiet erosion of it.
+    records.sort(key=lambda r: str(r.get("ts", "")))
+    echo = EchoIndex()
+
+    for rec in records:
+        text = str(rec.get("user_text", "")).strip()
+        echoed = echo.add_turn(text, str(rec.get("assistant_summary", "")))
+        if classify(text, min_chars=_MIN_EXPLANATION_CHARS)[0] != OWNER_PROSE:
+            continue
+        if text.count("?") > 2:          # mostly an interrogation, not a position
+            continue
+        if echoed > ECHO_CEILING:
+            continue
+        ts = str(rec.get("ts", ""))
+        slot = int(hashlib.sha256(ts.encode("utf-8")).hexdigest(), 16)
+        yield SFTPair(
+            user=_EXPLANATION_PROMPTS[slot % len(_EXPLANATION_PROMPTS)],
+            assistant=text[:_MAX_ANSWER_CHARS],
+            bucket="personalization", source_type="sft_personalization",
+            source_path=f"observation_queue.jsonl#{ts}",
+            metadata={"origin": "authored_by_user", "form": "explanation",
+                      "echo_fraction": round(echoed, 3)})
 
 
 def extract_kb_verbatim() -> Iterator[SFTPair]:
@@ -480,8 +505,25 @@ def extract_kb_verbatim() -> Iterator[SFTPair]:
                 metadata={"origin": "extracted_verbatim", "kb_type": entry.get("type")})
 
 
+_MIN_PARAGRAPH_CHARS = 250
+
+
 def extract_literature() -> Iterator[SFTPair]:
-    """The published essays — the purest voice material available (spec §5)."""
+    """The published essays — the purest voice material available (spec §5).
+
+    Emitted at TWO granularities, and the reason is that a whole `## ` section
+    and one paragraph inside it teach different things. The section teaches how
+    the user structures an argument; the paragraph teaches cadence at the scale
+    the adapter actually generates at. Section-level alone yielded 18 pairs
+    from the richest voice material in the repository, while 39 paragraphs of
+    it sat unused.
+
+    Overlap between the two levels is real and is handled where every other
+    overlap in this file is handled — `cluster_key` dedups on the ANSWER, so a
+    single-paragraph section collides with itself exactly once and the longer
+    form wins. The two Napoleon files are near-duplicates of each other and
+    collapse the same way; that is the dedup doing its job, not a bug.
+    """
     if not _LITERATURE.exists():
         return
     for path in sorted(_LITERATURE.rglob("*.md")):
@@ -500,6 +542,18 @@ def extract_literature() -> Iterator[SFTPair]:
                 source_path=f"knowledge/literature/{path.name}#{i}",
                 metadata={"origin": "authored_by_user", "form": "essay"})
 
+            for j, para in enumerate(re.split(r"\n\s*\n", body)):
+                para = para.strip()
+                if len(para) < _MIN_PARAGRAPH_CHARS or para.startswith("#"):
+                    continue
+                yield SFTPair(
+                    user=(f"In my own voice, on '{heading}' from '{title}' — "
+                          f"take the thought further."),
+                    assistant=para[:_MAX_ANSWER_CHARS],
+                    bucket="personalization", source_type="sft_personalization",
+                    source_path=f"knowledge/literature/{path.name}#{i}p{j}",
+                    metadata={"origin": "authored_by_user", "form": "essay_paragraph"})
+
 
 def extract_experience_map() -> Iterator[SFTPair]:
     """Filled Notes cells are literally (prompt -> the user's own answer)."""
@@ -515,7 +569,17 @@ def extract_experience_map() -> Iterator[SFTPair]:
             continue
         subject, note = cells[0], cells[-1]
         # The user's own prose lives in the Notes column; guesses are marked and skipped.
-        if "GUESS:" in note or len(note) < _MIN_ANSWER_CHARS or "---" in subject:
+        #
+        # THE FLOOR WAS `_MIN_ANSWER_CHARS` (120) AND THAT WAS THE WRONG
+        # CONSTANT — it is the ENGINEER floor, sized for a lesson that must
+        # carry a mechanism. This bucket is voice, and `passes_quality` already
+        # applies `_MIN_VOICE_CHARS` to it for exactly the reason recorded
+        # there: an honest experience boundary is short by nature. "Haven't
+        # gotten any situation where I would try out kafka or event hubs" is
+        # 70 characters and is precisely the material that stops the adapter
+        # claiming experience the user does not have. 79 such rows were being
+        # dropped by a threshold borrowed from the other bucket.
+        if "GUESS:" in note or len(note) < _MIN_VOICE_CHARS or "---" in subject:
             continue
         subject = re.sub(r"\*+", "", subject).strip()
         if not subject or subject.lower() in ("#", "project", "technology", "scenario"):

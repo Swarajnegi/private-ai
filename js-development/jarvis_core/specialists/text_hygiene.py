@@ -130,6 +130,15 @@ _MACHINE_LINE_FORMS: Tuple[Tuple[str, re.Pattern], ...] = (
     ("table_row", re.compile(r"^\s*\|.*\|\s*$")),
     ("bare_url", re.compile(r"^\s*https?://\S+\s*$")),
     ("key_value_log", re.compile(r"^\s*\[[\w.:+-]+\]\s+\w+")),
+    # Found 2026-09-14 while auditing what the DIRECTIVE bucket contained: two
+    # pasted Teams meeting transcripts had passed every check, because a
+    # meeting transcript IS fluent first-person English. The give-away is
+    # structural — a speaker-attribution line, or a bare media timestamp on its
+    # own line — not anything about the words.
+    ("transcript_timecode", re.compile(
+        r"^\s*\d{1,2}:\d{2}(?::\d{2})?\s*$|"
+        r"^\s*\d+\s+minutes?\s+\d+\s+seconds?\b|"
+        r"^\s*\[?\d{1,2}:\d{2}(?::\d{2})?\]?\s+\w+\s*:")),
 )
 
 # A leading markdown heading means a DOCUMENT was pasted. People do not open a
@@ -181,8 +190,10 @@ _QUOTED_OPENING = re.compile(r'^["“][^"”]{120,}["”]', re.DOTALL)
 _IMPERATIVE_OPENER = re.compile(
     r"^\W{0,3}"
     r"(?:\d+[.)]\s*)?"                                     # "1. " list marker
+    # `[\s,.:;]+` not `[\s,]+`: "Alright. Go through the repo" defeated the
+    # comma-only version and reached the corpus as an "explanation".
     r"(?:(?:also|and|so|then|now|ok(?:ay)?|alright|right|plus|"
-    r"first|next|finally|please|just|fine)[\s,]+)*"        # discourse particles
+    r"first|next|finally|please|just|fine)[\s,.:;]+)*"     # discourse particles
     r"\b(?:explain|tell|give|show|build|make|create|write|add|fix|run|go|"
     r"forget|let'?s|lets|read|check|update|remove|delete|change|use|put|take|"
     r"keep|start|stop|continue|do|don'?t|generate|implement|refactor|review|"
@@ -214,6 +225,17 @@ _INTERROGATIVE_OPENER = re.compile(
 _DECISIVE_FORMS = frozenset({
     "shell_prompt", "powershell_prompt", "windows_banner", "traceback", "progress_bar",
 })
+
+# "I want you to rebuild the UI" is grammatically first-person and functionally
+# an order, so the pronoun ratio waves it through. This is a CLOSED
+# construction — first-person subject, volitional verb, second-person object,
+# infinitive — and matching it is grammar, not vocabulary.
+_DELEGATED_WISH = re.compile(
+    r"\bI\s+(?:want|need|would\s+like|'?d\s+like|expect|require)\s+you\s+to\b",
+    re.IGNORECASE)
+
+# How much of a turn counts as its OPENING for mood rules.
+_MOOD_WINDOW = 200
 
 _MACHINE_LINE_CEILING = 0.10
 _MIN_FIRST_PERSON = 2
@@ -295,6 +317,15 @@ def classify(text: str, min_chars: int = 0) -> Tuple[str, str]:
 
     if _INTERROGATIVE_OPENER.match(stripped):
         return DIRECTIVE, "opens by asking — a question, not a position"
+
+    # SCOPED TO THE OPENING, like every other mood rule here. Searching the
+    # whole text cost two of the best voice rows in the corpus: a long turn
+    # about the user's own investing plan, and the one where they explain
+    # moving the build to Codex. Both reason at length and then happen to ask
+    # for something near the end. A turn's mood is set by how it OPENS; a
+    # request appearing later does not retroactively make it an order.
+    if _DELEGATED_WISH.search(stripped[:_MOOD_WINDOW]):
+        return DIRECTIVE, "opens with 'I want you to ...' — a delegated order"
 
     first = len(_FIRST_PERSON.findall(stripped))
     second = len(_SECOND_PERSON.findall(stripped))
@@ -463,6 +494,30 @@ def _smoke() -> int:
           classify("swara_unix@box:~/work$ ls\n"
                    + "\n".join(f"I wrote line {n} about my own reasoning here."
                                for n in range(40)))[0], MACHINE_TEXT)
+    # T34: a meeting transcript is fluent first-person English, so only its
+    # timecode lines betray it. Two of these reached the corpus undetected.
+    check("T34 pasted meeting transcript",
+          classify("Sanket Kumar\n2 minutes 38 seconds2:38\nThanks so Raj.\n\n"
+                   "Swaraj Negi\n3 minutes 10 seconds\nYeah I think my read on the "
+                   "migration is that we should hold until I have the numbers.")[0],
+          MACHINE_TEXT)
+    check("T35 'I want you to ...' is an order despite the first person",
+          classify("I want you to do an overhaul of the UI of this app completely. "
+                   "I want it smooth and fast and very modern looking.")[0], DIRECTIVE)
+    check("T36 discourse particle with a period no longer defeats the imperative",
+          classify("Alright. Go through my current workspace and tell me what my "
+                   "folders are for, except the ones I already documented.")[0], DIRECTIVE)
+    check("T38 a delegated request LATE in a long reasoning turn is not an order",
+          classify("Also you know how much i can invest in US markets until my next "
+                   "job switch or salary hike. 17k per month and then i have my "
+                   "incentive too. The two stocks I am watching to add are meta and "
+                   "ondas, and I wanna avg down on nvidia. " + "I reason about my own "
+                   "portfolio at length here. " * 4 +
+                   "I want you to tell me what to trim.")[0], OWNER_PROSE)
+    check("T37 a genuine first-person want is NOT an order",
+          classify("I want a system that actually knows me, and my reason is that I "
+                   "keep re-explaining my own context to every new chat I open.")[0],
+          OWNER_PROSE)
     check("T22 min_chars floor", classify("I am short and mine.", min_chars=320)[0], TOO_THIN)
     frac, counts = machine_line_fraction("hello there\nswara_unix@box:~$ ls\nmore prose here")
     check("T23 fraction is density not presence", round(frac, 2), 0.33)
