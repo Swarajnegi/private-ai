@@ -41,9 +41,13 @@ reward construction.
 THE FLOW
 =============================================================================
 
-STEP 1: read_usage() lists conversations/*.jsonl and parses the session
-        timestamp from each FILENAME (conv-YYYYMMDDTHHMMSS-pid.jsonl) — no
-        file is opened, so this stays cheap enough for every boot.
+STEP 1: read_usage() lists conversations/*.jsonl and takes each session's start
+        time from the FILENAME (conv-YYYYMMDDTHHMMSS-pid.jsonl) where one is
+        there. The web UI writes conv-web-<uuid>.jsonl with no timestamp in the
+        name, so for those it reads the first record's own `ts` — one line, then
+        it stops. This line used to end "no file is opened, so this stays cheap"
+        and that became false on 2026-09-15 when the fallback was added; the
+        cost is a single line per UI session, which is still fine for a boot.
         |
 STEP 2: it computes lifetime count, recent-window count, and days since the
         most recent session.
@@ -55,6 +59,7 @@ STEP 3: usage_line() renders one line for the inhale; context_injector ships
 
 from __future__ import annotations
 
+import json
 import re
 import sys
 from dataclasses import dataclass
@@ -91,21 +96,69 @@ class UsageState:
         return self.days_since is not None and self.days_since >= _STALE_AFTER_DAYS
 
 
-def _session_times(root: Path) -> List[datetime]:
+def _first_record_ts(path: Path) -> Optional[datetime]:
+    """The session's own first timestamp, read from inside the file."""
     try:
-        names = [p.name for p in root.iterdir() if p.suffix == ".jsonl"]
+        with path.open("r", encoding="utf-8", errors="replace") as handle:
+            for line in handle:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    stamp = str(json.loads(line).get("ts", ""))
+                except ValueError:
+                    return None
+                if not stamp:
+                    return None
+                try:
+                    parsed = datetime.fromisoformat(stamp)
+                except ValueError:
+                    return None
+                return parsed if parsed.tzinfo else parsed.replace(tzinfo=_IST)
+    except (OSError, FileNotFoundError):
+        return None
+    return None
+
+
+def _session_times(root: Path) -> List[datetime]:
+    """Every session's start time — from the filename, else from inside the file.
+
+    THE FILENAME-ONLY VERSION WAS BLIND TO THE WEB UI, and it mattered far more
+    than a miscount. Terminal sessions are written as
+    `conv-20260911T155453-2960.jsonl`, which `_SESSION_NAME` parses. The hearth's
+    web UI writes `conv-web-<uuid>.jsonl` — no timestamp anywhere in the name —
+    so every UI session hit the `continue` below and vanished silently.
+
+    Measured 2026-09-15: this reported `last_session 2026-09-11` while the user
+    was in the UI that same day and the day before, answering a 45-question
+    personalization set. `stage_5_specialists/ROADMAP.md` gates a ₹1,480-2,960
+    RunPod run partly on this number — citing "0 sessions in the last 30 days,
+    training an adapter for a path nobody opens" — so a parser that skipped the
+    surface actually in use was arguing against spend with evidence it did not
+    have.
+
+    The fallback reads the first record's own `ts`, which every conversation
+    record already carries. That is better than mtime for the same reason
+    `capture.py` insists a backfilled turn keeps its own timestamp: mtime is
+    when the file was last touched, not when the session happened.
+    """
+    try:
+        paths = [p for p in root.iterdir() if p.suffix == ".jsonl"]
     except (OSError, FileNotFoundError):
         return []
     stamps: List[datetime] = []
-    for name in names:
-        match = _SESSION_NAME.match(name)
-        if not match:
-            continue
-        try:
-            stamps.append(datetime.strptime(match.group(1), "%Y%m%dT%H%M%S")
-                          .replace(tzinfo=_IST))
-        except ValueError:
-            continue
+    for path in paths:
+        match = _SESSION_NAME.match(path.name)
+        if match:
+            try:
+                stamps.append(datetime.strptime(match.group(1), "%Y%m%dT%H%M%S")
+                              .replace(tzinfo=_IST))
+                continue
+            except ValueError:
+                pass
+        from_record = _first_record_ts(path)
+        if from_record is not None:
+            stamps.append(from_record)
     return sorted(stamps)
 
 
@@ -216,6 +269,35 @@ def _run_self_test() -> None:
         st = read_usage(root=root, now=now)
         check("T13 unparseable filename skipped, not fatal",
               st.lifetime_sessions == 1, f"got {st.lifetime_sessions}")
+
+    # T14-T16: the web-UI blindness. `conv-web-<uuid>.jsonl` carries no
+    # timestamp in its name, so the filename-only parser dropped every UI
+    # session in silence — and the number it produced was cited in
+    # stage_5_specialists/ROADMAP.md as grounds against a RunPod spend.
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        (root / "conv-20260911T155453-2960.jsonl").write_text(
+            '{"role":"user","content":"terminal","ts":"2026-09-11T15:54:53+05:30"}\n',
+            encoding="utf-8")
+        (root / "conv-web-cff653a1-415e-417b-ba68-3ac84f621778.jsonl").write_text(
+            '{"role":"user","content":"ui","ts":"2026-09-14T12:51:02+05:30"}\n',
+            encoding="utf-8")
+        st = read_usage(root=root, now=now)
+        check("T14 a web-UI session with no timestamp in its name is counted",
+              st.lifetime_sessions == 2, f"got {st.lifetime_sessions}")
+        check("T15 ...and it wins as the most recent session",
+              st.last_session is not None and st.last_session.day == 14,
+              f"got {st.last_session}")
+
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        (root / "conv-web-nots.jsonl").write_text(
+            '{"role":"user","content":"no ts field"}\n', encoding="utf-8")
+        (root / "conv-web-bad.jsonl").write_text("not json at all\n", encoding="utf-8")
+        (root / "conv-web-empty.jsonl").write_text("", encoding="utf-8")
+        st = read_usage(root=root, now=now)
+        check("T16 an unreadable UI session is skipped, never counted or fatal",
+              st.lifetime_sessions == 0, f"got {st.lifetime_sessions}")
 
     print("-" * 70)
     print(f"  {passed} passed, {len(failed)} failed")
