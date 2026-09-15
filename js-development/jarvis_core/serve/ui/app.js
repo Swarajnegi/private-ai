@@ -604,6 +604,9 @@
           if (brain) $("working-text").textContent = `Thinking · ${brain[1]}`;
           if (/^\s*(tool|\[tool)/i.test(text))
             $("working-text").textContent = "JARVIS is using tools";
+          const failover = text.match(/failover to ['"]?([^'"\s]+)/i) || text.match(/recovered on ['"]?([^'"\s]+)/i);
+          if (failover)
+            $("working-text").textContent = `Recovering on ${failover[1]}`;
         }
       });
       if (!final)

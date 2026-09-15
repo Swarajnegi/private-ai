@@ -978,6 +978,8 @@ class ReActLoop:
                 out = await out
             if isinstance(out, PermissionDecision):
                 return out
+            if isinstance(out, bool):
+                return PermissionDecision.ALLOW if out else PermissionDecision.DENY
         except Exception:
             pass
         return PermissionDecision.DENY

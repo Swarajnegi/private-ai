@@ -214,6 +214,9 @@ class Hearth:
         full: bool = False, allow_all: bool = False,
         max_iterations: Optional[int] = None, budget_usd: Optional[float] = None,
         reasoning_effort: Optional[str] = None,
+        target_timeout_s: Optional[float] = 35.0,
+        target_max_retries: Optional[int] = 1,
+        route_strategy: str = "priority",
     ) -> Dict[str, Any]:
         """One spine pass, narrated through `emit`. Returns the final payload.
 
@@ -261,10 +264,14 @@ class Hearth:
             kwargs["full"] = True
         if max_iterations is not None:
             kwargs["max_iterations"] = max_iterations
-        if budget_usd is not None:
-            kwargs["budget_usd"] = budget_usd
         if reasoning_effort is not None:
             kwargs["reasoning_effort"] = reasoning_effort
+        if target_timeout_s is not None:
+            kwargs["target_timeout_s"] = target_timeout_s
+        if target_max_retries is not None:
+            kwargs["target_max_retries"] = target_max_retries
+        if route_strategy is not None:
+            kwargs["route_strategy"] = route_strategy
 
         ask_fn = self._resolve_ask()
 
@@ -804,7 +811,23 @@ async def _handle_ask(hearth: Hearth, scope: Dict[str, Any],
     session = body.get("session")
     new_session = bool(body.get("new_session", False))
     model = body.get("model")
-    targets = [str(model)] if model else body.get("targets")
+    explicit_targets = body.get("targets")
+    if explicit_targets:
+        targets = [str(t).strip() for t in explicit_targets if str(t).strip()]
+    elif model:
+        primary = str(model).strip()
+        is_free = primary.endswith(":free") or primary == "openrouter/free"
+        if is_free:
+            fallback = "openrouter/free" if primary != "openrouter/free" else "cohere/north-mini-code:free"
+        else:
+            fallback = "moonshotai/kimi-k2.6" if primary != "moonshotai/kimi-k2.6" else "deepseek/deepseek-v4-flash"
+        targets = [primary]
+        if fallback and fallback not in targets:
+            targets.append(fallback)
+        if not is_free and "openrouter/free" not in targets:
+            targets.append("openrouter/free")
+    else:
+        targets = None
     full = bool(body.get("full", False))
     allow_all = bool(body.get("allow_all", False))
     # No browser-specific reasoning ceiling.  When omitted, the orchestrator

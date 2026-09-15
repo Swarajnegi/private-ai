@@ -1,6 +1,6 @@
 # Cognitive Profile — Model of the User
 
-> Auto-synthesized by `scripts/profile_synth.py` from `knowledge_base.jsonl` (643 entries). Injected into every chat via the SessionStart hook. Regenerate after KB updates.
+> Auto-synthesized by `scripts/profile_synth.py` from `knowledge_base.jsonl` (647 entries). Injected into every chat via the SessionStart hook. Regenerate after KB updates.
 
 ## Who you are
 - PATTERN: the user challenges the MECHANISM behind a good-looking result, and reasons about COMPOUNDING data debt rather than present correctness (2026-09-14). I had just reported clean metrics -- machine-text targets 27->0, corpora rebuilt, everything green. Instead of accepting it they asked: 'are you using stale mess ...

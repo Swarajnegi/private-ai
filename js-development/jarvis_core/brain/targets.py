@@ -149,6 +149,8 @@ class OpenRouterTarget(RouteTarget):
         registry: Optional[ProfileRegistry] = None,
         use_profile: bool = True,
         cost_tracker: Optional[Any] = None,
+        timeout_s: Optional[float] = None,
+        max_retries: Optional[int] = None,
     ) -> None:
         self._registry = registry or ProfileRegistry()
         self._use_profile = use_profile
@@ -158,7 +160,8 @@ class OpenRouterTarget(RouteTarget):
             # pool) makes each client's budget pre-gate aggregate-aware — the
             # per-client budget alone can't see peers' spend across failover.
             client = build_llm_call(budget_usd=budget_usd, model=model,
-                                    cost_tracker=cost_tracker)
+                                    cost_tracker=cost_tracker,
+                                    timeout_s=timeout_s, max_retries=max_retries)
         self._client = client
         self.name = name or (str(getattr(client, "model", "")) or model or "openrouter")
         self._resolve_profile()
