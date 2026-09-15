@@ -87,6 +87,19 @@ _IST = timezone(timedelta(hours=5, minutes=30))
 # low-confidence is exactly what a reviewer should re-run with a better one.
 _DEFAULT_MODEL = os.environ.get("JARVIS_CURATOR_MODEL", "google/gemini-3.6-flash")
 
+# THE VERDICT IS ~150 TOKENS AND THIS IS 4000, WHICH LOOKS WRONG UNTIL YOU
+# MEASURE IT. `max_tokens` bounds reasoning tokens AND visible output together,
+# and the default curator model reasons before it answers. Set to 600 the reply
+# came back 64 characters long — truncated mid-field at
+# `"responds_to": "` — because the thinking had already spent the budget. The
+# cap is not sized for the answer, it is sized for the answer plus however much
+# the model thinks first.
+#
+# 4000 still reserves ~6% of what an uncapped call does, which is the point:
+# uncapped, OpenRouter holds the MODEL's 65536 maximum against the balance and
+# refused outright with HTTP 402 on 2026-09-15.
+_CURATION_MAX_TOKENS = 4000
+
 
 def _read_jsonl(path: Path) -> List[Dict[str, Any]]:
     out: List[Dict[str, Any]] = []
@@ -169,7 +182,13 @@ def _build_complete_fn(model: str):
         import asyncio
 
         from jarvis_core.brain.llm_client import build_llm_call
-        client = build_llm_call(model=model)
+        # A verdict is one small JSON object — measured at ~150 tokens across
+        # the first 480 curations. Without a ceiling OpenRouter reserves the
+        # MODEL's maximum against the balance, and on 2026-09-15 refused a call
+        # with "you requested up to 65536 tokens, but can only afford 62888".
+        # The answer needed 0.2% of that. Capping is both the correctness fix
+        # and, on a per-turn job that runs forever, the cost one.
+        client = build_llm_call(model=model, max_tokens=_CURATION_MAX_TOKENS)
 
         def complete(prompt: str) -> str:
             return asyncio.run(client([{"role": "user", "content": prompt}]))
@@ -208,11 +227,24 @@ def run_backlog(limit: int, model: str, dry_run: bool = False) -> int:
     ok = failed = 0
     for i, ctx in enumerate(batch, 1):
         label = labels.get((ctx.ts, ctx.session_id), {})
-        verdict = curate(ctx, complete, curated_by=model,
-                         curated_at=datetime.now(_IST).isoformat(timespec="seconds"))
+        try:
+            verdict = curate(ctx, complete, curated_by=model,
+                             curated_at=datetime.now(_IST).isoformat(timespec="seconds"))
+        except Exception as exc:                       # noqa: BLE001
+            # THE MODEL COULD NOT BE REACHED — a different problem from a bad
+            # answer, and the batch STOPS. Every remaining turn would fail the
+            # same way, and on a metered API that is real money spent proving
+            # it. This path was added after an HTTP 402 (credits exhausted)
+            # was reported three times as "UNPARSEABLE", which reads as a
+            # prompt problem and sends the next person to the wrong file.
+            print(f"  [{i}/{len(batch)}] {ctx.ts[:16]}  MODEL UNREACHABLE — stopping the batch")
+            print(f"\n  {type(exc).__name__}: {str(exc)[:300]}")
+            print(f"\n  curated {ok} before this; {len(batch) - i + 1} turn(s) left untouched.")
+            print("  Nothing was guessed. Re-run once the cause is fixed.")
+            return 1
         if verdict is None:
             failed += 1
-            print(f"  [{i}/{len(batch)}] {ctx.ts[:16]}  UNPARSEABLE — left uncurated")
+            print(f"  [{i}/{len(batch)}] {ctx.ts[:16]}  unusable answer — left uncurated")
             continue
         verdict = Curation(**{**verdict.__dict__,
                               "embedding_label": str(label.get("label", "")),
