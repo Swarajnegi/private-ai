@@ -315,10 +315,18 @@ class OpenRouterClient:
 def build_llm_call(budget_usd: Optional[float] = _DEFAULT_BUDGET_USD,
                    model: Optional[str] = None,
                    cost_tracker: Optional[Any] = None,
-                   reasoning_effort: Optional[str] = None) -> OpenRouterClient:
+                   reasoning_effort: Optional[str] = None,
+                   timeout_s: Optional[float] = None,
+                   max_retries: Optional[int] = None) -> OpenRouterClient:
     """The one-line factory every surface uses: a ready LLMCall from env config."""
-    return OpenRouterClient(model=model, budget_usd=budget_usd, cost_tracker=cost_tracker,
-                            reasoning_effort=reasoning_effort)
+    kwargs: Dict[str, Any] = dict(model=model, budget_usd=budget_usd,
+                                  cost_tracker=cost_tracker,
+                                  reasoning_effort=reasoning_effort)
+    if timeout_s is not None:
+        kwargs["timeout_s"] = timeout_s
+    if max_retries is not None:
+        kwargs["max_retries"] = max_retries
+    return OpenRouterClient(**kwargs)
 
 
 # =============================================================================

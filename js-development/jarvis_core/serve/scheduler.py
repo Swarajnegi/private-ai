@@ -270,6 +270,14 @@ def default_jobs(python: Optional[str] = None,
             description="Codex capture adapter -> observation_queue.jsonl "
                         "(this job is WHY capture keeps working when this host "
                         "has no Stop-hook equivalent: see AGENTS.md CAPTURE STATUS)"),
+        # --- Added 2026-09-14: Antigravity capture adapter (ROADMAP 6.8.3, Q006) ---
+        Job(name="ingest_antigravity",
+            argv=(py, str(scripts / "ingest_antigravity_sessions.py")),
+            interval_seconds=1 * HOUR,
+            timeout_seconds=300.0,
+            initial_delay_seconds=240.0,
+            description="Antigravity capture adapter -> observation_queue.jsonl "
+                        "(closes the final host without automatic capture)"),
         Job(name="reconcile_codex_memory",
             argv=(py, str(scripts / "reconcile_codex_memory.py")),
             interval_seconds=12 * HOUR,
@@ -694,12 +702,12 @@ def _run_self_test() -> None:
         # T16: the real default job set is well-formed.
         jobs = default_jobs()
         names = [j.name for j in jobs]
-        check("T16 the default set includes GraphRAG, the 2026-09-10 Codex "
-              "trio, and the 2026-09-14 curation pair, in order",
-              names[:9] == ["consolidate", "refresh_profile", "reindex_memory",
-                            "rebuild_graphrag", "ingest_codex", "reconcile_codex_memory",
-                            "refresh_digest", "curate_turns", "relabel_domains"]
-              and (names[9:] in ([], ["sync_remote_memory"])),
+        check("T16 the default set includes GraphRAG, the Codex adapter, the Antigravity adapter, and curation",
+              names[:10] == ["consolidate", "refresh_profile", "reindex_memory",
+                             "rebuild_graphrag", "ingest_codex", "ingest_antigravity",
+                             "reconcile_codex_memory", "refresh_digest",
+                             "curate_turns", "relabel_domains"]
+              and (names[10:] in ([], ["sync_remote_memory"])),
               str(names))
         # T16b: curation and its reviewer must BOTH be scheduled. Shipping the
         # curator without relabel_domains would leave the agent's verdict with
@@ -724,11 +732,11 @@ def _run_self_test() -> None:
         check("T19 the jobs are staggered so startup is not a thundering herd",
               len({j.initial_delay_seconds for j in jobs}) == len(jobs))
 
-        # T19d-T19f -- the three Codex-migration jobs specifically.
+        # T19d-T19f -- the capture and reconciliation jobs specifically.
         by_name = {j.name: j for j in jobs}
-        check("T19d ingest_codex is unguarded — it must always attempt to read "
-              "new rollouts, there is nothing to guard it on",
-              not by_name["ingest_codex"].guard)
+        check("T19d ingest_codex and ingest_antigravity are unguarded — they must always attempt to read "
+              "new rollouts/transcripts, there is nothing to guard them on",
+              not by_name["ingest_codex"].guard and not by_name["ingest_antigravity"].guard)
         check("T19e refresh_digest points at recall.py, not a scripts/ wrapper "
               "— recall.py self-inserts its own import path (verified "
               "standalone-run safe) so no PYTHONPATH env is needed here",

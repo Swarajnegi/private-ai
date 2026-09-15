@@ -358,6 +358,8 @@ async def ask(
     pool: Optional[Any] = None,
     targets: Optional[List[str]] = None,
     route_strategy: str = "balanced",
+    target_timeout_s: Optional[float] = None,
+    target_max_retries: Optional[int] = None,
     route: bool = False,
     router: Optional[Any] = None,
     routing_ledger: Optional[Any] = None,
@@ -461,7 +463,9 @@ async def ask(
         budget_tracker = cost_tracker if cost_tracker is not None else CostTracker(budget_usd=budget_usd)
         built = [OpenRouterTarget(m.strip(), budget_usd=budget_usd,
                                   registry=registry, use_profile=use_profile,
-                                  cost_tracker=budget_tracker)
+                                  cost_tracker=budget_tracker,
+                                  timeout_s=target_timeout_s,
+                                  max_retries=target_max_retries)
                  for m in targets if m and m.strip()]
         # Seed health from the last ask() call's flush, so a target still
         # cooling down from a recent 429 doesn't get retried cold just
@@ -495,7 +499,9 @@ async def ask(
         profile_label = getattr(primary, "profile_label", "pooled") if use_profile else None
     else:
         client = llm_call or build_llm_call(budget_usd=budget_usd,
-                                            reasoning_effort=reasoning_effort)
+                                            reasoning_effort=reasoning_effort,
+                                            timeout_s=target_timeout_s,
+                                            max_retries=target_max_retries)
         if hasattr(client, "pick_free_model") and not getattr(client, "model", ""):
             await client.pick_free_model()
         model = str(getattr(client, "model", "") or "")
@@ -1275,7 +1281,7 @@ def _run_self_test() -> None:
             _conv._SESSION_STATE = tdp / ".session.json"
             kb = tdp / "kb.jsonl"
             kb.write_text(json.dumps({
-                "id": 1, "timestamp": FIXED.isoformat(), "type": "Decision",
+                "id": 1, "timestamp": datetime.now(timezone.utc).isoformat(), "type": "Decision",
                 "tags": ["stage-4"], "expiry": "Permanent",
                 "content": "Decision: Stage 4 Wave 1 builds the Cognitive Control Loop.",
             }) + "\n", encoding="utf-8")
@@ -1301,6 +1307,7 @@ def _run_self_test() -> None:
                 store_factory=lambda: None, gate=ConfidenceGate(embed_fn=scripted_embed),
                 writer=SessionMemoryWriter(append_fn=fake_append),
                 clock=lambda: FIXED, profile_path=profile, printer=lines.append,
+                status_prefetch=False, new_session=True,
             )
             check("T1 answer flows through", "Cognitive Control Loop" in r.answer)
             check("T2 confidence graded with evidence",
@@ -1347,6 +1354,7 @@ def _run_self_test() -> None:
                 store_factory=lambda: None, gate=ConfidenceGate(embed_fn=scripted_embed),
                 writer=SessionMemoryWriter(append_fn=fake_append),
                 extra_tools={"boom": Boom()}, inhale=False, printer=lines10.append,
+                new_session=True, ask_handler=lambda name, inp: True,
             )
             check("T10 tool error surfaced via tool!ERR",
                   any("tool!ERR: boom -> kaboom" in l for l in lines10), str(lines10))

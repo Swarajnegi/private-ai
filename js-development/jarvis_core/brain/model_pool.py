@@ -179,6 +179,8 @@ class ModelPool:
         latency_score = h.avg_latency_s
         cost_score = self._cost_hint(name)
         error_penalty = h.error_rate * _ERROR_PENALTY
+        if strategy in ("priority", "order"):
+            return float(self._order.index(name)) + error_penalty
         if strategy == "latency":
             return latency_score + error_penalty
         if strategy == "cost":

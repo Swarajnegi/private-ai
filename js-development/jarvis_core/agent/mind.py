@@ -223,6 +223,8 @@ class Mind:
             "Decompose the user's task into ordered steps. Return STRICT JSON: a list of "
             '{"tool_name": <one of the available tools>, "description": <short goal>}. '
             f"Available tools: {tool_names}. "
+            "If no external tools are required (e.g. conversational reply, personal sharing, "
+            "direct question answering, or greetings), return an empty list []. "
             "For architectural, codebase, system status, or repo exploration tasks, triangulate "
             "across: (a) specifications/docs (.md), (b) physical codebase implementation and folder "
             "trees (use list_dir to inspect directory structure and file_read on .py source files), "
@@ -238,10 +240,6 @@ class Mind:
             specs = self._parse_steps(str(raw))
         except Exception:
             specs = []
-        if not specs:
-            # Fail-safe: a single catch-all step so the plan is never empty.
-            specs = [{"tool_name": (tool_names[0] if tool_names else "noop"),
-                      "description": task[:80]}]
         return build_plan(goal=task, step_specs=specs[:_MAX_PLAN_STEPS])
 
     @staticmethod
