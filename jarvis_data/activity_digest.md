@@ -6,12 +6,12 @@
 > the DISTILLED, 7-day, human-readable form (observation_queue.jsonl
 > itself is also tracked; corrected 2026-09-10, this line used to
 > falsely claim otherwise).
-> Generated 2026-09-16T08:20:51+05:30 on HRM5472-NEW.
+> Generated 2026-09-16T21:17:16+05:30 on HRM5472-NEW.
 
-RECENT ACTIVITY — your own captured turns across ALL chats, last 7 days (474 turns, 27 chats). Source: local observation_queue.jsonl — this is your actual per-prompt activity log, NOT git. Use it to stay aware of what you have been working on across chats.
+RECENT ACTIVITY — your own captured turns across ALL chats, last 7 days (478 turns, 27 chats). Source: local observation_queue.jsonl — this is your actual per-prompt activity log, NOT git. Use it to stay aware of what you have been working on across chats.
 SELF-STATE: latest captured turn was produced by claude-opus-5 on HRM5472-NEW — brain swaps this window: claude-opus-5 -> claude-sonnet-5 (2026-09-10); claude-sonnet-5 -> claude-opus-5 (2026-09-11); claude-opus-5 -> thinkingmachines/inkling-small:free (2026-09-11); thinkingmachines/inkling-small:free -> openrouter/free (2026-09-11); openrouter/free -> google/gemini-3.6-flash (2026-09-11); google/gemini-3.6-flash -> deepseek/deepseek-v4-flash (2026-09-13); deepseek/deepseek-v4-flash -> claude-opus-5 (2026-09-14); claude-opus-5 -> moonshotai/kimi-k2.6 (2026-09-14); moonshotai/kimi-k2.6 -> nvidia/nemotron-3-ultra-550b-a55b:free (2026-09-14); nvidia/nemotron-3-ultra-550b-a55b:free -> moonshotai/kimi-k2.6 (2026-09-14); moonshotai/kimi-k2.6 -> claude-opus-5 (2026-09-15); claude-opus-5 -> claude-sonnet-5 (2026-09-15); claude-sonnet-5 -> claude-opus-5 (2026-09-15); claude-opus-5 -> claude-sonnet-5 (2026-09-16); claude-sonnet-5 -> claude-opus-5 (2026-09-16).
 
-- 2026-09-16 (Wed): 5 turns [2 chat(s)] — unknown×3, finance×2
+- 2026-09-16 (Wed): 9 turns [3 chat(s)] — unknown×5, finance×3, ai-ml×1
     • what is this error?
     • can you explain to me in detail how i want this app to be and where we will push
     • answers: 1. it is real, and near. 2. i don't know what that saying means, but I 
@@ -39,5 +39,5 @@ SELF-STATE: latest captured turn was produced by claude-opus-5 on HRM5472-NEW �
 - 2026-09-11 (Fri): 158 turns [17 chat(s)] — unknown×74, jarvis-build×52, ai-ml×27
     • aright, here's the thing: I just bought gpt plus (20$)m it has GPT 6 Astra but h
     • just re-paste and push
-    • The hearth isn't running as a daemon anywhere. Until it is, ingest_codex only f
+    • The hearth isn't running as a daemon anywhere. Until it is, ingest_cod
     … (truncated)
