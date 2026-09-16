@@ -6,12 +6,17 @@
 > the DISTILLED, 7-day, human-readable form (observation_queue.jsonl
 > itself is also tracked; corrected 2026-09-10, this line used to
 > falsely claim otherwise).
-> Generated 2026-09-15T22:56:45+05:30 on HRM5472-NEW.
+> Generated 2026-09-16T08:20:51+05:30 on HRM5472-NEW.
 
-RECENT ACTIVITY — your own captured turns across ALL chats, last 7 days (463 turns, 26 chats). Source: local observation_queue.jsonl — this is your actual per-prompt activity log, NOT git. Use it to stay aware of what you have been working on across chats.
-SELF-STATE: latest captured turn was produced by claude-sonnet-5 on HRM5472-NEW — brain swaps this window: claude-opus-5 -> claude-sonnet-5 (2026-09-10); claude-sonnet-5 -> claude-opus-5 (2026-09-11); claude-opus-5 -> thinkingmachines/inkling-small:free (2026-09-11); thinkingmachines/inkling-small:free -> openrouter/free (2026-09-11); openrouter/free -> google/gemini-3.6-flash (2026-09-11); google/gemini-3.6-flash -> deepseek/deepseek-v4-flash (2026-09-13); deepseek/deepseek-v4-flash -> claude-opus-5 (2026-09-14); claude-opus-5 -> moonshotai/kimi-k2.6 (2026-09-14); moonshotai/kimi-k2.6 -> nvidia/nemotron-3-ultra-550b-a55b:free (2026-09-14); nvidia/nemotron-3-ultra-550b-a55b:free -> moonshotai/kimi-k2.6 (2026-09-14); moonshotai/kimi-k2.6 -> claude-opus-5 (2026-09-15); claude-opus-5 -> claude-sonnet-5 (2026-09-15).
+RECENT ACTIVITY — your own captured turns across ALL chats, last 7 days (474 turns, 27 chats). Source: local observation_queue.jsonl — this is your actual per-prompt activity log, NOT git. Use it to stay aware of what you have been working on across chats.
+SELF-STATE: latest captured turn was produced by claude-opus-5 on HRM5472-NEW — brain swaps this window: claude-opus-5 -> claude-sonnet-5 (2026-09-10); claude-sonnet-5 -> claude-opus-5 (2026-09-11); claude-opus-5 -> thinkingmachines/inkling-small:free (2026-09-11); thinkingmachines/inkling-small:free -> openrouter/free (2026-09-11); openrouter/free -> google/gemini-3.6-flash (2026-09-11); google/gemini-3.6-flash -> deepseek/deepseek-v4-flash (2026-09-13); deepseek/deepseek-v4-flash -> claude-opus-5 (2026-09-14); claude-opus-5 -> moonshotai/kimi-k2.6 (2026-09-14); moonshotai/kimi-k2.6 -> nvidia/nemotron-3-ultra-550b-a55b:free (2026-09-14); nvidia/nemotron-3-ultra-550b-a55b:free -> moonshotai/kimi-k2.6 (2026-09-14); moonshotai/kimi-k2.6 -> claude-opus-5 (2026-09-15); claude-opus-5 -> claude-sonnet-5 (2026-09-15); claude-sonnet-5 -> claude-opus-5 (2026-09-15); claude-opus-5 -> claude-sonnet-5 (2026-09-16); claude-sonnet-5 -> claude-opus-5 (2026-09-16).
 
-- 2026-09-15 (Tue): 11 turns [2 chat(s)] — unknown×6, data-engineering×5
+- 2026-09-16 (Wed): 5 turns [2 chat(s)] — unknown×3, finance×2
+    • what is this error?
+    • can you explain to me in detail how i want this app to be and where we will push
+    • answers: 1. it is real, and near. 2. i don't know what that saying means, but I 
+    • A session-scoped Stop hook is now active with condition: "complete this app end-
+- 2026-09-15 (Tue): 17 turns [2 chat(s)] — unknown×12, data-engineering×5
     • this is the RSA prep chat right? so let's stick to RSA prep now. Getme up to spe
     • yup, then make a rule to add in the answers along with question to the answer ba
     • it's been a few days since i revised the concepts from within these answers, so 
@@ -34,13 +39,5 @@ SELF-STATE: latest captured turn was produced by claude-sonnet-5 on HRM5472-NEW 
 - 2026-09-11 (Fri): 158 turns [17 chat(s)] — unknown×74, jarvis-build×52, ai-ml×27
     • aright, here's the thing: I just bought gpt plus (20$)m it has GPT 6 Astra but h
     • just re-paste and push
-    • The hearth isn't running as a daemon anywhere. Until it is, ingest_codex only fi
-    • so everything is good and documented to be migrated? if yes commi and push
-- 2026-09-10 (Thu): 12 turns [5 chat(s)] — unknown×7, jarvis-build×2, ai-ml×1
-    • [REDACTED] you push
-    • alright, i added a file on the main branch called antigravity_review.md. take th
-    • done, just push now fast.
-    • Do you think that the data we have currently for training is genuinely enough to
-- 2026-09-09 (Wed): 4 turns [2 chat(s)] — unknown×3, ai-ml×1
-    • take the latest pull from gith
+    • The hearth isn't running as a daemon anywhere. Until it is, ingest_codex only f
     … (truncated)

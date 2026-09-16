@@ -399,12 +399,29 @@ _ATTRIBUTED_QUOTE = re.compile(
 _MIN_EXPLANATION_CHARS = 150
 
 
+# FIVE TEMPLATES OVER ~60 PAIRS MADE COLLISION STRUCTURAL, not accidental:
+# check_pipeline flagged one prompt on 13 different answers. One input mapped
+# to thirteen different targets teaches the model nothing about which to
+# produce. Fourteen templates puts the expected reuse at ~4, under the bar.
+#
+# This is a mitigation, not a cure. The real fix is a prompt that was actually
+# asked, which is what `extract_ui_sessions` provides — and why that extractor
+# is registered ahead of this one.
 _EXPLANATION_PROMPTS = (
     "Explain your own thinking on this, in your own words and at the length it deserves.",
     "What's your actual position here? Say it the way you'd say it, not the tidy version.",
     "Talk this through the way you'd talk it through out loud.",
     "Give me your reasoning on this — the whole shape of it, not a summary.",
     "How do you actually see this? Use your own words.",
+    "Set out your thinking here, at whatever length it actually needs.",
+    "What's the reasoning behind your view on this?",
+    "Say what you actually think about this, not the diplomatic version.",
+    "Walk me through how you arrived at this.",
+    "What matters to you about this, and why?",
+    "Lay out your position and the reasoning under it.",
+    "How would you explain your thinking here to someone who disagreed?",
+    "What's your read on this, in full?",
+    "Put your own reasoning on this into words.",
 )
 
 
