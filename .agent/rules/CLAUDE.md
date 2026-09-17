@@ -208,6 +208,7 @@ No fluff. Depth over brevity. Be direct. When the user is wrong, say so with rea
 | What | Path |
 |---|---|
 | **Nervous system, inventory, per-host setup** | **[NERVOUS_SYSTEM.md](NERVOUS_SYSTEM.md)** — how cross-chat context actually works, what does NOT survive a `git pull` and how to rebuild it, and the adapter contract for a new host |
+| **Cross-agent status snapshot** | **[STATUS.md](STATUS.md)** — kept current, not a log: what's mid-flight, what's confirmed broken/not-broken, open commitments with a task and owner, what's blocked on the user. Read at the start of any survey/verification turn before re-deriving it from scratch. |
 | Codex entry point | [AGENTS.md](AGENTS.md) |
 | Endgame architecture | [.agent/rules/JARVIS_ENDGAME.md](.agent/rules/JARVIS_ENDGAME.md) |
 | Antigravity always-on protocol | [.agent/rules/js-workspace-rule.md](.agent/rules/js-workspace-rule.md) |

@@ -6,14 +6,25 @@
 > the DISTILLED, 7-day, human-readable form (observation_queue.jsonl
 > itself is also tracked; corrected 2026-09-10, this line used to
 > falsely claim otherwise).
-> Generated 2026-09-17T15:11:02+05:30 on unknown.
+> Generated 2026-09-17T15:50:11+05:30 on unknown.
 
-RECENT ACTIVITY — your own captured turns across ALL chats, last 7 days (438 turns, 23 chats). Source: local observation_queue.jsonl — this is your actual per-prompt activity log, NOT git. Use it to stay aware of what you have been working on across chats.
-SELF-STATE: latest captured turn was produced by moonshotai/kimi-k2.6 on unknown — brain swaps this window: claude-opus-5 -> claude-sonnet-5 (2026-09-10); claude-sonnet-5 -> claude-opus-5 (2026-09-11); claude-opus-5 -> thinkingmachines/inkling-small:free (2026-09-11); thinkingmachines/inkling-small:free -> openrouter/free (2026-09-11); openrouter/free -> google/gemini-3.6-flash (2026-09-11); google/gemini-3.6-flash -> deepseek/deepseek-v4-flash (2026-09-13); deepseek/deepseek-v4-flash -> claude-opus-5 (2026-09-14); claude-opus-5 -> moonshotai/kimi-k2.6 (2026-09-14); moonshotai/kimi-k2.6 -> nvidia/nemotron-3-ultra-550b-a55b:free (2026-09-14); nvidia/nemotron-3-ultra-550b-a55b:free -> moonshotai/kimi-k2.6 (2026-09-14).
+RECENT ACTIVITY — your own captured turns across ALL chats, last 7 days (469 turns, 26 chats). Source: local observation_queue.jsonl — this is your actual per-prompt activity log, NOT git. Use it to stay aware of what you have been working on across chats.
+SELF-STATE: latest captured turn was produced by claude-opus-5 on HRM5472-NEW — brain swaps this window: claude-sonnet-5 -> claude-opus-5 (2026-09-11); claude-opus-5 -> thinkingmachines/inkling-small:free (2026-09-11); thinkingmachines/inkling-small:free -> openrouter/free (2026-09-11); openrouter/free -> google/gemini-3.6-flash (2026-09-11); google/gemini-3.6-flash -> deepseek/deepseek-v4-flash (2026-09-13); deepseek/deepseek-v4-flash -> claude-opus-5 (2026-09-14); claude-opus-5 -> moonshotai/kimi-k2.6 (2026-09-14); moonshotai/kimi-k2.6 -> nvidia/nemotron-3-ultra-550b-a55b:free (2026-09-14); nvidia/nemotron-3-ultra-550b-a55b:free -> moonshotai/kimi-k2.6 (2026-09-14); moonshotai/kimi-k2.6 -> claude-opus-5 (2026-09-15); claude-opus-5 -> claude-sonnet-5 (2026-09-15); claude-sonnet-5 -> moonshotai/kimi-k2.6 (2026-09-15); moonshotai/kimi-k2.6 -> claude-opus-5 (2026-09-15); claude-opus-5 -> claude-sonnet-5 (2026-09-16); claude-sonnet-5 -> claude-opus-5 (2026-09-16); claude-opus-5 -> claude-sonnet-5 (2026-09-17); claude-sonnet-5 -> claude-opus-5 (2026-09-17).
 
-- 2026-09-15 (Tue): 1 turns [1 chat(s)] — unknown×1
+- 2026-09-17 (Thu): 5 turns [2 chat(s)] — unknown×4, finance×1
+    • This session is being continued from a previous conversation that ran out of con
+    • put this survey work to work in a status md or any other md that the other agent
+- 2026-09-16 (Wed): 10 turns [3 chat(s)] — unknown×6, finance×3, ai-ml×1
+    • what is this error?
+    • can you explain to me in detail how i want this app to be and where we will push
+    • answers: 1. it is real, and near. 2. i don't know what that saying means, but I 
+    • A session-scoped Stop hook is now active with condition: "complete this app end-
+- 2026-09-15 (Tue): 18 turns [3 chat(s)] — unknown×13, data-engineering×5
     • I tend to overthink and by extension overcomplicate the process. If I have a the
-- 2026-09-14 (Mon): 29 turns [3 chat(s)] — unknown×15, ai-ml×7, jarvis-build×4
+    • this is the RSA prep chat right? so let's stick to RSA prep now. Getme up to spe
+    • yup, then make a rule to add in the answers along with question to the answer ba
+    • it's been a few days since i revised the concepts from within these answers, so 
+- 2026-09-14 (Mon): 30 turns [3 chat(s)] — unknown×16, ai-ml×7, jarvis-build×4
     • get the latest pull for jarvis.
     • fix the gap by fixing the training corpus antigravity falgged in q_003 then give
     • I can't use codex till sept 19 as the weekly limit is hit. "Two things I did not
@@ -27,11 +38,5 @@ SELF-STATE: latest captured turn was produced by moonshotai/kimi-k2.6 on unknown
     • # Files mentioned by the user: ## codex-clipboard-aeb83d56-138b-4891-9504-cadf36
     • also check the fonts and font sizes, they're too small. Just make this website p
     • [@Frontend Design Premium](plugin://frontend-design-premium@openai-curated-remot
-    • The following is the Codex agent history whose request action you are assessing.
-- 2026-09-11 (Fri): 158 turns [17 chat(s)] — unknown×74, jarvis-build×52, ai-ml×27
-    • aright, here's the thing: I just bought gpt plus (20$)m it has GPT 6 Astra but h
-    • just re-paste and push
-    • The hearth isn't running as a daemon anywhere. Until it is, ingest_codex only fi
-    • so everything is good and documented to be migrated? if yes commi and push
-- 2026-09-10 (Thu): 2 turns [1 chat(s)] — unknown×2
-    • done, just push now fast.
+    • The followin
+    … (truncated)

@@ -124,6 +124,7 @@ class OpenRouterClient:
         transport: Optional[Transport] = None,
         base_url: str = _BASE_URL,
         reasoning_effort: Optional[str] = None,
+        max_tokens: Optional[int] = None,
     ) -> None:
         self._api_key = api_key or os.environ.get("OPENROUTER_API_KEY", "")
         if not self._api_key:
@@ -135,6 +136,14 @@ class OpenRouterClient:
                 f"reasoning_effort must be one of {sorted(_REASONING_EFFORT_LEVELS)} "
                 f"or None, got {reasoning_effort!r}.")
         self._reasoning_effort = reasoning_effort
+        # Left None, OpenRouter bills the request against the MODEL's maximum
+        # rather than what the answer needs. That is not merely wasteful: on
+        # 2026-09-15 a curation call whose reply is ~150 tokens of JSON was
+        # refused with HTTP 402 "you requested up to 65536 tokens, but can only
+        # afford 62888" — the balance covered the answer many times over and
+        # the ceiling is what failed. Callers with a bounded answer should say
+        # so.
+        self._max_tokens = int(max_tokens) if max_tokens else None
         self._model = model or os.environ.get("OPENROUTER_MODEL", "")
         self._budget = budget_usd
         self._timeout = float(timeout_s)
@@ -255,6 +264,8 @@ class OpenRouterClient:
                 f"over {self._calls} calls)")
 
         payload = {"model": self._model, "messages": list(messages)}
+        if self._max_tokens is not None:
+            payload["max_tokens"] = self._max_tokens
         if self._reasoning_effort is not None:
             payload["reasoning"] = {"effort": self._reasoning_effort}
         last_err = ""
@@ -317,7 +328,8 @@ def build_llm_call(budget_usd: Optional[float] = _DEFAULT_BUDGET_USD,
                    cost_tracker: Optional[Any] = None,
                    reasoning_effort: Optional[str] = None,
                    timeout_s: Optional[float] = None,
-                   max_retries: Optional[int] = None) -> OpenRouterClient:
+                   max_retries: Optional[int] = None,
+                   max_tokens: Optional[int] = None) -> OpenRouterClient:
     """The one-line factory every surface uses: a ready LLMCall from env config."""
     kwargs: Dict[str, Any] = dict(model=model, budget_usd=budget_usd,
                                   cost_tracker=cost_tracker,
@@ -326,6 +338,8 @@ def build_llm_call(budget_usd: Optional[float] = _DEFAULT_BUDGET_USD,
         kwargs["timeout_s"] = timeout_s
     if max_retries is not None:
         kwargs["max_retries"] = max_retries
+    if max_tokens is not None:
+        kwargs["max_tokens"] = max_tokens
     return OpenRouterClient(**kwargs)
 
 
@@ -494,6 +508,30 @@ def _run_self_test() -> None:
         # T11: ledger summary shape
         s = c1.ledger_summary()
         check("T11 ledger summary", s["calls"] == 1 and s["budget_usd"] == _DEFAULT_BUDGET_USD)
+
+        # T12b: max_tokens threads into the payload, and is ABSENT when unset.
+        # Absent matters as much as present: an unconditional key would send
+        # max_tokens=None to a provider that rejects it.
+        seen12b = {}
+
+        async def t12b(url, headers, payload, timeout):
+            seen12b["payload"] = payload
+            return 200, {"choices": [{"message": {"content": "ok"}}],
+                         "usage": {"prompt_tokens": 1, "completion_tokens": 1}}
+        c12b = OpenRouterClient(api_key="k", model="m", transport=t12b, max_tokens=400)
+        await c12b([{"role": "user", "content": "hi"}])
+        check("T12b max_tokens reaches the payload",
+              seen12b["payload"].get("max_tokens") == 400, str(seen12b.get("payload")))
+        seen12c = {}
+
+        async def t12c(url, headers, payload, timeout):
+            seen12c["payload"] = payload
+            return 200, {"choices": [{"message": {"content": "ok"}}],
+                         "usage": {"prompt_tokens": 1, "completion_tokens": 1}}
+        c12c = OpenRouterClient(api_key="k", model="m", transport=t12c)
+        await c12c([{"role": "user", "content": "hi"}])
+        check("T12c max_tokens is OMITTED when unset, not sent as null",
+              "max_tokens" not in seen12c["payload"], str(seen12c.get("payload")))
 
         # T13: reasoning_effort threads into the payload's "reasoning" object
         seen13: Dict[str, Any] = {}

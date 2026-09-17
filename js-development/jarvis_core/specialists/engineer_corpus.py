@@ -598,6 +598,7 @@ def assemble_corpus(output_path: Optional[Path] = None) -> CorpusStats:
         name: {"records": 0, "chars": 0} for name, _ in _SOURCE_ITERATORS
     }
     dropped: Dict[str, int] = {}
+    _seen_exact: set = set()
     total_records = 0
 
     with path.open("w", encoding="utf-8") as handle:
@@ -610,6 +611,18 @@ def assemble_corpus(output_path: Optional[Path] = None) -> CorpusStats:
                     dropped[f"{source_name}:hygiene"] = (
                         dropped.get(f"{source_name}:hygiene", 0) + 1)
                     continue
+                # EXACT duplicates are dropped; NEAR duplicates stay capped at
+                # _MAX_PER_CLUSTER upstream. Conflating the two is what let
+                # 11.2% of blended_corpus become byte-identical copies. The cap
+                # is right for near-dupes (two phrasings carry a little signal)
+                # and wrong for exact ones, which carry none and only
+                # over-weight that sample in training.
+                fingerprint = hash(record.text)
+                if fingerprint in _seen_exact:
+                    dropped[f"{source_name}:exact_dupe"] = (
+                        dropped.get(f"{source_name}:exact_dupe", 0) + 1)
+                    continue
+                _seen_exact.add(fingerprint)
                 handle.write(json.dumps({
                     "source_type": record.source_type,
                     "source_path": record.source_path,

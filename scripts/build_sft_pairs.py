@@ -399,12 +399,29 @@ _ATTRIBUTED_QUOTE = re.compile(
 _MIN_EXPLANATION_CHARS = 150
 
 
+# FIVE TEMPLATES OVER ~60 PAIRS MADE COLLISION STRUCTURAL, not accidental:
+# check_pipeline flagged one prompt on 13 different answers. One input mapped
+# to thirteen different targets teaches the model nothing about which to
+# produce. Fourteen templates puts the expected reuse at ~4, under the bar.
+#
+# This is a mitigation, not a cure. The real fix is a prompt that was actually
+# asked, which is what `extract_ui_sessions` provides — and why that extractor
+# is registered ahead of this one.
 _EXPLANATION_PROMPTS = (
     "Explain your own thinking on this, in your own words and at the length it deserves.",
     "What's your actual position here? Say it the way you'd say it, not the tidy version.",
     "Talk this through the way you'd talk it through out loud.",
     "Give me your reasoning on this — the whole shape of it, not a summary.",
     "How do you actually see this? Use your own words.",
+    "Set out your thinking here, at whatever length it actually needs.",
+    "What's the reasoning behind your view on this?",
+    "Say what you actually think about this, not the diplomatic version.",
+    "Walk me through how you arrived at this.",
+    "What matters to you about this, and why?",
+    "Lay out your position and the reasoning under it.",
+    "How would you explain your thinking here to someone who disagreed?",
+    "What's your read on this, in full?",
+    "Put your own reasoning on this into words.",
 )
 
 
@@ -505,6 +522,89 @@ def extract_kb_verbatim() -> Iterator[SFTPair]:
                 metadata={"origin": "extracted_verbatim", "kb_type": entry.get("type")})
 
 
+_CONVERSATIONS = Path(DATA_ROOT) / "conversations"
+
+# The UI writes `**Question 3:** …` after its acknowledgement of the previous
+# answer. The acknowledgement is JARVIS's prose and must not become the prompt.
+_QUESTION_MARKER = re.compile(r"\*\*Question\s*\d+\s*[:.]?\*\*\s*(.+?)\s*$", re.DOTALL)
+# A prompt is a QUESTION, not a document. Without this the extractor also pairs
+# "here is a 2,679-char status dump" with whatever the user typed next.
+_MAX_QUESTION_CHARS = 600
+
+
+def _extract_question(assistant_text: str) -> str:
+    """The question JARVIS actually asked, or "" when the turn asked nothing."""
+    marked = _QUESTION_MARKER.search(assistant_text)
+    if marked:
+        question = marked.group(1).strip()
+    else:
+        paragraphs = [p.strip() for p in re.split(r"\n\s*\n", assistant_text) if p.strip()]
+        question = paragraphs[-1] if paragraphs else ""
+        if not question.rstrip().endswith("?"):
+            return ""
+    return question if 0 < len(question) <= _MAX_QUESTION_CHARS else ""
+
+
+def extract_ui_sessions() -> Iterator[SFTPair]:
+    """(the question JARVIS asked) -> (the user's answer). Spec §5's ideal shape.
+
+    THE USER IS CURRENTLY ANSWERING 45 PERSONALIZATION QUESTIONS THROUGH THE
+    JARVIS UI, and before this extractor existed those answers reached the
+    corpus only through `extract_user_explanations`, which reads the capture
+    queue and attaches the synthetic prompt "Explain your own thinking on
+    this…". That threw away the better half of every pair: a deliberate Q&A
+    session is ALREADY (prompt, target), with a real question and a real answer
+    in the user's own voice. Nothing else in this file gets to start from that.
+
+    Two gates, and both earn their place:
+      * the prompt must parse as a QUESTION, which is what stops this pairing a
+        long status answer with whatever the user happened to type next;
+      * the answer must pass `text_hygiene` as owner prose, which is what drops
+        the session's protocol-setting opener ("Alright Jarvis, ask me these
+        questions one by one…") as the vocative directive it is.
+
+    THE FLOOR IS `_MIN_VOICE_CHARS`, NOT `_MIN_EXPLANATION_CHARS`. The 150-char
+    floor on the queue path is a proxy for substance, needed only because that
+    path has no real prompt to judge the answer against. Here there is one, so
+    a short answer is still a whole pair — "I was saying I'm calculative even
+    when I shouldn't be" is 94 characters, is a genuine reply to a genuine
+    question, and was being discarded as `too_thin`.
+    """
+    if not _CONVERSATIONS.is_dir():
+        return
+    for path in sorted(_CONVERSATIONS.glob("*.jsonl")):
+        try:
+            text = path.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        turns: List[Dict[str, Any]] = []
+        for line in text.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                turns.append(json.loads(line))
+            except json.JSONDecodeError:
+                continue
+
+        for i in range(len(turns) - 1):
+            if turns[i].get("role") != "assistant" or turns[i + 1].get("role") != "user":
+                continue
+            question = _extract_question(str(turns[i].get("content", "")))
+            if not question:
+                continue
+            answer = str(turns[i + 1].get("content", "")).strip()
+            if classify(answer, min_chars=_MIN_VOICE_CHARS)[0] != OWNER_PROSE:
+                continue
+            yield SFTPair(
+                user=question,
+                assistant=answer[:_MAX_ANSWER_CHARS],
+                bucket="personalization", source_type="sft_personalization",
+                source_path=f"conversations/{path.name}#turn{i + 1}",
+                metadata={"origin": "authored_by_user", "form": "interview",
+                          "ts": str(turns[i + 1].get("ts", ""))})
+
+
 _MIN_PARAGRAPH_CHARS = 250
 
 
@@ -600,6 +700,13 @@ EXTRACTORS = (
     ("session_learnings", extract_session_learnings),
     ("big_picture", extract_big_picture),
     ("kb_verbatim", extract_kb_verbatim),
+    # BEFORE user_explanations, and the order is load-bearing. Dedup is global
+    # and keyed on the ANSWER (`SFTPair.cluster_key`), so the first extractor to
+    # emit a given answer wins. Both of these see the same UI turns — this one
+    # carries the question JARVIS actually asked, the other substitutes a
+    # generic prompt. Swap the order and every interview pair silently loses
+    # its real question to a synthetic one.
+    ("ui_sessions", extract_ui_sessions),
     ("user_explanations", extract_user_explanations),
     ("literature", extract_literature),
     ("experience_map", extract_experience_map),

@@ -98,9 +98,12 @@ STEP 3: `parse_verdict` reads strict JSON and REJECTS anything it cannot
         validate against the known vocabularies, rather than coercing. A
         guessed label is the failure mode this whole module exists to end.
         |
-STEP 4: `curate` returns a `Curation`, which the caller appends. Callers that
-        cannot reach a model get `None` and MUST leave the turn uncurated —
-        an absent verdict is recoverable, a fabricated one is not.
+STEP 4: `curate` returns a `Curation`, which the caller appends. `None` means
+        the model ANSWERED and the answer was unusable — leave that turn
+        uncurated, because an absent verdict is recoverable and a fabricated
+        one is not. A model that could not be REACHED raises instead; the two
+        are different problems and only the caller can decide between skipping
+        one turn and stopping the batch.
 =============================================================================
 """
 
@@ -211,9 +214,15 @@ Decide FOUR things and answer with JSON only.
    building on. This is the context an offline pass cannot recover. If the
    turn opens a topic, say so.
 
-4. `trainable` — true only if a model should learn from this turn's content.
-   Most turns in a working session are false. Be strict: a corpus of 200 real
-   turns beats 2000 padded ones.
+4. `trainable` — true only if a model should learn from this EXCHANGE.
+   Judge the pair, not the user's half alone. A short, precisely-steered
+   question that draws out a substantial technical answer IS a high-value
+   pair — the value sits in the answer, and the question is what elicited it.
+   "explain again but keep watermark at 3 and 4 minutes and the interval delay
+   at 2" carries no standalone reasoning and is trainable, because what came
+   back was a full numerical derivation.
+   Otherwise most turns in a working session are false. Be strict: a corpus of
+   200 real turns beats 2000 padded ones.
 
 Also give `confidence` (0.0-1.0) and a one-line `rationale`.
 
@@ -324,15 +333,24 @@ def parse_verdict(raw: str, ctx: TurnContext, curated_by: str,
 
 def curate(ctx: TurnContext, complete_fn: Callable[[str], str], curated_by: str,
            curated_at: str = "") -> Optional[Curation]:
-    """Ask the injected model to curate one turn. None when it cannot be trusted.
+    """Ask the injected model to curate one turn. None when the ANSWER is unusable.
 
     `complete_fn` is the seam that makes this host-independent: Claude Code's
     hook, Codex's ingester, Antigravity and JARVIS each pass their own.
+
+    TRANSPORT ERRORS PROPAGATE — they are deliberately NOT caught here, and the
+    first version of this function was wrong to catch them. It returned None on
+    any exception, so the caller reported every failure as "UNPARSEABLE". On
+    2026-09-15 that turned an HTTP 402 (OpenRouter credits exhausted) into three
+    lines claiming the model had produced unreadable output, which points at the
+    prompt instead of at the bill — the exact class of confidently-wrong message
+    this repo keeps finding.
+
+    The two failures need different handling and only the caller can choose: a
+    bad answer means skip this turn and continue; an unreachable model means
+    stop, because the next 900 turns will fail identically.
     """
-    try:
-        raw = complete_fn(build_prompt(ctx))
-    except Exception:
-        return None
+    raw = complete_fn(build_prompt(ctx))
     if not raw:
         return None
     return parse_verdict(raw, ctx, curated_by=curated_by, curated_at=curated_at)
@@ -432,6 +450,12 @@ def _smoke() -> int:
     check("T1 prompt carries the neighbours", "ChromaDB indexes embeddings" in prompt, True)
     check("T2 prompt carries the turn", "skip the learning for now" in prompt, True)
     check("T3 prompt names every domain", all(d in prompt for d in DOMAINS), True)
+    # T3b guards the fix for the one false `none` in Antigravity's a_005 audit:
+    # the prompt used to ask whether the USER's half carried reasoning, so a
+    # parameter-steered follow-up that drew out a full derivation was dropped.
+    check("T3b prompt tells the model to judge the EXCHANGE, not the user half",
+          "learn from this EXCHANGE" in prompt and "sits in the answer" in prompt, True)
+
     check("T4 first-turn prompt says so",
           "first turn in the session" in build_prompt(
               TurnContext(ts="t", session_id="s", user_text="hello there")), True)
@@ -480,9 +504,15 @@ def _smoke() -> int:
           parse_verdict(good.replace('["engineer"]', '["engineer","engineer"]'),
                         ctx, "claude").corpora, ("engineer",))
 
-    check("T23 curate() returns None when the model raises",
-          curate(ctx, lambda _p: (_ for _ in ()).throw(RuntimeError("no network")), "claude"),
-          None)
+    # T23 asserts the OPPOSITE of what it used to. A transport error must reach
+    # the caller so it can tell "bad answer" from "no model", instead of being
+    # flattened into the same None as unparseable output.
+    raised = False
+    try:
+        curate(ctx, lambda _p: (_ for _ in ()).throw(RuntimeError("HTTP 402")), "claude")
+    except RuntimeError as exc:
+        raised = "402" in str(exc)
+    check("T23 a transport error PROPAGATES rather than looking unparseable", raised, True)
     check("T24 curate() returns None on an empty completion",
           curate(ctx, lambda _p: "", "claude"), None)
     check("T25 curate() passes the verdict through",

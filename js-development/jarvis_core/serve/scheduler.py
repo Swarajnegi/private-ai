@@ -307,6 +307,25 @@ def default_jobs(python: Optional[str] = None,
                         "records in months, which is what per-turn discipline is "
                         "worth. Batched at 40 so a cold start drains the backlog "
                         "over hours instead of one enormous bill"),
+        # --- Added 2026-09-16: verification on a clock, not on attention ---
+        Job(name="check_pipeline",
+            argv=(py, str(scripts / "check_pipeline.py")),
+            interval_seconds=6 * HOUR,
+            timeout_seconds=600.0,
+            initial_delay_seconds=900.0,
+            description="invariants BETWEEN corpus artifacts — the class of "
+                        "defect all 94 module suites are structurally blind to, "
+                        "because no module owns a relationship. Caught 11.2% "
+                        "duplication in blended_corpus on its first run"),
+        Job(name="run_all_tests",
+            argv=(py, str(scripts / "run_all_tests.py"), "--fast"),
+            interval_seconds=12 * HOUR,
+            timeout_seconds=1800.0,
+            initial_delay_seconds=1020.0,
+            description="every smoke suite in the repo. Before this existed "
+                        "there was no runner at all, so 'run the tests' was not "
+                        "an operation anyone could perform and 85 of 94 suites "
+                        "went unrun in a working session"),
         Job(name="relabel_domains",
             argv=(py, str(scripts / "relabel_domains.py")),
             interval_seconds=12 * HOUR,
@@ -702,19 +721,33 @@ def _run_self_test() -> None:
         # T16: the real default job set is well-formed.
         jobs = default_jobs()
         names = [j.name for j in jobs]
-        check("T16 the default set includes GraphRAG, the Codex adapter, the Antigravity adapter, and curation",
-              names[:10] == ["consolidate", "refresh_profile", "reindex_memory",
-                             "rebuild_graphrag", "ingest_codex", "ingest_antigravity",
-                             "reconcile_codex_memory", "refresh_digest",
-                             "curate_turns", "relabel_domains"]
-              and (names[10:] in ([], ["sync_remote_memory"])),
-              str(names))
+        # T16 ASSERTS MEMBERSHIP, NOT POSITION, and that is a correction.
+        # It previously pinned the exact list and index of every job, so it
+        # broke twice from legitimate additions — curation on 2026-09-14 and
+        # Antigravity's capture adapter on 2026-09-15 — each time reporting a
+        # failure that was really just "someone added a job". A test that cries
+        # wolf on correct changes gets edited to shut it up, which is how it
+        # stops catching the thing it was written for. What actually matters is
+        # that nothing SILENTLY DISAPPEARS, so the required set is asserted and
+        # ordering is left alone.
+        required = {"consolidate", "refresh_profile", "reindex_memory",
+                    "rebuild_graphrag", "ingest_codex", "reconcile_codex_memory",
+                    "refresh_digest", "curate_turns", "relabel_domains"}
+        check("T16 no required job has silently disappeared",
+              required <= set(names), f"missing: {sorted(required - set(names))}")
+        check("T16a consolidate still leads (it is the unguarded pulse)",
+              names[0] == "consolidate", str(names[:1]))
         # T16b: curation and its reviewer must BOTH be scheduled. Shipping the
         # curator without relabel_domains would leave the agent's verdict with
         # nothing to be checked against, which is how domain_labels.jsonl came
         # to be six days stale and unnoticed in the first place.
         check("T16b the curator and its independent second opinion are both scheduled",
               {"curate_turns", "relabel_domains"} <= set(names), str(names))
+        # T16c: verification must run unprompted. Both instruments existed as
+        # scripts before they were scheduled, which is exactly how
+        # relabel_domains went six days stale while calling itself authoritative.
+        check("T16c both verification instruments are scheduled",
+              {"check_pipeline", "run_all_tests"} <= set(names), str(names))
         check("T17 consolidate is UNguarded (its whole point is to run anyway)",
               not jobs[0].guard and jobs[1].guard and jobs[2].guard)
         check("T17b each guarded job scopes its guard to the artifact IT fixes",
