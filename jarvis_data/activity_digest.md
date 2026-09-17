@@ -6,11 +6,13 @@
 > the DISTILLED, 7-day, human-readable form (observation_queue.jsonl
 > itself is also tracked; corrected 2026-09-10, this line used to
 > falsely claim otherwise).
-> Generated 2026-09-15T02:17:40+05:30 on unknown.
+> Generated 2026-09-17T15:11:02+05:30 on unknown.
 
-RECENT ACTIVITY — your own captured turns across ALL chats, last 7 days (471 turns, 29 chats). Source: local observation_queue.jsonl — this is your actual per-prompt activity log, NOT git. Use it to stay aware of what you have been working on across chats.
-SELF-STATE: latest captured turn was produced by moonshotai/kimi-k2.6 on unknown — brain swaps this window: claude-opus-5 -> google/gemini-3.6-flash (2026-09-08); google/gemini-3.6-flash -> claude-opus-5 (2026-09-08); claude-opus-5 -> google/gemini-3.6-flash (2026-09-08); google/gemini-3.6-flash -> claude-opus-5 (2026-09-08); claude-opus-5 -> google/gemini-3.6-flash (2026-09-08); google/gemini-3.6-flash -> claude-opus-5 (2026-09-08); claude-opus-5 -> google/gemini-3.6-flash (2026-09-08); google/gemini-3.6-flash -> claude-opus-5 (2026-09-08); claude-opus-5 -> google/gemini-3.6-flash (2026-09-08); google/gemini-3.6-flash -> claude-opus-5 (2026-09-08); claude-opus-5 -> google/gemini-3.6-flash (2026-09-08); google/gemini-3.6-flash -> claude-opus-5 (2026-09-08); claude-opus-5 -> claude-sonnet-5 (2026-09-10); claude-sonnet-5 -> claude-opus-5 (2026-09-11); claude-opus-5 -> thinkingmachines/inkling-small:free (2026-09-11); thinkingmachines/inkling-small:free -> openrouter/free (2026-09-11); openrouter/free -> google/gemini-3.6-flash (2026-09-11); google/gemini-3.6-flash -> deepseek/deepseek-v4-flash (2026-09-13); deepseek/deepseek-v4-flash -> claude-opus-5 (2026-09-14); claude-opus-5 -> moonshotai/kimi-k2.6 (2026-09-14); moonshotai/kimi-k2.6 -> nvidia/nemotron-3-ultra-550b-a55b:free (2026-09-14); nvidia/nemotron-3-ultra-550b-a55b:free -> moonshotai/kimi-k2.6 (2026-09-14).
+RECENT ACTIVITY — your own captured turns across ALL chats, last 7 days (438 turns, 23 chats). Source: local observation_queue.jsonl — this is your actual per-prompt activity log, NOT git. Use it to stay aware of what you have been working on across chats.
+SELF-STATE: latest captured turn was produced by moonshotai/kimi-k2.6 on unknown — brain swaps this window: claude-opus-5 -> claude-sonnet-5 (2026-09-10); claude-sonnet-5 -> claude-opus-5 (2026-09-11); claude-opus-5 -> thinkingmachines/inkling-small:free (2026-09-11); thinkingmachines/inkling-small:free -> openrouter/free (2026-09-11); openrouter/free -> google/gemini-3.6-flash (2026-09-11); google/gemini-3.6-flash -> deepseek/deepseek-v4-flash (2026-09-13); deepseek/deepseek-v4-flash -> claude-opus-5 (2026-09-14); claude-opus-5 -> moonshotai/kimi-k2.6 (2026-09-14); moonshotai/kimi-k2.6 -> nvidia/nemotron-3-ultra-550b-a55b:free (2026-09-14); nvidia/nemotron-3-ultra-550b-a55b:free -> moonshotai/kimi-k2.6 (2026-09-14).
 
+- 2026-09-15 (Tue): 1 turns [1 chat(s)] — unknown×1
+    • I tend to overthink and by extension overcomplicate the process. If I have a the
 - 2026-09-14 (Mon): 29 turns [3 chat(s)] — unknown×15, ai-ml×7, jarvis-build×4
     • get the latest pull for jarvis.
     • fix the gap by fixing the training corpus antigravity falgged in q_003 then give
@@ -31,9 +33,5 @@ SELF-STATE: latest captured turn was produced by moonshotai/kimi-k2.6 on unknown
     • just re-paste and push
     • The hearth isn't running as a daemon anywhere. Until it is, ingest_codex only fi
     • so everything is good and documented to be migrated? if yes commi and push
-- 2026-09-10 (Thu): 12 turns [5 chat(s)] — unknown×7, jarvis-build×2, ai-ml×1
-    • [REDACTED] you push
-    • alright, i added a file on the main branch called antigravity_review.md. take th
+- 2026-09-10 (Thu): 2 turns [1 chat(s)] — unknown×2
     • done, just push now fast.
-    • Do you think that the data we have cu
-    … (truncated)
