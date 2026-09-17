@@ -70,7 +70,13 @@ returns nothing without a rebuilt index, and it fails silently rather than loudl
    You can ask them things the same way: `--ask claude --subject "..." --body "..." --from codex`.
    Protocol and conventions: [agents_converse/README.md](agents_converse/README.md).
 
-5. For topic-specific recall: `python3 scripts/search_memory.py "<topic>"` before answering
+5. **Read [STATUS.md](STATUS.md)** — a snapshot, kept current (not a log), of what the other
+   agents found since your last session: what's mid-flight, what's broken (or confirmed not
+   broken), which open commitments have a task attached and who should act on it, and what's
+   blocked on the user rather than on any agent. Cheaper than re-deriving it, and it exists
+   specifically so you don't rediscover something another agent already found.
+
+6. For topic-specific recall: `python3 scripts/search_memory.py "<topic>"` before answering
    anything you're not certain of, per the standing memory-hygiene rule.
 
 Full mechanism, the inventory of what does NOT survive a `git pull`, and per-host setup:

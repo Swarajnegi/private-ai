@@ -27,7 +27,10 @@ JARVIS's consciousness travels with this repo (Consciousness Portability Contrac
    Claude Code and Codex leave questions in `agents_converse/`, delivered by git. Answer with
    `--answer <N> --body "..." --from antigravity`, then commit and push. Ask them things the same
    way with `--ask`. See `agents_converse/README.md`.
-4. For topic context, `python scripts/search_memory.py "<topic>"` as usual.
+4. **Read `STATUS.md`** — a kept-current snapshot of what the other agents found since your last
+   session: what's mid-flight, what's confirmed broken or not-broken, which open commitments have
+   a task attached and who should act, and what's blocked on the user rather than on any agent.
+5. For topic context, `python scripts/search_memory.py "<topic>"` as usual.
 
 **Capture status on this host (ROADMAP 6.8.3, closed 2026-09-14):** Automatic per-turn capture is now LIVE via `scripts/ingest_antigravity_sessions.py`, scheduled hourly on the hearth (`initial_delay_seconds=240.0`). It reads complete transcripts (`transcript_full.jsonl` / `transcript.jsonl` / `overview.txt`) directly from `~/.gemini/antigravity-ide/brain/`. Transcripts are never pruned by Antigravity; historical backfill of 359 turns from April 2026 onward has been ingested into `observation_queue.jsonl`. You can check or trigger it manually anytime via `python scripts/ingest_antigravity_sessions.py` (with `--status`, `--dry-run`, or `--self-test`).
 
