@@ -171,7 +171,8 @@ Also in [`jarvis_data/`](jarvis_data/): `life_state_feed.jsonl` (surfaced insigh
 | Path | What |
 |---|---|
 | [`agents_converse/`](agents_converse/) | Agent-to-agent questions and answers, delivered by git |
-| [`.agent/hooks.manifest.json`](.agent/hooks.manifest.json) | The committed hook wiring. `.claude/settings.json` is rehydrated *from* this |
+| [`.agent/hooks.manifest.json`](.agent/hooks.manifest.json) | The committed hook wiring. `.claude/settings.json` hooks are rehydrated *from* this |
+| [`.claude/settings.json`](.claude/settings.json) | **Tracked since 2026-09-18** — the shared permission allowlist, so a new Claude Code host does not re-approve 164 commands by hand. **Invariant: never put a credential in it** (`GH_TOKEN` goes in the environment, not an allowlist pattern — that is exactly how `b7bfbe6` leaked a PAT). `.claude/settings.local.json` stays per-host and ignored |
 | [`NERVOUS_SYSTEM.md`](NERVOUS_SYSTEM.md) | Mechanism, inventory, per-host setup |
 
 ---

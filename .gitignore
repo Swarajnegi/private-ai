@@ -117,17 +117,29 @@ desktop.ini
 *:Zone.Identifier
 *:sec.endpointdlp
 
-# -- Agent host settings (2026-09-08: LEAK REMEDIATION) -----------------------
-# .claude/settings.json was TRACKED and pushed (commit b7bfbe6) carrying a live
-# github_pat_ inside a permissions allowlist entry — "Bash(GH_TOKEN=\"...\")".
+# -- Agent host settings (2026-09-08 leak remediation; REVISED 2026-09-18) ----
+# HISTORY: .claude/settings.json was TRACKED and pushed (commit b7bfbe6) carrying
+# a live github_pat_ inside a permissions allowlist entry — Bash(GH_TOKEN="...").
 # The token leaked through an APPROVED COMMAND STRING, not a config value, which
-# is why no secret-shaped config key ever showed up in an audit.
+# is why no secret-shaped config key ever showed up in an audit. Both files were
+# untracked in response.
 #
-# .agent/hooks.manifest.json already declared this file "machine-local and
-# gitignored" — that was the intent and it was simply never true. Now it is.
-# bootstrap_jarvis.py rehydrates this file from the manifest, so untracking it
-# loses nothing.
-.claude/settings.json
+# 2026-09-18 — settings.json is TRACKED AGAIN, deliberately, at the user's call.
+# A second Claude Code host (personal laptop) now shares this repo, and having it
+# rebuild 164 permission approvals by hand is real friction for no security gain.
+# What changed to make this safe: the ONE credential-bearing entry is gone, and
+# the invariant below replaces it.
+#
+#   INVARIANT: no credential may live in .claude/settings.json. GH_TOKEN belongs
+#   in the shell environment or a git credential helper — never in an allowlist
+#   pattern. An allowlist entry exists to pre-approve a command SHAPE; embedding a
+#   secret in that shape is what caused b7bfbe6, and it buys nothing that `export`
+#   does not. Check before committing:
+#       grep -E 'github_pat_|ghp_|sk-or-v1-|AKIA' .claude/settings.json
+#
+# settings.local.json STAYS ignored: 247 KB of machine-specific approvals that
+# accumulate per host, with no cross-machine value. NERVOUS_SYSTEM.md Class 3
+# already records it as "not rehydratable — accept the loss", and that stands.
 .claude/settings.local.json
 
 # -- Derived calibration (a PROJECTION per KB 548) ----------------------------

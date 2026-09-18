@@ -145,8 +145,20 @@ host offers for putting text in front of the model before it answers.
 ### 2.1 The committed wiring recipe
 
 `.agent/hooks.manifest.json` is the **canonical, committed** declaration of every hook.
-`.claude/settings.json` is machine-local and gitignored — the manifest is what it gets rehydrated
-*from*, by `python3 scripts/bootstrap_jarvis.py`.
+`.claude/settings.json` is **tracked as of 2026-09-18** and carries the shared permission
+allowlist (164 entries) as well as the hook registrations. The manifest remains canonical for the
+*hooks*: `python3 scripts/bootstrap_jarvis.py` rehydrates them into whatever settings file exists,
+so a host that somehow lacks the tracked file still self-heals.
+
+**The invariant that makes tracking it safe:** no credential may appear in that file. It was
+untracked in the first place because a live `github_pat_` rode into commit b7bfbe6 inside an
+allowlist entry — `Bash(GH_TOKEN="...")` — i.e. through an approved command *string*, where no
+secret-shaped config key would ever show up in an audit. `GH_TOKEN` belongs in the shell
+environment or a credential helper. Before committing a change to it:
+
+```bash
+grep -E 'github_pat_|ghp_|sk-or-v1-|AKIA' .claude/settings.json   # must print nothing
+```
 
 This split exists because hook registrations once lived *only* in the gitignored settings file, so
 `git pull` on a new machine produced, in that file's own words, "a brain in a jar."
@@ -370,7 +382,6 @@ git check-ignore -v <path>            # why is this ignored? (silence = it is NO
 | `jarvis_data/.hearth_token` | auto-minted on next hearth start, `0600` |
 | `jarvis_data/.hearth_jobs.json`, `.hearth.pid`, `hearth.log` | recreated by the hearth |
 | `jarvis_data/.codex_ingest_watermark.jsonl` | machine-local by nature — it indexes *this* machine's rollout filenames |
-| `.claude/settings.json` | `python3 scripts/bootstrap_jarvis.py` (from the committed manifest) |
 | `__pycache__/`, caches, OS junk | automatic |
 
 ### Class 2 — The whole vector store, and why it stopped being tracked
@@ -409,9 +420,10 @@ opposite directions, before anyone ran the command.
   the KB — including the only surviving record of a Databricks workspace host, warehouse id, job
   id, and a serverless-jobs gotcha. Rescued into the KB before the migration. If you write there,
   treat it as a **draft** and promote anything durable with `kb_append.py` before the session ends.
-- **`.claude/settings.local.json`** — the accumulated permission allowlist. Gitignored and *not*
-  rehydratable; `bootstrap_jarvis.py` restores only `settings.json`. Claude-Code-only, so
-  irrelevant to Codex. Accept the loss.
+- **`.claude/settings.local.json`** — 247 KB of per-host accumulated approvals. Gitignored and
+  *not* rehydratable; `bootstrap_jarvis.py` restores only `settings.json`. Claude-Code-only, so
+  irrelevant to Codex. Accept the loss — but note this is now the *only* settings file that does
+  not travel: `.claude/settings.json`, with the shared 164-entry allowlist, IS tracked (§2.1).
 - **Claude Code session transcripts** (`~/.claude/projects/<project>/*.jsonl`, tens of MB) —
   deliberately not migrated. Their distilled signal is already in the KB and the queue.
 - **`client_work/*/deepclone/`** — verbatim client source, re-obtainable only from the client.

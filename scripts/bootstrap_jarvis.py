@@ -14,7 +14,8 @@ THE BIG PICTURE
 
 The Portable Mind audit (2026-06-11) found JARVIS's nervous system — all 5 hook
 registrations (capture, 3x session injection, runtime self-state) — living ONLY
-in `.claude/settings.json`, a gitignored machine-local file. The memory synced;
+in `.claude/settings.json`, which was a gitignored machine-local file at the time
+(it is tracked as of 2026-09-18, minus any credential). The memory synced;
 the MIND did not: `git pull` on a new machine produced a brain in a jar.
 
 This script is the fix: **mind = data + organs + a committed wiring recipe.**
