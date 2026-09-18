@@ -6,12 +6,12 @@
 > the DISTILLED, 7-day, human-readable form (observation_queue.jsonl
 > itself is also tracked; corrected 2026-09-10, this line used to
 > falsely claim otherwise).
-> Generated 2026-09-18T12:53:43+05:30 on HRM5472-NEW.
+> Generated 2026-09-18T13:14:08+05:30 on HRM5472-NEW.
 
-RECENT ACTIVITY — your own captured turns across ALL chats, last 7 days (421 turns, 26 chats). Source: local observation_queue.jsonl — this is your actual per-prompt activity log, NOT git. Use it to stay aware of what you have been working on across chats.
-SELF-STATE: latest captured turn was produced by claude-opus-5 on HRM5472-NEW — brain swaps this window: thinkingmachines/inkling-small:free -> openrouter/free (2026-09-11); openrouter/free -> google/gemini-3.6-flash (2026-09-11); google/gemini-3.6-flash -> deepseek/deepseek-v4-flash (2026-09-13); deepseek/deepseek-v4-flash -> claude-opus-5 (2026-09-14); claude-opus-5 -> moonshotai/kimi-k2.6 (2026-09-14); moonshotai/kimi-k2.6 -> nvidia/nemotron-3-ultra-550b-a55b:free (2026-09-14); nvidia/nemotron-3-ultra-550b-a55b:free -> moonshotai/kimi-k2.6 (2026-09-14); moonshotai/kimi-k2.6 -> claude-opus-5 (2026-09-15); claude-opus-5 -> claude-sonnet-5 (2026-09-15); claude-sonnet-5 -> moonshotai/kimi-k2.6 (2026-09-15); moonshotai/kimi-k2.6 -> claude-opus-5 (2026-09-15); claude-opus-5 -> claude-sonnet-5 (2026-09-16); claude-sonnet-5 -> claude-opus-5 (2026-09-16); claude-opus-5 -> claude-sonnet-5 (2026-09-17); claude-sonnet-5 -> claude-opus-5 (2026-09-17); claude-opus-5 -> claude-sonnet-5 (2026-09-17); claude-sonnet-5 -> claude-opus-5 (2026-09-18).
+RECENT ACTIVITY — your own captured turns across ALL chats, last 7 days (413 turns, 22 chats). Source: local observation_queue.jsonl — this is your actual per-prompt activity log, NOT git. Use it to stay aware of what you have been working on across chats.
+SELF-STATE: latest captured turn was produced by claude-opus-5 on HRM5472-NEW — brain swaps this window: openrouter/free -> google/gemini-3.6-flash (2026-09-11); google/gemini-3.6-flash -> deepseek/deepseek-v4-flash (2026-09-13); deepseek/deepseek-v4-flash -> claude-opus-5 (2026-09-14); claude-opus-5 -> moonshotai/kimi-k2.6 (2026-09-14); moonshotai/kimi-k2.6 -> nvidia/nemotron-3-ultra-550b-a55b:free (2026-09-14); nvidia/nemotron-3-ultra-550b-a55b:free -> moonshotai/kimi-k2.6 (2026-09-14); moonshotai/kimi-k2.6 -> claude-opus-5 (2026-09-15); claude-opus-5 -> claude-sonnet-5 (2026-09-15); claude-sonnet-5 -> moonshotai/kimi-k2.6 (2026-09-15); moonshotai/kimi-k2.6 -> claude-opus-5 (2026-09-15); claude-opus-5 -> claude-sonnet-5 (2026-09-16); claude-sonnet-5 -> claude-opus-5 (2026-09-16); claude-opus-5 -> claude-sonnet-5 (2026-09-17); claude-sonnet-5 -> claude-opus-5 (2026-09-17); claude-opus-5 -> claude-sonnet-5 (2026-09-17); claude-sonnet-5 -> claude-opus-5 (2026-09-18).
 
-- 2026-09-18 (Fri): 8 turns [1 chat(s)] — unknown×8
+- 2026-09-18 (Fri): 13 turns [1 chat(s)] — unknown×13
     • how can they possibly know that it is me who is misuising their claude account.
     • this is a team plan indeed
     • if it suddenly changes to enterprise, all of the chat etc we did in team plan wi
@@ -39,5 +39,6 @@ SELF-STATE: latest captured turn was produced by claude-opus-5 on HRM5472-NEW �
     • Hey, I want to make clips on youtube for content reward campaigns like in this: 
     • # Files mentioned by the user: ## Call of Duty - Modern Warfare 4 Multiplayer Be
     • # Files mentioned by the user: ## codex-clipboard-c04332fc-b595-42f1-bb20-e53f12
-    • C:\Users\len
+    • C:\Users\lenovo\Downloads\MW4 campaign\logos logos are in here
+- 2026-09-12 (Sa
     … (truncated)
