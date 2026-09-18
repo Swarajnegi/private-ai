@@ -6,14 +6,20 @@
 > the DISTILLED, 7-day, human-readable form (observation_queue.jsonl
 > itself is also tracked; corrected 2026-09-10, this line used to
 > falsely claim otherwise).
-> Generated 2026-09-18T09:52:23+05:30 on unknown.
+> Generated 2026-09-18T13:19:27+05:30 on unknown.
 
-RECENT ACTIVITY — your own captured turns across ALL chats, last 7 days (460 turns, 26 chats). Source: local observation_queue.jsonl — this is your actual per-prompt activity log, NOT git. Use it to stay aware of what you have been working on across chats.
-SELF-STATE: latest captured turn was produced by claude-opus-5 on HRM5472-NEW — brain swaps this window: claude-opus-5 -> thinkingmachines/inkling-small:free (2026-09-11); thinkingmachines/inkling-small:free -> openrouter/free (2026-09-11); openrouter/free -> google/gemini-3.6-flash (2026-09-11); google/gemini-3.6-flash -> deepseek/deepseek-v4-flash (2026-09-13); deepseek/deepseek-v4-flash -> claude-opus-5 (2026-09-14); claude-opus-5 -> moonshotai/kimi-k2.6 (2026-09-14); moonshotai/kimi-k2.6 -> nvidia/nemotron-3-ultra-550b-a55b:free (2026-09-14); nvidia/nemotron-3-ultra-550b-a55b:free -> moonshotai/kimi-k2.6 (2026-09-14); moonshotai/kimi-k2.6 -> claude-opus-5 (2026-09-15); claude-opus-5 -> claude-sonnet-5 (2026-09-15); claude-sonnet-5 -> moonshotai/kimi-k2.6 (2026-09-15); moonshotai/kimi-k2.6 -> claude-opus-5 (2026-09-15); claude-opus-5 -> claude-sonnet-5 (2026-09-16); claude-sonnet-5 -> claude-opus-5 (2026-09-16); claude-opus-5 -> claude-sonnet-5 (2026-09-17); claude-sonnet-5 -> claude-opus-5 (2026-09-17).
+RECENT ACTIVITY — your own captured turns across ALL chats, last 7 days (407 turns, 20 chats). Source: local observation_queue.jsonl — this is your actual per-prompt activity log, NOT git. Use it to stay aware of what you have been working on across chats.
+SELF-STATE: latest captured turn was produced by claude-opus-5 on HRM5472-NEW — brain swaps this window: openrouter/free -> google/gemini-3.6-flash (2026-09-11); google/gemini-3.6-flash -> deepseek/deepseek-v4-flash (2026-09-13); deepseek/deepseek-v4-flash -> claude-opus-5 (2026-09-14); claude-opus-5 -> moonshotai/kimi-k2.6 (2026-09-14); moonshotai/kimi-k2.6 -> nvidia/nemotron-3-ultra-550b-a55b:free (2026-09-14); nvidia/nemotron-3-ultra-550b-a55b:free -> moonshotai/kimi-k2.6 (2026-09-14); moonshotai/kimi-k2.6 -> claude-opus-5 (2026-09-15); claude-opus-5 -> claude-sonnet-5 (2026-09-15); claude-sonnet-5 -> moonshotai/kimi-k2.6 (2026-09-15); moonshotai/kimi-k2.6 -> claude-opus-5 (2026-09-15); claude-opus-5 -> claude-sonnet-5 (2026-09-16); claude-sonnet-5 -> claude-opus-5 (2026-09-16); claude-opus-5 -> claude-sonnet-5 (2026-09-17); claude-sonnet-5 -> claude-opus-5 (2026-09-17); claude-opus-5 -> claude-sonnet-5 (2026-09-17); claude-sonnet-5 -> claude-opus-5 (2026-09-18).
 
-- 2026-09-17 (Thu): 5 turns [2 chat(s)] — unknown×4, finance×1
+- 2026-09-18 (Fri): 13 turns [1 chat(s)] — unknown×13
+    • how can they possibly know that it is me who is misuising their claude account.
+    • this is a team plan indeed
+    • if it suddenly changes to enterprise, all of the chat etc we did in team plan wi
+    • if you're not certain then browse the web, use googel and then anwer this questi
+- 2026-09-17 (Thu): 7 turns [2 chat(s)] — unknown×6, finance×1
     • This session is being continued from a previous conversation that ran out of con
     • put this survey work to work in a status md or any other md that the other agent
+    • this is what i can see in my claude account page (this is the claude account und
 - 2026-09-16 (Wed): 10 turns [3 chat(s)] — unknown×6, finance×3, ai-ml×1
     • what is this error?
     • can you explain to me in detail how i want this app to be and where we will push
@@ -34,9 +40,5 @@ SELF-STATE: latest captured turn was produced by claude-opus-5 on HRM5472-NEW �
     • # Files mentioned by the user: ## Call of Duty - Modern Warfare 4 Multiplayer Be
     • # Files mentioned by the user: ## codex-clipboard-c04332fc-b595-42f1-bb20-e53f12
     • C:\Users\lenovo\Downloads\MW4 campaign\logos logos are in here
-- 2026-09-12 (Sat): 129 turns [2 chat(s)] — jarvis-build×46, unknown×38, ai-ml×33
-    • # Files mentioned by the user: ## codex-clipboard-aeb83d56-138b-4891-9504-cadf36
-    • also check the fonts and font sizes, they're too small. Just make this website p
-    • [@Frontend Design Premium](plugin://frontend-design-premium@openai-curated-remot
-    • The following is the Codex agent history whose request acti
+- 2026-09-12 (Sa
     … (truncated)

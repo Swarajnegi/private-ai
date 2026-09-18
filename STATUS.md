@@ -5,83 +5,99 @@
 > is a snapshot, not a log. If something below is stale by the time you read it, fix it and say
 > so in your commit message; don't leave a wrong number here because it was true once.
 
-**Last surveyed:** 2026-09-17, by claude (Sonnet 5)
-**Since the last survey (2026-09-15):** q_007 (Stage 5 gate) and q_008 (commitments unwired) were
-sent to Codex — both are new findings from this file's previous version, so read those two files
-in full before doing anything else if you are Codex. a_005 and a_006 came back from Antigravity in
-the meantime (curation verdicts audited — sound; Antigravity built its own capture adapter). No
-code changed in this session; this is a pure status write.
+**Last surveyed:** 2026-09-18, by claude (Opus 5)
+**Since the last survey (2026-09-17):** a **second Claude Code host** came online — the user's
+personal laptop, running Claude Code inside Antigravity, against this same repo. Most of today's
+changes exist to make that host arrive fully-equipped rather than half-blind. Three onboarding
+defects were found by measuring rather than reading, and all three are fixed (§6).
 
 ---
 
 ## 1. Is anything broken right now?
 
-**No.** `check_pipeline.py` — 12 invariants, 12 OK, 0 failed, 0 unmeasurable. `run_all_tests.py`
-runs every discovered suite on the hearth's clock. If you're arriving fresh and want to verify
-that claim yourself rather than trust it: `python3 scripts/check_pipeline.py` and
-`python3 scripts/run_all_tests.py --status`.
+**No.** `check_pipeline.py` — 12 invariants, 12 OK, 0 failed, 0 unmeasurable. Verify rather than
+trust: `python3 scripts/check_pipeline.py`, `python3 scripts/run_all_tests.py --status`.
 
 ## 2. What's mid-flight
 
-**Curation is stalled on credits, not on code.** `curate_turns --status`:
+**Curation is stalled on credits, not on code.** 1420 turns captured, 533 curated, **887
+uncurated**. OpenRouter balance is too low for the judge calls; it fails loudly (HTTP 402) rather
+than silently falling back to a weaker model — the user's explicit choice. **Nothing to fix.** It
+resumes by itself on the hourly clock when they top up. Don't build a workaround.
 
-```
-capture queue        : 1403 turns
-curated by an agent  : 533
-uncurated            : 870
-```
+**The 45-question personalization interview (JARVIS UI) is still in progress**, several days in.
+`extract_ui_sessions()` already pairs each real question with the real answer, so answers landing
+now are captured in their best shape. No action unless you see the extractor mis-split a question.
 
-OpenRouter balance is too low to run the curator's judge calls; it has been failing loudly
-(HTTP 402) rather than falling back to a weaker free model — that's the user's explicit choice,
-not a bug. **Nothing to fix here.** It resumes by itself, on the hourly clock, the moment the
-user tops up. Don't build a workaround; don't re-litigate the fail-loudly decision.
-
-**The 45-question personalization interview (JARVIS UI) is in progress.** The user is answering
-these directly over several days. `build_sft_pairs.py` now has a dedicated `extract_ui_sessions()`
-extractor (shipped 2026-09-15/16) that pairs each real question with the real answer rather than
-substituting a synthetic prompt — so answers landing now are captured in their best shape already.
-No action needed unless you find the extractor mis-splitting a question; if so, say so here.
-
-## 3. Open commitments (`scripts/commitments.py --list`) — the ones with a task attached
+## 3. Open commitments with a task attached (`scripts/commitments.py --list`)
 
 | id | what | who should act |
 |---|---|---|
-| c002 | Resolve Stage 5 adapter-vs-retrieval decision | **Codex — this is q_007.** Answerable now: the retrieval/surfacing path can be measured against the live 45-question corpus instead of argued about in the abstract. |
-| c007 | `a_001.md` exists (Antigravity answered it, built the adapter) but nothing runs this check — it should already be closed | **Codex — this is half of q_008.** Wire commitment checks to a hearth job; this one closes itself the moment that job runs once. |
-| c005 | Keep the 12-specialist roster demand-gated | No action — this is a standing policy commitment (re-check on schedule), not a task. |
-| GraphRAG (c001/c006/c008/c009) | Same underlying work recorded in **four** inconsistent states (abandoned/resolved/abandoned/open) | **Codex — other half of q_008.** Reconcile to one truthful current state; the build itself (`scripts/build_graphrag.py`, `rebuild_graphrag` hearth job, 648 nodes/55 edges) is real and already shipped, the registry just never caught up. |
+| c002 | Stage 5 adapter-vs-retrieval decision | **Codex — this is q_007.** Answerable now against the live interview corpus rather than in the abstract |
+| c007 | `a_001.md` exists, so this should already be closed — but nothing runs the check | **Codex — half of q_008.** Wire commitment checks to a hearth job; this closes itself on the first run |
+| c005 | Keep the 12-specialist roster demand-gated | No action — standing policy, not a task |
+| GraphRAG (c001/c006/c008/c009) | One body of work recorded in **four** inconsistent states | **Codex — other half of q_008.** The build shipped (`rebuild_graphrag`, 648 nodes/55 edges); only the registry lagged |
 
-Full detail and reasoning for both Codex tasks is in `agents_converse/q_007.md` and
-`agents_converse/q_008.md` — this table is a pointer, not a replacement for reading them.
+Mail: **q_004 is dead** (Antigravity built that adapter itself — see a_006; ignore it).
+**q_007 and q_008 are open and both Codex's.** Read them in full before acting on the table above.
 
 ## 4. Decisions waiting on the user (not on any agent)
 
-- Top up OpenRouter — unblocks curation by itself, no rerun needed.
+- Top up OpenRouter — unblocks curation with no rerun needed.
 - `personal_life.md` — consent call about named third parties, still parked.
-- 312 KB entries counted in both `engineer_corpus` and `personalization_corpus` — may be correct
-  (a `Decision` can genuinely be both technical and personal) but nobody has actually decided that;
-  it just happens.
+- 312 KB entries counted in both corpora — possibly correct, but never actually decided.
 
-Don't chase these — they're listed so nobody re-discovers and re-reports them as new findings.
+Listed so nobody re-discovers and re-reports them as new findings.
 
-## 5. Where things stand structurally
+## 5. Structural position
 
-- Stages 1–4: complete. Stage 5 (specialists): gated on c002/q_007 above — don't start training
-  before that answer lands.
-- Stage 6 (voice, vision, unified API, client shells, ambient presence): everything shipped so far
-  (hearth, scheduler, capture adapters on all three hosts, curation) is the memory/capture layer
-  underneath it. 6.9 (client shells) depends on 6.7 (always-reachable memory), which has a slice
-  built but not deployed — `_remote_sync_configured()` returns False on every machine right now.
-  Nobody is actively working this; flag it here so the next agent with spare cycles knows it's the
-  actual unlock, not a side quest.
+Stages 1–4 complete. Stage 5 gated on c002/q_007 — don't start training before that lands.
+Stage 6: everything shipped so far (hearth, scheduler, three capture adapters, curation) is the
+memory/capture layer *underneath* it. 6.9 (client shells) depends on 6.7 (always-reachable
+memory), which has a slice built but **not deployed** — `_remote_sync_configured()` is False on
+every machine. Nobody is working it; it is the actual unlock, not a side quest.
 
-## 6. Capture health across the three hosts
+## 6. Host topology — now FOUR runtimes, and what changed today
 
-All three adapters (Claude Code hooks, `ingest_codex_sessions.py`, `ingest_antigravity_sessions.py`)
-are live and scheduled on the hearth. Zero hosts degraded. This was the state of things as of
-a_006 (2026-09-14) and hasn't changed since.
+| Machine | Runtimes |
+|---|---|
+| Work laptop (Linux) | Claude Code |
+| Personal laptop (Windows) | Antigravity · Codex CLI · **Claude Code (new, 2026-09-18)** |
+
+Three defects that would have hit the new host, all found by measurement:
+
+1. **`.agent/rules/CLAUDE.md` claimed root `CLAUDE.md` is gitignored.** It is tracked. Eighth
+   prose-vs-code divergence. Load-bearing: root `CLAUDE.md` is the only file Claude Code
+   auto-loads, and it `@import`s the rules — had the prose been true, a fresh clone would
+   auto-load nothing.
+2. **`NERVOUS_SYSTEM.md` §5.1 said Claude Code setup was "automatic… nothing else to do."** True on
+   a prepared machine, false on a fresh clone — venv and ChromaDB don't travel either, and those
+   steps sat only under §5.2 as if Codex-specific. §5.1 now carries the host-agnostic block.
+3. **`.claude/settings.json` is now TRACKED** (reversing the 2026-09-08 leak untracking), so a new
+   Claude Code host inherits 164 permission approvals instead of rebuilding them by hand. The one
+   credential-bearing entry was removed. **Invariant: never put a credential in that file** —
+   `GH_TOKEN` goes in the environment, not an allowlist pattern. That is exactly how `b7bfbe6`
+   leaked a PAT: through an approved command *string*, where no secret-shaped config key would
+   ever show up in an audit. Guard: `grep -E 'github_pat_|ghp_|sk-or-v1-|AKIA' .claude/settings.json`
+
+## 7. Two live issues worth knowing before you touch the queue
+
+**Multi-host KB id collisions are now real, not theoretical.** On 2026-09-18 both machines
+independently assigned id **665** to different entries between syncs; `merge=union` concatenated
+both, and `profile_synth.py` crashed on a UNIQUE constraint. Resolved by renumbering (→667) and
+regenerating the projections. **This will recur** — sequential ids assigned independently on two
+machines collide whenever both write between syncs. A real fix (host-prefixed or content-derived
+ids) is unclaimed work and a good Codex task.
+
+**`MAX_ASSISTANT_CHARS` raised 2000 → 8000** (`agent/capture.py`), matching the user side.
+Measurement that prompted it: 268 of 1420 assistant summaries (18.9%) sat exactly at the 2000
+ceiling — cut mid-thought, losing the *why* the 2026-08-19 note says the cap exists to preserve.
+Queue is 11 MB, so the cost is a couple of MB. **Applies going forward only.** Previously-captured
+turns stay truncated; a backfill is *possible* on the work laptop (raw transcripts are on disk,
+160 MB) but needs design, because the queue is append-only and naive re-capture would duplicate
+rows rather than replace them. Unclaimed.
 
 ---
 
-*If you're the one updating this file: replace §1–2's numbers, don't just add a new dated
-section. A status file that grows forever stops being something anyone reads in full.*
+*If you're updating this file: replace the numbers in §1–2, don't add a new dated section. A
+status file that grows forever stops being something anyone reads in full.*
