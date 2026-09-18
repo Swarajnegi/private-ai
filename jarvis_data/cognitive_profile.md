@@ -1,6 +1,6 @@
 # Cognitive Profile — Model of the User
 
-> Auto-synthesized by `scripts/profile_synth.py` from `knowledge_base.jsonl` (660 entries). Injected into every chat via the SessionStart hook. Regenerate after KB updates.
+> Auto-synthesized by `scripts/profile_synth.py` from `knowledge_base.jsonl` (662 entries). Injected into every chat via the SessionStart hook. Regenerate after KB updates.
 
 ## Who you are
 - PATTERN: the user's aesthetic complaints are RELIABLE SIGNALS OF A REAL DEFECT AND UNRELIABLE DIAGNOSES OF ITS CAUSE (2026-09-17, Corpus/rfm design rounds). Three instances in one session, same shape each time. (1) 'the app looks really stocky, it doesn't look premium' -- I read the 2x screenshots as if 1x, concluded e ...

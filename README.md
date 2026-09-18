@@ -56,6 +56,7 @@ travel with git; on a fresh clone several will be MISSING. Fix those first, then
 | 3 | [`.agent/rules/CLAUDE.md`](.agent/rules/CLAUDE.md) | **The canon.** Code style, memory hygiene, migration discipline, what not to do. Applies to every host, not just Claude Code |
 | 4 | [`jarvis_data/cognitive_profile.md`](jarvis_data/cognitive_profile.md) | The standing model of the user — who they are, how they work, active directives. Replaces ever asking "tell me about yourself" |
 | 5 | [`jarvis_data/activity_digest.md`](jarvis_data/activity_digest.md) | What happened on the *other* machines, day by day. Check its `Generated` stamp; say so if stale |
+| 6 | [`STATUS.md`](STATUS.md) | What the other agents found since your last session: what's mid-flight, what's confirmed broken or not, open commitments with a task and an owner, what's blocked on the user. A snapshot, kept current — not a log |
 
 Then run your host's live checks — the surfacing organ and your mail:
 

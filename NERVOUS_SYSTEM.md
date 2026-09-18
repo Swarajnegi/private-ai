@@ -436,12 +436,29 @@ git add -An client_work/    # dry run: shows exactly what would be staged
 
 ## 5. Per-host setup
 
-### 5.1 Claude Code — automatic
+### 5.1 Claude Code — automatic, *once the machine itself is set up*
 
+On a host that already has the venv and the vector index:
 ```bash
 python3 scripts/bootstrap_jarvis.py --check   # verify all manifest hooks are live
 ```
-Capture is per-turn and automatic. Nothing else to do.
+Capture is then per-turn and automatic. Nothing else to do.
+
+**On a FRESH clone, that is not enough** — and this section said "nothing else to do" without
+qualification until 2026-09-18, which is wrong for a new machine. Hooks are only one of the four
+things that do not travel; the venv and ChromaDB do not either (Class 1 and Class 2 below). Run the
+same first-run block as §5.2 — it is host-agnostic, not a Codex step:
+
+```bash
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+python3 scripts/bootstrap_jarvis.py     # rehydrates hooks from the manifest; safe to re-run
+python3 scripts/index_memory.py         # rebuild jarvis_memory — chromadb/ does NOT travel
+```
+
+`bootstrap_jarvis.py --check` does report every one of these as MISSING with its fix inline, so the
+gap is recoverable rather than silent — but read the report, do not assume the hook check alone
+means the machine is ready.
 
 ### 5.2 Codex CLI — scheduled capture, manual boot ritual
 
