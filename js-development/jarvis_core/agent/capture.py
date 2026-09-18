@@ -82,8 +82,18 @@ QUEUE_PATH = Path(DATA_ROOT) / "observation_queue.jsonl"
 # decision was reached, only that one was, so the queue could not reconstruct the
 # reasoning it exists to preserve. User side is the higher-value half (their own
 # words are the voice-corpus signal) and gets the bigger raise.
+#
+# Raised again 2026-09-18, assistant side only, when a second Claude Code host
+# was being set up and the user asked why this conversation would not travel to
+# it. The answer was that it DOES travel — this queue is tracked and pushed — but
+# measurement showed 268 of 1420 assistant summaries (18.9%) sitting exactly at
+# the 2000 ceiling, i.e. cut mid-thought. The 2026-08-19 note above already
+# states the goal ("a cap cannot preserve WHY a decision was reached") and 2000
+# was still failing it on one turn in five. Cost measured before changing it:
+# the whole queue is 11 MB, so the worst case across every truncated row is a
+# couple of MB — trivial against losing the reasoning tail of a fifth of them.
 MAX_USER_CHARS = 8000
-MAX_ASSISTANT_CHARS = 2000
+MAX_ASSISTANT_CHARS = 8000
 
 # --- Secret redaction (same classes as react.py R1/M11 + correlation _scrub) ---
 _REDACTORS = [
