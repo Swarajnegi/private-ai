@@ -335,6 +335,13 @@ def default_jobs(python: Optional[str] = None,
                         "against. Found 6 days stale and covering 583 of 989 "
                         "turns on 2026-09-14 — nothing had ever scheduled it, so "
                         "the disagreement signal was silently degrading"),
+        Job(name="check_commitments",
+            argv=(py, str(scripts / "commitments.py"), "--due"),
+            interval_seconds=6 * HOUR,
+            timeout_seconds=120.0,
+            initial_delay_seconds=1140.0,
+            description="resolve machine-checkable commitments and surface only "
+                        "explicit review-due open loops; no prose inference"),
     ] + ([
         Job(name="sync_remote_memory",
             argv=(py, str(scripts / "sync_remote_memory.py")),
@@ -732,7 +739,8 @@ def _run_self_test() -> None:
         # ordering is left alone.
         required = {"consolidate", "refresh_profile", "reindex_memory",
                     "rebuild_graphrag", "ingest_codex", "reconcile_codex_memory",
-                    "refresh_digest", "curate_turns", "relabel_domains"}
+                    "refresh_digest", "curate_turns", "relabel_domains",
+                    "check_commitments"}
         check("T16 no required job has silently disappeared",
               required <= set(names), f"missing: {sorted(required - set(names))}")
         check("T16a consolidate still leads (it is the unguarded pulse)",

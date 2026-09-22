@@ -1,8 +1,8 @@
 # DORMANCY_SPEC — general perception of absence, Tier 1
 
-> **Status:** Tier 1 shipped 2026-09-11: `scripts/commitments.py` plus a five-item, KB-linked
-> seed registry. Tier 2–3 and session-start wiring remain deliberately unbuilt until Tier 1 proves
-> insufficient over a quiet week.
+> **Status:** Tier 1 shipped 2026-09-11 and was wired to the hearth clock 2026-09-22 via the
+> `check_commitments` job. Tier 2–3 remain deliberately gated until this instrument has a measured
+> quiet-week run and a gold evaluation set shows that explicit checks miss real stalled commitments.
 > **Requested by the user, verbatim:** *"JARVIS doesn't notice you stopped working on the finance
 > thing unless something measures that — I want this general perception of absence."*
 > **Parent:** `JARVIS_ENDGAME.md` §1.2. This is the sibling of `agent/tension.py`: that organ
@@ -128,8 +128,9 @@ slowly fills with things nobody will ever do and becomes the noise it was built 
    - **The two exposed PATs** — user-only action, still outstanding
    - **Stage 5 itself** — not started; the open question is whether a trained adapter beats the
      retrieval path already built
-3. **A `--due` report an agent can read at session start.** Wire it into the boot rituals only
-   *after* it has been quiet for a week without producing nonsense.
+3. **A `--due` report an agent can read at session start.** The hearth now runs the same command
+   every six hours. Boot surfacing remains gated until the clock has demonstrated a quiet week
+   without producing nonsense.
 
 **Definition of done:** `--due` returns **zero or a small number of genuinely stalled items** on a
 registry seeded with real commitments. If it returns a long list, the seed set is wrong, not the
@@ -145,7 +146,9 @@ threshold.
 
 ## 4. Tier 2, when Tier 1 proves insufficient
 
-Mirror `agent/tension.py`'s architecture exactly — it is proven and it is in this repo:
+Do not build this yet. First collect a quiet-week run from the scheduled Tier 1 organ and build the
+gold set below. If explicit checks resolve or surface the real commitments, Tier 2 is unnecessary.
+If it misses confirmed stalled items, mirror `agent/tension.py`'s architecture exactly — it is proven and it is in this repo:
 candidates → LLM judge **with an abstention option** → confidence floor → append-only watermark so
 nothing nags twice.
 

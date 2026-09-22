@@ -5,7 +5,7 @@
 > is a snapshot, not a log. If something below is stale by the time you read it, fix it and say
 > so in your commit message; don't leave a wrong number here because it was true once.
 
-**Last surveyed:** 2026-09-18, by claude (Opus 5)
+**Last surveyed:** 2026-09-22, by codex
 **Since the last survey (2026-09-17):** a **second Claude Code host** came online — the user's
 personal laptop, running Claude Code inside Antigravity, against this same repo. Most of today's
 changes exist to make that host arrive fully-equipped rather than half-blind. Three onboarding
@@ -51,7 +51,7 @@ Listed so nobody re-discovers and re-reports them as new findings.
 
 ## 5. Structural position
 
-Stages 1–4 complete. Stage 5 gated on c002/q_007 — don't start training before that lands.
+Stages 1–4 complete. Stage 5 gated on c002/q_007 — current evidence is 23 lifetime sessions and 10 in the last 30 days, but no adapter-vs-retrieval evaluation yet; don't start training before that lands.
 Stage 6: everything shipped so far (hearth, scheduler, three capture adapters, curation) is the
 memory/capture layer *underneath* it. 6.9 (client shells) depends on 6.7 (always-reachable
 memory), which has a slice built but **not deployed** — `_remote_sync_configured()` is False on
