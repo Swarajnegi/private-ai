@@ -179,7 +179,9 @@
             "type": "command",
             "command": "python3",
             "args": [
-              "/home/swara_unix/work/JARVIS/scripts/hooks/notice_runtime_change.py"
+              "-c",
+              "import os, sys, pathlib, runpy\ntry:\n    p = os.environ.get('CLAUDE_PROJECT_DIR', '')\n    r = pathlib.Path(p) if (p and (pathlib.Path(p)/'scripts'/'hooks').is_dir()) else next((d for d in [pathlib.Path.cwd(), *pathlib.Path.cwd().parents] if (d/'scripts'/'hooks').is_dir()), None)\n    if r:\n        os.chdir(str(r))\n        sys.path.insert(0, str(r / 'js-development'))\n        f = r / 'scripts' / 'hooks' / sys.argv[1]\n        if f.is_file():\n            runpy.run_path(str(f), run_name='__main__')\nexcept BaseException:\n    pass\nsys.exit(0)",
+              "notice_runtime_change.py"
             ],
             "timeout": 10,
             "statusMessage": "Checking runtime self-state"
@@ -188,7 +190,9 @@
             "type": "command",
             "command": "python3",
             "args": [
-              "/home/swara_unix/work/JARVIS/scripts/hooks/capture_gap_nudge.py"
+              "-c",
+              "import os, sys, pathlib, runpy\ntry:\n    p = os.environ.get('CLAUDE_PROJECT_DIR', '')\n    r = pathlib.Path(p) if (p and (pathlib.Path(p)/'scripts'/'hooks').is_dir()) else next((d for d in [pathlib.Path.cwd(), *pathlib.Path.cwd().parents] if (d/'scripts'/'hooks').is_dir()), None)\n    if r:\n        os.chdir(str(r))\n        sys.path.insert(0, str(r / 'js-development'))\n        f = r / 'scripts' / 'hooks' / sys.argv[1]\n        if f.is_file():\n            runpy.run_path(str(f), run_name='__main__')\nexcept BaseException:\n    pass\nsys.exit(0)",
+              "capture_gap_nudge.py"
             ],
             "timeout": 10,
             "statusMessage": "Checking personalization capture gap"
@@ -204,7 +208,9 @@
             "type": "command",
             "command": "python3",
             "args": [
-              "/home/swara_unix/work/JARVIS/scripts/hooks/capture_turn.py"
+              "-c",
+              "import os, sys, pathlib, runpy\ntry:\n    p = os.environ.get('CLAUDE_PROJECT_DIR', '')\n    r = pathlib.Path(p) if (p and (pathlib.Path(p)/'scripts'/'hooks').is_dir()) else next((d for d in [pathlib.Path.cwd(), *pathlib.Path.cwd().parents] if (d/'scripts'/'hooks').is_dir()), None)\n    if r:\n        os.chdir(str(r))\n        sys.path.insert(0, str(r / 'js-development'))\n        f = r / 'scripts' / 'hooks' / sys.argv[1]\n        if f.is_file():\n            runpy.run_path(str(f), run_name='__main__')\nexcept BaseException:\n    pass\nsys.exit(0)",
+              "capture_turn.py"
             ],
             "timeout": 30,
             "statusMessage": "Capturing turn for personalization"
@@ -214,7 +220,9 @@
             "type": "command",
             "command": "python3",
             "args": [
-              "/home/swara_unix/work/JARVIS/scripts/hooks/run_consolidation.py"
+              "-c",
+              "import os, sys, pathlib, runpy\ntry:\n    p = os.environ.get('CLAUDE_PROJECT_DIR', '')\n    r = pathlib.Path(p) if (p and (pathlib.Path(p)/'scripts'/'hooks').is_dir()) else next((d for d in [pathlib.Path.cwd(), *pathlib.Path.cwd().parents] if (d/'scripts'/'hooks').is_dir()), None)\n    if r:\n        os.chdir(str(r))\n        sys.path.insert(0, str(r / 'js-development'))\n        f = r / 'scripts' / 'hooks' / sys.argv[1]\n        if f.is_file():\n            runpy.run_path(str(f), run_name='__main__')\nexcept BaseException:\n    pass\nsys.exit(0)",
+              "run_consolidation.py"
             ],
             "timeout": 100,
             "statusMessage": "Consolidating cross-domain insight"
@@ -230,7 +238,9 @@
             "type": "command",
             "command": "python3",
             "args": [
-              "/home/swara_unix/work/JARVIS/scripts/hooks/inject_profile.py"
+              "-c",
+              "import os, sys, pathlib, runpy\ntry:\n    p = os.environ.get('CLAUDE_PROJECT_DIR', '')\n    r = pathlib.Path(p) if (p and (pathlib.Path(p)/'scripts'/'hooks').is_dir()) else next((d for d in [pathlib.Path.cwd(), *pathlib.Path.cwd().parents] if (d/'scripts'/'hooks').is_dir()), None)\n    if r:\n        os.chdir(str(r))\n        sys.path.insert(0, str(r / 'js-development'))\n        f = r / 'scripts' / 'hooks' / sys.argv[1]\n        if f.is_file():\n            runpy.run_path(str(f), run_name='__main__')\nexcept BaseException:\n    pass\nsys.exit(0)",
+              "inject_profile.py"
             ],
             "timeout": 30,
             "statusMessage": "Loading user cognitive profile"
@@ -239,7 +249,9 @@
             "type": "command",
             "command": "python3",
             "args": [
-              "/home/swara_unix/work/JARVIS/scripts/hooks/surface_life_state.py"
+              "-c",
+              "import os, sys, pathlib, runpy\ntry:\n    p = os.environ.get('CLAUDE_PROJECT_DIR', '')\n    r = pathlib.Path(p) if (p and (pathlib.Path(p)/'scripts'/'hooks').is_dir()) else next((d for d in [pathlib.Path.cwd(), *pathlib.Path.cwd().parents] if (d/'scripts'/'hooks').is_dir()), None)\n    if r:\n        os.chdir(str(r))\n        sys.path.insert(0, str(r / 'js-development'))\n        f = r / 'scripts' / 'hooks' / sys.argv[1]\n        if f.is_file():\n            runpy.run_path(str(f), run_name='__main__')\nexcept BaseException:\n    pass\nsys.exit(0)",
+              "surface_life_state.py"
             ],
             "timeout": 30,
             "statusMessage": "Checking for a cross-domain life-state observation to raise"
@@ -248,7 +260,9 @@
             "type": "command",
             "command": "python3",
             "args": [
-              "/home/swara_unix/work/JARVIS/scripts/hooks/inject_recent_activity.py"
+              "-c",
+              "import os, sys, pathlib, runpy\ntry:\n    p = os.environ.get('CLAUDE_PROJECT_DIR', '')\n    r = pathlib.Path(p) if (p and (pathlib.Path(p)/'scripts'/'hooks').is_dir()) else next((d for d in [pathlib.Path.cwd(), *pathlib.Path.cwd().parents] if (d/'scripts'/'hooks').is_dir()), None)\n    if r:\n        os.chdir(str(r))\n        sys.path.insert(0, str(r / 'js-development'))\n        f = r / 'scripts' / 'hooks' / sys.argv[1]\n        if f.is_file():\n            runpy.run_path(str(f), run_name='__main__')\nexcept BaseException:\n    pass\nsys.exit(0)",
+              "inject_recent_activity.py"
             ],
             "timeout": 30,
             "statusMessage": "Recalling recent cross-chat activity"
@@ -258,7 +272,9 @@
             "type": "command",
             "command": "python3",
             "args": [
-              "/home/swara_unix/work/JARVIS/scripts/hooks/check_agent_mail.py"
+              "-c",
+              "import os, sys, pathlib, runpy\ntry:\n    p = os.environ.get('CLAUDE_PROJECT_DIR', '')\n    r = pathlib.Path(p) if (p and (pathlib.Path(p)/'scripts'/'hooks').is_dir()) else next((d for d in [pathlib.Path.cwd(), *pathlib.Path.cwd().parents] if (d/'scripts'/'hooks').is_dir()), None)\n    if r:\n        os.chdir(str(r))\n        sys.path.insert(0, str(r / 'js-development'))\n        f = r / 'scripts' / 'hooks' / sys.argv[1]\n        if f.is_file():\n            runpy.run_path(str(f), run_name='__main__')\nexcept BaseException:\n    pass\nsys.exit(0)",
+              "check_agent_mail.py"
             ],
             "timeout": 15,
             "statusMessage": "Checking agent mail"

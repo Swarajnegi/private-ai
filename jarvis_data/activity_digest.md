@@ -6,9 +6,9 @@
 > the DISTILLED, 7-day, human-readable form (observation_queue.jsonl
 > itself is also tracked; corrected 2026-09-10, this line used to
 > falsely claim otherwise).
-> Generated 2026-09-23T07:47:56+05:30 on HRM5472-NEW.
+> Generated 2026-09-23T11:24:13+05:30 on HRM5472-NEW.
 
-RECENT ACTIVITY — your own captured turns across ALL chats, last 7 days (26 turns, 2 chats). Source: local observation_queue.jsonl — this is your actual per-prompt activity log, NOT git. Use it to stay aware of what you have been working on across chats.
+RECENT ACTIVITY — your own captured turns across ALL chats, last 7 days (22 turns, 2 chats). Source: local observation_queue.jsonl — this is your actual per-prompt activity log, NOT git. Use it to stay aware of what you have been working on across chats.
 SELF-STATE: latest captured turn was produced by claude-opus-5 on HRM5472-NEW — brain swaps this window: claude-opus-5 -> claude-sonnet-5 (2026-09-17); claude-sonnet-5 -> claude-opus-5 (2026-09-17); claude-opus-5 -> claude-sonnet-5 (2026-09-17); claude-sonnet-5 -> claude-opus-5 (2026-09-18).
 
 - 2026-09-18 (Fri): 14 turns [1 chat(s)] — unknown×14
@@ -20,7 +20,5 @@ SELF-STATE: latest captured turn was produced by claude-opus-5 on HRM5472-NEW �
     • This session is being continued from a previous conversation that ran out of con
     • put this survey work to work in a status md or any other md that the other agent
     • this is what i can see in my claude account page (this is the claude account und
-- 2026-09-16 (Wed): 5 turns [2 chat(s)] — unknown×3, ai-ml×1, finance×1
-    • give me the githubb PAT token here
-    • Base directory for this skill: /home/swara_unix/.claude/plugins/cache/claude-plu
+- 2026-09-16 (Wed): 1 turns [1 chat(s)] — unknown×1
     • commit and push

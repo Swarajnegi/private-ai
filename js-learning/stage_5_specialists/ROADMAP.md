@@ -30,9 +30,10 @@ Nobody has tested it. Testing it costs nothing and is a strict prerequisite to t
 Engineer training run, because a "yes" and a "no" imply completely different next quarters.
 
 Two measurements that make this urgent rather than academic:
-- **`--ask` has 19 sessions lifetime and 0 in the last 30 days** (`brain/usage.py`, row 0 of the
-  Stage 6 Distance-to-Goal table). Training an adapter for a path nobody opens buys a better version
-  of something unused.
+- **Measured 2026-09-22: 23 sessions lifetime, 10 in the last 30 days, last used 2026-09-14**
+  (`brain/usage.py`, including web-UI sessions by reading their first record timestamp). The old
+  19/0 figure was a filename-parser blind spot, not evidence of disuse. This establishes real use,
+  but it does not yet establish that an adapter beats retrieval plus proactive surfacing.
 - **The Stage-4 Final Boss that "closed" the prerequisite stage is an offline scripted twin** — fake
   embeddings, scripted conflicts, zero live calls. Real end-to-end behaviour is untested.
 

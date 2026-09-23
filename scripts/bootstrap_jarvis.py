@@ -357,22 +357,21 @@ def _run_self_test() -> None:
     check("T3 permissions preserved", merged3["permissions"]["allow"] == ["Bash(echo hi)"])
     stop_cmds = [tuple(h.get("args", [])) for g in merged3["hooks"]["Stop"] for h in g["hooks"]]
     check("T3b local extra hook survives", ("my_local_hook.py",) in stop_cmds)
-    check("T3c manifest Stop hook added alongside", ("scripts/hooks/capture_turn.py",) in stop_cmds)
+    check("T3c manifest Stop hook added alongside", any("capture_turn.py" in " ".join(cmd) for cmd in stop_cmds))
     check(f"T3d added count = {manifest_hook_count} (manifest only, local hook untouched)",
           added3 == manifest_hook_count, str(added3))
 
     # T4: partial install — one SessionStart hook present, merge adds only the missing
-    partial = {"hooks": {"SessionStart": [{"matcher": "startup|resume|clear|compact", "hooks": [
-        {"type": "command", "command": "python3", "args": ["scripts/hooks/inject_profile.py"],
-         "timeout": 30, "statusMessage": "Loading user cognitive profile"}]}]}}
+    first_ss_hook = manifest_hooks["SessionStart"][0]["hooks"][0]
+    partial = {"hooks": {"SessionStart": [{"matcher": "startup|resume|clear|compact", "hooks": [first_ss_hook]}]}}
     merged4, added4 = merge_hooks(partial, manifest_hooks)
     ss = next(g for g in merged4["hooks"]["SessionStart"]
               if g["matcher"] == "startup|resume|clear|compact")
     partial_gap = manifest_hook_count - 1   # `partial` pre-installs exactly one hook
     check(f"T4 partial -> only the missing {partial_gap} added",
           added4 == partial_gap, str(added4))
-    check("T4b no duplicate inject_profile",
-          sum(1 for h in ss["hooks"] if h.get("args") == ["scripts/hooks/inject_profile.py"]) == 1)
+    check("T4b no duplicate hook",
+          sum(1 for h in ss["hooks"] if h.get("args") == first_ss_hook.get("args")) == 1)
 
     # T5: missing_hooks reporting
     gaps = missing_hooks(partial, manifest_hooks)
