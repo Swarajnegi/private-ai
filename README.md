@@ -8,28 +8,38 @@ their devices.
 
 ## Talk to JARVIS in your browser
 
-With the hearth running, open **http://127.0.0.1:8756/**. The web workspace has searchable
-conversation history, an animated core, live hearth/job status, Markdown tables and code blocks,
-full-message copy and Markdown export, drafts, and a layout that adapts to narrow screens.
+With the hearth running, bookmark **http://127.0.0.1:8756/**. The desktop workspace opens on an
+interactive amber-gold 3D core. Conversation, history, models and live system activity open on
+demand. Full replies, Markdown tables/code, copy, export and per-conversation drafts are retained.
+This workspace stays on localhost; it is not published to Sites or Railway.
 
 On first connection, use **Choose the token file** and select `jarvis_data/.hearth_token`.
 This is the local hearth token, not an OpenRouter API key. It stays in the browser tab's session
 storage. Existing browser connections are migrated automatically. All UI assets are served locally.
 
 **Enter** sends; **Shift+Enter** adds a line; **Alt+N** starts a conversation; **/** searches titles
-and first prompts. Selecting a conversation continues that exact session. A blank model field uses
-the configured brain. **Configure** exposes model reasoning and tool settings; gated actions are
-opt-in. The system panel shows the complete execution trace and actual scheduler status.
+and first prompts. Selecting a conversation continues that exact session. The dark model picker
+searches the hearth's free and paid catalog and remembers your choice. The sliders button exposes
+reasoning and tool settings; gated actions are opt-in. System shows the execution trace and actual
+scheduler status. Drag the core to orbit, scroll to zoom, or use the pause/reset controls.
+
+**Local voice:** click the microphone, speak, then click it again to review the transcript before
+sending. **Hands-free** starts an explicit listen/answer/speak loop; **End voice** stops it. Hiding
+the tab stops audio activity. Install its machine-local engines once using
+`powershell -ExecutionPolicy Bypass -File scripts/setup_voice.ps1`. Audio processing uses whisper.cpp
+and Piper on the laptop; normal JARVIS model requests still use the configured model provider.
 
 New answers are stored in full and displayed without a character limit. Named terminal sessions
 also appear in history. Older answers saved under the former 2,000-character cap cannot recover
-their missing text from those transcripts. The model's short-term context budget still uses
-explicit excerpts; it does not shorten the saved or displayed answer.
+their missing text from those transcripts. The UI does not truncate stored or displayed answers.
 
 Verification: `python js-development/jarvis_core/serve/hearth.py` and
 `python js-development/jarvis_core/brain/conversation.py`. The browser regression in
-`scripts/verify_hearth_ui.cjs` uses Playwright with Edge and an isolated local fixture server;
-set `JARVIS_UI_LIVE=1` to additionally read the real hearth's session list and history.
+`scripts/verify_hearth_ui.cjs` uses Playwright with Edge and an isolated local fixture server.
+`scripts/verify_jarvis_desktop.cjs` reads the live hearth without generating answers. Frontend source
+is in `js-development/jarvis_core/serve/frontend`: `npm ci` then `npm run build` regenerates the
+committed assets in `serve/ui`. Normal use after a Git pull needs no frontend build. Design and
+verification details: [serve/ui/DESIGN.md](js-development/jarvis_core/serve/ui/DESIGN.md).
 
 ---
 

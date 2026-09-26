@@ -1,61 +1,103 @@
-# JARVIS desktop workspace
+# JARVIS observatory — desktop design and operation
 
-## Scope and appearance
+## Scope and direction
 
-Desktop-only visual rebuild, September 14, 2026. The user explicitly chose localhost only;
-do not publish this surface or its conversations to Sites or Railway. The regular bookmark
-is http://127.0.0.1:8756/ and requires the local hearth. No new frontend build step or CDN.
+Rebuilt September 26, 2026. Localhost only: http://127.0.0.1:8756/. No Sites or Railway deployment.
+The Austensor homepage and Quantum/page8 informed the full-screen particle scene, compact
+navigation, quiet corner labels and dimensional motion. Original Three.js geometry and shaders
+implement the reference direction; no third-party site code or VFX assets are copied.
 
-The active entry point loads `desktop.css`, `hologram.js`, `app.js` and `desktop.js`.
-The former `app.css` and `core.js` are no longer loaded by this entry point.
-The existing authenticated conversation/SSE contracts remain in `app.js`.
+One persistent amber-gold core lives behind the workspace. Conversation opens beside it;
+history, model selection, connection and system activity are on-demand overlays. Black surfaces,
+white reading text, electric-blue interaction, amber core/state, red errors. Space Grotesk and
+IBM Plex Mono are bundled locally. Main message text is 17px; primary controls are 14px.
+Desktop sizes 1920×1080, 1536×864, 1280×720 and 1100×700 are the supported verification targets.
 
-- Near-black navy surfaces, electric-blue controls and telemetry, white readable text.
-- Amber/gold belongs to the core, its ambient illumination and thinking/speaking states.
-- Red indicates errors, failed jobs and unavailable connections.
-- Segoe UI for reading, Bahnschrift for headings, Cascadia Code/Consolas for small metadata.
-- The system panel is an on-demand overlay, not a permanent column squeezing the core.
-- No phone-specific redesign. Desktop layouts tested at 1920×900, 1536×864, 1280×720,
-  and 1100×700 CSS pixels. Very short viewports can scroll the main content.
+## Source and build
 
-## Hologram
+Source: `serve/frontend/`. Generated delivery assets: `serve/ui/index.html` and `serve/ui/assets/`.
+From frontend: `npm ci`, then `npm run build`. The generated assets are committed so normal
+Git handoff needs no Node installation to open JARVIS. Edit source, never the generated bundle.
+No runtime CDN, third-party font request, or cloud frontend service is required.
+Superseded app/desktop/core/hologram scripts and styles have been removed.
 
-The supplied film clip was inspected at multiple timestamps. Its key features are a hollow
-amber sphere, broken shell bands, luminous circuit traces, radial fibres and internal rings.
-`hologram.js` recreates those features procedurally in WebGL, not as a movie background or a
-flat GIF. It is an interpretation, not the original film's VFX asset or an exact reconstruction.
+The hearth serves the assets and existing authenticated API. Frontend `api.ts` owns transport;
+`main.ts` owns navigation/conversation state; `scene.ts` owns graphics; `voice.ts` owns browser
+audio. The backend remains the authoritative conversation store. The UI imposes no reply-length
+truncation or model reasoning caps. User-selected paid models use the existing provider balance.
 
-Every core instance shares the same deterministic geometry and shaders. Idle motion breathes
-and rotates; thinking increases activity; optional browser read-aloud drives speaking and word
-energy. The square CSS viewport plus aspect-correct projection prevent an oval globe.
-Rendering is capped at 30fps and device pixel ratio 2, pauses when the tab is hidden, supports
-reduced motion and an explicit pause control, and handles WebGL context loss/recovery.
+## Canonical UI Map
 
-`Listen` uses the browser's speech-synthesis voice, not the movie voice. Speech availability
-depends on the browser/OS. It is opt-in, stops on new conversation/send, and never alters the
-stored answer. Voice errors remain visible; text is always available.
+| Capability | Canonical owner | Source of truth | Allowed variants | Verification |
+|---|---|---|---|---|
+| Select/Listbox | native select for finite request settings; searchable dialog for models | main.ts; /v1/models | Free/paid groups, filtered empty state | verify_hearth_ui.cjs |
+| Form | main.ts native form, application validation | hearth API and session draft | Composer, token connection | browser auth/send/failure checks |
+| Scrollbar | style.css global standards properties | shared tokens | Message, dialog and code overflow | desktop geometry checks |
+| Toast | main.ts toast() | transient action result | Copy and nonblocking failure | browser action checks |
+| CRUD | main.ts session navigation and submit() | /v1/sessions and /v1/ask | New/resume/export; no delete control | full saved and streamed replies |
 
-## Truthful system state
+Both markup and programmatic listeners are in main.ts. The premium static auditor only recognizes
+inline button handlers, so it reports externally bound buttons as actionless; these are verified
+by browser tests. Do not add empty inline handlers to satisfy a lexical check. Native request
+select ownership is deliberate; the model catalog uses a dark searchable dialog.
 
-Health checks run every five seconds while visible, with at most one outstanding probe.
-Each visible waveform represents an actual successful health response; blue is healthy,
-amber is busy and red is a failed background job. The panel shows measured HTTP response
-latency, not invented CPU load, neural activity or model latency. Failed checks stop adding
-beats and explicitly mark telemetry unavailable. An in-flight answer is not declared dead
-just because a health check failed. Failed job states include both `error` and `FAILED` forms.
+## Motion and performance
 
-## Interaction and verification
+Perspective aspect follows the actual canvas dimensions; the core is never stretched to fill
+a panel. Orbit, zoom, keyboard rotation/reset, breathing, listening amplitude, thinking energy
+and actual speech amplitude all reuse the same scene. Adaptive quality reduces 50,000 particles
+to 32,000 and limits pixel ratio/frame rate when sustained rendering is slow. Hidden tabs pause
+rendering; reduced-motion preference and the pause control stop autonomous motion. WebGL failure
+leaves the text workspace usable.
 
-The dark searchable model dialog uses the existing model options as its source of truth.
-It supports keyboard navigation, selection persistence, focus restoration and Escape.
-It does not change provider entitlements, pricing, model caps or backend reasoning behavior.
+## Local voice
 
-`node scripts/verify_hearth_ui.cjs` runs an isolated local fixture with Playwright. It makes
-no real model calls and writes no JARVIS conversations. Regression coverage includes auth,
-complete long Markdown and raw answers, XSS handling, split SSE/Unicode, history ordering,
-session continuity, exports, drafts, busy recovery, model selection, desktop geometry,
-animation/pause, WebGL recovery, and healthy/degraded/offline/reconnected telemetry.
+Run `powershell -ExecutionPolicy Bypass -File scripts/setup_voice.ps1` once per Windows machine.
+The installer uses this repo's E: location for dependencies, models, cache and temporary audio:
+`.runtime/voice/` and `.venv-voice/`, both ignored. whisper.cpp base handles transcription;
+Piper en_GB-alan-medium handles synthesis. Model/voice license information stays with the download.
+No browser SpeechRecognition or cloud speech fallback is used. The normal LLM request still
+uses JARVIS's configured model provider, including when its input was spoken.
 
-`node scripts/verify_jarvis_desktop.cjs` additionally reads the real local hearth and a saved
-conversation, using the local token without logging it. Screenshots go to ignored
-`artifacts/jarvis-ui/` on E:. Playwright must be installed or supplied through `NODE_PATH`.
+Click the microphone to start; click again to finish, review the transcript and send.
+Hands-free starts only on explicit selection, submits after a pause in speech, reads the answer,
+then resumes listening. End voice, navigation away, or hiding the tab stops capture/playback.
+Thirty seconds of silence ends hands-free capture. Individual recordings last at most two
+minutes; long answers are spoken in consecutive chunks without truncating their stored text.
+These are audio transport limits, not model intelligence limits.
+
+Voice workers run one at a time in short-lived subprocesses, with timeouts and temporary-file
+cleanup. Low Windows commit memory refuses a new voice worker visibly. Text remains usable.
+Microphone permission and the user's physical microphone/speaker quality require a real user
+check; automated tests do not pretend to validate that hardware.
+
+## Truthful state and failure handling
+
+Health samples run every five seconds while visible, one request at a time. The pulse encodes
+measured hearth HTTP response latency and job status, never invented CPU or neural telemetry.
+A failed check clears stale metrics; a failed scheduled job says needs attention. Health failures
+do not silently cancel an in-flight answer. The response stream can be disconnected with Stop
+waiting; this does not promise cancellation of backend generation. Check history before retrying.
+
+Full Markdown/raw text, split SSE Unicode, draft recovery, model persistence, newest-first history,
+export, token authentication and session continuity are preserved. Tokens remain in tab session
+storage, never URLs. Untrusted response HTML is sanitized; embedded remote media is disabled.
+
+## Verification
+
+`node scripts/verify_hearth_ui.cjs` uses an isolated HTTP fixture and makes no real model calls
+or conversation writes. It covers auth, free/paid picker, history ordering, full long Unicode
+replies, raw rendering/XSS, split SSE, busy recovery, desktop bounds, motion control, health
+recovery and unavailable local voice. Screenshots: ignored `artifacts/jarvis-ui/`.
+Synthetic microphone/audio fixtures also verify transcript review, hands-free submission,
+multi-chunk read-aloud, automatic return to listening and explicit stop. Growing multiline
+composition is checked against the conversation bounds; exported replies retain their end marker.
+
+`node scripts/verify_jarvis_desktop.cjs` reads the live hearth and a saved conversation using the
+local token without logging it. `python -m jarvis_core.serve.hearth` checks ASGI contracts;
+`python -m jarvis_core.serve.voice --self-test` checks malformed input and single-worker behavior.
+Set PYTHONPATH=js-development for module commands from the repo root.
+
+A synthetic local round trip produced “The local Jarvis voice test is complete.” in 30.4 seconds
+on this laptop, including speech generation, resampling and transcription. This establishes
+local worker functionality, not a promised interactive latency for every utterance.

@@ -78,6 +78,7 @@ import json
 import os
 import secrets
 import stat
+import subprocess
 import sys
 import time
 from dataclasses import dataclass, field
@@ -421,6 +422,8 @@ _STATIC_CONTENT_TYPES = {
     ".svg": b"image/svg+xml",
     ".png": b"image/png",
     ".ico": b"image/x-icon",
+    ".woff": b"font/woff",
+    ".woff2": b"font/woff2",
 }
 
 _REMOTE_LEDGER_LOGS = frozenset({
@@ -526,16 +529,16 @@ def _list_models() -> List[Dict[str, Any]]:
             continue
         cost_in = float(row.get("cost_input_1m", 1) or 0)
         cost_out = float(row.get("cost_output_1m", 1) or 0)
-        # The selector is intentionally free-only: choosing a model in the UI
-        # must never surprise the user with paid inference, and media/preview
-        # endpoints do not implement JARVIS's text/tool contract.
-        if cost_in != 0.0 or cost_out != 0.0 or any(s in str(row["id"]).lower() for s in avoid):
+        # Paid selection is explicit and priced in the UI; never silently pin one.
+        if any(s in str(row["id"]).lower() for s in avoid):
             continue
         models.append({
             "id": str(row["id"]),
             "name": str(row.get("name") or row["id"]),
             "vendor": str(row.get("vendor") or ""),
             "free": cost_in == 0.0 and cost_out == 0.0,
+            "cost_input_1m": cost_in,
+            "cost_output_1m": cost_out,
             "context_length": int(row.get("context_length", 0) or 0),
         })
     models.sort(key=lambda m: m["name"].lower())
@@ -633,7 +636,7 @@ async def _respond(send: Send, status: int, body: bytes,
     await send({"type": "http.response.body", "body": body})
 
 
-async def _read_body(receive: Receive) -> bytes:
+async def _read_body(receive: Receive, max_bytes: int = _MAX_BODY_BYTES) -> bytes:
     """Collect the request body with a hard cap. Oversize raises ValueError."""
     chunks: List[bytes] = []
     total = 0
@@ -643,8 +646,8 @@ async def _read_body(receive: Receive) -> bytes:
             raise ConnectionError("client disconnected before the body arrived")
         chunk = message.get("body", b"") or b""
         total += len(chunk)
-        if total > _MAX_BODY_BYTES:
-            raise ValueError(f"body exceeds {_MAX_BODY_BYTES} bytes")
+        if total > max_bytes:
+            raise ValueError(f"body exceeds {max_bytes} bytes")
         chunks.append(chunk)
         if not message.get("more_body"):
             return b"".join(chunks)
@@ -720,6 +723,32 @@ def build_app(hearth: Hearth) -> Callable[..., Awaitable[None]]:
         if path == "/v1/models" and method == "GET":
             await _respond(send, 200, _json_bytes({"ok": True, "models": _list_models()}))
             return
+
+        if path.startswith('/v1/voice/'):
+            # Voice is never enabled through the optional remote-hearth path.
+            if str((scope.get('client') or ('', 0))[0]) not in _LOOPBACK:
+                await _respond(send, 403, _json_bytes({'error': 'Voice is local-only.'}))
+                return
+            from . import voice
+            if path == '/v1/voice/capabilities' and method == 'GET':
+                status = voice.capabilities()
+                status.pop('config', None)
+                await _respond(send, 200, _json_bytes(status))
+                return
+            if path in ('/v1/voice/transcribe', '/v1/voice/synthesize') and method == 'POST':
+                try:
+                    payload = json.loads(await _read_body(receive, 6 * 1024 * 1024))
+                    if not isinstance(payload, dict):
+                        raise ValueError('Expected a JSON object.')
+                    result = await asyncio.to_thread(voice.process, path.rsplit('/', 1)[1], payload)
+                    await _respond(send, 200, _json_bytes(result))
+                except (ValueError, ConnectionError) as exc:
+                    await _respond(send, 400, _json_bytes({'error': str(exc)}))
+                except RuntimeError as exc:
+                    await _respond(send, 503, _json_bytes({'error': str(exc)}))
+                except (OSError, TimeoutError, subprocess.TimeoutExpired):
+                    await _respond(send, 503, _json_bytes({'error': 'Local voice worker unavailable or timed out. Text chat is still available.'}))
+                return
 
         if path == "/v1/sessions" and method == "GET":
             conv_dir = Path(DATA_ROOT) / "conversations"
@@ -1193,11 +1222,13 @@ def _run_self_test() -> None:
           status_of(sent_ui) == 200 and b"JARVIS" in body_of(sent_ui))
 
     # T26: Static CSS asset served
-    sent_css, _ = drive(app, {"type": "http", "method": "GET", "path": "/ui/app.css", "client": ("127.0.0.1", 1234),
+    import re
+    css_path = re.search(r'href="([^"]+\.css)"', (UI_DIR / 'index.html').read_text(encoding='utf-8')).group(1)
+    sent_css, _ = drive(app, {"type": "http", "method": "GET", "path": css_path, "client": ("127.0.0.1", 1234),
                               "headers": [(b"accept", b"text/css")]})
-    check("T26 GET /ui/app.css serves static stylesheet",
+    check("T26 active bundled stylesheet is served",
           status_of(sent_css) == 200 and b":root" in body_of(sent_css)
-          and b".composer" in body_of(sent_css))
+          and b"#composer" in body_of(sent_css))
 
     # T27: Sessions endpoint returns 200 and a list
     sent_sess, _ = drive(app, http_scope("GET", "/v1/sessions"))
@@ -1244,6 +1275,18 @@ def _run_self_test() -> None:
         ordered = _list_sessions(directory)
         check("T32 sessions sort by conversation timestamp, not copied mtime",
               [s["session_id"] for s in ordered] == ["conv-newer", "conv-older"])
+
+    sent_voice, _ = drive(app, http_scope('GET', '/v1/voice/capabilities', token='wrong'))
+    check('T33 voice requires the hearth bearer token', status_of(sent_voice) == 403)
+    sent_voice, _ = drive(app, http_scope('GET', '/v1/voice/capabilities'))
+    voice_status = json.loads(body_of(sent_voice))
+    check('T34 voice capabilities omit local configuration paths',
+          status_of(sent_voice) == 200 and voice_status.get('local') and 'config' not in voice_status)
+    remote_voice = build_app(Hearth(HearthConfig(token='tok', allow_remote=True), ask_fn=scripted_ask))
+    sent_voice, _ = drive(remote_voice, http_scope('GET', '/v1/voice/capabilities', client=('10.0.0.9', 1)))
+    check('T35 voice stays loopback-only even when remote hearth is enabled', status_of(sent_voice) == 403)
+    sent_voice, _ = drive(app, http_scope('POST', '/v1/voice/transcribe'), body=b'[]')
+    check('T36 malformed voice payload is rejected', status_of(sent_voice) == 400)
 
     loop.close()
     print("-" * 70)
