@@ -121,25 +121,17 @@ def _machine_tag() -> str:
 # PART 2: Content-hash dedup key (reuses jsonl_merge.entry_key semantics)
 # =============================================================================
 
-def _content_key(entry: Dict[str, Any]) -> str:
-    """Stable dedup key — collisions only on truly identical entries.
-    Identical to scripts/jsonl_merge.py:entry_key so the two agree."""
-    parts = [
-        entry.get("timestamp", ""),
-        entry.get("type", ""),
-        str(sorted(entry.get("tags", []))),
-        entry.get("content", "")[:300],
-    ]
-    return hashlib.sha256("|".join(parts).encode("utf-8")).hexdigest()
-
-
 def _content_key_ignoring_ts(entry: Dict[str, Any]) -> str:
     """Dedup key WITHOUT timestamp — catches the same insight re-appended at a
-    different time (the real duplicate case across chats)."""
+    different time (the real duplicate case across chats).
+
+    Hashes the WHOLE content. A prefix key deduped two different entries that
+    merely opened alike — a long session distill differing only in its answer
+    was silently dropped as a duplicate of the last one."""
     parts = [
         entry.get("type", ""),
         str(sorted(entry.get("tags", []))),
-        entry.get("content", "")[:300],
+        entry.get("content", ""),
     ]
     return hashlib.sha256("|".join(parts).encode("utf-8")).hexdigest()
 
@@ -374,6 +366,15 @@ def _run_self_test() -> None:
                           semantic_dedup=False, kb_path=kb)
         check("T3 content-hash dedup", r3["status"] == "deduped"
               and r3["reason"] == "content_hash", str(r3))
+
+        # T3b: a shared 300-char opening is NOT a duplicate
+        opening = "same opening " * 30
+        r3b = append_entry("Semantic", ["t1", "smoke"], opening + "ending one",
+                           semantic_dedup=False, kb_path=kb)
+        r3c = append_entry("Semantic", ["t1", "smoke"], opening + "ending two",
+                           semantic_dedup=False, kb_path=kb)
+        check("T3b entries differing past 300 chars are both kept",
+              r3b["status"] == "appended" and r3c["status"] == "appended", str(r3c))
 
         # T4: empty content rejected
         r4 = append_entry("Semantic", ["x"], "   ", semantic_dedup=False, kb_path=kb)

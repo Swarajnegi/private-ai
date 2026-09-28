@@ -90,9 +90,12 @@ THE FLOW
 STEP 1: `TurnContext` gathers the turn plus its preceding session neighbours —
         the context the offline classifier structurally cannot have.
         |
-STEP 2: `build_prompt` renders one compact classification request. Compact
-        matters: this runs on every turn forever, so the neighbour window and
-        each excerpt are capped.
+STEP 2: `build_prompt` renders parse_rule.PARSE_RULE (the one rule every
+        agent parses by) over the WHOLE exchange and every preceding turn
+        of its session — nothing is cut. When that exceeds the curator
+        model's context window, `curate` splits it into consecutive chunks
+        that together cover all of it, has the model take notes on each, and
+        decides on the combined notes instead.
         |
 STEP 3: `parse_verdict` reads strict JSON and REJECTS anything it cannot
         validate against the known vocabularies, rather than coercing. A
@@ -110,6 +113,7 @@ STEP 4: `curate` returns a `Curation`, which the caller appends. `None` means
 from __future__ import annotations
 
 import json
+import os
 import re
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
@@ -129,9 +133,10 @@ NOT_TRAINABLE = "none"
 # label incomparable, which would defeat the review path.
 DOMAINS: Tuple[str, ...] = ("jarvis-build", "data-engineering", "ai-ml", "finance", "unknown")
 
-_MAX_NEIGHBOURS = 3
-_MAX_NEIGHBOUR_CHARS = 400
-_MAX_TURN_CHARS = 2400
+# Sized for the smallest context a curator model is likely to have (~128k
+# tokens at ~4 chars/token, with room for the reply). This is a CHUNK size,
+# never a cut: a longer conversation is split and every chunk is read.
+_CONTEXT_WINDOW_CHARS = int(os.environ.get("JARVIS_CURATOR_CONTEXT_CHARS", "400000"))
 
 
 @dataclass(frozen=True)
@@ -190,67 +195,102 @@ class Curation:
         return self.embedding_label != self.domain
 
 
-_PROMPT = """\
-You are curating one captured turn for JARVIS's training corpus. You have the \
-conversation it came from, which an offline classifier does not.
+# THE PROMPT IS THE ONE PARSING RULE (2026-09-28). This module used to carry
+# its own curation prompt while agents were about to be handed another, and two
+# texts deciding the same four fields drift the first time either is edited.
+# `parse_rule.PARSE_RULE` is the only rule text; this section only lays the turn
+# out after it. Imported lazily because parse_rule imports this module.
+_TURN_SECTION = """
 
-Decide FOUR things and answer with JSON only.
-
-1. `corpora` — where this turn's content belongs. A list, any of:
-     "engineer"        — technical reasoning, architecture, code, data work.
-     "personalization" — how the user thinks, decides, writes, what they want,
-                         their constraints, preferences, self-assessments.
-     "none"            — carries no durable signal. Acknowledgements ("ok",
-                         "continue", "go ahead"), pure task commands with no
-                         reasoning, pasted machine output, greetings.
-   Both real corpora may apply. If "none" applies, it is the ONLY entry.
-
-2. `domain` — exactly one of: {domains}.
-   Use the CONVERSATION to resolve follow-ups. "skip the learning for now"
-   has no domain alone; with the preceding turns it usually does. Answer
-   "unknown" only when the context genuinely does not settle it.
-
-3. `responds_to` — one sentence: what the user's message was replying to or
-   building on. This is the context an offline pass cannot recover. If the
-   turn opens a topic, say so.
-
-4. `trainable` — true only if a model should learn from this EXCHANGE.
-   Judge the pair, not the user's half alone. A short, precisely-steered
-   question that draws out a substantial technical answer IS a high-value
-   pair — the value sits in the answer, and the question is what elicited it.
-   "explain again but keep watermark at 3 and 4 minutes and the interval delay
-   at 2" carries no standalone reasoning and is trainable, because what came
-   back was a full numerical derivation.
-   Otherwise most turns in a working session are false. Be strict: a corpus of
-   200 real turns beats 2000 padded ones.
-
-Also give `confidence` (0.0-1.0) and a one-line `rationale`.
-
-CONVERSATION SO FAR (oldest first):
+CONVERSATION SO FAR (the owner's earlier turns in this session, oldest first):
 {neighbours}
 
-THE TURN TO CURATE
-user: {user_text}
-assistant (summary): {assistant_summary}
+THE TURN TO PARSE (ts={ts}, session_id={session_id})
+owner: {user_text}
+assistant: {assistant_summary}"""
 
-Answer with JSON only, no prose, no code fence:
-{{"corpora": [...], "domain": "...", "responds_to": "...", "trainable": true|false, "confidence": 0.0, "rationale": "..."}}"""
+
+def _rule() -> str:
+    from jarvis_core.agent.parse_rule import PARSE_RULE
+    return PARSE_RULE
+
+
+def _render(ctx: TurnContext, neighbours: str, user_text: str, assistant_summary: str) -> str:
+    return _rule() + _TURN_SECTION.format(
+        neighbours=neighbours, ts=ctx.ts, session_id=ctx.session_id,
+        user_text=user_text, assistant_summary=assistant_summary)
 
 
 def build_prompt(ctx: TurnContext) -> str:
-    """Render the curation request. Capped — this runs on every turn, forever."""
+    """PARSE_RULE over the whole exchange and every earlier turn of its session."""
     if ctx.neighbours:
-        window = ctx.neighbours[-_MAX_NEIGHBOURS:]
-        neighbours = "\n".join(
-            f"  [{i + 1}] {n[:_MAX_NEIGHBOUR_CHARS]}" for i, n in enumerate(window))
+        neighbours = "\n".join(f"  [{i + 1}] {n}" for i, n in enumerate(ctx.neighbours))
     else:
         neighbours = "  (this is the first turn in the session)"
-    return _PROMPT.format(
-        domains=", ".join(f'"{d}"' for d in DOMAINS),
-        neighbours=neighbours,
-        user_text=ctx.user_text[:_MAX_TURN_CHARS],
-        assistant_summary=ctx.assistant_summary[:_MAX_NEIGHBOUR_CHARS],
-    )
+    return _render(ctx, neighbours, ctx.user_text, ctx.assistant_summary)
+
+
+_NOTE_PROMPT = """\
+You are helping curate one captured turn for JARVIS's training corpus. The \
+conversation is too long to read in one pass, so it arrives in consecutive \
+parts. This is part {index} of {total}.
+
+Write notes on THIS part only, keeping everything a curator would need to \
+decide: what the final user turn is about and replies to, its technical \
+domain, any technical reasoning or derivation, and anything the user reveals \
+about how they think, decide or what they want. Notes only, no verdict.
+
+PART {index} OF {total}:
+{chunk}"""
+
+_NOTES_SECTION = """\
+  (The conversation and the turn were too long for one pass. Below are notes
+  taken over consecutive parts that together cover ALL of it, oldest first;
+  the last parts hold the turn to curate.)
+{notes}"""
+
+
+def _transcript(ctx: TurnContext) -> str:
+    lines = [f"[{i + 1}] user: {n}" for i, n in enumerate(ctx.neighbours)]
+    lines.append(f"THE TURN TO CURATE\nuser: {ctx.user_text}\nassistant: {ctx.assistant_summary}")
+    return "\n".join(lines)
+
+
+def _chunks(text: str, size: int) -> List[str]:
+    """Consecutive, non-overlapping pieces that concatenate back to `text` exactly."""
+    return [text[i:i + size] for i in range(0, len(text), size)] or [""]
+
+
+def _notes_over(text: str, complete_fn: Callable[[str], str], chunk_chars: int) -> str:
+    """Notes covering every character of `text`, re-noted until they fit one pass."""
+    overhead = len(_NOTE_PROMPT.format(index=10 ** 6, total=10 ** 6, chunk=""))
+    size = max(1, chunk_chars - overhead)
+    while True:
+        parts = _chunks(text, size)
+        notes = [
+            f"--- notes on part {i} of {len(parts)} ---\n"
+            + (complete_fn(_NOTE_PROMPT.format(index=i, total=len(parts), chunk=part)) or "").strip()
+            for i, part in enumerate(parts, 1)]
+        combined = "\n".join(notes)
+        if len(combined) <= size:
+            return combined
+        if len(combined) >= len(text):
+            raise RuntimeError(
+                f"curator notes did not shrink ({len(text)} -> {len(combined)} chars); "
+                "this turn needs review by a model with a larger context window")
+        text = combined
+
+
+def _final_prompt(ctx: TurnContext, complete_fn: Callable[[str], str],
+                  context_chars: int) -> str:
+    prompt = build_prompt(ctx)
+    if len(prompt) <= context_chars:
+        return prompt
+    shell = len(build_prompt(TurnContext(ts=ctx.ts, session_id=ctx.session_id, user_text="")))
+    budget = context_chars - shell - len(_NOTES_SECTION) - 2 * len("(covered by the notes above)")
+    notes = _notes_over(_transcript(ctx), complete_fn, budget)
+    return _render(ctx, _NOTES_SECTION.format(notes=notes),
+                   "(covered by the notes above)", "(covered by the notes above)")
 
 
 _FENCE = re.compile(r"```(?:json)?\s*\n?(.*?)\n?\s*```", re.DOTALL)
@@ -287,6 +327,12 @@ def parse_verdict(raw: str, ctx: TurnContext, curated_by: str,
     known one would rebuild that failure with a bigger model behind it.
     """
     data = _extract_json(raw)
+    if isinstance(data, dict) and isinstance(data.get("verdicts"), list):
+        # PARSE_RULE asks for {"verdicts": [...]}; take the one keyed to this turn.
+        items = [v for v in data["verdicts"] if isinstance(v, dict)]
+        keyed = [v for v in items if str(v.get("ts")) == ctx.ts
+                 and str(v.get("session_id")) == ctx.session_id]
+        data = keyed[0] if keyed else items[0] if len(items) == 1 else None
     if not isinstance(data, dict):
         return None
 
@@ -323,8 +369,8 @@ def parse_verdict(raw: str, ctx: TurnContext, curated_by: str,
         corpora=corpora,
         domain=domain,
         trainable=trainable,
-        responds_to=str(data.get("responds_to", "")).strip()[:400],
-        rationale=str(data.get("rationale", "")).strip()[:300],
+        responds_to=str(data.get("responds_to", "")).strip(),
+        rationale=str(data.get("rationale", "")).strip(),
         curated_by=curated_by,
         confidence=confidence,
         curated_at=curated_at,
@@ -332,7 +378,8 @@ def parse_verdict(raw: str, ctx: TurnContext, curated_by: str,
 
 
 def curate(ctx: TurnContext, complete_fn: Callable[[str], str], curated_by: str,
-           curated_at: str = "") -> Optional[Curation]:
+           curated_at: str = "",
+           context_chars: int = _CONTEXT_WINDOW_CHARS) -> Optional[Curation]:
     """Ask the injected model to curate one turn. None when the ANSWER is unusable.
 
     `complete_fn` is the seam that makes this host-independent: Claude Code's
@@ -350,7 +397,7 @@ def curate(ctx: TurnContext, complete_fn: Callable[[str], str], curated_by: str,
     bad answer means skip this turn and continue; an unreachable model means
     stop, because the next 900 turns will fail identically.
     """
-    raw = complete_fn(build_prompt(ctx))
+    raw = complete_fn(_final_prompt(ctx, complete_fn, context_chars))
     if not raw:
         return None
     return parse_verdict(raw, ctx, curated_by=curated_by, curated_at=curated_at)
@@ -454,7 +501,10 @@ def _smoke() -> int:
     # the prompt used to ask whether the USER's half carried reasoning, so a
     # parameter-steered follow-up that drew out a full derivation was dropped.
     check("T3b prompt tells the model to judge the EXCHANGE, not the user half",
-          "learn from this EXCHANGE" in prompt and "sits in the answer" in prompt, True)
+          "learn from this EXCHANGE" in prompt and "judge the pair" in prompt, True)
+    from jarvis_core.agent.parse_rule import PARSE_RULE
+    check("T3c the prompt IS the one parsing rule, verbatim, plus the turn",
+          prompt.startswith(PARSE_RULE) and "ts=2026-09-14T10:00:00+05:30" in prompt, True)
 
     check("T4 first-turn prompt says so",
           "first turn in the session" in build_prompt(
@@ -495,6 +545,13 @@ def _smoke() -> int:
           parse_verdict('{"corpora":["none"],"domain":"unknown","responds_to":"an ack",'
                         '"trainable":false,"confidence":0.95,"rationale":"acknowledgement"}',
                         ctx, "claude").corpora, ("none",))
+    wrapped = json.dumps({"verdicts": [
+        {"ts": "other", "session_id": "s1", "corpora": ["none"], "domain": "unknown",
+         "trainable": False, "confidence": 0.5},
+        dict(json.loads(good), ts="2026-09-14T10:00:00+05:30", session_id="s1")]})
+    got19b = parse_verdict(wrapped, ctx, "claude")
+    check("T19b a PARSE_RULE {verdicts:[...]} answer yields the verdict keyed to this turn",
+          got19b.corpora if got19b else None, ("engineer",))
     check("T20 confidence is clamped",
           parse_verdict(good.replace("0.8", "4.2"), ctx, "claude").confidence, 1.0)
     check("T21 both corpora at once is valid",
@@ -553,10 +610,41 @@ def _smoke() -> int:
     check("T38 an UNCURATED turn is admitted, not dropped",
           routes_to("engineer", ("never-seen", "s"), routing), True)
 
+    answer = "".join(f"a{i:04d} " for i in range(1000))          # 6,000 chars
     long_ctx = TurnContext(ts="t", session_id="s", user_text="x" * 9000,
-                           neighbours=tuple("n" * 2000 for _ in range(12)))
+                           assistant_summary=answer,
+                           neighbours=tuple(f"n{i}-" + "n" * 2000 for i in range(12)))
     p = build_prompt(long_ctx)
-    check("T33 prompt stays bounded on a huge turn", len(p) < 6000, True)
+    check("T33 the whole answer reaches the prompt", answer in p, True)
+    check("T33b the whole turn reaches the prompt", "x" * 9000 in p, True)
+    check("T33c every neighbour, whole, reaches the prompt",
+          all(n in p for n in long_ctx.neighbours), True)
+
+    seen: List[str] = []
+
+    def recording(prompt: str) -> str:
+        seen.append(prompt)
+        if prompt.startswith("You are helping curate"):
+            return f"note{len(seen)}"
+        return good
+    window = len(PARSE_RULE) + 5000      # the rule itself is ~3.5k of every call
+    v39 = curate(long_ctx, recording, "claude", context_chars=window)
+    note_prompts = [q for q in seen if q.startswith("You are helping curate")]
+    covered = "".join(q.split(" OF ", 1)[1].split(":\n", 1)[1] for q in note_prompts)
+    check("T39 an over-window exchange is chunked, not cut",
+          covered == _transcript(long_ctx), True)
+    check("T40 every call fits the window", all(len(q) <= window for q in seen), True)
+    check("T41 the verdict is decided on the combined notes",
+          v39 is not None and all(f"note{i}" in seen[-1] for i in range(1, len(note_prompts) + 1)),
+          True)
+    before = len(seen)
+    curate(ctx, recording, "claude")
+    check("T42 a prompt inside the window is one call, unchanged",
+          len(seen) - before == 1 and seen[-1] == build_prompt(ctx), True)
+    long_why = "because " * 200
+    check("T43 stored fields are kept whole",
+          parse_verdict(good.replace("a real build decision", long_why), ctx, "c").rationale,
+          long_why.strip())
 
     print("=" * 70)
     print("  curator smoke tests")

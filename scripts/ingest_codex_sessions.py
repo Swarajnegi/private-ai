@@ -386,7 +386,7 @@ def run(dry_run: bool = False) -> Dict[str, Any]:
                      "assistant_summary": exch.assistant_summary,
                      "model": exch.model_hint},
                     exch.cwd or str(_REPO_ROOT),
-                    ts=exch.ts)
+                    ts=exch.ts, host="codex")
                 if obs is not None:
                     obs["chat_label"] = exch.thread_name or obs["chat_label"]
                     append_observation(obs)
@@ -593,6 +593,8 @@ def _run_self_test() -> None:
                   queue.exists() and len(queue.read_text().splitlines()) == 2)
             check("T23 chat_label reflects the Codex thread_name, not just cwd basename",
                   all(c.get("chat_label") for c in captured), str(captured))
+            check("T23b every ingested row names its host, so parse_ledger never guesses",
+                  all(c.get("host") == "codex" for c in captured), str(captured))
 
             result2 = mod.run(dry_run=False)
             check("T24 a second run ingests 0 — the watermark actually prevents re-ingestion",

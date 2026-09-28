@@ -58,7 +58,7 @@ def main() -> int:
     try:
         organ = _load_organ(event.get("cwd", os.getcwd()))
         if organ is not None:
-            organ.capture_stop_event(event)
+            organ.capture_stop_event(event, host="claude")
     except Exception:
         pass  # swallow everything — never disrupt the user's turn
     return 0
@@ -94,9 +94,10 @@ def _run_self_test() -> None:
         rec = organ.capture_stop_event(
             {"session_id": "s", "transcript_path": str(tp), "cwd": td,
              "stop_hook_active": False},
-            queue_path=q)
+            queue_path=q, host="claude")
         check("T2 e2e capture through adapter path", rec is not None and q.exists())
         check("T3 model stamped via organ", rec is not None and rec.get("model") == "claude-fable-5")
+        check("T4 the turn is attributed to this host", rec is not None and rec.get("host") == "claude")
 
     total = passed + len(failed)
     print(f"\n  Passed: {passed}/{total}")

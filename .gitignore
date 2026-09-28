@@ -291,3 +291,18 @@ jarvis_data/commitments.jsonl.lock
 # Also 9.5 MB of built .apk at the repo root, which is its own reason.
 rfm/
 dadfinanceapp/
+
+# ---- voice (2026-09-27) ------------------------------------------------------
+# voice_latency.jsonl is a machine-local instrument (serve/speech.log_latency):
+# per-turn stage timings for THIS machine's GPU and network, meaningless on
+# another. voice_models.json stays TRACKED on purpose — the measured model
+# chain should be the same on every host until someone re-benchmarks.
+jarvis_data/voice_latency.jsonl
+jarvis_data/voice_latency.jsonl.lock
+# Rendered audio: regenerable (scripts/verify_voice_live.py renders test speech;
+# voice samples come from the resident Kokoro engine), and binary.
+artifacts/voice-samples/
+artifacts/voice-test/
+.tmp/ui-shots/
+.tmp/austensor-ref/
+.tmp/removed-jarvis-tests-2026-09-28/

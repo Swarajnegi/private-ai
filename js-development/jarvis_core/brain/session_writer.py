@@ -55,8 +55,6 @@ from jarvis_core.config import KB_PATH
 
 _ENTRY_TYPE = "Episodic"                      # FIXED — the whitelist
 _BASE_TAGS: Tuple[str, ...] = ("session-distill", "terminal")
-_HEAD_Q = 160
-_HEAD_A = 220
 
 
 # =============================================================================
@@ -84,11 +82,6 @@ class SessionRecord:
 def _tag_safe(raw: str) -> str:
     tag = re.sub(r"[^a-z0-9-]", "", (raw or "").lower().replace(" ", "-"))
     return tag or "general"
-
-
-def _head(text: str, cap: int) -> str:
-    flat = " ".join((text or "").split())
-    return flat[:cap] + ("…" if len(flat) > cap else "")
 
 
 def _default_append_fn() -> Callable[..., Dict[str, Any]]:
@@ -123,8 +116,8 @@ class SessionMemoryWriter:
                      and record.reasoning_verdict != "UNCHECKED" else "")
         content = (
             f"Terminal session distill ({record.model or 'unknown brain'}): "
-            f"Q: {_head(record.question, _HEAD_Q)} | "
-            f"A: {_head(record.answer, _HEAD_A)} | "
+            f"Q: {(record.question or '').strip()} | "
+            f"A: {(record.answer or '').strip()} | "
             f"tools: {tools} | confidence: {confidence}{reasoning} | "
             f"spend: ${record.spend_usd:.4f}"
         )
@@ -188,7 +181,8 @@ def _run_self_test() -> None:
     check("T4 template carries the facts",
           "nemotron-3-super" in c and "prior_self_consult" in c
           and "CONFIDENT 0.81" in c and "$0.0000" in c, c[:160])
-    check("T5 heads are capped", len(c) < 700 and "…" in c, str(len(c)))
+    check("T5 question and answer are stored whole",
+          rec.question in c and rec.answer.strip() in c and "…" not in c, str(len(c)))
     check("T5b semantic dedupe off on the exit path",
           captured[0]["semantic_dedup"] is False)
 
@@ -202,6 +196,14 @@ def _run_self_test() -> None:
         raise OSError("disk gone")
     out7 = SessionMemoryWriter(append_fn=boom).write(rec)
     check("T7 failure fail-soft", out7["status"] == "error" and "OSError" in out7["error"])
+
+    long_q = "".join(f"q{i:05d} " for i in range(1430))     # ~10,000 chars
+    long_a = "line one\n" + "".join(f"a{i:05d} " for i in range(3000))
+    w.write(SessionRecord(question=long_q, answer=long_a, model="m"))
+    c11 = captured[-1]["content"]
+    check("T11 a 10,000-char question and 21,000-char answer are distilled whole",
+          len(long_q) >= 10_000 and long_q.strip() in c11 and long_a.strip() in c11,
+          str(len(c11)))
 
     # T8-T10: the REAL kb_append path against a temp KB
     with tempfile.TemporaryDirectory() as td:

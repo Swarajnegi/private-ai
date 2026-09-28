@@ -71,6 +71,17 @@
             "args": [
               "-c",
               "import os, sys, pathlib, runpy\ntry:\n    p = os.environ.get('CLAUDE_PROJECT_DIR', '')\n    r = pathlib.Path(p) if (p and (pathlib.Path(p)/'scripts'/'hooks').is_dir()) else next((d for d in [pathlib.Path.cwd(), *pathlib.Path.cwd().parents] if (d/'scripts'/'hooks').is_dir()), None)\n    if r:\n        os.chdir(str(r))\n        sys.path.insert(0, str(r / 'js-development'))\n        f = r / 'scripts' / 'hooks' / sys.argv[1]\n        if f.is_file():\n            runpy.run_path(str(f), run_name='__main__')\nexcept BaseException:\n    pass\nsys.exit(0)",
+              "surface_pipeline_health.py"
+            ],
+            "timeout": 30,
+            "statusMessage": "Checking JARVIS pipeline health"
+          },
+          {
+            "type": "command",
+            "command": "python3",
+            "args": [
+              "-c",
+              "import os, sys, pathlib, runpy\ntry:\n    p = os.environ.get('CLAUDE_PROJECT_DIR', '')\n    r = pathlib.Path(p) if (p and (pathlib.Path(p)/'scripts'/'hooks').is_dir()) else next((d for d in [pathlib.Path.cwd(), *pathlib.Path.cwd().parents] if (d/'scripts'/'hooks').is_dir()), None)\n    if r:\n        os.chdir(str(r))\n        sys.path.insert(0, str(r / 'js-development'))\n        f = r / 'scripts' / 'hooks' / sys.argv[1]\n        if f.is_file():\n            runpy.run_path(str(f), run_name='__main__')\nexcept BaseException:\n    pass\nsys.exit(0)",
               "inject_profile.py"
             ],
             "timeout": 30,

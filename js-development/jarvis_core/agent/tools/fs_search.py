@@ -38,10 +38,12 @@ STEP 1: resolve root = (JARVIS_ROOT / subdir); reject if it escapes JARVIS_ROOT.
 STEP 2: walk the tree, skipping noise dirs (.git, chromadb, .venv, caches,
         vendored repos) and binary files; filter filenames by name_glob.
         |
-STEP 3: if content_regex, scan each text file line-by-line (per-file byte cap),
-        collecting {path, line_no, line}; else just list the matched paths.
+STEP 3: if content_regex, stream each text file line-by-line (any size),
+        collecting {path, line_no, line} with the WHOLE line; else just list
+        the matched paths.
         |
-STEP 4: cap at max_results; return {matches, count, truncated, root}.
+STEP 4: return EVERY match — or, when the caller passes max_results as a page
+        size, one page plus total and next_offset. Never a silent cut.
 
 =============================================================================
 """
@@ -53,7 +55,7 @@ import os
 import re
 import sys
 from pathlib import Path
-from typing import List, Optional
+from typing import Iterator, List, Optional
 
 from pydantic import Field
 
@@ -93,13 +95,14 @@ class FileSearchInput(ToolInput):
                     "Cannot escape the project root.",
         json_schema_extra={"aliases": ["dir", "directory", "subdirectory", "search_dir"]},
     )
-    max_results: int = Field(
-        default=50, ge=1, le=500,
-        description="Max matches to return (filenames or matching lines).",
+    max_results: Optional[int] = Field(
+        default=None, ge=1,
+        description=("Optional page size. Default = return ALL matches. With a page "
+                     "size, pass back next_offset as offset for the next page."),
     )
-    max_file_bytes: int = Field(
-        default=1_000_000, ge=1, le=10_000_000,
-        description="Skip content-scanning files larger than this (default 1MB).",
+    offset: int = Field(
+        default=0, ge=0,
+        description="Index of the first match to return (for paging; default 0).",
     )
 
 
@@ -139,50 +142,51 @@ class FileSearchTool(Tool):
         except re.error as e:
             return ToolResult(error=f"invalid content_regex: {e}")
 
-        matches: List[dict] = []
-        truncated = False
+        total = 0
+        page: List[dict] = []
+        stop = None if tool_input.max_results is None else tool_input.offset + tool_input.max_results
+        for m in self._iter_matches(root, root_base, tool_input.name_glob, pattern):
+            if total >= tool_input.offset and (stop is None or total < stop):
+                page.append(m)
+            total += 1
+
+        end = tool_input.offset + len(page)
+        return ToolResult(output={
+            "matches": page,
+            "count": len(page),
+            "total_matches": total,
+            "offset": tool_input.offset,
+            "next_offset": None if end >= total else end,
+            "complete": end >= total,
+            "root": str(root.relative_to(root_base)) or ".",
+        })
+
+    @staticmethod
+    def _iter_matches(
+        root: Path, root_base: Path, name_glob: Optional[str],
+        pattern: Optional["re.Pattern[str]"],
+    ) -> Iterator[dict]:
+        """Every match, in a stable order (sorted walk) so offsets page reliably."""
         for dirpath, dirnames, filenames in os.walk(root):
-            dirnames[:] = [d for d in dirnames if d not in _SKIP_DIRS]
-            for fname in filenames:
-                if tool_input.name_glob and not fnmatch.fnmatch(fname, tool_input.name_glob):
+            dirnames[:] = sorted(d for d in dirnames if d not in _SKIP_DIRS)
+            for fname in sorted(filenames):
+                if name_glob and not fnmatch.fnmatch(fname, name_glob):
                     continue
                 fpath = Path(dirpath) / fname
                 rel = str(fpath.relative_to(root_base))
                 if pattern is None:
-                    matches.append({"path": rel})
-                    if len(matches) >= tool_input.max_results:
-                        truncated = True
-                        break
+                    yield {"path": rel}
                     continue
-                # content scan
                 if fpath.suffix.lower() in _BINARY_EXT:
                     continue
                 try:
-                    if fpath.stat().st_size > tool_input.max_file_bytes:
-                        continue
                     with fpath.open("r", encoding="utf-8", errors="ignore") as fh:
                         for line_no, line in enumerate(fh, 1):
                             if pattern.search(line):
-                                matches.append({
-                                    "path": rel, "line_no": line_no,
-                                    "line": line.rstrip("\n")[:300],
-                                })
-                                if len(matches) >= tool_input.max_results:
-                                    truncated = True
-                                    break
+                                yield {"path": rel, "line_no": line_no,
+                                       "line": line.rstrip("\n")}
                 except (OSError, ValueError):
                     continue
-                if truncated:
-                    break
-            if truncated:
-                break
-
-        return ToolResult(output={
-            "matches": matches,
-            "count": len(matches),
-            "truncated": truncated,
-            "root": str(root.relative_to(root_base)) or ".",
-        })
 
 
 # =============================================================================
@@ -237,10 +241,34 @@ if __name__ == "__main__":
               r5.is_success and not any("/.git/" in m["path"] or "chromadb" in m["path"]
                                         for m in r5.output["matches"]))
 
-        # T6: max_results cap + truncation flag
-        r6 = await safe_invoke(tool, {"name_glob": "*.py", "max_results": 3})
-        check("T6 max_results cap", r6.is_success and r6.output["count"] == 3
-              and r6.output["truncated"] is True)
+        # T6: NO CUT — by default every match is returned; with a page size,
+        # paging by next_offset returns every match exactly once.
+        r6 = await safe_invoke(tool, {"name_glob": "*.py", "subdir": "js-development"})
+        all_py = [m["path"] for m in r6.output["matches"]] if r6.is_success else []
+        check("T6a default returns ALL matches (old default cut at 50)",
+              r6.is_success and r6.output["complete"] and len(all_py) > 50
+              and r6.output["total_matches"] == len(all_py), str(len(all_py)))
+        paged: List[str] = []
+        off: Optional[int] = 0
+        while off is not None:
+            rp = await safe_invoke(tool, {"name_glob": "*.py", "subdir": "js-development",
+                                          "max_results": 17, "offset": off})
+            paged += [m["path"] for m in rp.output["matches"]]
+            off = rp.output["next_offset"]
+        check("T6b paging covers every match exactly once, in order",
+              paged == all_py, f"{len(paged)} vs {len(all_py)}")
+
+        # T6c: a matching line is returned WHOLE (old cut: 300 chars).
+        import tempfile as _tf
+        with _tf.TemporaryDirectory(dir=str(Path(JARVIS_ROOT))) as td:
+            long_line = "NEEDLE-" + "L" * 5_000 + "-END"
+            (Path(td) / "long.txt").write_text(long_line + "\n", encoding="utf-8")
+            sub = str(Path(td).relative_to(Path(JARVIS_ROOT).resolve()))
+            rl = await safe_invoke(tool, {"subdir": sub, "content_regex": "NEEDLE"})
+            check("T6c a 5,000-char matching line is returned whole",
+                  rl.is_success and rl.output["matches"]
+                  and rl.output["matches"][0]["line"] == long_line,
+                  str(rl.error or len(rl.output["matches"][0]["line"])))
 
         # T7: invalid regex -> clean error
         r7 = await safe_invoke(tool, {"content_regex": "([unclosed"})

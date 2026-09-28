@@ -21,8 +21,13 @@ Without a real personalization corpus:
     -> "JARVIS knows me" stays a context-injection story: cognitive_profile.md
        re-read every session, capped at 2500 chars inside a 6000-char boot
        budget (brain/context_injector.py) — a cheat sheet, not internalization
-    -> personal_life.md, the richest non-work material that exists, reaches
-       nothing at all — verified: zero modules reference it
+    -> personal_life.md is DELIBERATELY NOT A SOURCE (decided 2026-09-23,
+       reversing its inclusion here). It names real third parties — partner,
+       family, friends — who never consented to being trained into weights,
+       and weights cannot be un-trained the way a file can be deleted. The
+       benefit it bought was arithmetically nil: 2 records / 4,957 chars,
+       0.07% of the blend. Do NOT re-add it to _SOURCE_ITERATORS on the
+       grounds that it "reaches nothing" — reaching nothing is the intent.
     -> The user's own 460 captured prompts — how they ACTUALLY write, ask,
        push back — are used for nothing
 
@@ -103,7 +108,6 @@ from jarvis_core.specialists.text_hygiene import corpus_admits
 _CORPUS_CHUNK_CHAR_LIMIT = 4000
 _CORPUS_CHUNK_OVERLAP = 400
 
-_PERSONAL_LIFE_PATH = Path(DATA_ROOT) / "personal_life.md"
 _CONVERSATIONS_DIR = Path(DATA_ROOT) / "conversations"
 _OBSERVATION_QUEUE_PATH = Path(DATA_ROOT) / "observation_queue.jsonl"
 
@@ -273,30 +277,6 @@ class CorpusStats:
 # =============================================================================
 # Part 3: FACTS — WHO THE OWNER IS
 # =============================================================================
-
-def iter_personal_life_records() -> Generator[CorpusRecord, None, None]:
-    """
-    LAYER: Specialists (Corpus Assembly)
-
-    The private life notes: family, living situation, relationships,
-    friendships, health history, professional recognition. Local-only and
-    gitignored (never pushed to the public repo) — but note this DOES leave
-    the machine if the assembled corpus is uploaded to RunPod for training.
-    """
-    try:
-        text = _PERSONAL_LIFE_PATH.read_text(encoding="utf-8")
-    except OSError:
-        return
-    if not text.strip():
-        return
-    for i, chunk in enumerate(_chunker().chunk(text)):
-        yield CorpusRecord(
-            source_type="personal_life",
-            source_path=f"personal_life.md#chunk{i}",
-            text=chunk,
-            metadata={"visibility": "private-local-only"},
-        )
-
 
 def iter_kb_identity_records() -> Generator[CorpusRecord, None, None]:
     """
@@ -634,7 +614,6 @@ _HYGIENE_SOURCES = frozenset({"user_voice"})
 _MIN_RECORD_CHARS = 100
 
 _SOURCE_ITERATORS = (
-    ("personal_life", lambda dropped: iter_personal_life_records()),
     ("kb_identity", lambda dropped: iter_kb_identity_records()),
     ("kb_judgment", lambda dropped: iter_kb_judgment_records()),
     ("written_reasoning", lambda dropped: iter_written_reasoning_records()),

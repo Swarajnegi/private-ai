@@ -101,8 +101,13 @@ def _table_row_label(line: str) -> Optional[str]:
     if not pending:
         return None
     label_cells = [_strip_markers(c) for c in cells]
+    # Number + name form the label; every other cell (status words, notes such
+    # as "RunPod prepaid only") rides along as detail rather than being dropped.
     label = " ".join(c for c in label_cells[:2] if c)
-    return label or None
+    detail = " | ".join(c for c in label_cells[2:] if c)
+    if label and detail:
+        return f"{label} — {detail}"
+    return label or detail or None
 
 
 def _classify_line(line: str) -> Optional[str]:
@@ -203,7 +208,11 @@ def _run_self_test() -> None:
               any("Sub-Phase 9.0: The Lungs" in l for l in labels), str(labels))
         check("T2 pending table row found (label = number + name)",
               "9.0 Cognitive Control Loop" in labels, str(labels))
-        check("T3 in-progress row counts as pending", "9.3 In flight" in labels)
+        check("T3 in-progress row counts as pending, status kept as detail",
+              "9.3 In flight — In progress" in labels, str(labels))
+        check("T3b a notes cell is kept, not dropped",
+              _classify_line("| 5.1 | Fine-Tuning | ⬜ | RunPod prepaid only |")
+              == "5.1 Fine-Tuning — RunPod prepaid only")
         check("T4 completed rows excluded",
               not any("Done thing" in l or "Entry sprint" in l for l in labels))
         check("T5 deferred row excluded", not any("GraphRAG" in l for l in labels))

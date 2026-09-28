@@ -46,7 +46,8 @@ STEP 3: ensure jarvis_data/ exists; regenerate cognitive_profile.md ONLY if
         missing (profile_synth); regenerate activity_digest.md ONLY if missing
         AND a local queue exists (never blank a synced digest).
         |
-STEP 4: print the self-state report. --check does STEP 1 + report only.
+STEP 4: print the self-state report, ending with scripts/pipeline_health.py's
+        breaches (exit 1 when there are any). --check does STEP 1 + report only.
 
 =============================================================================
 """
@@ -308,9 +309,34 @@ def run(check_only: bool = False) -> int:
 
     _ensure_artifacts(_ROOT, report, check_only)
     _machine_readiness(_ROOT, report)
+    breached = _pipeline_health(report)
     report.append("=" * 62)
     print("\n".join(report))
-    return 0
+    return 1 if breached else 0
+
+
+def _pipeline_health(report: List[str]) -> bool:
+    """Append scripts/pipeline_health.py's breaches; True when any exist.
+
+    The hearth answering 200 is not the same as the pipeline working: on
+    2026-09-28 it answered 200 while curate_turns had failed 185 of 195 runs.
+    Codex and Antigravity run this at boot, so this is where they find out.
+    """
+    report.append("  " + "-" * 58)
+    try:
+        if str(_ROOT / "scripts") not in sys.path:
+            sys.path.insert(0, str(_ROOT / "scripts"))
+        import pipeline_health
+        lines = pipeline_health.brief_lines(pipeline_health.health_report())
+    except Exception as e:                              # a crashed check is a breach, not a pass
+        lines = [f"[pipeline_health] could not run: {type(e).__name__}: {e}"]
+    if not lines:
+        report.append("  pipeline health : HEALTHY (python scripts/pipeline_health.py)")
+        return False
+    report.append(f"  pipeline health : {len(lines)} BREACH(ES) — act on these, or tell the owner:")
+    report.extend(f"    {line}" for line in lines)
+    report.append("    whole report: python scripts/pipeline_health.py")
+    return True
 
 
 def _run_self_test() -> None:
@@ -377,6 +403,34 @@ def _run_self_test() -> None:
     gaps = missing_hooks(partial, manifest_hooks)
     check(f"T5 check-mode finds the {partial_gap} gaps", len(gaps) == partial_gap, str(gaps))
     check("T5b complete settings -> no gaps", missing_hooks(merged, manifest_hooks) == [])
+
+    # T6: pipeline health reaches the boot report, and a breach is non-zero.
+    import types
+    fake = types.ModuleType("pipeline_health")
+    reports = {"r": {"healthy": True, "breaches": []}}
+    fake.health_report = lambda: reports["r"]                          # type: ignore[attr-defined]
+    fake.brief_lines = lambda r: [f"[{b['check']}] {b['detail']}" for b in r["breaches"]]  # type: ignore[attr-defined]
+    real_mod = sys.modules.get("pipeline_health")
+    sys.modules["pipeline_health"] = fake
+    try:
+        lines6: List[str] = []
+        check("T6 a healthy pipeline is one HEALTHY line and not a breach",
+              _pipeline_health(lines6) is False and any("HEALTHY" in x for x in lines6), str(lines6))
+        reports["r"] = {"healthy": False, "breaches": [
+            {"check": "job:curate_turns", "detail": "185 consecutive failures"}]}
+        lines6b: List[str] = []
+        check("T6b every breach is printed whole and makes the run a breach",
+              _pipeline_health(lines6b) is True
+              and any("[job:curate_turns] 185 consecutive failures" in x for x in lines6b), str(lines6b))
+        fake.health_report = lambda: (_ for _ in ()).throw(RuntimeError("boom"))  # type: ignore[attr-defined]
+        lines6c: List[str] = []
+        check("T6c a pipeline_health that cannot run is a breach, never a pass",
+              _pipeline_health(lines6c) is True and any("could not run" in x for x in lines6c), str(lines6c))
+    finally:
+        if real_mod is not None:
+            sys.modules["pipeline_health"] = real_mod
+        else:
+            sys.modules.pop("pipeline_health", None)
 
     total = passed + len(failed)
     print(f"\n  Passed: {passed}/{total}")

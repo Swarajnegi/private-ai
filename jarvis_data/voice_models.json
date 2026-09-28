@@ -1,0 +1,123 @@
+{
+  "_comment": "Written by scripts/bench_voice_models.py. brain/voice_path.py streams from chain[0] and fails over to the next on error or HTTP 402. Re-run the script after a credit top-up or when a model degrades.",
+  "measured_at": "2026-09-27T01:49:16+05:30",
+  "chain": [
+    "qwen/qwen3-30b-a3b-instruct-2507",
+    "google/gemini-2.5-flash-lite",
+    "nvidia/nemotron-3-super-120b-a12b:free"
+  ],
+  "results": {
+    "paid": [
+      {
+        "model": "qwen/qwen3-32b",
+        "eligible": false,
+        "reason": "all 5 calls failed: no content tokens"
+      },
+      {
+        "model": "openai/gpt-oss-120b",
+        "ok_calls": "4/5",
+        "ttft_p50": 0.44,
+        "ttft_max": 0.501,
+        "total_p50": 0.485,
+        "sample": "Hello, sir.",
+        "escalates": "1/3",
+        "false_escalations": 0,
+        "eligible": false,
+        "reason": "escalated only 1/3 tool requests"
+      },
+      {
+        "model": "google/gemini-2.5-flash-lite",
+        "ok_calls": "5/5",
+        "ttft_p50": 0.758,
+        "ttft_max": 0.862,
+        "total_p50": 0.837,
+        "sample": "Hello, sir.",
+        "escalates": "3/3",
+        "false_escalations": 0,
+        "eligible": true
+      },
+      {
+        "model": "openai/gpt-oss-20b",
+        "ok_calls": "4/5",
+        "ttft_p50": 0.933,
+        "ttft_max": 1.509,
+        "total_p50": 0.955,
+        "sample": "All operational, awaiting instructions.",
+        "escalates": "0/3",
+        "false_escalations": 0,
+        "eligible": false,
+        "reason": "escalated only 0/3 tool requests"
+      },
+      {
+        "model": "meta-llama/llama-3.1-8b-instruct",
+        "ok_calls": "5/5",
+        "ttft_p50": 0.331,
+        "ttft_max": 0.349,
+        "total_p50": 0.365,
+        "sample": "Good morning, sir.",
+        "escalates": "1/3",
+        "false_escalations": 0,
+        "eligible": false,
+        "reason": "escalated only 1/3 tool requests"
+      },
+      {
+        "model": "qwen/qwen3-30b-a3b-instruct-2507",
+        "ok_calls": "5/5",
+        "ttft_p50": 0.468,
+        "ttft_max": 7.028,
+        "total_p50": 0.615,
+        "sample": "Good morning, sir. Ready for the day’s tasks.",
+        "escalates": "3/3",
+        "false_escalations": 0,
+        "eligible": true
+      },
+      {
+        "model": "deepseek/deepseek-v4-flash",
+        "eligible": false,
+        "reason": "all 5 calls failed: no content tokens"
+      }
+    ],
+    "free": [
+      {
+        "model": "nvidia/nemotron-3-super-120b-a12b:free",
+        "ok_calls": "5/5",
+        "ttft_p50": 1.579,
+        "ttft_max": 2.245,
+        "total_p50": 1.58,
+        "sample": "We are in a new session. The user says \"Hi, JARVIS.\" We must respond appropriately.\n Accor",
+        "escalates": "3/3",
+        "false_escalations": 0,
+        "eligible": true
+      },
+      {
+        "model": "nvidia/nemotron-3.5-lightning:free",
+        "ok_calls": "4/5",
+        "ttft_p50": 18.962,
+        "ttft_max": 118.492,
+        "total_p50": 18.988,
+        "sample": "The user said \"Hi, JARVIS.\" This is a simple greeting. According to the instructions, I ne",
+        "escalates": "1/3",
+        "false_escalations": 0,
+        "eligible": false,
+        "reason": "escalated only 1/3 tool requests"
+      },
+      {
+        "model": "google/gemma-4-26b-a4b-it:free",
+        "eligible": false,
+        "reason": "all 5 calls failed: {\"error\":{\"message\":\"Provider returned error\",\"code\":429,\"metadata\":{\"raw\":\"goog"
+      },
+      {
+        "model": "openrouter/free",
+        "ok_calls": "3/5",
+        "ttft_p50": 1.064,
+        "ttft_max": 1.126,
+        "total_p50": 1.191,
+        "sample": "Sir, JARVIS here. What can I do for you?",
+        "escalates": "0/3",
+        "false_escalations": 0,
+        "eligible": false,
+        "reason": "escalated only 0/3 tool requests"
+      }
+    ]
+  }
+}

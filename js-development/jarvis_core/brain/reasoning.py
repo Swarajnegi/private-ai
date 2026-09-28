@@ -146,13 +146,11 @@ VERDICT_UNCHECKED = "UNCHECKED"
 # would make the pair inconsistent — fuse() has no handle on the gate's config;
 # revisit if a non-default threshold is ever wired (no production caller is today).
 _REASONING_SOUND_FLOOR = 0.35
-# History is bounded before it enters the critic prompt. Rules are almost always
-# USER turns, so user turns get a generous cap; assistant turns (which can be a
-# pathological --full wall of text) get a tight one. Truncation is MARKED, never
-# silent (project EXPLANATION STYLE rule #3: no invisible operations).
-_CONTEXT_USER_CHARS = 2000
-_CONTEXT_ASSISTANT_CHARS = 400
-_MAX_CONTEXT_TURNS = 12
+# The critic sees the WHOLE conversation, every turn in full. The rule it most
+# needs to catch — an inversion like "say no if true" — is exactly the kind a
+# window or a per-turn cap drops: stated once, early, and never repeated. The
+# answering model was already handed this same history, so the critic call
+# (the same model by default) can take it too.
 
 
 # =============================================================================
@@ -186,19 +184,10 @@ _CRITIC_SYSTEM = (
 def _render_context(context: Optional[List[Dict[str, str]]]) -> str:
     if not context:
         return "(no prior conversation)"
-    dropped = max(0, len(context) - _MAX_CONTEXT_TURNS)
-    turns = context[-_MAX_CONTEXT_TURNS:]
     lines = []
-    if dropped:
-        lines.append(f"[{dropped} older turn(s) elided — a rule stated earlier "
-                     "than this window is not visible to the audit]")
-    for t in turns:
+    for t in context:
         role = str(t.get("role", "?"))
-        full = str(t.get("content", "")).strip()
-        cap = _CONTEXT_USER_CHARS if role == "user" else _CONTEXT_ASSISTANT_CHARS
-        content = full[:cap]
-        if len(full) > cap:
-            content += " […turn truncated]"
+        content = str(t.get("content", "")).strip()
         if content:
             lines.append(f"{role}: {content}")
     return "\n".join(lines) if lines else "(no prior conversation)"
@@ -670,6 +659,19 @@ def _run_self_test() -> None:
           "DERIVE the correct answer yourself" in body
           and body.index("DERIVE the correct answer yourself")
           < body.index("THE ANSWER THAT WAS GIVEN"), body[:160])
+
+    # T10g: the critic sees the WHOLE history — a rule stated in turn 1 of 40
+    # (old window: last 12 turns) and a 9,000-char assistant turn (old cap: 400)
+    # both reach it in full, with no elision marker.
+    long_hist = [{"role": "user", "content": "RULE: respond no if true and yes if false"}]
+    for i in range(39):
+        long_hist.append({"role": "assistant" if i % 2 == 0 else "user",
+                          "content": f"turn {i} " + ("w" * 9_000 if i == 20 else "ok")})
+    body_long = _build_critic_messages("is earth flat?", "No.", long_hist)[-1]["content"]
+    check("T10g the earliest rule and a 9,000-char turn both reach the critic whole",
+          "RULE: respond no if true and yes if false" in body_long
+          and ("w" * 9_000) in body_long and "turn 38 ok" in body_long
+          and "elided" not in body_long and "truncated" not in body_long)
 
     # T10e: an EVIDENCE digest is injected and precedes the given answer, so the
     # critic judges the answer against what was gathered (not blind).

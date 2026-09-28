@@ -32,11 +32,15 @@ THE FLOW
 
 STEP 1: stream observation_queue.jsonl, window-bounded by timestamp.
         |
-STEP 2: group turns by IST calendar day; per day tally turn count + domain mix +
-        a few representative, de-duplicated topic snippets (harness wrappers and
-        secrets already stripped/redacted at capture; light cleanup here too).
+STEP 2: group turns by IST calendar day; per day tally turn count + domain mix,
+        and pick ONE representative message per chat: the first turn that is
+        mostly the owner's own prose (harness envelopes, auto-approval
+        transcripts, compaction summaries, bare image markers skipped).
         |
-STEP 3: render a compact, source-labeled markdown digest (most-recent day first).
+STEP 3: render a source-labeled markdown digest (most-recent day first).
+        Every selected message appears WHOLE — which turns to show is a
+        selection policy; cutting the ones shown is not allowed (owner
+        directive 2026-09-28: no truncation anywhere).
 
 =============================================================================
 """
@@ -74,16 +78,49 @@ _QUEUE_PATH = Path(DATA_ROOT) / "observation_queue.jsonl"
 _DIGEST_PATH = Path(DATA_ROOT) / "activity_digest.md"
 
 _DEFAULT_DAYS = 7
-_SNIPPETS_PER_DAY = 4
-_SNIPPET_CHARS = 80
-_MAX_DIGEST_CHARS = 3500
 _WEEKDAY = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
+# A chat is represented by its first turn with this much owner prose (the
+# opening request usually states what the chat is for); failing that, by its
+# wordiest turn, provided it clears the floor that rules out "ok"/"continue".
+_SUBSTANTIVE_PROSE_CHARS = 40
+_MIN_PROSE_CHARS = 12
+# A turn whose owner prose is under half its text is mostly a paste or a log;
+# another turn from the same chat describes the work better.
+_MIN_PROSE_SHARE = 0.5
 
-# Light leftover-wrapper cleanup for snippet display (capture strips these going
-# forward; older queued turns may still carry them).
-_WRAP = re.compile(
-    r"</?(ide_opened_file|ide_selection|system-reminder|task-notification|"
-    r"local-command-[a-z]+|command-[a-z]+)\b[^>]*>", re.IGNORECASE)
+# Host-injected blocks. Removed WITH their bodies: a task-notification's body
+# is the harness talking, not the owner.
+_HARNESS_TAGS = (
+    r"ide_opened_file|ide_selection|system-reminder|task-notification|"
+    r"local-command-[a-z]+|command-[a-z]+|user-prompt-submit-hook|"
+    r"codex_internal_context|in-app-browser-context|realtime_delegation|"
+    r"turn_aborted|heartbeat|automation_id|automation|"
+    r"send_user_message_question_reply|environment_context|user_instructions|"
+    r"INSTRUCTIONS|image"
+)
+_HARNESS_BLOCK = re.compile(r"<(" + _HARNESS_TAGS + r")\b[^>]*>.*?</\1>",
+                            re.IGNORECASE | re.DOTALL)
+_WRAP = re.compile(r"</?(" + _HARNESS_TAGS + r")\b[^>]*/?>", re.IGNORECASE)
+# Whole-turn envelopes: an automated reviewer's transcript, a context-compaction
+# summary, a skill body, an interrupt notice. None of it was typed by the owner.
+_ENVELOPE_OPENERS = (
+    "the following is the codex agent history",
+    "this session is being continued from a previous conversation",
+    "base directory for this skill",
+    "[request interrupted",
+    "your previous response had no visible output",
+    "# agents.md instructions for",
+)
+_MARKER_LINE = re.compile(
+    r"^\s*\[(?:image[^\]]*|external unsupported block[^\]]*)\]\s*$",
+    re.IGNORECASE | re.MULTILINE)
+_PASTED = re.compile(r"<pasted_content\b[^>]*>.*?</pasted_content[^>]*>",
+                     re.IGNORECASE | re.DOTALL)
+_FENCED = re.compile(r"```.*?```", re.DOTALL)
+_LOG_LINE = re.compile(
+    r"^\s*(?:Traceback|File \"|at |\$ |PS [A-Z]:|>>>|\d{4}-\d{2}-\d{2}[T ]\d{2}:"
+    r"|\[\d{2}:\d{2}|(?:INFO|WARN|WARNING|ERROR|DEBUG)\b|[{}\[\]])")
+_FILES_REQUEST = re.compile(r"^## My request[^\n]*:[ \t]*$", re.MULTILINE)
 
 
 def _parse_instant(ts: str) -> Optional[datetime]:
@@ -108,10 +145,58 @@ def _iter_queue(path: Path) -> Iterator[Dict[str, Any]]:
                 continue
 
 
-def _clean_snippet(text: str) -> str:
-    text = _WRAP.sub(" ", text or "")
-    text = " ".join(text.split())  # collapse whitespace
-    return text
+def _owner_message(raw: str) -> str:
+    """The owner's message with host envelopes removed, or "" when the whole
+    turn is an envelope. Nothing the owner typed is removed."""
+    text = raw or ""
+    if text.lstrip().lower().startswith(_ENVELOPE_OPENERS):
+        return ""
+    text = _HARNESS_BLOCK.sub(" ", text)
+    text = _WRAP.sub(" ", text)
+    request = _FILES_REQUEST.search(text)
+    if request:
+        # Codex prefixes attachments as "# Files mentioned by the user: ...
+        # ## My request:" — the file list is the host's, the request is the owner's.
+        text = text[request.end():]
+    text = _MARKER_LINE.sub("", text)
+    lines = [ln.rstrip() for ln in text.strip().splitlines()]
+    return "\n".join(ln for ln in lines if ln.strip())
+
+
+def _prose_chars(message: str) -> int:
+    """Characters of the message that read as the owner writing, not pasting."""
+    body = _FENCED.sub("", _PASTED.sub("", message))
+    return sum(len(ln.strip()) for ln in body.splitlines() if not _LOG_LINE.match(ln))
+
+
+class _ChatPick:
+    """Streaming choice of the one turn that best says what a chat was about
+    on a day: its EARLIEST mostly-prose turn, else its wordiest turn. Holds one
+    message per chat, never the chat's whole history."""
+
+    __slots__ = ("dt", "message", "prose", "substantive")
+
+    def __init__(self) -> None:
+        self.dt: Optional[datetime] = None
+        self.message = ""
+        self.prose = 0
+        self.substantive = False
+
+    def offer(self, dt: datetime, message: str) -> None:
+        prose = _prose_chars(message)
+        substantive = (prose >= _SUBSTANTIVE_PROSE_CHARS
+                       and prose >= _MIN_PROSE_SHARE * len(message))
+        if substantive:
+            # The queue is union-merged across machines, so file order is not
+            # time order; "earliest" is decided by timestamp.
+            if not self.substantive or (self.dt is not None and dt < self.dt):
+                self.dt, self.message, self.prose, self.substantive = dt, message, prose, True
+        elif not self.substantive and prose > self.prose:
+            self.dt, self.message, self.prose = dt, message, prose
+
+    @property
+    def chosen(self) -> Optional[str]:
+        return self.message if self.prose >= _MIN_PROSE_CHARS else None
 
 
 class ActivityRecaller:
@@ -127,8 +212,7 @@ class ActivityRecaller:
         per_day_turns: Dict[str, int] = defaultdict(int)
         per_day_domains: Dict[str, Counter] = defaultdict(Counter)
         per_day_sessions: Dict[str, set] = defaultdict(set)
-        per_day_snippets: Dict[str, List[str]] = defaultdict(list)
-        per_day_seen: Dict[str, set] = defaultdict(set)
+        per_chat: Dict[tuple, _ChatPick] = defaultdict(_ChatPick)
         model_sightings: List[tuple] = []  # (dt, model) — runtime SELF-state
         machine = ""
         total = 0
@@ -149,13 +233,9 @@ class ActivityRecaller:
                 machine = rec["machine"]
             total += 1
 
-            snippet = _clean_snippet(rec.get("user_text", ""))[:_SNIPPET_CHARS]
-            if snippet and len(snippet) >= 12:
-                dedup_key = snippet[:40].lower()
-                if (dedup_key not in per_day_seen[day]
-                        and len(per_day_snippets[day]) < _SNIPPETS_PER_DAY):
-                    per_day_seen[day].add(dedup_key)
-                    per_day_snippets[day].append(snippet)
+            message = _owner_message(rec.get("user_text", ""))
+            if message:
+                per_chat[(day, rec.get("session_id", ""))].offer(dt, message)
 
         if total == 0:
             return ("RECENT ACTIVITY: no captured turns in the last "
@@ -174,19 +254,26 @@ class ActivityRecaller:
         self_line = self._self_state_line(model_sightings, machine)
         if self_line:
             lines.insert(1, self_line)
+        per_day_picks: Dict[str, List[tuple]] = defaultdict(list)
+        for (day, _), pick in per_chat.items():
+            if pick.chosen is not None:
+                per_day_picks[day].append((pick.dt, pick.chosen))
+
         for day in sorted(per_day_turns, reverse=True):
             dt = datetime.fromisoformat(day + "T00:00:00").replace(tzinfo=_IST)
             wd = _WEEKDAY[dt.weekday()]
-            doms = ", ".join(f"{d}×{c}" for d, c in per_day_domains[day].most_common(3))
+            doms = ", ".join(f"{d}×{c}" for d, c in per_day_domains[day].most_common())
             lines.append(f"- {day} ({wd}): {per_day_turns[day]} turns "
                          f"[{len(per_day_sessions[day])} chat(s)] — {doms}")
-            for snip in per_day_snippets[day]:
-                lines.append(f"    • {snip}")
+            seen: set = set()
+            for _, message in sorted(per_day_picks[day], key=lambda t: t[0]):
+                key = " ".join(message.split()).lower()
+                if key in seen:
+                    continue
+                seen.add(key)
+                lines.append("    • " + message.replace("\n", "\n      "))
 
-        digest = "\n".join(lines)
-        if len(digest) > _MAX_DIGEST_CHARS:
-            digest = digest[:_MAX_DIGEST_CHARS] + "\n    … (truncated)"
-        return digest
+        return "\n".join(lines)
 
     def write_digest(
         self, days: int = _DEFAULT_DAYS, now: Optional[datetime] = None,
@@ -294,7 +381,7 @@ def _run_self_test() -> None:
 
         check("T1 sourced from queue not git", "NOT git" in d and "observation_queue" in d)
         check("T2 June 9 DE present (the chat the review missed)",
-              "2026-06-09" in d and "LakehousePlumber" in d, d)
+              "2026-06-09" in d and ("LakehousePlumber" in d or "auto cdc flags" in d), d)
         check("T3 June 9 recognized as data-engineering", "data-engineering" in d)
         check("T4 June 10 present with jarvis-build", "2026-06-10" in d and "jarvis-build" in d)
         check("T5 cross-chat: counts multiple chats", "chats)" in d and "3 chats" in d.replace("  ", " ") or "3 chats" in d, d[:200])
@@ -315,6 +402,62 @@ def _run_self_test() -> None:
                       encoding="utf-8")
         dw = ActivityRecaller(queue_path=wq).digest(days=2, now=now)
         check("T10 wrapper stripped from snippet", "ide_opened_file" not in dw and "real question here" in dw, dw)
+
+        # --- no cuts: the selected message appears whole, however long ---
+        long_msg = ("I want the insights screen to show the monthly movement first, "
+                    + "and then every holding in order of weight " * 150 + "FINAL-WORD")
+        lq = Path(td) / "long.jsonl"
+        lq.write_text("\n".join([
+            obs(now - timedelta(hours=3), "finance", long_msg, "s_long"),
+            obs(now - timedelta(hours=2), "finance", "second shorter turn in the same chat", "s_long"),
+        ]) + "\n", encoding="utf-8")
+        dl = ActivityRecaller(queue_path=lq).digest(days=2, now=now)
+        check("T15 a 6,000-char message appears whole, to its last word",
+              "FINAL-WORD" in dl and "truncated" not in dl
+              and " ".join(dl.split()).count("every holding in order of weight") == 150, dl[-200:])
+        check("T16 one message per chat per day (the opening request)",
+              "second shorter turn" not in dl)
+
+        # --- envelopes are never chosen; the owner's own prose is ---
+        eq2 = Path(td) / "envelopes.jsonl"
+        eq2.write_text("\n".join([
+            obs(now - timedelta(hours=5), "general",
+                "The following is the Codex agent history whose request action you are "
+                "assessing. >>> TRANSCRIPT START [1] user: something", "s_env"),
+            obs(now - timedelta(hours=4), "general",
+                "This session is being continued from a previous conversation that ran "
+                "out of context. Summary: lots of things", "s_env"),
+            obs(now - timedelta(hours=3), "general",
+                "<task-notification>agent finished with a long report body</task-notification>",
+                "s_env"),
+            obs(now - timedelta(hours=2), "general",
+                "[Image: source: C:\\tmp\\1.png]\n[external unsupported block: image]", "s_env"),
+            obs(now - timedelta(hours=1), "general",
+                "# AGENTS.md instructions for E:\\J.A.R.V.I.S\n<INSTRUCTIONS>rules</INSTRUCTIONS>",
+                "s_env"),
+            obs(now - timedelta(minutes=30), "general",
+                "# Files mentioned by the user:\n\n## shot.png: C:/tmp/shot.png\n\n"
+                "## My request for Codex:\n"
+                "the graph needs to show the whole year, not just this month", "s_env"),
+        ]) + "\n", encoding="utf-8")
+        de = ActivityRecaller(queue_path=eq2).digest(days=2, now=now)
+        check("T17 harness envelopes skipped; the owner's request chosen",
+              "the graph needs to show the whole year" in de
+              and "TRANSCRIPT START" not in de and "being continued" not in de
+              and "long report body" not in de and "shot.png" not in de
+              and "AGENTS.md" not in de, de)
+
+        # a chat whose opener is a pasted log is represented by its prose turn
+        pq = Path(td) / "paste.jsonl"
+        log = "\n".join(f"2026-06-10T10:00:{i:02d} ERROR worker {i} failed" for i in range(40))
+        pq.write_text("\n".join([
+            obs(now - timedelta(hours=2), "general", log, "s_paste"),
+            obs(now - timedelta(hours=1), "general",
+                "why does the worker pool keep failing after the deploy?", "s_paste"),
+        ]) + "\n", encoding="utf-8")
+        dp = ActivityRecaller(queue_path=pq).digest(days=2, now=now)
+        check("T18 a pasted log loses to the owner's prose", "why does the worker pool" in dp
+              and "ERROR worker" not in dp, dp)
 
         # --- SELF-STATE (Identity pillar) ---
         def obs_m(ts: datetime, model: str, sid: str = "s1") -> str:

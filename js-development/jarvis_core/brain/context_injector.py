@@ -17,14 +17,17 @@ Claude Code sessions get this state injected by hooks; the runtime Mind got
 nothing — same mind, different limb, no breath.
 
 This organ is the inhale: a small set of PROVIDERS (plain callables returning
-text or None) composed into ONE bounded prompt block that boot.py appends to
+text or None) composed into ONE prompt block that boot.py appends to
 JARVIS_PSYCHE_PROMPT. Providers are injected — a test passes a fake clock and
 temp paths; a future host passes its own self-state — so the organ is
 host-independent by construction (System_Protocol: core organ + thin adapter).
 
-Bounded by design: per-provider char caps + a total cap. A boot inhale that
-blows a free-tier model's context window would be a self-inflicted lobotomy;
-a provider that crashes must cost one note line, never the boot.
+Nothing is cut (owner directive 2026-09-28: no truncation anywhere). Every
+provider's text ships whole and no section is ever dropped for size — the old
+per-provider caps and 6,000-char total cut the profile to its first 2,500
+chars, so the model never saw most of who its owner is. Context-window
+overflow is handled by paging elsewhere, not by silently discarding state
+here. A provider that crashes still costs one note line, never the boot.
 
 =============================================================================
 THE FLOW
@@ -35,22 +38,24 @@ STEP 1: default_providers() builds the standard set: temporal (injected clock),
         (cognitive_profile.md head), activity (ActivityRecaller digest).
         |
 STEP 2: ContextInjector.inhale(): run each provider in order; skip empty,
-        truncate to its cap, note (never raise) on failure.
+        redact outbound identifiers, note (never raise) on failure.
         |
-STEP 3: stop appending when the total cap is reached; return InhaleResult
-        (block + which providers fired/skipped) for the BootReport.
+STEP 3: return InhaleResult (block + which providers fired/skipped) for the
+        BootReport.
 
 =============================================================================
 """
 
 from __future__ import annotations
 
+import contextlib
+import contextvars
 import os
 import sys
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Callable, List, Optional, Tuple
+from typing import Callable, Iterator, List, Optional, Tuple
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))  # standalone-run safety
 
@@ -65,10 +70,47 @@ _IST = timezone(timedelta(hours=5, minutes=30))
 Provider = Callable[[], Optional[str]]
 Clock = Callable[[], datetime]
 
-_DEFAULT_TOTAL_CAP = 6000
-_TRUNCATION_MARK = " …(truncated)"
-
 _DEFAULT_PROFILE_PATH = Path(DATA_ROOT) / "cognitive_profile.md"
+_DEFAULT_PERSONAL_LIFE_PATH = Path(DATA_ROOT) / "personal_life.md"
+
+# pipeline_health builds both inhales to check nothing in them is cut, and the
+# inhale includes pipeline health: without this, each would compute the other
+# forever. Set only while pipeline_health is building an inhale.
+_PIPELINE_HEALTH_SUPPRESSED: contextvars.ContextVar[bool] = contextvars.ContextVar(
+    "pipeline_health_suppressed", default=False)
+_PIPELINE_HEALTH_TTL_S = 60.0
+
+
+@contextlib.contextmanager
+def pipeline_health_suppressed() -> Iterator[None]:
+    """Silence the Pipeline health provider for the duration (recursion guard)."""
+    token = _PIPELINE_HEALTH_SUPPRESSED.set(True)
+    try:
+        yield
+    finally:
+        _PIPELINE_HEALTH_SUPPRESSED.reset(token)
+
+
+def pipeline_health_line() -> Optional[str]:
+    """Every breach, one per line, or None when the pipeline is healthy.
+
+    Quiet-when-healthy like projections.stale_line: a working pipeline costs
+    zero prompt tokens, and a broken one is something JARVIS says out loud.
+    """
+    if _PIPELINE_HEALTH_SUPPRESSED.get():
+        return None
+    scripts = str(Path(JARVIS_ROOT) / "scripts")
+    if scripts not in sys.path:
+        sys.path.insert(0, scripts)
+    import pipeline_health  # scripts/pipeline_health.py — the one implementation
+    report = pipeline_health.cached_report(max_age_s=_PIPELINE_HEALTH_TTL_S)
+    lines = pipeline_health.brief_lines(report)
+    if not lines:
+        return None
+    return (f"PIPELINE BREACHED — {len(lines)} problem(s) in your own memory and "
+            f"training pipeline. Tell your owner plainly the next time they speak "
+            f"to you; do not wait to be asked. Full detail: python "
+            f"scripts/pipeline_health.py\n" + "\n".join(lines))
 
 
 # =============================================================================
@@ -77,10 +119,9 @@ _DEFAULT_PROFILE_PATH = Path(DATA_ROOT) / "cognitive_profile.md"
 
 @dataclass(frozen=True)
 class ProviderSpec:
-    """One named source of live state with its own size budget."""
+    """One named source of live state."""
     name: str
     provider: Provider
-    max_chars: int = 1200
 
 
 @dataclass(frozen=True)
@@ -97,7 +138,7 @@ class InhaleResult:
 # =============================================================================
 
 class ContextInjector:
-    """Composes provider output into one bounded boot-inhale prompt block."""
+    """Composes provider output into one boot-inhale prompt block."""
 
     HEADER = (
         "LIVE SYSTEM STATE (boot inhale — current, machine-derived; trust it "
@@ -105,10 +146,8 @@ class ContextInjector:
     )
 
     def __init__(self, providers: List[ProviderSpec],
-                 total_cap: int = _DEFAULT_TOTAL_CAP,
                  policy: Optional[OutboundPolicy] = None) -> None:
         self._providers = list(providers)
-        self._total_cap = max(0, int(total_cap))
         self._policy = policy or OutboundPolicy()
 
     def inhale(self) -> InhaleResult:
@@ -116,7 +155,6 @@ class ContextInjector:
         fired: List[str] = []
         skipped: List[str] = []
         redacted: List[str] = []
-        used = len(self.HEADER)
         for spec in self._providers:
             try:
                 value = spec.provider()
@@ -130,19 +168,10 @@ class ContextInjector:
                 continue
             # THE AIRLOCK. Every provider passes through here, including any
             # added later — that is the point of doing it in the loop rather
-            # than inside individual providers. Runs BEFORE the cap so the
-            # budget applies to what actually ships.
+            # than inside individual providers.
             verdict = redact_outbound(text, policy=self._policy)
-            text = verdict.text
             redacted.extend(verdict.removed)
-            if len(text) > spec.max_chars:
-                text = text[: spec.max_chars] + _TRUNCATION_MARK
-            section = f"## {spec.name}\n{text}"
-            if used + len(section) > self._total_cap:
-                skipped.append(spec.name)
-                continue
-            sections.append(section)
-            used += len(section)
+            sections.append(f"## {spec.name}\n{verdict.text}")
             fired.append(spec.name)
         if not fired:
             # Notes alone are not a breath — boot proceeds bare rather than
@@ -228,6 +257,7 @@ def default_providers(
     roadmap_paths: Optional[List[Path]] = None,
     activity_days: int = 7,
     collections: Optional[List[str]] = None,
+    personal_life_path: Optional[Path] = None,
 ) -> List[ProviderSpec]:
     """The standard inhale: tool guidance, temporal, self-state, next task,
     profile, activity.
@@ -236,7 +266,7 @@ def default_providers(
     Heavy reads happen inside the provider closures, at inhale time, never here.
     """
     now = clock or (lambda: datetime.now(_IST))
-    profile = Path(profile_path) if profile_path else _DEFAULT_PROFILE_PATH
+    profile_file = Path(profile_path) if profile_path else _DEFAULT_PROFILE_PATH
 
     def tool_guidance() -> str:
         # The L324 lesson: wiring the autobiography tool is not enough; the
@@ -275,6 +305,9 @@ def default_providers(
         from jarvis_core.brain.projections import stale_line
         return stale_line()
 
+    def pipeline_state() -> Optional[str]:
+        return pipeline_health_line()
+
     def usage_state() -> str:
         # The one provider that can report badly on the project. It exists
         # because conversations/ was the only usage log in the repo and had no
@@ -290,10 +323,23 @@ def default_providers(
         return (f"Next pending roadmap task: {task.label} "
                 f"[{Path(task.file).name}:{task.line_no}]")
 
-    def profile_head() -> Optional[str]:
-        if not profile.exists():
+    def profile_text() -> Optional[str]:
+        if not profile_file.exists():
             return None
-        return profile.read_text(encoding="utf-8", errors="replace").strip()
+        return profile_file.read_text(encoding="utf-8", errors="replace").strip()
+
+    def personal_life() -> Optional[str]:
+        # The owner chose on 2026-09-28 to let JARVIS see the people in their
+        # life when answering (it could not say who their girlfriend was).
+        # Context only: training artifacts still redact these names. The file
+        # opens with a blockquote about its own storage policy; the people and
+        # circumstances start at the first heading.
+        f = Path(personal_life_path) if personal_life_path else _DEFAULT_PERSONAL_LIFE_PATH
+        if not f.exists():
+            return None
+        text = f.read_text(encoding="utf-8", errors="replace")
+        start = text.find("\n## ")
+        return (text[start:] if start >= 0 else text).strip() or None
 
     def recent_activity() -> Optional[str]:
         from jarvis_core.agent.recall import ActivityRecaller
@@ -303,17 +349,17 @@ def default_providers(
         return None if "no captured turns" in text else text
 
     return [
-        ProviderSpec("Tool routing guidance", tool_guidance, max_chars=600),
-        ProviderSpec("Temporal", temporal, max_chars=200),
-        ProviderSpec("Runtime self-state", runtime_self_state, max_chars=300),
-        ProviderSpec("Projection integrity", projection_state, max_chars=400),
-        ProviderSpec("Usage reality (built vs actually used)", usage_state,
-                     max_chars=400),
-        ProviderSpec("Next pending task", next_task, max_chars=300),
-        ProviderSpec("Repo self-map (your own anatomy)", repo_anatomy, max_chars=800),
-        ProviderSpec("Cognitive profile (standing model of your owner)",
-                     profile_head, max_chars=2500),
-        ProviderSpec("Recent cross-chat activity", recent_activity, max_chars=2400),
+        ProviderSpec("Tool routing guidance", tool_guidance),
+        ProviderSpec("Temporal", temporal),
+        ProviderSpec("Runtime self-state", runtime_self_state),
+        ProviderSpec("Projection integrity", projection_state),
+        ProviderSpec("Pipeline health", pipeline_state),
+        ProviderSpec("Usage reality (built vs actually used)", usage_state),
+        ProviderSpec("Next pending task", next_task),
+        ProviderSpec("Repo self-map (your own anatomy)", repo_anatomy),
+        ProviderSpec("Cognitive profile (standing model of your owner)", profile_text),
+        ProviderSpec("People and circumstances in your owner's life", personal_life),
+        ProviderSpec("Recent cross-chat activity", recent_activity),
     ]
 
 
@@ -368,19 +414,20 @@ def _run_self_test() -> None:
           "(unavailable: OSError)" in r5.block and "Good" in r5.fired
           and "Bad" in r5.skipped, r5.block)
 
-    # T6: per-provider cap enforced with marker
-    r6 = ContextInjector([ProviderSpec("Big", lambda: "z" * 500, max_chars=100)]).inhale()
-    check("T6 per-provider cap", "z" * 100 + _TRUNCATION_MARK in r6.block
-          and "z" * 101 not in r6.block)
+    # T6: a large provider ships whole — no cut, no marker
+    r6 = ContextInjector([ProviderSpec("Big", lambda: "z" * 50_000)]).inhale()
+    check("T6 a 50,000-char section ships whole",
+          "z" * 50_000 in r6.block and "truncated" not in r6.block)
 
-    # T7: total cap stops later sections (earlier ones intact)
+    # T7: no section is ever dropped for size, however large the total
     r7 = ContextInjector(
-        [ProviderSpec("S1", lambda: "a" * 300, max_chars=400),
-         ProviderSpec("S2", lambda: "b" * 300, max_chars=400)],
-        total_cap=420,
+        [ProviderSpec("S1", lambda: "a" * 30_000),
+         ProviderSpec("S2", lambda: "b" * 30_000),
+         ProviderSpec("S3", lambda: "c" * 30_000)],
     ).inhale()
-    check("T7 total cap drops the overflow section",
-          r7.fired == ("S1",) and "S2" in r7.skipped, str(r7.fired))
+    check("T7 every section fires regardless of total size",
+          r7.fired == ("S1", "S2", "S3") and not r7.skipped
+          and all(ch * 30_000 in r7.block for ch in "abc"), str(r7.fired))
 
     # T8: nothing fired -> empty block (boot proceeds bare)
     r8 = ContextInjector([ProviderSpec("N", lambda: None)]).inhale()
@@ -390,7 +437,8 @@ def _run_self_test() -> None:
     with tempfile.TemporaryDirectory() as td:
         tdp = Path(td)
         profile = tdp / "cognitive_profile.md"
-        profile.write_text("# Profile\nPROFILE-MARKER-XYZ likes depth.", encoding="utf-8")
+        long_profile = "# Profile\nPROFILE-MARKER-XYZ likes depth. " + "trait " * 2000 + "PROFILE-TAIL-END"
+        profile.write_text(long_profile, encoding="utf-8")
         queue = tdp / "queue.jsonl"
         queue.write_text(json.dumps({
             "ts": FIXED.isoformat(), "session_id": "s1", "machine": "test-box",
@@ -412,6 +460,8 @@ def _run_self_test() -> None:
               "2026-06-12T12:00:00" in rr.block and "Friday" in rr.block)
         check("T10 self-state line present", "Runtime brain: test-brain" in rr.block)
         check("T11 profile content inhaled", "PROFILE-MARKER-XYZ" in rr.block)
+        check("T11b a 12,000-char profile is inhaled whole, to its last word",
+              long_profile.strip() in rr.block)
         check("T12 roadmap next-pending surfaced", "pending thing" in rr.block)
         check("T13 activity digest inhaled (from temp queue)",
               "context injector organ" in rr.block, rr.block[-300:])
@@ -450,6 +500,47 @@ def _run_self_test() -> None:
         check("T16c missing .agent dirs -> None",
               repo_anatomy(rules_dir=tdp / "nope", workflows_dir=tdp / "nada",
                            kb_path=tdp / "kb.jsonl", root=tdp) is None)
+
+        # T17: the people in the owner's life reach the inhale, named, without
+        # the file's storage-policy blockquote (context-only consent, 2026-09-28).
+        life = tdp / "personal_life.md"
+        life.write_text("# Personal Life\n\n> storage policy note\n\n## Relationships\n"
+                        "- Girlfriend: Alicia, called \"Ali\".\n", encoding="utf-8")
+        spec = next(s for s in default_providers(personal_life_path=life, profile_path=tdp / "none.md")
+                    if s.name.startswith("People and circumstances"))
+        body = spec.provider()
+        check("T17 personal life ships named, policy blockquote left out",
+              bool(body) and "Alicia" in body and "Ali" in body and "storage policy" not in body, str(body))
+
+    # T18-T20: the Pipeline health provider — silent when healthy, every
+    # breach when not, and never recursing into itself.
+    import types
+    fake_reports = {"r": {"healthy": True, "breaches": []}}
+    fake = types.ModuleType("pipeline_health")
+    fake.cached_report = lambda max_age_s=60.0: fake_reports["r"]          # type: ignore[attr-defined]
+    fake.brief_lines = lambda r: [f"[{b['check']}] {b['detail']}" for b in r["breaches"]]  # type: ignore[attr-defined]
+    real_mod = sys.modules.get("pipeline_health")
+    sys.modules["pipeline_health"] = fake
+    try:
+        check("T18 a healthy pipeline costs zero prompt tokens", pipeline_health_line() is None)
+        fake_reports["r"] = {"healthy": False, "breaches": [
+            {"check": "job:reindex_memory", "detail": "16 consecutive failures"},
+            {"check": "backlog:codex", "detail": "1153 turns unparsed"}]}
+        line = pipeline_health_line() or ""
+        check("T19 every breach reaches the inhale, one per line",
+              "PIPELINE BREACHED — 2 problem(s)" in line
+              and "\n[job:reindex_memory] 16 consecutive failures" in line
+              and "\n[backlog:codex] 1153 turns unparsed" in line, line)
+        with pipeline_health_suppressed():
+            check("T20 suppressed while pipeline_health builds an inhale (no recursion)",
+                  pipeline_health_line() is None)
+        check("T20b the standard set includes the Pipeline health provider",
+              any(sp.name == "Pipeline health" for sp in default_providers()))
+    finally:
+        if real_mod is not None:
+            sys.modules["pipeline_health"] = real_mod
+        else:
+            sys.modules.pop("pipeline_health", None)
 
     total = passed + len(failed)
     print(f"\n  Passed: {passed}/{total}")

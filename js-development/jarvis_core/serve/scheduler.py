@@ -58,10 +58,14 @@ STEP 3: tick() asks each job if it is due (now - last_run >= interval, and the
         parallel — they write the same files.
         |
 STEP 4: A job with a guard runs the guard first; exit 0 means "nothing to do"
-        and the job is skipped but still marked as checked.
+        and the job is skipped but still marked as checked. A job whose last
+        real run FAILED skips its guard and retries: a skip must never
+        overwrite a failure.
         |
-STEP 5: The result (rc, duration, tail of output) lands in the job's state and
-        surfaces through GET /v1/health, so a silent scheduler is impossible.
+STEP 5: The result (rc, duration, whole output, success/failure times, the
+        consecutive-failure count) lands in the job's state and surfaces
+        through GET /v1/health and scripts/pipeline_health.py, so a silent
+        scheduler is impossible.
 =============================================================================
 """
 
@@ -84,7 +88,6 @@ STATE_PATH = Path(DATA_ROOT) / ".hearth_jobs.json"
 
 _POLL_SECONDS = 60.0
 _DEFAULT_TIMEOUT = 1800.0
-_OUTPUT_TAIL_CHARS = 400
 
 HOUR = 3600.0
 
@@ -160,7 +163,14 @@ class Job:
 
 @dataclass
 class JobState:
-    """Mutable bookkeeping for one job. Serialised to .hearth_jobs.json."""
+    """Mutable bookkeeping for one job. Serialised to .hearth_jobs.json.
+
+    A failure stays visible until a REAL success clears it. Until 2026-09-28 a
+    guard-skip overwrote `last_status` with "skipped — guard reports nothing to
+    do", which is how reindex_memory failed 16 of 17 runs while every surface
+    said it was fine. `consecutive_failures` is the field that cannot be
+    overwritten by anything except a run that exits 0.
+    """
     last_run: float = 0.0
     last_rc: Optional[int] = None
     last_status: str = "never run"
@@ -169,6 +179,10 @@ class JobState:
     runs: int = 0
     failures: int = 0
     skipped: int = 0
+    last_success_ts: float = 0.0
+    last_failure_ts: float = 0.0
+    consecutive_failures: int = 0
+    first_seen_ts: float = 0.0
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -176,6 +190,10 @@ class JobState:
             "last_status": self.last_status, "last_duration_s": self.last_duration_s,
             "last_output": self.last_output, "runs": self.runs,
             "failures": self.failures, "skipped": self.skipped,
+            "last_success_ts": self.last_success_ts,
+            "last_failure_ts": self.last_failure_ts,
+            "consecutive_failures": self.consecutive_failures,
+            "first_seen_ts": self.first_seen_ts,
         }
 
     @classmethod
@@ -191,7 +209,29 @@ class JobState:
         s.runs = int(raw.get("runs", 0) or 0)
         s.failures = int(raw.get("failures", 0) or 0)
         s.skipped = int(raw.get("skipped", 0) or 0)
+        s.last_success_ts = float(raw.get("last_success_ts", 0.0) or 0.0)
+        s.last_failure_ts = float(raw.get("last_failure_ts", 0.0) or 0.0)
+        s.consecutive_failures = int(raw.get("consecutive_failures", 0) or 0)
+        s.first_seen_ts = float(raw.get("first_seen_ts", 0.0) or 0.0)
+        if "consecutive_failures" not in raw:
+            s._backfill_legacy()
         return s
+
+    def _backfill_legacy(self) -> None:
+        """State written before these fields existed. `last_rc` was never
+        touched by a guard-skip, so it still tells the truth about the last
+        REAL run even where `last_status` was overwritten."""
+        failed = self.last_rc not in (None, 0)
+        if failed:
+            self.consecutive_failures = 1
+            self.last_failure_ts = self.last_run
+            if not self.last_status.startswith("FAILED"):
+                self.last_status = (f"FAILED rc={self.last_rc} (its last real run; "
+                                    f"a guard-skip used to hide this)")
+        elif self.last_run and (self.last_status == "ok" or self.last_status.startswith("skipped")):
+            self.last_success_ts = self.last_run
+        if self.last_run and not self.first_seen_ts:
+            self.first_seen_ts = self.last_run
 
 
 # =============================================================================
@@ -233,14 +273,13 @@ def default_jobs(python: Optional[str] = None,
         Job(name="consolidate",
             argv=(py, str(scripts / "consolidate.py")),
             interval_seconds=6 * HOUR,
-            # Raised from 900s on 2026-09-09: this job now runs the tension
-            # detector, which makes one judge call per candidate (capped at
-            # --scan-limit). Embedding load plus up to 40 judged candidates does
-            # not fit in 15 minutes, and a timeout would look like "no findings".
-            timeout_seconds=2400.0,
+            # No model calls since 2026-09-28: tension verdicts now arrive with
+            # each parse submission (parse_turns.py), so this only persists the
+            # behavioural model and runs in seconds.
+            timeout_seconds=600.0,
             initial_delay_seconds=120.0,
-            description="tension detection -> life_state_feed (the moat organ); "
-                        "also persists the per-domain activity telemetry"),
+            description="persist the per-domain activity telemetry (tension "
+                        "findings now come from parse_turns submissions)"),
         Job(name="refresh_profile",
             argv=(py, str(scripts / "profile_synth.py")),
             guard=guard_for("cognitive_profile"),
@@ -286,6 +325,14 @@ def default_jobs(python: Optional[str] = None,
             description="promote JARVIS-relevant items from Codex's own "
                         "(global, session-scoped) memory into the one "
                         "authoritative knowledge_base.jsonl"),
+        Job(name="interview_to_kb",
+            argv=(py, str(base / "scripts" / "interview_to_kb.py")),
+            interval_seconds=HOUR,
+            timeout_seconds=600.0,
+            initial_delay_seconds=600.0,
+            description="copy each accepted personalization-interview answer into "
+                        "the KB verbatim — until 2026-09-28 nothing did, so the "
+                        "owner's own self-description never reached the profile"),
         Job(name="refresh_digest",
             argv=(py, str(base / "js-development" / "jarvis_core" / "agent" / "recall.py"),
                  "--write"),
@@ -295,18 +342,22 @@ def default_jobs(python: Optional[str] = None,
             description="regenerate activity_digest.md — found 2.5 MONTHS "
                         "stale on 2026-09-10 because nothing had ever "
                         "scheduled this; Antigravity reads it at every boot"),
-        # --- Added 2026-09-14: per-turn curation (the routing decision) ---
-        Job(name="curate_turns",
-            argv=(py, str(scripts / "curate_turns.py"), "--backlog", "40"),
-            interval_seconds=1 * HOUR,
+        # --- 2026-09-28: the Memory Contract replaces curate_turns ---
+        # curate_turns made a paid Gemini call per turn and FAILED 185 of 195
+        # runs from 2026-09-15 without anyone noticing. The owner's rule: the
+        # agent the owner chats with parses those turns, and background jobs
+        # make no paid LLM calls. This job is JARVIS parsing its OWN turns with
+        # its own free-first model chain; the other hosts parse theirs in-chat.
+        Job(name="parse_jarvis_turns",
+            argv=(py, str(scripts / "parse_turns.py"), "--host", "jarvis",
+                  "--auto", "--limit", "10"),
+            interval_seconds=15 * 60.0,
             timeout_seconds=900.0,
             initial_delay_seconds=480.0,
-            description="an agent WITH conversation context decides each turn's "
-                        "corpus and domain. On a clock and not on anyone's "
-                        "discipline: Antigravity's manual /memory produced ZERO "
-                        "records in months, which is what per-turn discipline is "
-                        "worth. Batched at 40 so a cold start drains the backlog "
-                        "over hours instead of one enormous bill"),
+            description="JARVIS parses its own captured turns by the one "
+                        "PARSE_RULE (training routing + durable knowledge), "
+                        "10 at a time, free models first; exits non-zero on "
+                        "failure so pipeline_health sees it"),
         # --- Added 2026-09-16: verification on a clock, not on attention ---
         Job(name="check_pipeline",
             argv=(py, str(scripts / "check_pipeline.py")),
@@ -342,6 +393,15 @@ def default_jobs(python: Optional[str] = None,
             initial_delay_seconds=1140.0,
             description="resolve machine-checkable commitments and surface only "
                         "explicit review-due open loops; no prose inference"),
+        Job(name="rebuild_corpora",
+            argv=(py, str(scripts / "rebuild_corpora.py")),
+            interval_seconds=24 * HOUR,
+            timeout_seconds=3600.0,
+            initial_delay_seconds=1260.0,
+            description="engineer -> personalization -> blend -> SFT pairs -> "
+                        "check_pipeline, pure code. Before 2026-09-28 the corpora "
+                        "were rebuilt only by hand, so newly parsed turns never "
+                        "reached them"),
     ] + ([
         Job(name="sync_remote_memory",
             argv=(py, str(scripts / "sync_remote_memory.py")),
@@ -357,7 +417,7 @@ def default_jobs(python: Optional[str] = None,
 # =============================================================================
 
 async def _subprocess_runner(argv: Sequence[str], timeout: float) -> Tuple[int, str]:
-    """Run argv from JARVIS_ROOT; return (rc, tail of combined output).
+    """Run argv from JARVIS_ROOT; return (rc, whole combined output).
 
     EXECUTION FLOW:
     1. Spawn with stdout+stderr piped so a chatty job cannot fill a terminal.
@@ -365,7 +425,7 @@ async def _subprocess_runner(argv: Sequence[str], timeout: float) -> Tuple[int, 
        rc 124 (the conventional timeout code) rather than hanging the clock.
 
     Returns:
-        (returncode, last _OUTPUT_TAIL_CHARS of output). rc 127 if spawn failed.
+        (returncode, the job's whole output). rc 127 if spawn failed.
     """
     try:
         proc = await asyncio.create_subprocess_exec(
@@ -401,7 +461,7 @@ async def _subprocess_runner(argv: Sequence[str], timeout: float) -> Tuple[int, 
             pass
         return 124, f"timed out after {timeout:.0f}s"
     text = (out or b"").decode("utf-8", errors="replace").strip()
-    return int(proc.returncode or 0), text[-_OUTPUT_TAIL_CHARS:]
+    return int(proc.returncode or 0), text
 
 
 class Scheduler:
@@ -460,7 +520,12 @@ class Scheduler:
             self._log(f"state save failed ({type(e).__name__}) — continuing")
 
     def _state(self, name: str) -> JobState:
-        return self._states.setdefault(name, JobState())
+        st = self._states.setdefault(name, JobState())
+        if not st.first_seen_ts:
+            # When this job first came under the clock: the grace period for a
+            # job that has never succeeded is measured from here.
+            st.first_seen_ts = self._clock()
+        return st
 
     # ---- one pass --------------------------------------------------------
 
@@ -491,15 +556,22 @@ class Scheduler:
             st = self._state(job.name)
             if not job.is_due(now, st.last_run, ready_from):
                 continue
-            if job.guard:
+            # A job whose last real run failed is retried WITHOUT its guard:
+            # the guard can say "fresh" about an artifact the failed run left
+            # half-written, and skipping on its word would hide the failure
+            # forever. Only a real exit 0 clears consecutive_failures.
+            if job.guard and st.consecutive_failures == 0:
                 rc, out = await self._run_one(job.guard, job.timeout_seconds, job.name)
                 if rc == 0:
                     st.last_run = now
                     st.skipped += 1
+                    st.last_success_ts = now
                     st.last_status = "skipped — guard reports nothing to do"
                     self._save()
                     continue
                 self._log(f"{job.name}: guard exit {rc} -> work needed")
+            elif job.guard:
+                self._log(f"{job.name}: last run failed — retrying without the guard")
             started = self._clock()
             rc, out = await self._run_one(job.argv, job.timeout_seconds, job.name)
             st.last_run = self._clock()
@@ -509,10 +581,14 @@ class Scheduler:
             st.runs += 1
             if rc == 0:
                 st.last_status = "ok"
+                st.last_success_ts = st.last_run
+                st.consecutive_failures = 0
             else:
                 st.failures += 1
+                st.consecutive_failures += 1
+                st.last_failure_ts = st.last_run
                 st.last_status = f"FAILED rc={rc}"
-                self._log(f"{job.name}: FAILED rc={rc} — {out[:160]}")
+                self._log(f"{job.name}: FAILED rc={rc} — {out}")
             ran.append(job.name)
             self._save()
         return ran
@@ -575,11 +651,21 @@ class Scheduler:
             out.append({
                 "name": job.name,
                 "every_hours": round(job.interval_seconds / HOUR, 2),
+                "interval_seconds": job.interval_seconds,
+                "initial_delay_seconds": job.initial_delay_seconds,
                 "guarded": bool(job.guard),
                 "status": st.last_status,
+                "last_status": st.last_status,
+                "last_rc": st.last_rc,
                 "runs": st.runs, "failures": st.failures, "skipped": st.skipped,
+                "consecutive_failures": st.consecutive_failures,
+                "last_run_ts": st.last_run or None,
+                "last_success_ts": st.last_success_ts or None,
+                "last_failure_ts": st.last_failure_ts or None,
+                "first_seen_ts": st.first_seen_ts or None,
                 "last_run_age_s": (round(now - st.last_run, 1) if st.last_run else None),
                 "last_duration_s": st.last_duration_s,
+                "last_output": st.last_output,
                 "description": job.description,
             })
         return out
@@ -739,23 +825,33 @@ def _run_self_test() -> None:
         # ordering is left alone.
         required = {"consolidate", "refresh_profile", "reindex_memory",
                     "rebuild_graphrag", "ingest_codex", "reconcile_codex_memory",
-                    "refresh_digest", "curate_turns", "relabel_domains",
-                    "check_commitments"}
+                    "refresh_digest", "parse_jarvis_turns", "relabel_domains",
+                    "check_commitments", "interview_to_kb", "rebuild_corpora"}
         check("T16 no required job has silently disappeared",
               required <= set(names), f"missing: {sorted(required - set(names))}")
         check("T16a consolidate still leads (it is the unguarded pulse)",
               names[0] == "consolidate", str(names[:1]))
-        # T16b: curation and its reviewer must BOTH be scheduled. Shipping the
-        # curator without relabel_domains would leave the agent's verdict with
-        # nothing to be checked against, which is how domain_labels.jsonl came
-        # to be six days stale and unnoticed in the first place.
-        check("T16b the curator and its independent second opinion are both scheduled",
-              {"curate_turns", "relabel_domains"} <= set(names), str(names))
+        # T16b: the parse and its independent second opinion must BOTH be
+        # scheduled. Shipping a turn router without relabel_domains leaves its
+        # verdicts with nothing to be checked against, which is how
+        # domain_labels.jsonl came to be six days stale and unnoticed.
+        check("T16b JARVIS's own parse and its independent second opinion are both scheduled",
+              {"parse_jarvis_turns", "relabel_domains"} <= set(names), str(names))
         # T16c: verification must run unprompted. Both instruments existed as
         # scripts before they were scheduled, which is exactly how
         # relabel_domains went six days stale while calling itself authoritative.
         check("T16c both verification instruments are scheduled",
               {"check_pipeline", "run_all_tests"} <= set(names), str(names))
+        check("T16d the paid-LLM curate_turns job is gone (owner rule 2026-09-28)",
+              "curate_turns" not in names, str(names))
+        by_name16 = {j.name: j for j in jobs}
+        check("T16e parse_jarvis_turns parses JARVIS's host only, 10 at a time, every 15 min",
+              by_name16["parse_jarvis_turns"].argv[2:] == ("--host", "jarvis", "--auto", "--limit", "10")
+              and by_name16["parse_jarvis_turns"].interval_seconds == 15 * 60.0,
+              str(by_name16["parse_jarvis_turns"].argv))
+        check("T16f corpora are rebuilt daily",
+              by_name16["rebuild_corpora"].interval_seconds == 24 * HOUR
+              and Path(by_name16["rebuild_corpora"].argv[1]).name == "rebuild_corpora.py")
         check("T17 consolidate is UNguarded (its whole point is to run anyway)",
               not jobs[0].guard and jobs[1].guard and jobs[2].guard)
         check("T17b each guarded job scopes its guard to the artifact IT fixes",
@@ -788,6 +884,60 @@ def _run_self_test() -> None:
               "urgent ones",
               by_name["reconcile_codex_memory"].interval_seconds == 12 * HOUR)
 
+        # T23-T27: a guard-skip must never hide a failure (reindex_memory
+        # failed 16/17 runs on 2026-09-28 while its status read "skipped").
+        script23 = {"check.py": 1, "fix.py": 1}
+
+        async def run23(argv: Sequence[str], timeout: float) -> Tuple[int, str]:
+            key = Path(argv[-1]).name
+            return script23.get(key, 0), f"out of {key}"
+
+        g23 = Job("fix", ("py", "fix.py"), interval_seconds=10.0, guard=("py", "check.py"))
+        s23 = Scheduler(jobs=[g23], state_path=Path(td) / "g23.json", runner=run23,
+                        clock=clock, logger=lambda m: None)
+        loop.run_until_complete(s23.tick())
+        st23 = s23.status()[0]
+        check("T23 a failed run records rc, failure time and a consecutive count",
+              st23["last_rc"] == 1 and st23["consecutive_failures"] == 1
+              and st23["last_failure_ts"] and not st23["last_success_ts"], str(st23))
+        script23["check.py"] = 0          # the guard now claims "nothing to do"
+        clock.advance(11.0)
+        ran23 = loop.run_until_complete(s23.tick())
+        st23 = s23.status()[0]
+        check("T24 after a failure the guard is NOT trusted: the job re-runs",
+              ran23 == ["fix"], str(ran23))
+        check("T25 the failure stays visible (status, rc, count all still say so)",
+              st23["status"].startswith("FAILED") and st23["last_rc"] == 1
+              and st23["consecutive_failures"] == 2, str(st23))
+        script23["fix.py"] = 0
+        clock.advance(11.0)
+        loop.run_until_complete(s23.tick())
+        st23 = s23.status()[0]
+        check("T26 only a real exit 0 clears it",
+              st23["status"] == "ok" and st23["consecutive_failures"] == 0
+              and st23["last_success_ts"], str(st23))
+        clock.advance(11.0)
+        loop.run_until_complete(s23.tick())
+        st23 = s23.status()[0]
+        check("T27 once healthy, a guard-skip counts as a verified success",
+              "guard" in st23["status"] and st23["last_success_ts"] == clock.t, str(st23))
+        check("T27b status() carries the whole last output",
+              st23["last_output"] == "out of fix.py", st23["last_output"])
+
+        legacy = JobState.from_dict({"last_run": 500.0, "last_rc": 1,
+                                     "last_status": "skipped — guard reports nothing to do",
+                                     "runs": 17, "failures": 16, "skipped": 14})
+        check("T28 legacy state: a guard-skip that hid rc=1 is restored as a failure",
+              legacy.consecutive_failures == 1 and legacy.last_status.startswith("FAILED")
+              and legacy.last_failure_ts == 500.0 and legacy.last_success_ts == 0.0,
+              str(legacy.to_dict()))
+        legacy_ok = JobState.from_dict({"last_run": 700.0, "last_rc": 0, "last_status": "ok"})
+        check("T28b legacy state: an ok run becomes the last success",
+              legacy_ok.last_success_ts == 700.0 and legacy_ok.consecutive_failures == 0)
+        roundtrip = JobState.from_dict(legacy.to_dict())
+        check("T28c the new fields round-trip without re-running the backfill",
+              roundtrip.to_dict() == legacy.to_dict())
+
         # T19b -- the stagger must not silence a DELIBERATE one-shot run. Before
         # ignore_stagger existed, `hearth.py --tick-once` printed "nothing was
         # due" and did nothing: a command that looked like it worked.
@@ -814,6 +964,12 @@ def _run_self_test() -> None:
         started, stopped = loop.run_until_complete(lifecycle())
         check("T20 start() spawns the polling task", started)
         check("T21 stop() joins it and clears the handle", stopped)
+
+        rc22, out22 = loop.run_until_complete(_subprocess_runner(
+            [sys.executable or "python", "-c", "print('START' + 'x' * 5000 + 'END')"], 60.0))
+        check("T22 a job's whole output is kept, not its last 400 chars",
+              rc22 == 0 and out22.startswith("START") and out22.endswith("END")
+              and len(out22) == 5008, f"rc={rc22} len={len(out22)}")
 
     loop.close()
     print("-" * 70)

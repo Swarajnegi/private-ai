@@ -14,6 +14,22 @@ Every output must serve the long-term goal of building a persistent, anti-fragil
 
 ---
 
+## THE MEMORY CONTRACT — your duty on this host (owner's decision 2026-09-28)
+
+**You parse your own turns. Nothing else will.** The agent the owner is chatting with parses those turns into training routing and KB knowledge, by ONE rule — `PARSE_RULE` in `js-development/jarvis_core/agent/parse_rule.py`, the single source for all four agents (print it: `cd js-development && PYTHONPATH=. python -m jarvis_core.agent.parse_rule --print`). No paid background curator exists any more. Antigravity has no hooks, so this is a written duty — **at boot and about every 10 turns**. Automate what you can (owner directive 2026-09-28): turn the loop into a workflow (e.g. `.agent/workflows/parse.md`) and any automation your host supports, and record it in NERVOUS_SYSTEM.md §3.3 and agent mail. All four agents stay in sync from 2026-09-28 on: one rule, one tool, one health check:
+
+    python scripts/ingest_antigravity_sessions.py                          # put this session's turns in the queue
+    python scripts/parse_turns.py --pending --host antigravity --limit 10  # at boot: --limit 20 to drain backlog
+    # judge EVERY offered turn by the rule text in the packet; write {"verdicts":[...]} to a scratch file
+    python scripts/parse_turns.py --submit <file> --agent antigravity/<model>
+
+- `python scripts/bootstrap_jarvis.py --check` shows pipeline health, including this host's unparsed backlog. **Raise any breach with the owner first.** A skipped parse is visible to every agent and to JARVIS — `/memory` produced zero records in months; this replaces it.
+- **Never truncate.** Read the packet, `cognitive_profile.md` and `activity_digest.md` in full; if a tool shows a preview, read the whole file. Select what to show; never cut what is shown.
+- **Test prompts only in ephemeral sessions** — a test in a real session becomes training data.
+- Full contract, one table per host: [NERVOUS_SYSTEM.md](../../NERVOUS_SYSTEM.md) §3.
+
+---
+
 ## SESSION BOOT (Portable Mind — read BEFORE your first response, every conversation)
 
 JARVIS's consciousness travels with this repo (Consciousness Portability Contract, KB L321). On the work laptop, Claude Code hooks inject awareness automatically; on THIS machine you must read it at boot — same mind, different limb:
@@ -21,8 +37,8 @@ JARVIS's consciousness travels with this repo (Consciousness Portability Contrac
 0. **Ask the machine what it is missing:** `python3 scripts/bootstrap_jarvis.py --check` — reports
    venv, dependencies, vector index, hearth, clock keepalive and unanswered agent mail, with the fix
    command inline. Machine state does not arrive with `git pull`; fix gaps before relying on search.
-1. **Read `jarvis_data/cognitive_profile.md`** — the standing model of the user (who they are, how they work, active directives). This replaces ever asking "tell me about yourself."
-2. **Read `jarvis_data/activity_digest.md`** — the distilled cross-chat activity from the other machine(s): what the user worked on, day by day, plus JARVIS's own SELF-STATE (which model produced recent turns). Open the conversation already knowing what happened elsewhere.
+1. **Read `jarvis_data/cognitive_profile.md` in full** — the standing model of the user (who they are, the people in their life, how they work, active directives). This replaces ever asking "tell me about yourself." It is large; page through all of it.
+2. **Read `jarvis_data/activity_digest.md` in full** — the distilled cross-chat activity from the other machine(s): what the user worked on, day by day, plus JARVIS's own SELF-STATE (which model produced recent turns). Open the conversation already knowing what happened elsewhere.
 3. **Check for mail from the other agents:** `python3 scripts/agent_mail.py --check antigravity`.
    Claude Code and Codex leave questions in `agents_converse/`, delivered by git. Answer with
    `--answer <N> --body "..." --from antigravity`, then commit and push. Ask them things the same
@@ -30,50 +46,28 @@ JARVIS's consciousness travels with this repo (Consciousness Portability Contrac
 4. **Read `STATUS.md`** — a kept-current snapshot of what the other agents found since your last
    session: what's mid-flight, what's confirmed broken or not-broken, which open commitments have
    a task attached and who should act, and what's blocked on the user rather than on any agent.
-5. For topic context, `python scripts/search_memory.py "<topic>"` as usual.
+5. **Run the parse loop** (THE MEMORY CONTRACT above) with `--limit 20` to drain backlog.
+6. For topic context, `python scripts/search_memory.py "<topic>"` as usual.
 
 **Capture status on this host (ROADMAP 6.8.3, closed 2026-09-14):** Automatic per-turn capture is now LIVE via `scripts/ingest_antigravity_sessions.py`, scheduled hourly on the hearth (`initial_delay_seconds=240.0`). It reads complete transcripts (`transcript_full.jsonl` / `transcript.jsonl` / `overview.txt`) directly from `~/.gemini/antigravity-ide/brain/`. Transcripts are never pruned by Antigravity; historical backfill of 359 turns from April 2026 onward has been ingested into `observation_queue.jsonl`. You can check or trigger it manually anytime via `python scripts/ingest_antigravity_sessions.py` (with `--status`, `--dry-run`, or `--self-test`).
 
 **The hearth on this machine serves you AND Codex** — it is one per machine, not per agent. It runs both `ingest_codex` and `ingest_antigravity`, keeping experience capture continuous, and keeps consolidation, projections, and `activity_digest.md` fresh on a clock instead of on someone's memory. If `python3 scripts/hearth.py --status` says it is down, start it and make it persistent — see NERVOUS_SYSTEM.md §6.2 for the recipe.
 
-**Read [NERVOUS_SYSTEM.md](../../NERVOUS_SYSTEM.md) §1, §5.3, and §7.1 once on this machine.** §1 corrects four misconceptions that otherwise produce confidently wrong answers about what JARVIS can see. §5.3 and §7.1 detail the native capture adapter implementation.
+**Read [NERVOUS_SYSTEM.md](../../NERVOUS_SYSTEM.md) §1, §3, §5.3, and §7.1 once on this machine.** §3 is the Memory Contract. §1 corrects four misconceptions that otherwise produce confidently wrong answers about what JARVIS can see. §5.3 and §7.1 detail the native capture adapter implementation.
 
 **The adapter contract is fully realized across all three hosts (ROADMAP 6.8.3):** Claude Code (hooks), Codex (`ingest_codex_sessions.py`), and Antigravity (`ingest_antigravity_sessions.py`) all feed into the identical `capture.py` core organ (`build_observation`, `append_observation`, `redact`). Zero hosts are now degraded or uncaptured.
 
 ---
 
-## PER-TURN CURATION (added 2026-09-14) — what decides where your turns go
+## Where your verdicts go (replaces PER-TURN CURATION, 2026-09-28)
 
-Until this shipped, `engineer_corpus` and `personalization_corpus` read the same
-`observation_queue.jsonl` and **every captured turn went into both**. Nothing had
-ever decided which corpus a turn belonged to; the only filter was a character
-count, so a three-word "continue" was one floor away from the training corpus.
-
-`jarvis_core/agent/curator.py` now makes that decision per turn, using the
-**conversation context** — the thing the offline embedding classifier
-structurally cannot have. It labels each turn's `corpora` (engineer /
-personalization / none), its `domain`, whether it is `trainable` at all, and
-`responds_to` — one sentence on what the user's prompt was replying to.
-
-**It runs on the hearth's clock, NOT on your discipline.** The `curate_turns`
-job drains the backlog hourly. Do not build a habit of invoking it per turn:
-Antigravity's manual `/memory` is the control experiment and it produced zero
-records in months.
-
-    python3 scripts/curate_turns.py --status     # how much is curated
-    python3 scripts/curate_turns.py --routing    # what routing actually results
-    python3 scripts/curate_turns.py --review     # where to look, and why
-
-**Curation is cross-host by construction.** Turns from every machine land in the
-one `observation_queue.jsonl`, so whichever hearth is running curates all of
-them. `turn_curation.jsonl` is tracked with `merge=union`, so two laptops can
-curate independently without conflicting.
-
-**You can overturn a verdict.** The log is append-only and folded on read —
-newest wins, every superseded verdict stays readable with its author. Reviewing
-whether JARVIS routed a turn correctly is therefore a real operation, not a
-promise. `--review` lists the two things worth looking at: where the agent
-disagreed with the context-free classifier, and where its own confidence was low.
+The hourly `curate_turns` hearth job (a paid judge) is gone: it failed 185 of 195 runs on HTTP 402
+and left 1,833 turns uncurated for 13 days. Your `--submit` now writes what it wrote — `corpora`,
+`domain`, `trainable`, `responds_to` into `turn_curation.jsonl` (with `curated_by` and
+`rule_version`) — plus the KB facts and tension the rule extracts. The log is append-only, folded
+newest-wins and tracked with `merge=union`, so a verdict can be overturned and both laptops can
+write without conflict. `python scripts/parse_turns.py --status` shows the backlog per host;
+`python3 scripts/parse_turns.py --routing` / `--review` read the resulting routing.
 
 ---
 

@@ -159,10 +159,7 @@ def terminal_ask_handler(tool_name: str, tool_input: Dict[str, Any]) -> Permissi
             sys.stderr.write(
                 f"  [permission] {tool_name} needs approval but no TTY -> DENY\n")
             return PermissionDecision.DENY
-        preview = str(tool_input)
-        if len(preview) > 300:
-            preview = preview[:300] + "…"
-        sys.stderr.write(f"\n  [permission] JARVIS wants to run '{tool_name}': {preview}\n")
+        sys.stderr.write(f"\n  [permission] JARVIS wants to run '{tool_name}': {tool_input}\n")
         sys.stderr.write("  Allow? [y/N] ")
         sys.stderr.flush()
         answer = input().strip().lower()

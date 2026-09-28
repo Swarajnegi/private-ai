@@ -62,8 +62,9 @@ import asyncio
 import json
 import os
 import sys
+from contextlib import aclosing
 from pathlib import Path
-from typing import Any, Awaitable, Callable, Dict, List, Optional, Tuple
+from typing import Any, AsyncIterator, Awaitable, Callable, Dict, List, Optional, Tuple
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))  # standalone-run safety
 
@@ -81,6 +82,27 @@ def _counter():
     from jarvis_core.agent.tokens import shared_counter
     return shared_counter()
 _REASONING_EFFORT_LEVELS = frozenset({"low", "medium", "high"})
+
+# AUTOMATIC CONTINUATION. max_tokens has to stay on the request — without it
+# OpenRouter reserves the model's whole output window and refuses a low balance
+# with HTTP 402 — but a ceiling must never become a cut. When a reply stops
+# with finish_reason "length", the partial reply goes back as an assistant turn
+# with the instruction below, and the pieces are joined. The guard exists for a
+# model that never stops; hitting it is reported, never swallowed.
+_MAX_CONTINUATIONS = 16
+_CONTINUE_PROMPT = (
+    "Your previous reply was cut off by the output-length limit. Continue exactly "
+    "where it stopped — mid-sentence or mid-word if that is where it ended. Do not "
+    "repeat anything already written, do not restart, and add no preamble or "
+    "commentary.")
+
+
+def _continuation_messages(messages: List[Dict[str, str]], so_far: str) -> List[Dict[str, str]]:
+    """The original conversation, the partial reply, and the instruction to go on."""
+    if not so_far.strip():
+        return list(messages)          # nothing to continue from: ask again
+    return list(messages) + [{"role": "assistant", "content": so_far},
+                             {"role": "user", "content": _CONTINUE_PROMPT}]
 
 # Injected transport: (url, headers, json_payload, timeout_s) -> (status, body_dict)
 Transport = Callable[[str, Dict[str, str], Optional[Dict[str, Any]], float],
@@ -107,7 +129,7 @@ async def _httpx_transport(url: str, headers: Dict[str, str],
         try:
             return r.status_code, r.json()
         except Exception:
-            return r.status_code, {"raw": r.text[:2000]}
+            return r.status_code, {"raw": r.text}
 
 
 class OpenRouterClient:
@@ -192,7 +214,7 @@ class OpenRouterClient:
         status, body = await self._transport(f"{self._base}/models", self._headers(),
                                              None, self._timeout)
         if status != 200:
-            raise LLMCallError(f"/models returned {status}: {str(body)[:200]}")
+            raise LLMCallError(f"/models returned {status}: {body}")
         return body.get("data", [])
 
     async def _ensure_pricing(self) -> Dict[str, Tuple[float, float]]:
@@ -237,6 +259,24 @@ class OpenRouterClient:
     # ---- the LLMCall protocol ---------------------------------------------
 
     async def __call__(self, messages: List[Dict[str, str]]) -> str:
+        """The whole reply. A reply cut at max_tokens is continued until it ends."""
+        text, finish = await self._complete_once(messages)
+        parts = [text]
+        continuations = 0
+        while finish == "length":
+            if continuations >= _MAX_CONTINUATIONS:
+                raise LLMCallError(
+                    f"reply still unfinished after {continuations} continuation calls "
+                    f"({sum(len(p) for p in parts)} chars, finish_reason=length); "
+                    "refusing to return a cut answer")
+            continuations += 1
+            text, finish = await self._complete_once(
+                _continuation_messages(messages, "".join(parts)))
+            parts.append(text)
+        return "".join(parts)
+
+    async def _complete_once(self, messages: List[Dict[str, str]]) -> Tuple[str, str]:
+        """One metered, budget-gated, retried completion: (text, finish_reason)."""
         if not self._model:
             await self.pick_free_model()
         pricing = await self._ensure_pricing()
@@ -280,10 +320,11 @@ class OpenRouterClient:
                 continue
             if status == 200:
                 try:
-                    msg = body["choices"][0]["message"]
-                    text = msg.get("content") or ""
-                except (KeyError, IndexError, TypeError):
-                    raise LLMCallError(f"malformed response: {str(body)[:300]}")
+                    choice = body["choices"][0]
+                    text = choice["message"].get("content") or ""
+                    finish = str(choice.get("finish_reason") or "")
+                except (KeyError, IndexError, TypeError, AttributeError):
+                    raise LLMCallError(f"malformed response: {body}")
                 if not text.strip() and attempt < self._retries:
                     # Reasoning-channel quirk: some providers return an empty final
                     # channel (all tokens spent in `reasoning`). Burn a retry.
@@ -315,12 +356,137 @@ class OpenRouterClient:
                         self._tracker.record(self._model, in_tok, out_tok, cost_usd=call_cost)
                     except Exception:
                         pass  # secondary ledger must never break a call
-                return text
+                return text, finish
             if status == 429 or status >= 500:
-                last_err = f"HTTP {status}: {str(body)[:200]}"
+                last_err = f"HTTP {status}: {body}"
                 continue
-            raise LLMCallError(f"HTTP {status}: {str(body)[:300]}")  # other 4xx: no retry
+            raise LLMCallError(f"HTTP {status}: {body}")  # other 4xx: no retry
         raise LLMCallError(f"exhausted {self._retries + 1} attempts; last: {last_err}")
+
+
+# =============================================================================
+# STREAMING — for the voice fast path (brain/voice_path.py)
+# =============================================================================
+# A voice turn is judged by time-to-first-token: speech starts on the first
+# finished sentence. OpenRouterClient waits for the whole completion and opens
+# a new TLS connection per call; measured 2026-09-27, a warm keep-alive
+# connection alone cut TTFT by 0.5-1.7 s per model. So streaming gets its own
+# path: one persistent client per event loop, `stream: true`, content deltas
+# yielded as they arrive. Reasoning deltas are not speakable and are dropped.
+
+_STREAM_CLIENT: Optional[Tuple[Any, Any]] = None      # (event loop, httpx.AsyncClient)
+
+
+class StreamRefused(LLMCallError):
+    """The provider refused before sending a single token — safe to fail over."""
+
+    def __init__(self, status: Optional[int], detail: str) -> None:
+        super().__init__(f"HTTP {status}: {detail}")
+        self.status = status
+
+
+def _stream_client() -> Any:
+    global _STREAM_CLIENT
+    import httpx
+    loop = asyncio.get_running_loop()
+    if _STREAM_CLIENT is None or _STREAM_CLIENT[0] is not loop or _STREAM_CLIENT[1].is_closed:
+        _STREAM_CLIENT = (loop, httpx.AsyncClient(
+            timeout=httpx.Timeout(30.0, connect=10.0),
+            limits=httpx.Limits(max_keepalive_connections=4, keepalive_expiry=300.0)))
+    return _STREAM_CLIENT[1]
+
+
+# Injected stream transport: (url, headers, payload, timeout_s) -> SSE lines.
+StreamTransport = Callable[[str, Dict[str, str], Dict[str, Any], float], AsyncIterator[str]]
+
+
+async def _httpx_stream_lines(url: str, headers: Dict[str, str], payload: Dict[str, Any],
+                              timeout_s: float) -> AsyncIterator[str]:
+    import httpx
+    try:
+        async with _stream_client().stream("POST", url, json=payload, headers=headers,
+                                           timeout=timeout_s) as r:
+            if r.status_code != 200:
+                body = (await r.aread()).decode("utf-8", "replace")
+                raise StreamRefused(r.status_code, body)
+            async for line in r.aiter_lines():
+                yield line
+    except httpx.HTTPError as e:
+        raise StreamRefused(None, f"{type(e).__name__}: {e}") from e
+
+
+async def stream_chat(
+    model: str,
+    messages: List[Dict[str, str]],
+    max_tokens: int = 400,
+    api_key: Optional[str] = None,
+    base_url: str = _BASE_URL,
+    timeout_s: float = 30.0,
+    transport: Optional[StreamTransport] = None,
+):
+    """Yield assistant CONTENT text as it streams, continued past max_tokens.
+
+    Raises StreamRefused if the provider rejects the first request (402, 429,
+    5xx, bad body). A reply that stops on finish_reason "length" is continued
+    transparently — the caller sees one unbroken stream. A continuation that
+    fails raises LLMCallError instead: text has already been yielded, so it is
+    no longer safe to fail over as if nothing had been said."""
+    key = api_key or os.environ.get("OPENROUTER_API_KEY", "")
+    if not key:
+        raise StreamRefused(None, "OPENROUTER_API_KEY is not set")
+    stream_lines = transport or _httpx_stream_lines
+    url = f"{base_url.rstrip('/')}/chat/completions"
+    headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json",
+               "X-Title": "JARVIS"}
+    written: List[str] = []
+    convo = list(messages)
+    for round_no in range(_MAX_CONTINUATIONS + 1):
+        # OpenRouter routes a model to one of several hosting providers; left to
+        # itself it balances on price, and one provider's queue produced a 8.9 s
+        # first token on 2026-09-27 against a 0.3-2 s norm. For voice, ask for
+        # the lowest-latency provider explicitly.
+        # Reasoning off: a spoken reply has no room for it. Measured 2026-09-27 on
+        # nemotron-3-super:free with the real voice prompt, reasoning ON took
+        # 5.7-14.6 s and wrote its own deliberation into the reply ("We need to
+        # respond. The user asks..."); OFF answered in 1.1-2.3 s, cleanly.
+        payload = {"model": model, "messages": convo, "stream": True,
+                   "max_tokens": int(max_tokens),
+                   "provider": {"sort": "latency"}, "reasoning": {"enabled": False}}
+        finish = ""
+        done = False
+        try:
+            async with aclosing(stream_lines(url, headers, payload, timeout_s)) as lines:
+                async for line in lines:
+                    if done or not line.startswith("data: "):
+                        continue
+                    data = line[6:].strip()
+                    if data == "[DONE]":
+                        done = True
+                        continue
+                    try:
+                        chunk = json.loads(data)
+                    except json.JSONDecodeError:
+                        continue
+                    if "error" in chunk:
+                        err = chunk["error"]
+                        raise StreamRefused(err.get("code") if isinstance(err, dict) else None, str(err))
+                    choice = (chunk.get("choices") or [{}])[0]
+                    piece = (choice.get("delta") or {}).get("content")
+                    if piece:
+                        written.append(piece)
+                        yield piece
+                    finish = str(choice.get("finish_reason") or finish)
+        except StreamRefused as e:
+            if round_no == 0:
+                raise
+            raise LLMCallError(
+                f"continuation {round_no} of a length-cut reply failed after "
+                f"{sum(len(w) for w in written)} chars: {e}") from e
+        if finish != "length":
+            return
+        convo = _continuation_messages(messages, "".join(written))
+    yield (f" [This answer was still unfinished after {_MAX_CONTINUATIONS} continuations "
+           "and stopped here.]")
 
 
 def build_llm_call(budget_usd: Optional[float] = _DEFAULT_BUDGET_USD,
@@ -565,6 +731,108 @@ def _run_self_test() -> None:
         except LLMCallError:
             check("T13c invalid reasoning_effort raises at construction", True)
 
+        # T14: a reply cut at max_tokens is continued, and the pieces are joined.
+        seen14: List[Dict[str, Any]] = []
+        replies14 = [("The first half of a long ", "length"), ("answer, and the ", "length"),
+                     ("end.", "stop")]
+
+        async def t14(url, headers, payload, timeout):
+            if url.endswith("/models"):
+                return 200, CATALOG
+            text, finish = replies14[len(seen14)]
+            seen14.append(payload)
+            return 200, {"choices": [{"message": {"content": text}, "finish_reason": finish}],
+                         "usage": {"prompt_tokens": 10, "completion_tokens": 5}}
+        c14 = OpenRouterClient(api_key="k", model="paid/model", transport=t14, max_tokens=5)
+        out14 = await c14([{"role": "user", "content": "tell me everything"}])
+        check("T14 a length-cut reply is continued to its end, not cut",
+              out14 == "The first half of a long answer, and the end.", out14)
+        check("T14b each continuation carries the partial reply + the continue instruction",
+              len(seen14) == 3
+              and seen14[2]["messages"][-2] == {"role": "assistant",
+                                                "content": "The first half of a long answer, and the "}
+              and seen14[2]["messages"][-1]["content"] == _CONTINUE_PROMPT
+              and seen14[2]["messages"][0]["content"] == "tell me everything"
+              and all(p.get("max_tokens") == 5 for p in seen14), str(seen14[-1]))
+        check("T14c every continuation is metered", c14.call_count == 3, str(c14.call_count))
+
+        # T14d: a model that never stops hits the guard LOUDLY.
+        async def t14d(url, headers, payload, timeout):
+            if url.endswith("/models"):
+                return 200, CATALOG
+            return 200, {"choices": [{"message": {"content": "more "}, "finish_reason": "length"}],
+                         "usage": {"prompt_tokens": 1, "completion_tokens": 1}}
+        try:
+            await OpenRouterClient(api_key="k", model="paid/model", transport=t14d)(
+                [{"role": "user", "content": "hi"}])
+            check("T14d a runaway continuation raises instead of returning a cut", False)
+        except LLMCallError as e:
+            check("T14d a runaway continuation raises instead of returning a cut",
+                  "unfinished" in str(e), str(e))
+
+        # T15: the stream is continued transparently — one unbroken stream.
+        seen15: List[Dict[str, Any]] = []
+        rounds15 = [["Once upon ", "a time"], [" there was ", "an end."]]
+
+        async def t15(url, headers, payload, timeout):
+            seen15.append(payload)
+            pieces = rounds15[len(seen15) - 1]
+            for i, piece in enumerate(pieces):
+                last = i == len(pieces) - 1
+                fin = ("length" if len(seen15) == 1 else "stop") if last else None
+                yield "data: " + json.dumps({"choices": [{"delta": {"content": piece},
+                                                          "finish_reason": fin}]})
+            yield "data: [DONE]"
+        got15 = [p async for p in stream_chat("m", [{"role": "user", "content": "story"}],
+                                              max_tokens=450, api_key="k", transport=t15)]
+        check("T15 a length-cut stream is continued and yields the full text",
+              "".join(got15) == "Once upon a time there was an end.", str(got15))
+        check("T15b the continuation keeps reasoning off, latency sort and max_tokens",
+              len(seen15) == 2 and all(p["reasoning"] == {"enabled": False}
+                                       and p["provider"] == {"sort": "latency"}
+                                       and p["max_tokens"] == 450 for p in seen15)
+              and seen15[1]["messages"][-2]["content"] == "Once upon a time",
+              str(seen15[-1]))
+
+        # T15c: a refusal on the FIRST request is still StreamRefused (fail-over-safe);
+        # one on a continuation is not, because text has already been yielded.
+        async def t15c(url, headers, payload, timeout):
+            if False:
+                yield ""
+            raise StreamRefused(402, "no credit")
+        try:
+            [p async for p in stream_chat("m", [], api_key="k", transport=t15c)]
+            check("T15c first-request refusal is StreamRefused", False)
+        except StreamRefused:
+            check("T15c first-request refusal is StreamRefused", True)
+        calls15d = {"n": 0}
+
+        async def t15d(url, headers, payload, timeout):
+            calls15d["n"] += 1
+            if calls15d["n"] > 1:
+                raise StreamRefused(402, "no credit")
+            yield "data: " + json.dumps({"choices": [{"delta": {"content": "half"},
+                                                      "finish_reason": "length"}]})
+        got15d: List[str] = []
+        try:
+            async for p in stream_chat("m", [], api_key="k", transport=t15d):
+                got15d.append(p)
+            check("T15d a failed continuation raises LLMCallError, not StreamRefused", False)
+        except StreamRefused:
+            check("T15d a failed continuation raises LLMCallError, not StreamRefused", False)
+        except LLMCallError as e:
+            check("T15d a failed continuation raises LLMCallError, not StreamRefused",
+                  got15d == ["half"] and "continuation 1" in str(e), str(e))
+
+        # T16: error bodies are carried whole.
+        long_err = {"error": {"message": "x" * 1000 + " the actual reason"}}
+        t16, _ = make_transport([(400, long_err)])
+        try:
+            await OpenRouterClient(api_key="k", model="paid/model", transport=t16)(
+                [{"role": "user", "content": "hi"}])
+        except LLMCallError as e:
+            check("T16 a provider error body is reported whole", "the actual reason" in str(e))
+
     # T12: missing key -> clear construction error
     old = os.environ.pop("OPENROUTER_API_KEY", None)
     try:
@@ -600,7 +868,7 @@ async def _live_ping() -> None:
     print(f"  auto-picked    : {chosen} (free tier)")
     text = await client([{"role": "user",
                           "content": "Reply with exactly: JARVIS first light confirmed."}])
-    print(f"  model said     : {text.strip()[:120]}")
+    print(f"  model said     : {text.strip()}")
     print(f"  ledger         : {client.ledger_summary()}")
 
 
@@ -632,7 +900,7 @@ async def _first_thought() -> None:
     result = await mind.solve(task)
     print(f"  tool calls     : {[(tc.name, tr.output) for tc, tr in result.react.tool_calls]}")
     print(f"  iterations     : {result.react.iterations_used}")
-    print(f"  answer         : {result.answer.strip()[:300]}")
+    print(f"  answer         : {result.answer.strip()}")
     print(f"  criteria       : {result.criteria_met}")
     print(f"  ledger         : {client.ledger_summary()}")
     ok = expected in result.answer.replace(",", "")

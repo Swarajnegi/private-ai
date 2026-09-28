@@ -1,5 +1,0 @@
-{
-  "ownership": {"Select/Listbox": "native"},
-  "commands": {"build": "npm run build", "browser": "node ../../../../scripts/verify_hearth_ui.cjs"},
-  "requiredCommands": ["build", "browser"]
-}

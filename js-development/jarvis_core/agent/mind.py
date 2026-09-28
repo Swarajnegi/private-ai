@@ -71,7 +71,6 @@ from jarvis_core.agent.tool import Tool
 LLMCall = Callable[[List[Dict[str, str]]], Union[str, Awaitable[str]]]
 ConsolidateFn = Callable[[], Awaitable[Any]]
 
-_MAX_PLAN_STEPS = 12
 
 
 # =============================================================================
@@ -108,7 +107,11 @@ JARVIS_IDENTITY_PROMPT = (
     "assistant — never claim to be. If asked who you are, answer: JARVIS, the "
     "user's private AI. (You may name the underlying model only if asked what you "
     "run on.) Use the knowledge-base tools to ground answers in your owner's "
-    "history when relevant."
+    "history when relevant. Asked about your owner (who they are, what you know "
+    "about them), answer as a close friend who knows them would: a short, warm "
+    "synthesis in plain words - where they come from, what drives them, how they "
+    "work, the chapter they are in, the people in their life - not a recital of "
+    "profile entries; offer to go deeper."
 )
 
 # The conduct layer — the metacognitive lessons the system learned at the harness
@@ -240,7 +243,7 @@ class Mind:
             specs = self._parse_steps(str(raw))
         except Exception:
             specs = []
-        return build_plan(goal=task, step_specs=specs[:_MAX_PLAN_STEPS])
+        return build_plan(goal=task, step_specs=specs)
 
     @staticmethod
     def _parse_steps(raw: str) -> List[Dict[str, Any]]:
@@ -590,6 +593,16 @@ def _run_self_test() -> None:
             res_noid = await mind_noid.solve("x")
             check("C-identity opt-out honored (identity_prompt=None)",
                   "You are JARVIS" not in res_noid.react.messages[0]["content"])
+
+            # ---- PLAN IS NEVER CUT: a 30-step decomposition keeps 30 steps ----
+            thirty = json.dumps([{"tool_name": "web_search", "description": f"step {i}"}
+                                 for i in range(30)])
+            mind30 = Mind(llm_call=scripted([thirty, "done"]), tools=tools,
+                          enable_monitor=False, allow_replan=False)
+            plan30 = await mind30._decompose("thirty steps")
+            descs30 = [s.description for s in plan30.steps.values()]
+            check("C-plan a 30-step plan keeps all 30 steps",
+                  len(descs30) == 30 and descs30[-1] == "step 29", str(len(descs30)))
 
             # ---- AGGREGATE: Final Boss 7/7 across happy + failure runs ----
             seven = {

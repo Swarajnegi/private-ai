@@ -1,2 +1,0 @@
-{"ts": "2026-09-11T13:16:54+05:30", "role": "user", "content": "What past JARVIS decisions constrain the task I am starting today?"}
-{"ts": "2026-09-11T13:16:54+05:30", "role": "assistant", "content": "<tool_call>prior_self_consult<arg_key>query</arg_key><arg_value>decisions that constrain fine-tuning and QLoRA RunPod Kimi K2.6 base</arg_value><arg_key>types</arg_key><arg_value>[\"Decision\"]</arg_value><arg_key>top_n</arg_key><arg_value>8</arg_value></tool_call>"}

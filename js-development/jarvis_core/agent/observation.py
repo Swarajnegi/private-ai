@@ -8,7 +8,6 @@ Import with:
         format_observation,
         format_plan_summary,
         format_hits_compact,
-        truncate,
     )
 
 LAYER: Agent (Observation)
@@ -21,19 +20,22 @@ Without an Observation formatter:
     -> The ReAct loop hands raw ToolResult objects (or dicts) back to the LLM
        as the next-turn user message. Memory-retrieval payloads carry hundreds
        of KB of chunk text. The 200K-token context window saturates within
-       3-4 tool calls and the agent silently degrades to truncation soup.
+       3-4 tool calls.
     -> Failures surface as opaque tracebacks. The LLM can't tell whether
        the step failed permanently, was retried, or got skipped because an
        upstream step blew up. Replanning loops on the same error.
 
 With format_observation (this module):
-    -> Every Step is rendered into a deterministic, bounded string. Hits get
-       compact "[N] score=X id=Y: <truncated>" lines. Dicts get json.dumps
-       with default=str. Failures get "[step X ERROR after N attempts] ..."
-       so the LLM can decide between retry, replan, or escape-valve.
-    -> A global truncate() cap (4000 chars default) guarantees no single
-       observation blows the context budget. The omitted byte-count is
-       included in the marker so the LLM knows information was elided.
+    -> Every Step is rendered into a deterministic string. Hits get one
+       "[N] score=X id=Y: <content>" line each, content WHOLE. Dicts get
+       json.dumps with default=str. Failures get "[step X ERROR after N
+       attempts] ..." so the LLM can decide between retry, replan, or
+       escape-valve.
+    -> NOTHING here cuts content. Size is the ReAct loop's concern, and it
+       answers it by PAGING: an observation too large for the window is stored
+       verbatim in the context ledger and replaced by a handle the model reads
+       page by page (react.py _page_oversized). A cut here would be invisible
+       to that mechanism and unrecoverable.
     -> format_plan_summary gives the ReAct system prompt a one-liner of
        plan-level progress without re-serializing the whole DAG.
 
@@ -54,9 +56,7 @@ STEP 3: format_observation branches on step.status:
             - SKIPPED                    -> [SKIPPED] upstream-failure msg
             - PENDING/RUNNING            -> [in flight] status
         ↓
-STEP 4: Result string runs through truncate() with the caller's max_chars.
-        ↓
-STEP 5: format_plan_summary(plan) prepended to the LLM turn gives a
+STEP 4: format_plan_summary(plan) prepended to the LLM turn gives a
         DAG-level rollup: X/Y succeeded, F failed, S skipped.
 
 =============================================================================
@@ -71,31 +71,11 @@ from jarvis_core.agent.plan import Plan, Step, StepStatus
 
 
 # =============================================================================
-# Part 1: CONSTANTS
+# Part 1: HIT FORMATTING (retrieval-shape payloads)
 # =============================================================================
 
-DEFAULT_MAX_OBSERVATION_CHARS: int = 50000
-TRUNCATION_MARKER_TEMPLATE: str = "\n... [TRUNCATED, omitted {n} chars] ..."
-
-
-# =============================================================================
-# Part 2: TRUNCATION
-# =============================================================================
-
-def truncate(text: str, max_chars: int = DEFAULT_MAX_OBSERVATION_CHARS) -> str:
-    """Cap `text` at `max_chars` with a marker disclosing omitted byte count."""
-    if len(text) <= max_chars:
-        return text
-    omitted = len(text) - max_chars
-    return text[:max_chars] + TRUNCATION_MARKER_TEMPLATE.format(n=omitted)
-
-
-# =============================================================================
-# Part 3: HIT FORMATTING (retrieval-shape payloads)
-# =============================================================================
-
-def format_hits_compact(hits: List[Dict[str, Any]], max_per_hit: int = 200) -> str:
-    """Render a list of retrieval hits as bounded one-line entries.
+def format_hits_compact(hits: List[Dict[str, Any]]) -> str:
+    """Render a list of retrieval hits as one line each, content whole.
 
     Each hit is expected to expose `id`, `content`, optional `metadata`,
     `score`. Missing fields render as empty / 0.0 without raising.
@@ -123,18 +103,16 @@ def format_hits_compact(hits: List[Dict[str, Any]], max_per_hit: int = 200) -> s
         # Sanitize control chars that would break the one-line-per-hit
         # contract (newlines, carriage returns, tabs).
         content = content.replace("\r", " ").replace("\n", " ").replace("\t", " ")
-        if len(content) > max_per_hit:
-            content = content[:max_per_hit]
         lines.append(f"  [{i}] score={score:.2f} id={hid}: {content}")
     return "\n".join(lines)
 
 
 # =============================================================================
-# Part 4: STEP-LEVEL OBSERVATION
+# Part 2: STEP-LEVEL OBSERVATION
 # =============================================================================
 
-def format_observation(step: Step, max_chars: int = DEFAULT_MAX_OBSERVATION_CHARS) -> str:
-    """Render a Step as an LLM-readable observation string, capped at max_chars."""
+def format_observation(step: Step) -> str:
+    """Render a Step as an LLM-readable observation string, content whole."""
     if step.status == StepStatus.SUCCEEDED:
         output = step.result.output if step.result is not None else None
         if isinstance(output, dict) and "hits" in output:
@@ -154,11 +132,11 @@ def format_observation(step: Step, max_chars: int = DEFAULT_MAX_OBSERVATION_CHAR
     else:
         result = f"[step {step.step_id} still in flight: {step.status.value}]"
 
-    return truncate(result, max_chars)
+    return result
 
 
 # =============================================================================
-# Part 5: PLAN-LEVEL SUMMARY
+# Part 3: PLAN-LEVEL SUMMARY
 # =============================================================================
 
 def format_plan_summary(plan: Plan) -> str:
@@ -195,19 +173,20 @@ if __name__ == "__main__":
         else:
             failed.append(f"FAIL: {name}" + (f" ({hint})" if hint else ""))
 
-    # ---- T1: truncate short passthrough ----------------------------------
-    short = "hello world"
-    check("T1 truncate short passthrough", truncate(short, max_chars=50) == short)
+    # ---- T1: a 200,000-char tool output is rendered WHOLE ---------------
+    huge = "q" * 200_000
+    s1 = Step(step_id="s1", tool_name="file_read", status=StepStatus.SUCCEEDED,
+              result=ToolResult(output=huge))
+    obs1 = format_observation(s1)
+    check("T1 huge str output reaches the observation whole",
+          obs1 == "[step s1 OK] " + huge, hint=f"got len={len(obs1)}")
 
-    # ---- T2: truncate long adds marker with correct count ----------------
-    long_text = "x" * 5000
-    truncated = truncate(long_text, max_chars=100)
-    expected_marker = TRUNCATION_MARKER_TEMPLATE.format(n=4900)
-    check(
-        "T2 truncate long marker correct char count",
-        truncated == "x" * 100 + expected_marker,
-        hint=f"got len={len(truncated)}",
-    )
+    # ---- T2: a huge dict output is rendered whole too --------------------
+    s2 = Step(step_id="s2", tool_name="t", status=StepStatus.SUCCEEDED,
+              result=ToolResult(output={"body": "w" * 120_000, "tail": "END"}))
+    obs2 = format_observation(s2)
+    check("T2 huge dict output whole, tail present",
+          ("w" * 120_000) in obs2 and '"tail": "END"' in obs2, hint=f"len={len(obs2)}")
 
     # ---- T3: SUCCEEDED with str output -----------------------------------
     s3 = Step(step_id="s3", tool_name="echo", status=StepStatus.SUCCEEDED,
@@ -263,16 +242,17 @@ if __name__ == "__main__":
         hint=obs8,
     )
 
-    # ---- T9: format_hits_compact 3 hits truncated to max_per_hit ----------
-    long_content = "y" * 500
+    # ---- T9: format_hits_compact keeps every hit's content whole ---------
+    long_content = "y" * 7_000
     hits9 = [
         {"id": "h1", "content": long_content, "score": 0.5},
         {"id": "h2", "content": long_content, "score": 0.4},
         {"id": "h3", "content": long_content, "score": 0.3},
     ]
-    out9 = format_hits_compact(hits9, max_per_hit=50)
-    check("T9a 3 lines produced", len(out9.split("\n")) == 3, hint=out9)
-    check("T9b each hit truncated to 50 chars", all(("y" * 50) in line and ("y" * 51) not in line for line in out9.split("\n")))
+    out9 = format_hits_compact(hits9)
+    check("T9a 3 lines produced", len(out9.split("\n")) == 3, hint=out9[:80])
+    check("T9b each 7,000-char hit is NOT cut",
+          all(line.endswith(": " + long_content) for line in out9.split("\n")))
 
     # ---- T10: format_hits_compact empty list -----------------------------
     check("T10 empty hits returns (no hits)", format_hits_compact([]) == "  (no hits)")

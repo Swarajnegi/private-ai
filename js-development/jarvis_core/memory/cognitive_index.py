@@ -429,7 +429,7 @@ def main() -> None:
     print("#" * 70)
     for entry in list(query_by_dimension("personality"))[:3]:
         print(f"\n  [{entry.timestamp}] tags={entry.tags}")
-        print(f"  {entry.content[:160]}")
+        print(f"  {entry.content}")
     print()
     print("#" * 70)
 

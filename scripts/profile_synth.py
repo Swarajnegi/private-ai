@@ -12,52 +12,54 @@ Run with:
 THE BIG PICTURE
 =============================================================================
 
-The SessionStart hook (inject_profile.py) needs ONE compact document to
-inject into every chat. The KB has ~460 scattered entries; the model
-shouldn't have to search them every session. profile_synth distills the
-high-signal user-model entries into a single ranked markdown profile.
+The SessionStart hook (inject_profile.py) and the boot inhale
+(brain/context_injector.py) need ONE document that says who the owner is.
+The KB holds hundreds of scattered entries; profile_synth sorts the
+user-model entries into sections and renders every selected entry WHOLE.
 
-Bucketing runs against jarvis_core.memory.cognitive_index (Decision
-2026-08-10) instead of re-scanning raw content for magic substrings. The
-KB's own `type` field already IS a brain-inspired taxonomy (Episodic/
-Semantic/Procedural = the standard cognitive-science memory model,
-Cognitive_Pattern = personality) — cognitive_index just makes it
-queryable. "Who you are" now means the structured personality dimension
-(every Cognitive_Pattern entry), not only the ones whose prose happened to
-contain "user has"/"background"/"expertise" — verified against the real
-KB that the old substring check silently missed genuine personality
-entries that didn't happen to use those exact phrases (e.g. entries
-opening with "PATTERN: dsa_debugging_format..." or "PATTERN: refusal_
-pattern - rejects mechanism claims...").
+"Who you are" is IDENTITY, not recency (corrected 2026-09-28, KB 771). It
+used to be the 8 newest directive-bearing Cognitive_Patterns cut to 320
+chars, so a week of Stitch colour corrections displaced every durable trait
+and JARVIS answered "what do you know about me?" with UI rules. Identity is
+now selected by identity-family tags (career, legacy, philosophy, ambition,
+motivation, self-model...) and read oldest -> newest, so later entries read
+as updates to earlier ones. Last week's project corrections get their own,
+explicitly-labelled section.
 
-Kept, deliberately: content-level checks for signals that are genuinely
-about the TEXT, not the type/tag (does this entry literally say
-"DIRECTIVE:" inline, does it mention "anti-pattern") — the structured
-index doesn't and shouldn't try to capture that; jarvis_core.memory.
-cognitive_index.query_all() gives a real cursor over every entry for
-exactly this case, so it's still a query, not a hand-rolled file scan.
+"People in your life" (added 2026-09-28) holds every entry tagged `person`
+or `person-<name>`, which is what parse_rule's person facts are written with,
+oldest -> newest, right after "Who you are". Before it, the owner's
+girlfriend was nowhere JARVIS could see: a person fact had no section to land
+in, and the only personal-life record was a file JARVIS never read.
 
-The Stage 3.5.7 consolidator can later replace the heuristic with an LLM
-synthesis; the output contract (cognitive_profile.md) stays the same.
+No entry is ever cut, and no section has a count limit: an entry is either
+selected in full or not selected. An entry appears in exactly one section.
+Entries a newer entry declares superseded (a `supersedes-YYYY-MM-DD` tag
+sharing a topical tag) are left out, which is a selection, not a cut.
+
+The profile leaves the machine (OpenRouter via the boot inhale, Claude via
+the hook). People in the owner's life are NOT redacted here: on 2026-09-28
+the owner chose to let JARVIS see them when answering ("in context only"),
+after JARVIS could not say who their girlfriend was. Training artifacts
+still redact them (specialists/third_parties.py at blend/SFT time), and
+employer/client identifiers are still stripped downstream by
+brain/outbound_policy.redact_outbound.
 
 =============================================================================
 THE FLOW
 =============================================================================
 
 STEP 1: rebuild_index(kb_path) — always fresh, no assumption a pre-existing
-        index is current (matches the old full-rescan property: this
-        script always works standalone, nothing to run beforehand).
+        index is current.
         |
         v
-STEP 2: Bucket via structured queries (query_by_dimension/type/tag/all)
-        against the just-rebuilt index.
+STEP 2: Drop superseded entries, then assign each remaining entry to the
+        FIRST section whose selector accepts it, in priority order:
+        people -> who -> think -> recent -> how -> building -> prefs -> other.
         |
         v
-STEP 3: Rank each bucket (recency desc, DIRECTIVE-carrying first) and take
-        the top-N, excerpting each to keep the profile lean.
-        |
-        v
-STEP 4: Render markdown; write jarvis_data/cognitive_profile.md (or stdout).
+STEP 3: Render every assigned entry in full; write
+        jarvis_data/cognitive_profile.md (or stdout).
 
 =============================================================================
 """
@@ -65,10 +67,12 @@ STEP 4: Render markdown; write jarvis_data/cognitive_profile.md (or stdout).
 from __future__ import annotations
 
 import argparse
+import re
 import sys
 import tempfile
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Callable, Dict, List, Optional, Set, Tuple
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "js-development"))
 from jarvis_core.config import DATA_ROOT  # noqa: E402
@@ -76,107 +80,170 @@ from jarvis_core.memory.cognitive_index import (  # noqa: E402
     IndexedEntry,
     IndexStats,
     query_all,
-    query_by_dimension,
-    query_by_tag,
-    query_by_type,
     rebuild_index,
 )
 
 _PROFILE_PATH = Path(DATA_ROOT) / "cognitive_profile.md"
+_IST = timezone(timedelta(hours=5, minutes=30))
+_RECENT_DAYS = 7
 
-_MAX_PER_SECTION = 8
-_EXCERPT_CHARS = 320
+# Identity family, surveyed from the KB's real tags on 2026-09-28. Explicit
+# rather than a prefix match: "self_hosted" and "self-critique-unreliable"
+# share a prefix with "self-model" and are not identity.
+_IDENTITY_TAGS = frozenset({
+    "identity", "career", "career-strategy", "career-plan", "career-planning",
+    "career-switch", "career-timeline", "legacy", "philosophy", "ambition",
+    "ambition-passion-distinction", "motivation", "motivation-architecture",
+    "meaning-architecture", "life-design", "self-model", "self-knowledge",
+    "self-assessment", "self-calibration", "production-vs-self-assessment",
+    "intellectual-profile", "exhaustive-learner", "cognitive-signature",
+    "identity-measure", "identity_measure_of_value", "personal-artifact",
+    "financial-profile", "demographics",
+})
+# Tags that mean the entry is about JARVIS's own identity, not the owner's.
+_SYSTEM_SELF_TAGS = frozenset({
+    "JARVIS-identity", "identity-pillar", "identity-assertion",
+    "identity-crisis", "runtime-state", "awareness-probe",
+})
+# A procedural `is`-vs-`==` note is tagged "identity" too; only these types
+# can describe a person.
+_IDENTITY_TYPES = frozenset({
+    "Cognitive_Pattern", "Cognitive_Profile", "Decision", "Episodic", "Semantic",
+})
+_LEARNING_TAG = re.compile(r"learn|gap|metacognition|meta[-_]cognition|explanation|teaching")
+_PATTERN_TYPES = frozenset({"Cognitive_Pattern", "Cognitive_Profile"})
+_SUPERSEDES_TAG = re.compile(r"^supersedes-(\d{4}-\d{2}-\d{2})")
+# Too broad to show two entries are about the same thing.
+_NON_TOPICAL_TAGS = frozenset({"identity", "DIRECTIVE", "directive"})
 
 
 def _has_directive(e: IndexedEntry) -> bool:
-    return "DIRECTIVE" in e.tags or "DIRECTIVE:" in e.content
+    return any(t.lower() == "directive" for t in e.tags) or "DIRECTIVE:" in e.content
 
 
-def _rank_key(e: IndexedEntry) -> Tuple[bool, str]:
-    # DIRECTIVE-carrying first, then most-recent timestamp.
-    return (_has_directive(e), e.timestamp or "")
+def _is_correction(e: IndexedEntry) -> bool:
+    return any("correction" in t.lower() for t in e.tags)
 
 
-def _excerpt(text: str, limit: int = _EXCERPT_CHARS) -> str:
-    text = " ".join(text.split())  # collapse whitespace/newlines
-    return text if len(text) <= limit else text[:limit] + " ..."
+def _render(e: IndexedEntry) -> str:
+    text = " ".join(e.content.split())
+    return f"- [{(e.timestamp or '')[:10]} · {e.type}] {text}"
 
 
-def _directive_sentence(content: str) -> str:
-    """Pull the DIRECTIVE clause if present, else the opening sentence."""
-    if "DIRECTIVE:" in content:
-        frag = content.split("DIRECTIVE:", 1)[1]
-        return _excerpt("DIRECTIVE:" + frag)
-    return _excerpt(content)
-
-
-def _dedupe(entries: List[IndexedEntry]) -> List[IndexedEntry]:
-    seen = set()
-    out: List[IndexedEntry] = []
-    for e in entries:
-        if e.id in seen:
-            continue
-        seen.add(e.id)
-        out.append(e)
+def _superseded_ids(entries: List[IndexedEntry]) -> Set[str]:
+    """Ids a NEWER entry declares superseded via `supersedes-<date>`, where the
+    two also share a topical tag — a date alone would sweep in every unrelated
+    entry written that day (KB 245 supersedes 2026-04-18 *portfolio snapshots*,
+    not the Strategic Identity decision from the same date)."""
+    out: Set[str] = set()
+    for newer in entries:
+        topical = {t for t in newer.tags
+                   if t not in _NON_TOPICAL_TAGS and not t.startswith("supersedes-")}
+        for tag in newer.tags:
+            m = _SUPERSEDES_TAG.match(tag)
+            if not m:
+                continue
+            day = m.group(1)
+            for older in entries:
+                if (older.id != newer.id and (older.timestamp or "")[:10] == day
+                        and (older.timestamp or "") < (newer.timestamp or "")
+                        and topical & set(older.tags)):
+                    out.add(older.id)
     return out
 
 
-def _bucket(kb_path: Path, db_path: Path) -> Tuple[Dict[str, List[IndexedEntry]], IndexStats]:
+def _is_person(e: IndexedEntry) -> bool:
+    """About someone in the owner's life. `person-` exactly, so that
+    "personal-artifact" (an identity tag) is not mistaken for one."""
+    return (any(t == "person" or t.startswith("person-") for t in e.tags)
+            and not set(e.tags) & _SYSTEM_SELF_TAGS)
+
+
+def _is_identity(e: IndexedEntry) -> bool:
+    tags = set(e.tags)
+    return (e.type in _IDENTITY_TYPES
+            and (e.type == "Cognitive_Profile" or bool(tags & _IDENTITY_TAGS))
+            and not tags & _SYSTEM_SELF_TAGS
+            and not _is_correction(e))
+
+
+def _is_learning(e: IndexedEntry) -> bool:
+    return e.type == "Cognitive_Pattern" and any(_LEARNING_TAG.search(t) for t in e.tags)
+
+
+def _is_how(e: IndexedEntry) -> bool:
+    return e.type == "System_Protocol" or _has_directive(e)
+
+
+def _is_building(e: IndexedEntry) -> bool:
+    return (e.type in ("Decision", "System_Protocol")
+            and any(cue in e.content.lower() for cue in ("stage", "sub-phase", "wave")))
+
+
+def _is_pref(e: IndexedEntry) -> bool:
+    return (e.type == "Failure"
+            or bool({"refusal_pattern", "refusal"} & set(e.tags))
+            or "anti-pattern" in e.content.lower())
+
+
+def _oldest_first(entries: List[IndexedEntry]) -> List[IndexedEntry]:
+    return sorted(entries, key=lambda e: e.timestamp or "")
+
+
+def _newest_first(entries: List[IndexedEntry]) -> List[IndexedEntry]:
+    return sorted(entries, key=lambda e: e.timestamp or "", reverse=True)
+
+
+def _directive_first(entries: List[IndexedEntry]) -> List[IndexedEntry]:
+    return sorted(entries, key=lambda e: (_has_directive(e), e.timestamp or ""), reverse=True)
+
+
+def _bucket(kb_path: Path, db_path: Path,
+            now: datetime) -> Tuple[Dict[str, List[IndexedEntry]], IndexStats]:
     stats = rebuild_index(kb_path=kb_path, db_path=db_path)
+    entries = list(query_all(db_path))
+    dropped = _superseded_ids(entries)
+    live = [e for e in entries if e.id not in dropped]
 
-    # Who you are — the structured personality dimension, full stop. No
-    # longer gated on the entry's prose happening to contain a magic phrase.
-    who = list(query_by_dimension("personality", db_path))
+    recent_floor = (now - timedelta(days=_RECENT_DAYS)).isoformat()
 
-    # How you work — protocol entries, DIRECTIVE-tagged entries, and
-    # entries that literally state "DIRECTIVE:" inline without the tag.
-    how = _dedupe(
-        list(query_by_type("System_Protocol", db_path))
-        + list(query_by_tag("DIRECTIVE", db_path))
-        + [e for e in query_all(db_path) if "DIRECTIVE:" in e.content]
-    )
+    def is_recent_correction(e: IndexedEntry) -> bool:
+        return (e.type == "Cognitive_Pattern" and (_has_directive(e) or _is_correction(e))
+                and _parse_ts(e.timestamp) >= recent_floor)
 
-    # What you're building — Decisions / protocols that mention project
-    # status. Not a dimension (it's a topic, not a memory type), so this
-    # stays a content check — but scoped to a structured type-query first
-    # instead of scanning the whole KB by hand.
-    stage_cues = ("stage", "sub-phase", "wave")
-    building_candidates = list(query_by_type("Decision", db_path)) + list(
-        query_by_type("System_Protocol", db_path)
-    )
-    building = _dedupe(
-        [e for e in building_candidates if any(cue in e.content.lower() for cue in stage_cues)]
-    )
-
-    # Preferences & anti-patterns — refusals, failures, and inline
-    # "anti-pattern" mentions without a matching tag.
-    prefs = _dedupe(
-        list(query_by_type("Failure", db_path))
-        + list(query_by_tag("refusal_pattern", db_path))
-        + list(query_by_tag("refusal", db_path))
-        + [e for e in query_all(db_path) if "anti-pattern" in e.content.lower()]
-    )
-
-    def top(bucket: List[IndexedEntry]) -> List[IndexedEntry]:
-        return sorted(bucket, key=_rank_key, reverse=True)[:_MAX_PER_SECTION]
-
-    def top_recent(bucket: List[IndexedEntry]) -> List[IndexedEntry]:
-        # Build-state must reflect the LATEST stage, so rank by recency only —
-        # DIRECTIVE-weighting would bury a recent non-directive stage Decision.
-        return sorted(bucket, key=lambda e: e.timestamp or "", reverse=True)[:_MAX_PER_SECTION]
-
-    return (
-        {
-            "who": top(who),
-            "how": top(how),
-            "building": top_recent(building),
-            "prefs": top(prefs),
-        },
-        stats,
-    )
+    selectors: List[Tuple[str, Callable[[IndexedEntry], bool],
+                          Callable[[List[IndexedEntry]], List[IndexedEntry]]]] = [
+        ("people", _is_person, _oldest_first),
+        ("who", _is_identity, _oldest_first),
+        ("think", _is_learning, _oldest_first),
+        ("recent", is_recent_correction, _newest_first),
+        ("how", _is_how, _directive_first),
+        ("building", _is_building, _newest_first),
+        ("prefs", _is_pref, _directive_first),
+        ("other", lambda e: e.type in _PATTERN_TYPES, _oldest_first),
+    ]
+    buckets: Dict[str, List[IndexedEntry]] = {name: [] for name, _, _ in selectors}
+    for e in live:
+        for name, accepts, _ in selectors:
+            if accepts(e):
+                buckets[name].append(e)
+                break
+    return {name: order(buckets[name]) for name, _, order in selectors}, stats
 
 
-def synthesize(kb_path: Optional[Path] = None, db_path: Optional[Path] = None) -> str:
+def _parse_ts(ts: str) -> str:
+    """ISO timestamp normalised to IST so string comparison is chronological."""
+    try:
+        dt = datetime.fromisoformat(ts)
+    except (TypeError, ValueError):
+        return ""
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=_IST)
+    return dt.astimezone(_IST).isoformat()
+
+
+def synthesize(kb_path: Optional[Path] = None, db_path: Optional[Path] = None,
+               now: Optional[datetime] = None) -> str:
     from jarvis_core.config import KB_PATH
 
     kb = kb_path or KB_PATH
@@ -187,14 +254,8 @@ def synthesize(kb_path: Optional[Path] = None, db_path: Optional[Path] = None) -
 
         db = COGNITIVE_INDEX_PATH
 
-    buckets, stats = _bucket(Path(kb), Path(db))
-
-    # Best-effort "current stage" line from the most recent stage Decision.
-    current = ""
-    for e in sorted(buckets["building"], key=lambda x: x.timestamp or "", reverse=True):
-        current = _excerpt(e.content, 200)
-        if current:
-            break
+    moment = (now or datetime.now(_IST)).astimezone(_IST)
+    buckets, stats = _bucket(Path(kb), Path(db), moment)
 
     lines: List[str] = []
     lines.append("# Cognitive Profile — Model of the User")
@@ -203,44 +264,46 @@ def synthesize(kb_path: Optional[Path] = None, db_path: Optional[Path] = None) -
         "> Auto-synthesized by `scripts/profile_synth.py` from "
         f"`knowledge_base.jsonl` ({stats.total_entries} entries). "
         "Injected into every chat via the SessionStart hook. "
-        "Regenerate after KB updates."
+        "Regenerate after KB updates. Every entry is shown in full, "
+        "dated, and appears in one section only."
     )
     lines.append("")
 
-    lines.append("## Who you are")
-    if buckets["who"]:
-        for e in buckets["who"]:
-            lines.append(f"- {_excerpt(e.content)}")
-    else:
-        lines.append("- (no user-background patterns captured yet)")
-    lines.append("")
+    def section(title: str, key: str, empty: str, preface: str = "") -> None:
+        lines.append(f"## {title}")
+        if preface:
+            lines.append(preface)
+        if buckets[key]:
+            lines.extend(_render(e) for e in buckets[key])
+        else:
+            lines.append(f"- ({empty})")
+        lines.append("")
 
-    lines.append("## How you work — active directives")
-    if buckets["how"]:
-        for e in buckets["how"]:
-            lines.append(f"- [{e.type}] {_directive_sentence(e.content)}")
-    else:
-        lines.append("- (no directives captured yet)")
-    lines.append("")
+    section("Who you are", "who", "no identity entries captured yet",
+            "_Durable identity — career, ambitions, philosophy, how you see "
+            "yourself. Oldest first; later entries update earlier ones._")
+    section("People in your life", "people", "no people captured yet",
+            "_Who the people around you are, and what they are to you. Oldest "
+            "first; later entries update earlier ones._")
+    section("How you think and learn", "think", "no learning-pattern entries captured yet")
+    section("How you work — active directives", "how", "no directives captured yet")
 
     lines.append("## What you're building")
-    if current:
-        lines.append(f"**Current focus:** {current}")
+    building = buckets["building"]
+    if building:
+        lines.append(f"**Current focus:** {_render(building[0])[2:]}")
         lines.append("")
-    if buckets["building"]:
-        for e in buckets["building"][:5]:
-            lines.append(f"- {_excerpt(e.content, 200)}")
+        lines.extend(_render(e) for e in building[1:])
     else:
         lines.append("- (no build-state decisions captured yet)")
     lines.append("")
 
-    lines.append("## Preferences & anti-patterns")
-    if buckets["prefs"]:
-        for e in buckets["prefs"]:
-            lines.append(f"- {_excerpt(e.content)}")
-    else:
-        lines.append("- (no preference/refusal patterns captured yet)")
-    lines.append("")
+    section("Preferences & anti-patterns", "prefs", "no preference/refusal patterns captured yet")
+    section("Other observed patterns", "other", "no other patterns captured yet")
+    section(f"Recent corrections (last {_RECENT_DAYS} days)", "recent",
+            "no corrections in the last week",
+            "_Project-specific corrections from the past week. These are NOT "
+            "identity — never answer \"who am I?\" from this section._")
 
     return "\n".join(lines)
 
@@ -258,6 +321,9 @@ def _run_self_test() -> None:
             passed += 1
         else:
             failed.append(f"FAIL: {name}" + (f" ({hint})" if hint else ""))
+
+    now = datetime(2026, 9, 28, 12, 0, tzinfo=_IST)
+    long_identity = "Strategic Identity: legacy-driven, not career-driven. " + ("ambition " * 600)
 
     with tempfile.TemporaryDirectory() as td:
         import json
@@ -279,37 +345,108 @@ def _run_self_test() -> None:
              "expiry": "Permanent"},
             {"timestamp": "2026-05-29T00:00:00+05:30", "type": "System_Protocol",
              "tags": ["workflow-protocol", "DIRECTIVE"],
-             "content": "DIRECTIVE: /next must skip concept-only lessons when build lessons exist.",
+             "content": "Preamble that must survive. DIRECTIVE: /next must skip concept-only lessons when build lessons exist.",
              "expiry": "Permanent"},
+            {"timestamp": "2026-04-18T00:00:00+05:30", "type": "Decision",
+             "tags": ["identity", "legacy"], "content": long_identity, "expiry": "Permanent"},
+            {"timestamp": "2026-04-17T00:00:00+05:30", "type": "Episodic",
+             "tags": ["career", "identity"],
+             "content": "User Identity Update: Data Engineer, lives with Alicia.", "expiry": "Permanent"},
+            {"timestamp": "2026-01-15T00:00:00+05:30", "type": "Procedural",
+             "tags": ["identity", "python"],
+             "content": "Use `is None` for singleton identity checks.", "expiry": "Permanent"},
+            {"timestamp": "2026-09-27T00:00:00+05:30", "type": "Cognitive_Pattern",
+             "tags": ["identity", "correction", "directive"],
+             "content": "CORRECTION: Stitch gold is 0.8% dark green. DIRECTIVE: use it.",
+             "expiry": "Permanent"},
+            {"timestamp": "2026-05-13T00:00:00+05:30", "type": "Episodic",
+             "tags": ["finance", "identity"],
+             "content": "OLD-SNAPSHOT holdings list.", "expiry": "Permanent"},
+            {"timestamp": "2026-05-16T00:00:00+05:30", "type": "Episodic",
+             "tags": ["finance", "identity", "supersedes-2026-05-13-snapshot"],
+             "content": "NEW-SNAPSHOT holdings list.", "expiry": "Permanent"},
+            {"timestamp": "2026-06-11T00:00:00+05:30", "type": "Cognitive_Pattern",
+             "tags": ["identity-pillar", "self-model", "DIRECTIVE"],
+             "content": "JARVIS-SELF: the runtime did not register its own model swap. DIRECTIVE: announce it.",
+             "expiry": "Permanent"},
+            {"timestamp": "2026-09-14T00:00:00+05:30", "type": "Semantic",
+             "tags": ["distilled", "person", "source-claude", "person-shubha"],
+             "content": "The owner's girlfriend is Shubha, called Tobu. " + ("detail " * 400),
+             "expiry": "Permanent"},
+            {"timestamp": "2026-08-01T00:00:00+05:30", "type": "Semantic",
+             "tags": ["person-father"],
+             "content": "PERSON-OLDER the owner's father is a teacher.", "expiry": "Permanent"},
+            {"timestamp": "2026-02-01T00:00:00+05:30", "type": "Cognitive_Pattern",
+             "tags": ["personal-artifact", "identity"],
+             "content": "PERSONAL-ARTIFACT-IDENTITY a notebook the owner keeps.", "expiry": "Permanent"},
+            {"timestamp": "2026-03-01T00:00:00+05:30", "type": "Cognitive_Pattern",
+             "tags": ["curiosity-shape"],
+             "content": "UNTAGGED-PATTERN user asks for execution traces.", "expiry": "Permanent"},
         ]
         with open(kb, "w", encoding="utf-8") as f:
             for e in fake:
                 f.write(json.dumps(e) + "\n")
 
-        out = synthesize(kb, db)
+        out = synthesize(kb, db, now=now)
+
+        def section_of(marker: str) -> str:
+            head = out[:out.index(marker)]
+            return head[head.rindex("\n## ") + 4:].split("\n", 1)[0]
+
         check("T1 non-empty", len(out) > 100)
-        check("T2 has 'Who you are'", "## Who you are" in out)
-        check("T3 has 'How you work'", "## How you work" in out)
-        check("T4 has 'What you're building'", "## What you're building" in out)
-        check("T5 has 'Preferences'", "## Preferences" in out)
-        check("T6 surfaces a DIRECTIVE", "DIRECTIVE:" in out, out[:400])
-        check("T7 surfaces current stage", "3.5" in out or "Stage 3" in out)
-        check("T8 surfaces refusal/anti-pattern", "bundling" in out.lower() or "anti-pattern" in out.lower())
+        check("T2 has every section", all(s in out for s in (
+            "## Who you are", "## People in your life", "## How you think and learn", "## How you work",
+            "## What you're building", "## Preferences", "## Other observed patterns",
+            "## Recent corrections")))
+        check("T3 a 5,000-char identity entry appears whole", long_identity.strip() in out)
+        check("T4 no excerpt ellipsis anywhere", " ..." not in out)
+        check("T5 identity entries land in 'Who you are'",
+              section_of("Strategic Identity") == "Who you are"
+              and section_of("User Identity Update") == "Who you are", out[:600])
+        check("T6 identity reads oldest -> newest",
+              out.index("User Identity Update") < out.index("Strategic Identity"))
+        check("T7 a Procedural tagged identity is not identity",
+              "Use `is None`" not in out[:out.index("## How you think")])
+        check("T8 a recent correction is labelled recent, not identity",
+              section_of("Stitch gold") == "Recent corrections (last 7 days)")
+        check("T9 the text before DIRECTIVE: survives",
+              "Preamble that must survive. DIRECTIVE:" in out)
+        check("T10 learning pattern lands in 'How you think'",
+              section_of("ML math foundation") == "How you think and learn")
+        check("T11 superseded snapshot excluded, superseding one kept",
+              "OLD-SNAPSHOT" not in out and "NEW-SNAPSHOT" in out)
+        check("T12 JARVIS's own self-model is not the owner's identity",
+              section_of("JARVIS-SELF") != "Who you are")
+        check("T13 people in the owner's life stay named (context-only consent, 2026-09-28)", "Alicia" in out)
+        check("T14 current stage surfaced", "Sub-Phase 3.5" in out)
+        check("T15 refusal/anti-pattern surfaced", section_of("bundling") == "Preferences & anti-patterns")
+        check("T16 unplaced pattern kept, not dropped",
+              section_of("UNTAGGED-PATTERN") == "Other observed patterns")
+        check("T17 every entry appears once",
+              all(out.count(marker) == 1 for marker in (
+                  "Strategic Identity", "ML math foundation", "Stitch gold",
+                  "MemoryManager", "bundling", "JARVIS-SELF")))
+        check("T18 header keeps the (N entries) count the stale check parses",
+              "(15 entries)" in out)
+        check("T20 person-tagged entries land in 'People in your life', whole",
+              section_of("girlfriend is Shubha") == "People in your life"
+              and section_of("PERSON-OLDER") == "People in your life"
+              and ("The owner's girlfriend is Shubha, called Tobu. " + "detail " * 400).strip() in out)
+        check("T21 people read oldest -> newest, right after 'Who you are'",
+              out.index("PERSON-OLDER") < out.index("girlfriend is Shubha")
+              and out.index("## Who you are") < out.index("## People in your life")
+              < out.index("## How you think and learn"))
+        check("T22 'personal-artifact' is identity, not a person",
+              section_of("PERSONAL-ARTIFACT-IDENTITY") == "Who you are")
 
-        # Origin-tracing check: entry 1 (Cognitive_Pattern, no magic
-        # substring) must reach "Who you are" via the dimension, not via
-        # the old substring cue — this is the actual bug being fixed.
-        check("T9 personality entry surfaces without magic-phrase dependency",
-              "ML math foundation" in out)
-
-        # Empty KB -> still well-formed with placeholders
         empty = Path(td) / "empty.jsonl"
         empty_db = Path(td) / "empty.sqlite3"
         empty.write_text("", encoding="utf-8")
-        out2 = synthesize(empty, empty_db)
-        check("T10 empty KB still has all 4 sections",
-              all(s in out2 for s in ("## Who you are", "## How you work",
-                                       "## What you're building", "## Preferences")))
+        out2 = synthesize(empty, empty_db, now=now)
+        check("T19 empty KB still has every section with placeholders",
+              all(s in out2 for s in ("## Who you are", "## People in your life", "## How you work",
+                                       "## What you're building", "## Preferences",
+                                       "(no identity entries captured yet)")))
 
     total = passed + len(failed)
     print(f"\n  Passed: {passed}/{total}")

@@ -92,6 +92,7 @@ sys.path.insert(0, str(_REPO_ROOT / "js-development"))
 
 from jarvis_core.agent.provenance import ECHO_CEILING, EchoIndex  # noqa: E402
 from jarvis_core.config import DATA_ROOT, JARVIS_ROOT, KB_PATH  # noqa: E402
+from jarvis_core.specialists import third_parties  # noqa: E402
 from jarvis_core.specialists.text_hygiene import (  # noqa: E402
     MACHINE_TEXT, OWNER_PROSE, classify,
 )
@@ -115,6 +116,52 @@ _MIN_ANSWER_CHARS = 120
 _MIN_VOICE_CHARS = 60      # a real utterance, not a fragment — voice runs shorter
 _MIN_QUESTION_CHARS = 15
 _MAX_ANSWER_CHARS = 6000
+
+
+def _answer_parts(text: str) -> List[str]:
+    """Split an over-long answer into consecutive parts that together hold ALL of it.
+
+    A slice here used to keep the first 6,000 chars and throw the rest away.
+    Parts break on paragraphs, then sentences, and are balanced so the last one
+    is not a fragment the quality gate would drop.
+    """
+    text = text.strip()
+    if len(text) <= _MAX_ANSWER_CHARS:
+        return [text]
+    units: List[str] = []
+    for para in re.split(r"(?<=\n\n)", text):
+        if len(para) <= _MAX_ANSWER_CHARS:
+            units.append(para)
+            continue
+        for sentence in re.split(r"(?<=[.!?])(?=\s)", para):
+            units.extend(sentence[i:i + _MAX_ANSWER_CHARS]
+                         for i in range(0, len(sentence), _MAX_ANSWER_CHARS))
+    count = -(-len(text) // _MAX_ANSWER_CHARS)
+    target = -(-len(text) // count)
+    parts: List[str] = []
+    current = ""
+    for unit in units:
+        if current and (len(current) + len(unit) > _MAX_ANSWER_CHARS or len(current) >= target):
+            parts.append(current)
+            current = unit
+        else:
+            current += unit
+    parts.append(current)
+    return [part.strip() for part in parts if part.strip()]
+
+
+def _pairs_over(user: str, answer: str, source_path: str,
+                metadata: Dict[str, Any], **fields: Any) -> Iterator["SFTPair"]:
+    """One pair per part of `answer`; a single part is the ordinary pair, unchanged."""
+    parts = _answer_parts(answer)
+    for i, part in enumerate(parts, 1):
+        if len(parts) == 1:
+            yield SFTPair(user=user, assistant=part, source_path=source_path,
+                          metadata=metadata, **fields)
+            continue
+        yield SFTPair(user=f"{user}\n\n(Continue — part {i} of {len(parts)}.)",
+                      assistant=part, source_path=f"{source_path}#part{i}",
+                      metadata={**metadata, "part": i, "parts": len(parts)}, **fields)
 
 # Spec §4's bar is "the answer must contain the REASON, not just the fact".
 #
@@ -467,6 +514,7 @@ def extract_user_explanations() -> Iterator[SFTPair]:
     # lazy-pipeline rule and not a quiet erosion of it.
     records.sort(key=lambda r: str(r.get("ts", "")))
     echo = EchoIndex()
+    taken = 0
 
     for rec in records:
         text = str(rec.get("user_text", "")).strip()
@@ -478,10 +526,13 @@ def extract_user_explanations() -> Iterator[SFTPair]:
         if echoed > ECHO_CEILING:
             continue
         ts = str(rec.get("ts", ""))
-        slot = int(hashlib.sha256(ts.encode("utf-8")).hexdigest(), 16)
-        yield SFTPair(
-            user=_EXPLANATION_PROMPTS[slot % len(_EXPLANATION_PROMPTS)],
-            assistant=text[:_MAX_ANSWER_CHARS],
+        # Round-robin in ts order, not a hash of ts: hashing put 14 answers on
+        # one template (2026-09-28), over check_pipeline's monoculture bar.
+        prompt = _EXPLANATION_PROMPTS[taken % len(_EXPLANATION_PROMPTS)]
+        taken += 1
+        yield from _pairs_over(
+            user=prompt,
+            answer=text,
             bucket="personalization", source_type="sft_personalization",
             source_path=f"observation_queue.jsonl#{ts}",
             metadata={"origin": "authored_by_user", "form": "explanation",
@@ -515,7 +566,7 @@ def extract_kb_verbatim() -> Iterator[SFTPair]:
             ref = eid if isinstance(eid, int) else f"ts:{str(entry.get('timestamp',''))[:19]}"
             yield SFTPair(
                 user=(f"Here is a situation from my own history. Respond the way I "
-                      f"actually responded, in my own words.\n\n{framing[:1200]}"),
+                      f"actually responded, in my own words.\n\n{framing}"),
                 assistant=quote,
                 bucket="personalization", source_type="sft_personalization",
                 source_path=f"kb#{ref}#verbatim",
@@ -596,9 +647,9 @@ def extract_ui_sessions() -> Iterator[SFTPair]:
             answer = str(turns[i + 1].get("content", "")).strip()
             if classify(answer, min_chars=_MIN_VOICE_CHARS)[0] != OWNER_PROSE:
                 continue
-            yield SFTPair(
+            yield from _pairs_over(
                 user=question,
-                assistant=answer[:_MAX_ANSWER_CHARS],
+                answer=answer,
                 bucket="personalization", source_type="sft_personalization",
                 source_path=f"conversations/{path.name}#turn{i + 1}",
                 metadata={"origin": "authored_by_user", "form": "interview",
@@ -635,9 +686,9 @@ def extract_literature() -> Iterator[SFTPair]:
         for i, (heading, body) in enumerate(_split_md_sections(text, level="## ")):
             if len(body) < _MIN_ANSWER_CHARS:
                 continue
-            yield SFTPair(
+            yield from _pairs_over(
                 user=(f"Write in my own voice about this, from '{title}': {heading}"),
-                assistant=body.strip()[:_MAX_ANSWER_CHARS],
+                answer=body,
                 bucket="personalization", source_type="sft_personalization",
                 source_path=f"knowledge/literature/{path.name}#{i}",
                 metadata={"origin": "authored_by_user", "form": "essay"})
@@ -646,10 +697,10 @@ def extract_literature() -> Iterator[SFTPair]:
                 para = para.strip()
                 if len(para) < _MIN_PARAGRAPH_CHARS or para.startswith("#"):
                     continue
-                yield SFTPair(
+                yield from _pairs_over(
                     user=(f"In my own voice, on '{heading}' from '{title}' — "
                           f"take the thought further."),
-                    assistant=para[:_MAX_ANSWER_CHARS],
+                    answer=para,
                     bucket="personalization", source_type="sft_personalization",
                     source_path=f"knowledge/literature/{path.name}#{i}p{j}",
                     metadata={"origin": "authored_by_user", "form": "essay_paragraph"})
@@ -757,10 +808,14 @@ def carve_heldout(pairs: List[SFTPair]) -> Tuple[List[SFTPair], List[SFTPair]]:
 
 def write_jsonl(pairs: List[SFTPair], path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
+    people = third_parties.load()
     tmp = path.with_suffix(".tmp")
     with tmp.open("w", encoding="utf-8") as fh:
         for p in pairs:
-            fh.write(json.dumps(p.to_record(), ensure_ascii=False) + "\n")
+            record = p.to_record()
+            for message in record.get("messages", []):
+                message["content"], _ = third_parties.redact(message.get("content", ""), people)
+            fh.write(json.dumps(record, ensure_ascii=False) + "\n")
     tmp.replace(path)
 
 
@@ -819,8 +874,8 @@ def main() -> int:
             print(f"\n--- sample {bucket} pairs ---")
             for pair in [x for x in pairs if x.bucket == bucket][:args.samples]:
                 print(f"\n  [{pair.source_path}]")
-                print(f"  USER      : {pair.user[:220]}")
-                print(f"  ASSISTANT : {pair.assistant[:260]}")
+                print(f"  USER      : {pair.user}")
+                print(f"  ASSISTANT : {pair.assistant}")
 
     if args.dry_run:
         print("\n  --dry-run: nothing written")

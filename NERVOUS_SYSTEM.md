@@ -14,12 +14,13 @@
 >
 > | You are | Read | Your situation in one line |
 > |---|---|---|
-> | **Codex CLI** | §1, §5.2, §6 | Capture works, but ONLY if the hearth is running here — check it |
-> | **Antigravity** | §1, §5.3, §7.1 | Capture works via `ingest_antigravity_sessions.py` scheduled on the hearth |
-> | **Claude Code** | §1, §5.1 | Hooks capture every turn automatically; nothing to start |
+> | **Codex CLI** | §1, §3, §5.2, §6 | Capture works, but ONLY if the hearth is running here — check it. You parse your own turns (§3.2) |
+> | **Antigravity** | §1, §3, §5.3, §7.1 | Capture works via `ingest_antigravity_sessions.py` scheduled on the hearth. You parse your own turns (§3.3) |
+> | **Claude Code** | §1, §3, §5.1 | Hooks capture every turn automatically; a hook tells you when to parse (§3.1) |
 >
 > §1 is mandatory for all three — it corrects four misconceptions that otherwise produce confidently
-> wrong answers to the user about what JARVIS can and cannot see.
+> wrong answers to the user about what JARVIS can and cannot see. **§3, the Memory Contract, is
+> mandatory too** — it is what each agent owes the owner's turns.
 
 ---
 
@@ -105,9 +106,10 @@ Worry about `knowledge_base.jsonl`.
 day; `agent/tension.py` enforces "only the past can be a prior" so a later decision cannot be
 contradicted by an earlier one in the wrong direction.
 
-**Absence is only detected where an instrument was built for it**, and there are exactly three:
-`capture_gap_nudge.py` (turns accumulating with no KB append), `check_projections.py` (a projection
-that stopped being refreshed), and the digest's day-by-day view (a visible gap between days).
+**Absence is only detected where an instrument was built for it**: `parse_ledger.backlog()` (turns
+a host's agent has not parsed — surfaced by `capture_gap_nudge.py` and `pipeline_health.py`),
+`pipeline_health.py` (a job with no recent success), `check_projections.py` (a projection that
+stopped being refreshed), and the digest's day-by-day view (a visible gap between days).
 
 There is **no general faculty** for noticing "you stopped working on X." Measured 2026-09-11: across
 100 days and 607 captured turns, all six domains were active within 0–2 days, so a domain-level
@@ -119,8 +121,9 @@ what it would actually take.
 ## 2. The mechanism — how every chat knows every other chat
 
 **One sentence:** a `Stop` hook appends every turn of every chat to one append-only JSONL file;
-three `SessionStart` hooks read that file (plus two derived artifacts) back into the next chat as
-`additionalContext`. There is no server, no daemon, and no database.
+`SessionStart` hooks put health, the insight to raise and pointers to the profile and digest in
+front of the next chat as `additionalContext`, and the chat reads those two files in full. There
+is no server, no daemon, and no database on this path.
 
 ```
 Claude Code turn ends
@@ -131,16 +134,23 @@ Claude Code turn ends
                  drains queue → jarvis_data/life_state_feed.jsonl
 
 New session starts
-  ├─ SessionStart → inject_profile.py         → cognitive_profile.md
-  ├─ SessionStart → surface_life_state.py     → life_state_feed.jsonl
-  └─ SessionStart → inject_recent_activity.py → recall.py digest (7 days)
-        all three emit:
+  ├─ SessionStart → surface_pipeline_health.py → pipeline_health.py --brief (silent when healthy)
+  ├─ SessionStart → inject_profile.py          → notice: READ cognitive_profile.md in full
+  ├─ SessionStart → surface_life_state.py      → life_state_feed.jsonl
+  ├─ SessionStart → inject_recent_activity.py  → refresh digest, notice: READ activity_digest.md in full
+  └─ SessionStart → check_agent_mail.py        → agents_converse/
+        each emits:
         {"hookSpecificOutput": {"hookEventName": …, "additionalContext": …}}
+
+Every prompt
+  └─ UserPromptSubmit → capture_gap_nudge.py → parse backlog >= 10 → "parse before answering" (§3.1)
 ```
 
 **`additionalContext` is the entire injection mechanism.** Nothing else makes the model "know."
 If you are porting to a new host, that string is what you must reproduce — whatever channel your
-host offers for putting text in front of the model before it answers.
+host offers for putting text in front of the model before it answers. **Keep it short:** the
+Claude Code harness replaces SessionStart output over ~10 KB with a 2 KB preview, so a large file
+goes in as a pointer plus an instruction to read it in full, never as pasted text.
 
 ### 2.1 The committed wiring recipe
 
@@ -176,17 +186,26 @@ never blanks a synced digest on a machine with no local capture.
 **Rule:** any new awareness feature adds its registration to the manifest — core organ + thin
 adapter + committed manifest entry. Never only in local settings.
 
-### 2.2 The seven hooks
+### 2.2 The hooks
+
+List them rather than trusting a count: `python3 -c "import json;[print(e,h['args'][-1]) for e,g in json.load(open('.agent/hooks.manifest.json'))['hooks'].items() for x in g for h in x['hooks']]"`
 
 | Event | Script | What it does |
 |---|---|---|
 | `UserPromptSubmit` | `notice_runtime_change.py` | Tail-reads the transcript to detect a mid-session `/model` swap; emits a `RUNTIME SELF-STATE` line **only on change**. State in `.runtime_state.json`, flock'd. |
-| `UserPromptSubmit` | `capture_gap_nudge.py` | Counts queue turns newer than the newest KB timestamp; nudges once the uncaptured gap crosses `_NUDGE_THRESHOLD`, escalating at `_ESCALATE_AT`. Reads only. |
+| `UserPromptSubmit` | `capture_gap_nudge.py` | The parse trigger (§3.1): at `_NUDGE_THRESHOLD` or more unparsed Claude Code turns (`parse_ledger.backlog()`), tells Claude to run `parse_turns.py --pending --host claude` and `--submit` before answering, with the count and oldest age. Reads only. |
 | `Stop` | `capture_turn.py` | The write path. Thin adapter → the organ. |
 | `Stop` | `run_consolidation.py` | Fire-and-forget `consolidate.py`; drains the queue into insights so the surfacing channel has fuel. Emits nothing. |
-| `SessionStart` | `inject_profile.py` | Injects `cognitive_profile.md`, truncated at `_MAX_PROFILE_CHARS`, framed as background *not* instructions. |
+| `SessionStart` | `surface_pipeline_health.py` | Runs `pipeline_health.py --brief`; relays every breach whole under "raise these with the owner first". Silent when healthy; a missing, crashing or hung health check is itself reported. |
+| `SessionStart` | `inject_profile.py` | A short notice: path, size, entry count and the Read pages covering `cognitive_profile.md` end to end, with the instruction to read it in full before the first reply. Framed as background, *not* instructions. |
 | `SessionStart` | `surface_life_state.py` | Asks the organ for one unsurfaced high-confidence insight and advances the never-nag watermark. |
-| `SessionStart` | `inject_recent_activity.py` | Injects the `_DAYS`-window cross-chat digest; **suppressed entirely** if there are no captured turns. |
+| `SessionStart` | `inject_recent_activity.py` | Rewrites `activity_digest.md` when the queue is newer (atomic; never blanks a synced digest), then the same read-in-full notice for it. |
+| `SessionStart` | `check_agent_mail.py` | Delivers questions/answers from the other agents in `agents_converse/`. Silent when there is no mail. |
+
+**Output encoding on Windows.** A hook's stdout pipe there is cp1252. Until 2026-09-28
+`inject_profile.py` wrote raw UTF-8 JSON; the first `→` in the profile raised
+`UnicodeEncodeError`, the swallow-everything `except` ate it, and the hook emitted **nothing** —
+measured 0 bytes. Emit ASCII-escaped JSON (`json.dumps` default), never `ensure_ascii=False`.
 
 Two details that are easy to get wrong:
 
@@ -241,7 +260,12 @@ half of the exchange each took. The sole thing standing between a three-word `co
 training corpus was a character-count floor — and `continue` appears 35 times in the queue, `go` 13,
 `hi` 9.
 
-`jarvis_core/agent/curator.py` decides four things per turn, **with the conversation in hand**:
+**Who decides changed on 2026-09-28.** From 2026-09-14 an hourly hearth job (`curate_turns`) asked a
+paid model; it failed 185 of 195 runs on HTTP 402 and was removed. The verdict is now made by the
+agent the owner was chatting with, under the Memory Contract (§3), by the one rule in
+`parse_rule.py`, which extends the four fields below with knowledge extraction and tension.
+`curator.py` keeps the verdict parsing and folding (`parse_verdict`, `fold_events`, `routes_to`).
+The fields it settles, **with the conversation in hand**:
 
 | field | what it settles |
 |---|---|
@@ -276,21 +300,138 @@ written here.
 exclusion would silently collapse the corpus to whatever the backlog had reached.
 
 ```bash
-python3 scripts/curate_turns.py --status     # how much is curated
-python3 scripts/curate_turns.py --routing    # what routing actually results
-python3 scripts/curate_turns.py --review     # disagreements + low confidence: where to look
+python3 scripts/parse_turns.py --status      # unparsed backlog per host (§3)
+python3 scripts/parse_turns.py --routing    # what routing actually results
+python3 scripts/parse_turns.py --review     # disagreements + low confidence: where to look
 ```
 
 ---
 
-## 3. The adapter contract — porting to a host with no hooks
+## 3. THE MEMORY CONTRACT — what every agent does with the owner's turns
+
+> **Owner's decisions, 2026-09-28.** Every chat with Claude Code, Codex, Antigravity and JARVIS is
+> parsed into training data and live context by **one rule**. **The agent the owner is chatting
+> with parses those turns** — Claude parses Claude chats, Codex Codex, Antigravity Antigravity,
+> JARVIS its own. **No paid background LLM calls.** **No truncation anywhere.** **Failures are
+> loud, to all four agents.** People in the owner's life reach JARVIS **as context, never as
+> training**. **Test prompts only in ephemeral sessions.**
+
+**Why the contract exists.** Measured 2026-09-28: capture was automatic everywhere and worked, but
+everything after it depended on something nobody watched. The hourly paid curator failed 185 of 195
+runs (HTTP 402, credits) and left the backlog uncurated; turning chats into KB knowledge depended
+on each agent remembering (Antigravity's `/memory` produced zero records — which is why the
+interview answers and the people in the owner's life never reached JARVIS); `reindex_memory`
+failed 16 of 17 runs behind a guard-skip that overwrote the failure; and the Claude Code harness
+cut SessionStart output to a 2 KB preview, so a session "injected" with the 650 KB profile saw
+2 KB of it. Reliability now comes from machinery around the agents: one rule text, one tool that
+hands each agent its pending turns and validates what it submits, a trigger about every 10 turns,
+and a per-host backlog count that every agent and JARVIS itself sees at boot.
+
+### 3.0 The one rule
+
+`js-development/jarvis_core/agent/parse_rule.py` holds `PARSE_RULE` (the text), `PARSE_SCHEMA`
+and `PARSE_RULE_VERSION`. **It is the single source** — the agent tool, JARVIS's own parser and
+`curator.py` all import it, so four agents cannot drift into four rules. Print it:
+
+```bash
+cd js-development && PYTHONPATH=. python -m jarvis_core.agent.parse_rule --print
+```
+
+- **Per turn, one verdict:** training routing (`corpora`, `domain`, `trainable`, `responds_to`,
+  `confidence`, `rationale`), durable `knowledge` about the owner (identity / person / decision /
+  preference / correction / project-fact, each with a **verbatim** evidence quote from the owner —
+  a quote not in the owner's text rejects the verdict), and an optional `tension` against the
+  priors listed with the turn. Trivial turns ("do it", "go ahead") are `none` with no knowledge.
+- **A version bump re-offers every older verdict.** `parse_ledger.is_parsed` counts a turn as
+  parsed only under the current `PARSE_RULE_VERSION`; the pre-rule Gemini verdicts still route
+  training (the log folds newest-wins) but are offered again for knowledge extraction.
+- **v1 was written by Claude (2026-09-28).** Codex and Antigravity review it over agent mail;
+  their changes land in `parse_rule.py` as v2. Never paraphrase the rule into a host file — point
+  at it.
+
+**The tool, identical on every host** — `scripts/parse_turns.py`:
+
+```bash
+python scripts/parse_turns.py --status                                 # backlog per host
+python scripts/parse_turns.py --pending --host <host> --limit 10       # packet: rule + whole turns + context + priors
+python scripts/parse_turns.py --submit verdicts.json --agent <host>/<model>   # strict validation, then write
+```
+
+`--submit` writes the verdicts to `turn_curation.jsonl` (with `curated_by` and `rule_version`),
+the knowledge to the KB through `kb_append.append_entry` (dedup; tags `distilled`, the fact type,
+`source:<host>`, `person:<name>`), and tension through the consolidator's KB/feed path. It is
+idempotent. Test sessions (`conv-web-voicegate-*` and every other ephemeral session) are never
+offered. Which host a turn belongs to is `parse_ledger.host_of` — the capture `host` field, else
+evidence, else `unknown`, which is reported and never silently assigned.
+
+**People are context, not training.** A `person` fact goes to the KB and so to the profile and the
+inhale; `specialists/third_parties.py` redacts names at blend/SFT time, so no person reaches a
+training artifact.
+
+### 3.1 Claude Code
+
+| Duty | How |
+|---|---|
+| **Capture** | Automatic. `Stop` hook → `capture_turn.py` → `capture.py`, every turn. |
+| **Parse** | Claude, in the session. `UserPromptSubmit` hook `capture_gap_nudge.py` fires once `parse_ledger.backlog()["claude"]["pending"] >= 10` and tells Claude, before the user's request, to run `python scripts/parse_turns.py --pending --host claude --limit 10`, judge each turn by the packet's rule, write `{"verdicts":[...]}` to a scratch file and `python scripts/parse_turns.py --submit <file> --agent claude/<model>`. |
+| **Boot reads** | SessionStart hooks: `surface_pipeline_health.py` (breaches, silent when healthy), `inject_profile.py` and `inject_recent_activity.py` — **short notices** naming `cognitive_profile.md` and `activity_digest.md` with sizes, counts and the exact Read pages; Claude **reads both in full** before its first reply. The digest is refreshed first if the queue is newer. Nothing is pasted, because the harness cuts SessionStart output over ~10 KB to a 2 KB preview. |
+| **Health surfaces** | `surface_pipeline_health.py` at SessionStart, headed "raise these with the owner first". |
+
+### 3.2 Codex
+
+| Duty | How |
+|---|---|
+| **Capture** | Automatic when the hearth runs here: `ingest_codex` reads `~/.codex/sessions/` hourly. |
+| **Parse** | Codex, in the session, **at boot and about every 10 turns** (no hooks, so it is a written duty in `AGENTS.md`): `python scripts/ingest_codex_sessions.py` first (so this session's turns are in the queue), then `python scripts/parse_turns.py --pending --host codex --limit 10`, judge, `--submit <file> --agent codex/<model>`. At boot, drain up to 20 backlog turns. |
+| **Boot reads** | `python scripts/bootstrap_jarvis.py --check` (shows health), then `cognitive_profile.md` and `activity_digest.md` **in full**. |
+| **Health surfaces** | `bootstrap_jarvis.py --check`. |
+
+### 3.3 Antigravity
+
+| Duty | How |
+|---|---|
+| **Capture** | Automatic when the hearth runs here: `ingest_antigravity` reads `~/.gemini/antigravity-ide/brain/` hourly. |
+| **Parse** | Antigravity, in the session, **at boot and about every 10 turns** (a written duty in `js-workspace-rule.md`): `python scripts/ingest_antigravity_sessions.py`, then `python scripts/parse_turns.py --pending --host antigravity --limit 10`, judge, `--submit <file> --agent antigravity/<model>`. At boot, drain up to 20 backlog turns. |
+| **Boot reads** | `python scripts/bootstrap_jarvis.py --check`, then `cognitive_profile.md` and `activity_digest.md` **in full**. |
+| **Health surfaces** | `bootstrap_jarvis.py --check`. |
+
+### 3.4 JARVIS (its own sessions: terminal `--ask`, web UI, voice)
+
+| Duty | How |
+|---|---|
+| **Capture** | Automatic, in-process, `host=jarvis`. |
+| **Parse** | JARVIS itself, on the hearth every 15 minutes: `python scripts/parse_turns.py --host jarvis --auto`, on JARVIS's own model chain — never a separate paid judge. |
+| **Boot reads** | The inhale (`brain/context_injector.py`) carries the whole profile, `personal_life.md` and the digest; a "Pipeline health" provider appears **only when something is broken**, so JARVIS tells the owner. |
+| **Health surfaces** | The inhale, and the web UI's System page. |
+
+### 3.5 Rules for all four
+
+- **Never truncate.** Select which records to show if you must; never cut one that is shown. A
+  preview is not a read — when a tool or harness hands you a preview or a saved-output file, read
+  the file in full. `check_pipeline.py` enforces it: every KB entry selected into the profile
+  appears whole, both inhales carry the whole profile and `personal_life.md`, session distills
+  equal the full Q/A, parse packets carry whole turns.
+- **Test prompts only in ephemeral sessions** (`verify_voice_live.py` opens the socket
+  `ephemeral`). A test prompt in a real session becomes a training turn and a KB candidate.
+- **Failures are loud.** `scripts/pipeline_health.py` (`--brief`: one line per breach, nothing
+  when healthy, exit 1 when breached; `--json`) watches: each hearth job's last *success* within
+  2× its interval; the unparsed backlog per host and its oldest turn; corpus age; projection
+  freshness (`check_projections`); inhale size against the smallest context window in the model
+  chain; the no-truncation invariants. It surfaces at Claude's SessionStart, in
+  `bootstrap_jarvis.py --check`, in JARVIS's inhale and on the System page. A health check that
+  cannot run is itself a breach.
+
+### 3.6 The adapter contract — porting to a host with no hooks
+
+*(These were §3.1–§3.4 before 2026-09-28; older agent mail cites them by those numbers.)*
 
 This is no longer theoretical. `scripts/ingest_codex_sessions.py` is a **second working
 implementation** against a different host, a different transcript format, and a different
 lifecycle (no hooks at all — a scheduled reader instead). It proved the organ genuinely is
-host-independent rather than merely designed to be. That closed ROADMAP 6.8.1–6.8.4.
+host-independent rather than merely designed to be. That closed ROADMAP 6.8.1–6.8.4. A new host
+must also meet §3.0–§3.5: capture feeds the queue, and the chatting agent parses.
 
-### 3.1 Reuse this — it is host-agnostic
+### 3.6.1 Reuse this — it is host-agnostic
 
 | Component | Where |
 |---|---|
@@ -313,7 +454,7 @@ The only hit is a **comment in the Codex ingester asserting this very fact** —
 ever see a second hit, the portability contract has been broken and capture has become
 host-locked.
 
-### 3.2 Re-derive this — it is Claude-Code-specific
+### 3.6.2 Re-derive this — it is Claude-Code-specific
 
 1. **Lifecycle event names** — `Stop`, `SessionStart` (matcher `startup|resume|clear|compact`),
    `UserPromptSubmit`. `compact` in particular is a Claude Code concept.
@@ -327,7 +468,7 @@ host-locked.
    fills with harness noise instead of user prompts, because a pure-wrapper turn will look like
    real user text.
 
-### 3.3 The one change the organ needed, and why
+### 3.6.3 The one change the organ needed, and why
 
 `build_observation` originally hardcoded "now" as the timestamp — correct for a **live** Stop hook
 (the turn just ended), and wrong for **ingesting a historical transcript** written weeks ago.
@@ -341,7 +482,7 @@ optional `ts=` override. Every existing call site is unaffected.
 **Generalize this:** when a second host needs a variation, extend the organ by one optional
 parameter — do not copy it. A forked schema diverges the first time either copy changes.
 
-### 3.4 Two bugs this pattern produced — do not repeat them
+### 3.6.4 Two bugs this pattern produced — do not repeat them
 
 Both are in the KB with full mechanisms (search `def-time binding`, `regex closed set`):
 
@@ -518,8 +659,10 @@ produce zero records over months on the other hookless host (§5.3). The adapter
 the same as the adapter running. **Start the hearth on whichever machine you actually work on.**
 
 **Every session** — this is `AGENTS.md`'s SESSION BOOT, and it is the whole orientation:
-read `cognitive_profile.md`, read `activity_digest.md` (check its `Generated` stamp), **check for
-something to raise**, then use `search_memory.py` for topic recall.
+`bootstrap_jarvis.py --check` (health), read `cognitive_profile.md` and `activity_digest.md` **in
+full** (check the digest's `Generated` stamp), **check for something to raise**, run the parse loop
+of §3.2 (ingest, then drain up to 20 of this host's pending turns), then use `search_memory.py` for
+topic recall. Repeat the parse loop about every 10 turns.
 
 **The step people skip, and must not:**
 ```bash
@@ -584,7 +727,9 @@ python3 scripts/ingest_antigravity_sessions.py --dry-run    # un-ingested turns 
 python3 scripts/ingest_antigravity_sessions.py --self-test   # offline unit tests (19/19)
 ```
 
-Orientation remains the same read-at-boot ritual — see `.agent/rules/js-workspace-rule.md`.
+Orientation remains the same read-at-boot ritual — see `.agent/rules/js-workspace-rule.md` — plus
+the parse loop of §3.3 at boot and about every 10 turns. The hourly ingest keeps capture
+automatic; running it yourself before a parse only makes this session's latest turns available.
 
 ---
 
@@ -622,20 +767,26 @@ grep -oP 'Job\(name="\K[^"]+' js-development/jarvis_core/serve/scheduler.py
 ```
 
 Roughly: `consolidate` (the pulse for the surfacing organ), `refresh_profile` and `reindex_memory`
-(guarded), `rebuild_graphrag`, `ingest_codex` (capture on a hookless host),
-`reconcile_codex_memory`, `refresh_digest`, and — added 2026-09-14 — `curate_turns` and
-`relabel_domains`.
+(guarded), `rebuild_graphrag`, `ingest_codex` and `ingest_antigravity` (capture on hookless hosts),
+`reconcile_codex_memory`, `refresh_digest`, `relabel_domains`, `check_pipeline`, and JARVIS's own
+parse (`parse_turns.py --host jarvis --auto`, every 15 minutes, §3.4).
 
-**`curate_turns` is the one that decides what your turns are FOR** (§2.4). It is scheduled rather
-than agent-invoked for a reason this repo has already paid for: Antigravity's manual `/memory` is
-the control experiment and it produced **zero** records in months. Anything that must be *remembered*
-every turn returns nothing.
+**`curate_turns` was removed on 2026-09-28.** It was the hourly paid judge that decided what turns
+were FOR (§2.4); it failed 185 of 195 runs on HTTP 402 and 1,833 turns sat uncurated for 13 days
+with no agent noticing. The owner's decision replaced it with the Memory Contract (§3): the
+chatting agent parses, by one rule, and background jobs make no paid LLM calls. The lesson it
+taught is kept in the contract rather than lost: a duty that depends on discipline needs a
+trigger and a visible backlog, which is what `capture_gap_nudge.py`, the host rule files and
+`pipeline_health.py` provide.
 
-**`relabel_domains` is scheduled because it is the curator's reviewer**, and it was found six days
+**`relabel_domains` is scheduled because it is the verdicts' reviewer**, and it was found six days
 stale covering 583 of 989 turns on 2026-09-14 with nothing scheduling it at all — so the independent
-second opinion the agent verdict gets checked against was silently degrading. A scheduler smoke test
-now asserts **both** are present, because shipping the curator without its reviewer is exactly how
-that staleness happened the first time.
+second opinion the agent verdict gets checked against was silently degrading.
+
+**A job's status must never hide its failure.** Measured 2026-09-28: `reindex_memory` failed 16 of
+17 runs (a ChromaDB `InternalError` in compaction), but a later guard-skip overwrote
+`last_status`, so `--status` read "skipped — guard reports nothing to do". `pipeline_health.py`
+judges each job by its last *success*, not its last status line.
 
 > **THE HEARTH RUNS THE CODE IT BOOTED WITH.** Adding a job to `default_jobs()` does nothing to a
 > running hearth — and `--status` looks perfectly healthy while the new job silently does not exist.
@@ -772,11 +923,14 @@ Claude Code asked in `q_004` / `q_006`:
 - Watermarking: append-only per-session log at `jarvis_data/.antigravity_ingest_watermark.jsonl`.
 - Verification: `python3 scripts/ingest_antigravity_sessions.py --self-test` (hermetic tempdir tests, zero `~/` access).
 
-### 7.2 Codex has no `notice_runtime_change` or `capture_gap_nudge` equivalent
+### 7.2 Codex and Antigravity have no hook-driven parse trigger
 
-Low value on Codex (it runs one model, so self-state barely changes), and the capture-gap question
-is answered on demand by `ingest_codex_sessions.py --dry-run`, which `AGENTS.md` now instructs.
-Build only if the manual check proves insufficient in practice.
+Neither host has hooks, so the "parse about every 10 turns" duty (§3.2, §3.3) is written in
+`AGENTS.md` and `js-workspace-rule.md` rather than fired by a hook. What keeps it honest is the
+backlog count: `bootstrap_jarvis.py --check` and `pipeline_health.py` show each host's unparsed
+turns and their oldest age, so a skipped parse is visible at every boot on every host, including
+to Claude and to JARVIS. `notice_runtime_change` stays unported — low value on a host that runs one
+model per session.
 
 ---
 

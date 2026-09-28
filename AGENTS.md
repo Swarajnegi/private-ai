@@ -21,6 +21,39 @@ treat this file as a lighter substitute for it.
 
 ---
 
+## THE MEMORY CONTRACT — your duty on this host (owner's decision 2026-09-28)
+
+**You parse your own turns. Nothing else will.** The agent the owner is chatting with parses
+those turns into training routing and KB knowledge, by ONE rule — `PARSE_RULE` in
+`js-development/jarvis_core/agent/parse_rule.py`, the single source for all four agents (print it:
+`cd js-development && PYTHONPATH=. python -m jarvis_core.agent.parse_rule --print`). There is no
+paid background curator any more. This is your duty **at boot and about every 10 turns**:
+
+```bash
+python scripts/ingest_codex_sessions.py                          # put this session's turns in the queue
+python scripts/parse_turns.py --pending --host codex --limit 10  # at boot: --limit 20 to drain backlog
+# judge EVERY offered turn by the rule text in the packet; write {"verdicts":[...]} to a scratch file
+python scripts/parse_turns.py --submit <file> --agent codex/<model>
+```
+
+- `python scripts/bootstrap_jarvis.py --check` shows pipeline health, including this host's
+  unparsed backlog. **Raise any breach with the owner first.** Skipping the parse is visible to
+  every agent and to JARVIS.
+- **Never truncate.** Read the packet, `cognitive_profile.md` and `activity_digest.md` in full; if a
+  tool shows you a preview, read the whole file. Select what to show; never cut what is shown.
+- **Test prompts only in ephemeral sessions** — a test in a real session becomes training data.
+- **Automate it yourself (owner directive 2026-09-28).** Codex supports hooks (`.codex/hooks.json`,
+  already used by rfm_2.0) and skills. Build your own hook and/or skill that runs the loop above —
+  e.g. a session-start hook for `bootstrap_jarvis.py --check` + the backlog drain, and a per-prompt
+  hook that nudges the parse once `parse_ledger.backlog()["codex"]["pending"] >= 10` (Claude's
+  version: `scripts/hooks/capture_gap_nudge.py`, reusable with the host changed). Keep hooks
+  fail-soft, never cut output, and record what you built in NERVOUS_SYSTEM.md §3.2 and agent mail.
+- **All four agents stay in sync from 2026-09-28 on**: one rule, one tool, one health check. A
+  change to the rule is proposed over agent mail and lands as a version bump in `parse_rule.py`.
+- Full contract, one table per host: [NERVOUS_SYSTEM.md](NERVOUS_SYSTEM.md) §3.
+
+---
+
 ## SESSION BOOT (read before your first response, every session)
 
 **0. First, ask the machine what it is missing — do not probe or guess:**
@@ -34,10 +67,10 @@ report tells you exactly what to run. Do that before the rest of this list — `
 returns nothing without a rebuilt index, and it fails silently rather than loudly.
 
 
-1. **Read [jarvis_data/cognitive_profile.md](jarvis_data/cognitive_profile.md)** — the standing
-   model of the user: who they are, how they work, active directives. Replaces ever asking "tell
-   me about yourself."
-2. **Read [jarvis_data/activity_digest.md](jarvis_data/activity_digest.md)** — distilled cross-chat
+1. **Read [jarvis_data/cognitive_profile.md](jarvis_data/cognitive_profile.md) in full** — the standing
+   model of the user: who they are, the people in their life, how they work, active directives.
+   Replaces ever asking "tell me about yourself." It is large; page through all of it.
+2. **Read [jarvis_data/activity_digest.md](jarvis_data/activity_digest.md) in full** — distilled cross-chat
    activity from the other machines: what the user worked on, day by day, plus JARVIS's own
    SELF-STATE (which model produced recent turns). Check its `Generated` timestamp — if it is more
    than a day or two old, say so; regenerate with `PYTHONPATH=js-development python3
@@ -76,7 +109,9 @@ returns nothing without a rebuilt index, and it fails silently rather than loudl
    blocked on the user rather than on any agent. Cheaper than re-deriving it, and it exists
    specifically so you don't rediscover something another agent already found.
 
-6. For topic-specific recall: `python3 scripts/search_memory.py "<topic>"` before answering
+6. **Run the parse loop** (THE MEMORY CONTRACT above) with `--limit 20` to drain backlog.
+
+7. For topic-specific recall: `python3 scripts/search_memory.py "<topic>"` before answering
    anything you're not certain of, per the standing memory-hygiene rule.
 
 Full mechanism, the inventory of what does NOT survive a `git pull`, and per-host setup:
@@ -181,38 +216,15 @@ edits needed on Windows vs Linux.
 
 ---
 
-## PER-TURN CURATION (added 2026-09-14) — what decides where your turns go
+## Where your verdicts go (replaces PER-TURN CURATION, 2026-09-28)
 
-Until this shipped, `engineer_corpus` and `personalization_corpus` read the same
-`observation_queue.jsonl` and **every captured turn went into both**. Nothing had
-ever decided which corpus a turn belonged to; the only filter was a character
-count, so a three-word "continue" was one floor away from the training corpus.
-
-`jarvis_core/agent/curator.py` now makes that decision per turn, using the
-**conversation context** — the thing the offline embedding classifier
-structurally cannot have. It labels each turn's `corpora` (engineer /
-personalization / none), its `domain`, whether it is `trainable` at all, and
-`responds_to` — one sentence on what the user's prompt was replying to.
-
-**It runs on the hearth's clock, NOT on your discipline.** The `curate_turns`
-job drains the backlog hourly. Do not build a habit of invoking it per turn:
-Antigravity's manual `/memory` is the control experiment and it produced zero
-records in months.
-
-    python3 scripts/curate_turns.py --status     # how much is curated
-    python3 scripts/curate_turns.py --routing    # what routing actually results
-    python3 scripts/curate_turns.py --review     # where to look, and why
-
-**Curation is cross-host by construction.** Turns from every machine land in the
-one `observation_queue.jsonl`, so whichever hearth is running curates all of
-them. `turn_curation.jsonl` is tracked with `merge=union`, so two laptops can
-curate independently without conflicting.
-
-**You can overturn a verdict.** The log is append-only and folded on read —
-newest wins, every superseded verdict stays readable with its author. Reviewing
-whether JARVIS routed a turn correctly is therefore a real operation, not a
-promise. `--review` lists the two things worth looking at: where the agent
-disagreed with the context-free classifier, and where its own confidence was low.
+The hourly `curate_turns` hearth job (a paid judge) is gone: it failed 185 of 195 runs on HTTP 402
+and left 1,833 turns uncurated for 13 days. Your `--submit` now writes what it wrote — `corpora`,
+`domain`, `trainable`, `responds_to` into `turn_curation.jsonl` (with `curated_by` and
+`rule_version`) — plus the KB facts and tension the rule extracts. The log is append-only, folded
+newest-wins and tracked with `merge=union`, so a verdict can be overturned and both laptops can
+write without conflict. `python scripts/parse_turns.py --status` shows the backlog per host;
+`python3 scripts/parse_turns.py --routing` / `--review` read the resulting routing.
 
 ---
 

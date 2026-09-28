@@ -78,7 +78,6 @@ import json
 import os
 import secrets
 import stat
-import subprocess
 import sys
 import time
 from dataclasses import dataclass, field
@@ -87,7 +86,7 @@ from typing import Any, Awaitable, Callable, Dict, List, Optional, Tuple
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))  # standalone-run safety
 
-from jarvis_core.config import DATA_ROOT, MODEL_CATALOG_PATH
+from jarvis_core.config import DATA_ROOT, JARVIS_ROOT, MODEL_CATALOG_PATH
 from jarvis_core.locking import exclusive_lock
 
 TOKEN_PATH = Path(DATA_ROOT) / ".hearth_token"
@@ -187,10 +186,14 @@ class Hearth:
         ask_fn: Optional[Callable[..., Awaitable[Any]]] = None,
         scheduler: Optional[Any] = None,
         clock: Callable[[], float] = time.time,
+        pipeline_health: Optional[Callable[[], Optional[Dict[str, Any]]]] = None,
     ) -> None:
         self._cfg = config
         self._ask_fn = ask_fn
         self._scheduler = scheduler
+        # Must return at once (a cached report, or None while the first one is
+        # computed off-thread) — /v1/health is a free probe, never a wait.
+        self._pipeline_health = pipeline_health
         self._clock = clock
         self._slot = asyncio.Semaphore(1)
         self._started_at = clock()
@@ -218,6 +221,8 @@ class Hearth:
         target_timeout_s: Optional[float] = 35.0,
         target_max_retries: Optional[int] = 1,
         route_strategy: str = "priority",
+        capture: Optional[bool] = None,
+        free_only: bool = False,
     ) -> Dict[str, Any]:
         """One spine pass, narrated through `emit`. Returns the final payload.
 
@@ -244,8 +249,7 @@ class Hearth:
 
         def deny_handler(tool_name: str, tool_input: Dict[str, Any]) -> Any:
             from jarvis_core.agent.permissions import PermissionDecision
-            preview = str(tool_input)
-            denials.append(_Denial(tool=str(tool_name), preview=preview[:200]))
+            denials.append(_Denial(tool=str(tool_name), preview=str(tool_input)))
             printer(f"  [permission] {tool_name} DENIED — no human is reachable "
                     f"over the hearth; run it from --ask if you want to approve it")
             return PermissionDecision.DENY
@@ -259,8 +263,14 @@ class Hearth:
         kwargs: Dict[str, Any] = dict(self._cfg.ask_kwargs)
         kwargs.update(printer=printer, ask_handler=active_handler,
                       session=session, new_session=new_session)
+        if free_only:
+            # Never the default client: it follows OPENROUTER_MODEL, which the
+            # watchdog copies from the user environment and may name a paid model.
+            targets = free_targets(targets)
         if targets:
             kwargs["targets"] = targets
+        if budget_usd is not None:
+            kwargs["budget_usd"] = budget_usd
         if full:
             kwargs["full"] = True
         if max_iterations is not None:
@@ -273,6 +283,12 @@ class Hearth:
             kwargs["target_max_retries"] = target_max_retries
         if route_strategy is not None:
             kwargs["route_strategy"] = route_strategy
+        if capture is not None:
+            kwargs["capture"] = capture
+        if capture is False:
+            # An uncaptured (ephemeral) turn must leave no KB distill either:
+            # test prompts reached knowledge_base.jsonl this way on 2026-09-28.
+            kwargs["distill"] = False
 
         ask_fn = self._resolve_ask()
 
@@ -396,6 +412,16 @@ class Hearth:
                 jobs = self._scheduler.status()
             except Exception:
                 jobs = []
+        pipeline: Optional[Dict[str, Any]] = None
+        if self._pipeline_health is not None:
+            try:
+                pipeline = self._pipeline_health() or {
+                    "healthy": None, "breaches": [], "backlog": {},
+                    "status": "computing — the first pipeline report is being built"}
+            except Exception as e:
+                pipeline = {"healthy": False, "backlog": {}, "breaches": [{
+                    "check": "pipeline_health",
+                    "detail": f"the health report itself failed: {type(e).__name__}: {e}"}]}
         return {
             "ok": True,
             "uptime_seconds": round(self._clock() - self._started_at, 1),
@@ -404,7 +430,9 @@ class Hearth:
             "requests_served": self.requests_served,
             "requests_rejected": self.requests_rejected,
             "last_error": self.last_error,
+            "warm": dict(WARM),
             "jobs": jobs,
+            "pipeline": pipeline,
         }
 
 
@@ -459,7 +487,7 @@ def _list_sessions(conv_dir: Path) -> List[Dict[str, Any]]:
                     except json.JSONDecodeError:
                         continue
             session_id = path.stem
-            title = first_user_prompt.strip().replace("\n", " ")[:80] if first_user_prompt else "Empty session"
+            title = first_user_prompt.strip().replace("\n", " ") if first_user_prompt else "Empty session"
             sessions.append({
                 "session_id": session_id,
                 "title": title,
@@ -507,6 +535,19 @@ def _get_session_turns(conv_dir: Path, session_id: str) -> Optional[List[Dict[st
     except OSError:
         return None
     return turns
+
+
+def free_targets(requested: Optional[List[str]] = None) -> List[str]:
+    """The pool for FREE MODELS mode: the caller's free picks, else the voice
+    chain's free models, always ending in openrouter/free. Paid ids are dropped."""
+    from jarvis_core.brain.voice_path import free_chain, is_free_model
+    picked = [t for t in (requested or []) if is_free_model(t)]
+    for t in picked or free_chain():
+        if t not in picked:
+            picked.append(t)
+    if "openrouter/free" not in picked:
+        picked.append("openrouter/free")
+    return picked
 
 
 def _list_models() -> List[Dict[str, Any]]:
@@ -665,6 +706,66 @@ def _sse(event: str, data: Dict[str, Any]) -> bytes:
     return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n".encode("utf-8")
 
 
+async def _serve_websocket(hearth: Hearth, scope: Dict[str, Any],
+                           receive: Receive, send: Send) -> None:
+    """WS /v1/voice/live — the hands-free voice socket. Same auth as HTTP, and
+    loopback-only even when remote HTTP is enabled, like the voice routes."""
+    host = str((scope.get("client") or ("", 0))[0])
+    refusal = hearth.authorize(scope)
+    if refusal is None and host not in _LOOPBACK:
+        refusal = "voice is local-only"
+    if refusal is None and scope.get("path", "") != "/v1/voice/live":
+        refusal = "no such socket"
+    if refusal is not None:
+        hearth.requests_rejected += 1
+        await receive()
+        await send({"type": "websocket.close", "code": 4403, "reason": refusal})
+        return
+    from jarvis_core.serve import live_voice
+    await live_voice.handle(hearth, scope, receive, send)
+
+
+# Filled by warm_up() on a background thread at hearth start; reported by
+# /v1/health so a client can say "waking" instead of looking broken.
+WARM: Dict[str, Any] = {"state": "cold", "seconds": None, "error": None}
+
+
+def warm_up() -> Dict[str, Any]:
+    """Pay every one-time cost before the first question, not during it.
+
+    Measured 2026-09-26: the first ask after a hearth restart spent 45-60 s
+    loading torch, the encoder, ChromaDB and making Hugging Face network
+    checks. Order matters: the speech engine initialises torch on CUDA before
+    faster-whisper loads (see serve/speech.py THE LOAD-ORDER RULE).
+    """
+    os.environ.setdefault("HF_HUB_OFFLINE", "1")
+    WARM.update(state="warming")
+    t0 = time.perf_counter()
+    errors: List[str] = []
+    try:
+        from jarvis_core.serve.speech import ENGINE
+        st = ENGINE.warm()
+        if st.error:
+            errors.append(st.error)
+    except Exception as e:                                  # noqa: BLE001
+        errors.append(f"speech: {type(e).__name__}: {e}")
+    try:
+        from jarvis_core.memory.store import DEFAULT_EMBEDDING_MODEL, _get_cached_encoder
+        _get_cached_encoder(DEFAULT_EMBEDDING_MODEL)
+    except Exception as e:                                  # noqa: BLE001
+        errors.append(f"encoder: {type(e).__name__}: {e}")
+    try:
+        import jarvis_core.brain.orchestrator  # noqa: F401  (deep-path import cost)
+        from jarvis_core.brain.voice_path import BRAIN
+        BRAIN.warm()
+    except Exception as e:                                  # noqa: BLE001
+        errors.append(f"brain: {type(e).__name__}: {e}")
+    WARM.update(state="warm" if not errors else "degraded",
+                seconds=round(time.perf_counter() - t0, 1),
+                error="; ".join(errors) or None)
+    return WARM
+
+
 def build_app(hearth: Hearth) -> Callable[..., Awaitable[None]]:
     """Return an ASGI 3 application closed over `hearth`.
 
@@ -686,6 +787,9 @@ def build_app(hearth: Hearth) -> Callable[..., Awaitable[None]]:
                 elif message["type"] == "lifespan.shutdown":
                     await send({"type": "lifespan.shutdown.complete"})
                     return
+        if scope["type"] == "websocket":
+            await _serve_websocket(hearth, scope, receive, send)
+            return
         if scope["type"] != "http":
             return
 
@@ -729,25 +833,23 @@ def build_app(hearth: Hearth) -> Callable[..., Awaitable[None]]:
             if str((scope.get('client') or ('', 0))[0]) not in _LOOPBACK:
                 await _respond(send, 403, _json_bytes({'error': 'Voice is local-only.'}))
                 return
-            from . import voice
+            # The resident engine (serve/speech.py) — the same one the live
+            # socket uses, so these routes are fast rather than a second stack.
+            from jarvis_core.serve import speech
             if path == '/v1/voice/capabilities' and method == 'GET':
-                status = voice.capabilities()
-                status.pop('config', None)
-                await _respond(send, 200, _json_bytes(status))
+                await _respond(send, 200, _json_bytes(speech.http_capabilities()))
                 return
             if path in ('/v1/voice/transcribe', '/v1/voice/synthesize') and method == 'POST':
                 try:
                     payload = json.loads(await _read_body(receive, 6 * 1024 * 1024))
                     if not isinstance(payload, dict):
                         raise ValueError('Expected a JSON object.')
-                    result = await asyncio.to_thread(voice.process, path.rsplit('/', 1)[1], payload)
+                    result = await asyncio.to_thread(speech.http_voice, path.rsplit('/', 1)[1], payload)
                     await _respond(send, 200, _json_bytes(result))
                 except (ValueError, ConnectionError) as exc:
                     await _respond(send, 400, _json_bytes({'error': str(exc)}))
                 except RuntimeError as exc:
                     await _respond(send, 503, _json_bytes({'error': str(exc)}))
-                except (OSError, TimeoutError, subprocess.TimeoutExpired):
-                    await _respond(send, 503, _json_bytes({'error': 'Local voice worker unavailable or timed out. Text chat is still available.'}))
                 return
 
         if path == "/v1/sessions" and method == "GET":
@@ -865,6 +967,7 @@ async def _handle_ask(hearth: Hearth, scope: Dict[str, Any],
     max_iterations = body.get("max_iterations")
     budget_usd = body.get("budget_usd")
     reasoning_effort = body.get("reasoning_effort")
+    free_only = bool(body.get("free_only", False))
     streaming = _wants_stream(scope)
 
     async with hearth._slot:
@@ -880,7 +983,7 @@ async def _handle_ask(hearth: Hearth, scope: Dict[str, Any],
                                            session=session, new_session=new_session,
                                            targets=targets, full=full, allow_all=allow_all,
                                            max_iterations=max_iterations, budget_usd=budget_usd,
-                                           reasoning_effort=reasoning_effort)
+                                           reasoning_effort=reasoning_effort, free_only=free_only)
             payload["log"] = collected
             await _respond(send, 200 if payload.get("ok") else 500, _json_bytes(payload))
             return
@@ -900,7 +1003,7 @@ async def _handle_ask(hearth: Hearth, scope: Dict[str, Any],
                                        session=session, new_session=new_session,
                                        targets=targets, full=full, allow_all=allow_all,
                                        max_iterations=max_iterations, budget_usd=budget_usd,
-                                       reasoning_effort=reasoning_effort)
+                                       reasoning_effort=reasoning_effort, free_only=free_only)
         await emit("answer", payload)
         await send({"type": "http.response.body", "body": b"", "more_body": False})
 
@@ -909,11 +1012,23 @@ async def _handle_ask(hearth: Hearth, scope: Dict[str, Any],
 # Part 5: SERVING (the only place uvicorn is touched)
 # =============================================================================
 
+_PIPELINE_HEALTH_TTL_S = 60.0
+
+
+def _cached_pipeline_health() -> Optional[Dict[str, Any]]:
+    """scripts/pipeline_health.py's report, at most ~60 s old, never waited on."""
+    scripts = str(Path(JARVIS_ROOT) / "scripts")
+    if scripts not in sys.path:
+        sys.path.insert(0, scripts)
+    import pipeline_health
+    return pipeline_health.cached_report(max_age_s=_PIPELINE_HEALTH_TTL_S, block=False)
+
+
 def serve(config: HearthConfig, scheduler: Optional[Any] = None) -> int:
     """Bind and serve until interrupted. Returns a process exit code."""
     import uvicorn
 
-    hearth = Hearth(config, scheduler=scheduler)
+    hearth = Hearth(config, scheduler=scheduler, pipeline_health=_cached_pipeline_health)
     app = build_app(hearth)
 
     if scheduler is not None:
@@ -1226,9 +1341,12 @@ def _run_self_test() -> None:
     css_path = re.search(r'href="([^"]+\.css)"', (UI_DIR / 'index.html').read_text(encoding='utf-8')).group(1)
     sent_css, _ = drive(app, {"type": "http", "method": "GET", "path": css_path, "client": ("127.0.0.1", 1234),
                               "headers": [(b"accept", b"text/css")]})
+    # The page's own stylesheet — identified by its design tokens, not by one
+    # selector name, which is what broke this check when the UI was rebuilt.
+    index_html = (UI_DIR / 'index.html').read_text(encoding='utf-8')
     check("T26 active bundled stylesheet is served",
           status_of(sent_css) == 200 and b":root" in body_of(sent_css)
-          and b"#composer" in body_of(sent_css))
+          and b"--gold" in body_of(sent_css) and 'id="composer"' in index_html)
 
     # T27: Sessions endpoint returns 200 and a list
     sent_sess, _ = drive(app, http_scope("GET", "/v1/sessions"))
@@ -1287,6 +1405,55 @@ def _run_self_test() -> None:
     check('T35 voice stays loopback-only even when remote hearth is enabled', status_of(sent_voice) == 403)
     sent_voice, _ = drive(app, http_scope('POST', '/v1/voice/transcribe'), body=b'[]')
     check('T36 malformed voice payload is rejected', status_of(sent_voice) == 400)
+
+    seen_kwargs: Dict[str, Any] = {}
+
+    async def recording_ask(question: str, **kwargs: Any) -> FakeResult:
+        seen_kwargs.clear()
+        seen_kwargs.update(kwargs)
+        return FakeResult()
+    rec_app = build_app(Hearth(HearthConfig(token="tok"), ask_fn=recording_ask))
+    drive(rec_app, http_scope("POST", "/v1/ask"),
+          body=_json_bytes({"question": "q", "model": "google/gemini-3.6-flash", "free_only": True}))
+    picked = seen_kwargs.get("targets") or []
+    check("T37 free_only drops a paid model and sends only free targets",
+          bool(picked) and all(t.endswith(":free") or t == "openrouter/free" for t in picked), str(picked))
+    drive(rec_app, http_scope("POST", "/v1/ask"), body=_json_bytes({"question": "q", "budget_usd": 0.01}))
+    check("T38 budget_usd reaches ask() instead of being dropped",
+          seen_kwargs.get("budget_usd") == 0.01 and "targets" not in seen_kwargs, str(seen_kwargs.keys()))
+    loop.run_until_complete(Hearth(HearthConfig(token="tok"), ask_fn=recording_ask).run_ask(
+        "q", lambda _e, _d: asyncio.sleep(0), capture=False))
+    check("T39 an ephemeral (capture=False) turn also skips the KB distill",
+          seen_kwargs.get("capture") is False and seen_kwargs.get("distill") is False, str(seen_kwargs))
+
+    # T40-T42: the pipeline report rides on /v1/health, and never blocks it.
+    reports = {"n": 0}
+
+    def fake_pipeline() -> Optional[Dict[str, Any]]:
+        reports["n"] += 1
+        return {"healthy": False, "breaches": [{"check": "job:reindex_memory", "detail": "failing"}],
+                "backlog": {"codex": {"pending": 1153, "oldest": "2026-09-07T21:09:09+05:30"}}}
+    sent, _ = drive(build_app(Hearth(HearthConfig(token="tok"), ask_fn=scripted_ask,
+                                     pipeline_health=fake_pipeline)), http_scope("GET", "/v1/health"))
+    body40 = json.loads(body_of(sent))
+    check("T40 /v1/health carries the pipeline report: breaches and per-host backlog",
+          body40["pipeline"]["healthy"] is False
+          and body40["pipeline"]["breaches"][0]["check"] == "job:reindex_memory"
+          and body40["pipeline"]["backlog"]["codex"]["pending"] == 1153, str(body40.get("pipeline")))
+    sent, _ = drive(build_app(Hearth(HearthConfig(token="tok"), ask_fn=scripted_ask,
+                                     pipeline_health=lambda: None)), http_scope("GET", "/v1/health"))
+    body41 = json.loads(body_of(sent))
+    check("T41 before the first report exists, health says 'computing' instead of blocking",
+          body41["pipeline"]["healthy"] is None and "computing" in body41["pipeline"]["status"])
+
+    def broken_pipeline() -> Optional[Dict[str, Any]]:
+        raise RuntimeError("scripts dir missing")
+    sent, _ = drive(build_app(Hearth(HearthConfig(token="tok"), ask_fn=scripted_ask,
+                                     pipeline_health=broken_pipeline)), http_scope("GET", "/v1/health"))
+    body42 = json.loads(body_of(sent))
+    check("T42 a crashing health report is itself a breach, and health still answers 200",
+          status_of(sent) == 200 and body42["pipeline"]["healthy"] is False
+          and "scripts dir missing" in body42["pipeline"]["breaches"][0]["detail"])
 
     loop.close()
     print("-" * 70)

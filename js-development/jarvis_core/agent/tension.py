@@ -115,14 +115,13 @@ CONTRADICTABLE_TYPES = ("Decision", "Failure", "Cognitive_Pattern")
 # 20% of queue turns are under 25 chars ("go ahead", "continue", "do it"). They carry
 # no claim, so they cannot contradict one — and sending them to a judge is pure spend.
 _MIN_CANDIDATE_CHARS = 40
-_MAX_CANDIDATE_CHARS = 4000      # judge prompts stay bounded; heads carry the claim
-_MAX_PRIOR_CHARS = 1200
 
 # Retrieval query shape. Not tuned by taste: at full length the gold prior did
 # not appear in the top 15 at all; at ~300 chars it appeared at rank 9.
+# The windows tile the WHOLE text: a claim at the end of a long entry is as
+# retrievable as one at the start.
 _QUERY_WINDOW_CHARS = 320
 _QUERY_WINDOW_OVERLAP = 80
-_MAX_QUERY_WINDOWS = 5
 
 _DEFAULT_TOP_K = 5
 # Chosen 2026-09-08 with the user: daily-ish cadence, some noise accepted. This is the
@@ -142,10 +141,6 @@ class TensionCandidate:
     ts: str              # ISO 8601, used to exclude priors that postdate it
     text: str
 
-    @property
-    def head(self) -> str:
-        return self.text[:_MAX_CANDIDATE_CHARS]
-
 
 @dataclass(frozen=True)
 class PriorRecord:
@@ -154,10 +149,6 @@ class PriorRecord:
     entry_type: str
     ts: str
     text: str
-
-    @property
-    def head(self) -> str:
-        return self.text[:_MAX_PRIOR_CHARS]
 
 
 @dataclass
@@ -269,11 +260,11 @@ _JUDGE_SYSTEM = (
 def _build_judge_messages(candidate: TensionCandidate,
                           priors: Sequence[PriorRecord]) -> List[Dict[str, str]]:
     prior_blocks = "\n\n".join(
-        f"[id={p.entry_id}] type={p.entry_type} date={p.ts[:10]}\n{p.head}"
+        f"[id={p.entry_id}] type={p.entry_type} date={p.ts[:10]}\n{p.text}"
         for p in priors
     )
     user = (
-        f"--- NOW (untrusted) ---\n{candidate.head}\n--- END NOW ---\n\n"
+        f"--- NOW (untrusted) ---\n{candidate.text}\n--- END NOW ---\n\n"
         f"--- PRIOR RECORDS (untrusted) ---\n{prior_blocks}\n--- END PRIORS ---\n\n"
         "Respond with ONLY a JSON object, no prose around it:\n"
         '{"relation": "REVERSES" | "REPEATS" | "RECONFUSES" | "NONE", '
@@ -411,7 +402,7 @@ def _parse_finding(raw: str, candidate: TensionCandidate,
         candidate_ts=candidate.ts,
         prior_ref=match.entry_id,
         prior_ts=match.ts,
-        which=str(data.get("which", "")).strip()[:400],
+        which=str(data.get("which", "")).strip(),
         grounds_already_rejected=bool(data.get("grounds_already_rejected", False)),
         confidence=max(0.0, min(confidence, 1.0)),
         grounds=(f"judged against {len(priors)} prior record(s)",),
@@ -429,10 +420,11 @@ def _iso(value: Any) -> str:
 def _query_windows(text: str) -> List[str]:
     """Focused retrieval queries over one candidate.
 
-    Short text is one query. Longer text becomes several overlapping windows, so
-    each subject in a multi-topic entry gets its own sharp query instead of being
-    averaged into an embedding that matches nothing. See retrieve_priors for the
-    measurement that forced this.
+    Short text is one query. Longer text becomes overlapping windows covering all
+    of it, so each subject in a multi-topic entry gets its own sharp query instead
+    of being averaged into an embedding that matches nothing. See retrieve_priors
+    for the measurement that forced this. A trailing sliver under 80 chars is
+    dropped as a query only because the previous window's overlap already holds it.
     """
     text = (text or "").strip()
     if not text:
@@ -440,8 +432,7 @@ def _query_windows(text: str) -> List[str]:
     if len(text) <= _QUERY_WINDOW_CHARS:
         return [text]
     step = _QUERY_WINDOW_CHARS - _QUERY_WINDOW_OVERLAP
-    windows = [text[i:i + _QUERY_WINDOW_CHARS]
-               for i in range(0, len(text), step)][:_MAX_QUERY_WINDOWS]
+    windows = [text[i:i + _QUERY_WINDOW_CHARS] for i in range(0, len(text), step)]
     return [w for w in windows if len(w) >= 80]
 
 
@@ -684,10 +675,20 @@ class TensionDetector:
             ("kb", iter_kb_candidates(self._kb_path, marks.get("kb", ""))),
             ("queue", iter_queue_candidates(self._queue_path, marks.get("queue", ""))),
         )
-        for source, stream in sources:
+        # Each source gets its own share of `limit`. One shared counter let the
+        # KB — iterated first, and never short of candidates — spend the whole
+        # limit, so queue turns (the EARLY-warning source) were never scanned.
+        # Whatever a source leaves unused passes to the next; what it cannot
+        # reach stays behind the watermark for the next scan.
+        for index, (source, stream) in enumerate(sources):
+            share = 0
+            if limit:
+                share = max(1, (limit - examined) // (len(sources) - index))
+            taken = 0
             for candidate in stream:
-                if limit and examined >= limit:
+                if share and taken >= share:
                     break
+                taken += 1
                 examined += 1
                 report.candidates += 1
                 if candidate.ts > newest.get(source, ""):
@@ -898,8 +899,12 @@ def _run_self_test() -> None:
     long_text = "".join(f"topic{i} " * 40 for i in range(6))
     w = _query_windows(long_text)
     check("T21d long text is split into several bounded, overlapping windows",
-          1 < len(w) <= _MAX_QUERY_WINDOWS
-          and all(len(x) <= _QUERY_WINDOW_CHARS for x in w), f"{len(w)} windows")
+          1 < len(w) and all(len(x) <= _QUERY_WINDOW_CHARS for x in w), f"{len(w)} windows")
+    huge = "".join(f"claim{i:04d} " for i in range(1000))       # 10,000 chars
+    wh = _query_windows(huge)
+    check("T21f the windows cover the WHOLE text, not the first five",
+          all(f"claim{i:04d}" in "".join(wh) for i in range(1000)) and len(wh) > 5,
+          f"{len(wh)} windows")
     check("T21e windows overlap, so a claim spanning a boundary is not lost",
           len(w) > 1 and long_text[_QUERY_WINDOW_CHARS - _QUERY_WINDOW_OVERLAP:
                                    _QUERY_WINDOW_CHARS] in w[1],
@@ -962,6 +967,33 @@ def _run_self_test() -> None:
         found = run(detector(high, 0.55).scan())
         check("T27 a finding above the floor is surfaced, bound to the right prior",
               len(found) == 1 and found[0].prior_ref == "10", str(found))
+
+        # T28: the shared limit no longer starves the queue.
+        kb.write_text("".join(json.dumps(
+            {"id": 200 + i, "timestamp": f"2026-05-{i + 1:02d}T00:00:00+05:30",
+             "type": "Decision", "content": f"kb claim number {i} " * 5}) + "\n"
+            for i in range(30)), encoding="utf-8")
+        q.write_text("".join(json.dumps(
+            {"ts": f"2026-05-{i + 1:02d}T01:00:00+05:30",
+             "user_text": f"queue turn number {i} with a real claim in it"}) + "\n"
+            for i in range(5)), encoding="utf-8")
+        seen_sources: List[str] = []
+
+        class SpyDetector(TensionDetector):
+            async def retrieve_priors(self, candidate: TensionCandidate) -> List[PriorRecord]:
+                seen_sources.append(candidate.source)
+                return []
+        run(SpyDetector(retriever=FakeRetriever(hits), kb_path=kb, queue_path=q,
+                        watermark_path=Path(td) / ".wm28.jsonl").scan(limit=10))
+        check("T28 with KB candidates to spare, queue turns are STILL scanned",
+              seen_sources.count("queue") == 5 and seen_sources.count("kb") == 5,
+              str(seen_sources))
+        long_turn = "x" * 9000 + " the final claim"
+        msgs = _build_judge_messages(
+            TensionCandidate("queue", "turn:t", now_ts, long_turn),
+            [PriorRecord("1", "Decision", now_ts, "p" * 5000 + " prior tail")])
+        check("T29 the judge sees the whole candidate and the whole prior",
+              long_turn in msgs[1]["content"] and "p" * 5000 + " prior tail" in msgs[1]["content"])
 
     loop.close()
     print("-" * 70)

@@ -360,7 +360,7 @@ def run(
                      "assistant_summary": exch.assistant_summary,
                      "model": exch.model_hint},
                     exch.cwd or str(_REPO_ROOT),
-                    ts=exch.ts)
+                    ts=exch.ts, host="antigravity")
                 if obs is not None:
                     obs["chat_label"] = exch.thread_name or obs["chat_label"]
                     kwargs = {"queue_path": queue_path} if queue_path is not None else {}
@@ -545,6 +545,9 @@ def _run_self_test() -> None:
               res1["exchanges_ingested"] == 2, str(res1))
         check("T17 observation queue received records",
               queue.exists() and len(queue.read_text(encoding="utf-8").splitlines()) == 2)
+        check("T17b every ingested row names its host, so parse_ledger never guesses",
+              all(json.loads(l).get("host") == "antigravity"
+                  for l in queue.read_text(encoding="utf-8").splitlines()))
 
         res2 = run(dry_run=False, root=temp_dir, watermark_path=run_wm, queue_path=queue)
         check("T18 second run ingests 0 (watermark prevents re-ingest)",

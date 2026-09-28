@@ -87,7 +87,12 @@ from jarvis_core.agent.domain_classifier import (
 )
 
 _DEFAULT_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
-_EVIDENCE_CHUNK_CHARS = 600     # embed heads, not megabytes of tool output
+# MiniLM reads 256 tokens and silently drops the rest, so a text is embedded as
+# overlapping windows that together cover ALL of it (~600 chars ≈ 150 tokens,
+# safely under the model's own cut). Grading matches each draft window to its
+# best evidence window; nothing past a head is ever invisible to the gate.
+_WINDOW_CHARS = 600
+_WINDOW_OVERLAP = 150
 _MIN_WORD_LEN = 3               # "content words" — drop is/a/of noise
 
 VERDICT_CONFIDENT = "CONFIDENT"
@@ -122,6 +127,24 @@ def _content_words(text: str) -> set:
     return {w for w in re.findall(r"\w+", text.lower()) if len(w) >= _MIN_WORD_LEN}
 
 
+def _windows(text: str) -> List[str]:
+    """Overlapping windows that together cover every character of `text`."""
+    if len(text) <= _WINDOW_CHARS:
+        return [text]
+    step = _WINDOW_CHARS - _WINDOW_OVERLAP
+    return [text[i:i + _WINDOW_CHARS] for i in range(0, len(text) - _WINDOW_OVERLAP, step)]
+
+
+def _mean_unit(vecs: List[List[float]]) -> List[float]:
+    """One vector for a whole multi-window text: the renormalized mean."""
+    if len(vecs) == 1:
+        return list(vecs[0])
+    dim = len(vecs[0])
+    mean = [sum(v[k] for v in vecs) / len(vecs) for k in range(dim)]
+    norm = sum(x * x for x in mean) ** 0.5
+    return [x / norm for x in mean] if norm else mean
+
+
 class ConfidenceGate:
     """Grades a draft answer against session evidence. Deterministic, ₹0."""
 
@@ -150,16 +173,16 @@ class ConfidenceGate:
 
         EXECUTION FLOW:
         1. Sanitize: keep non-empty evidence strings; empty draft/evidence -> ESCALATE.
-        2. Lexical coverage of the draft's content words by the evidence union.
-        3. Semantic max-cosine of the draft vs each evidence chunk head.
+        2. Lexical coverage of the draft's content words by the WHOLE evidence.
+        3. Semantic: every draft window's best cosine against every evidence
+           window (windows cover all of both), averaged over draft windows.
         4. Blend 50/50 -> threshold verdict -> report with human-readable grounds.
 
         Returns:
             ConfidenceReport — ESCALATE is the floor, never an exception.
         """
         draft = (draft or "").strip()
-        chunks = [e.strip()[:_EVIDENCE_CHUNK_CHARS] for e in (evidence or [])
-                  if e and e.strip()]
+        chunks = [e.strip() for e in (evidence or []) if e and e.strip()]
         if not draft:
             return ConfidenceReport(0.0, VERDICT_ESCALATE, ("empty draft — nothing to grade",))
         if not chunks:
@@ -173,11 +196,20 @@ class ConfidenceGate:
         coverage = (len(draft_words & evidence_words) / len(draft_words)
                     if draft_words else 0.0)
 
-        vecs = self._embed([draft[:_EVIDENCE_CHUNK_CHARS]] + chunks)
-        draft_vec, chunk_vecs = vecs[0], vecs[1:]
-        sims = [_dot(draft_vec, cv) for cv in chunk_vecs]
-        best_i = max(range(len(sims)), key=lambda i: sims[i])
-        max_cos = max(0.0, min(1.0, sims[best_i]))
+        draft_windows = _windows(draft)
+        ev_windows = [(ci, w) for ci, c in enumerate(chunks) for w in _windows(c)]
+        vecs = self._embed(draft_windows + [w for _ci, w in ev_windows])
+        draft_vecs, ev_vecs = vecs[:len(draft_windows)], vecs[len(draft_windows):]
+        per_window_best: List[float] = []
+        best_sim, best_j = -2.0, 0
+        for dv in draft_vecs:
+            sims = [_dot(dv, ev) for ev in ev_vecs]
+            j = max(range(len(sims)), key=lambda k: sims[k])
+            per_window_best.append(sims[j])
+            if sims[j] > best_sim:
+                best_sim, best_j = sims[j], j
+        max_cos = max(0.0, min(1.0, sum(per_window_best) / len(per_window_best)))
+        best_chunk, best_window = ev_windows[best_j]
 
         score = max(0.0, min(1.0, 0.5 * max_cos + 0.5 * coverage))
         if score >= self._confident_at:
@@ -190,8 +222,8 @@ class ConfidenceGate:
         grounds = (
             f"semantic: best-evidence cosine {max_cos:.2f}",
             f"lexical: {coverage:.0%} of draft content words found in evidence",
-            f"evidence: {len(chunks)} chunk(s); best match: "
-            f"\"{chunks[best_i][:80]}{'…' if len(chunks[best_i]) > 80 else ''}\"",
+            f"evidence: {len(chunks)} chunk(s); best match in chunk {best_chunk + 1} "
+            f"({len(chunks[best_chunk]):,} chars): \"{best_window}\"",
         )
         return ConfidenceReport(round(score, 4), verdict, grounds, had_evidence=True)
 
@@ -309,7 +341,13 @@ def detect_divergence(
             grounds=("fewer than 2 usable answers — divergence not measurable",))
 
     active_embed = embed_fn or _build_default_embed_fn(model_name)
-    vecs = active_embed([a for _m, a in usable])
+    windows = [_windows(a) for _m, a in usable]
+    flat = active_embed([w for ws in windows for w in ws])
+    vecs: List[List[float]] = []
+    pos = 0
+    for ws in windows:
+        vecs.append(_mean_unit(flat[pos:pos + len(ws)]))
+        pos += len(ws)
 
     pairwise: List[Tuple[str, str, float]] = []
     min_cos = 1.0
@@ -471,10 +509,35 @@ def _run_self_test() -> None:
     except ValueError:
         check("T9 invalid thresholds raise", True)
 
-    # T10: long evidence chunks are head-truncated before embedding (no crash,
-    # snippet bounded)
-    r10 = gate.grade("spark stuff", ["spark " + "y" * 5000])
-    check("T10 long evidence handled", r10.score > 0 and len(r10.grounds[2]) < 200)
+    # T10: long evidence is embedded WHOLE through overlapping windows. The
+    # only grounding fact sits at char ~9,000 — past any head — and must still
+    # be what the draft matches; every window stays under the model's limit.
+    seen10: List[str] = []
+
+    def recording_embed(texts: List[str]) -> List[List[float]]:
+        seen10.extend(texts)
+        return scripted_embed(texts)
+
+    long_ev = "portfolio " * 900 + "spark shuffle partitions default to 200"
+    r10 = ConfidenceGate(embed_fn=recording_embed).grade(
+        "spark shuffle partitions default to 200", [long_ev])
+    ev_seen = seen10[1:]
+    check("T10 a fact 9,000 chars into the evidence is found (no head cut)",
+          r10.verdict == VERDICT_CONFIDENT and "spark shuffle" in r10.grounds[2],
+          f"{r10.score} {r10.grounds}")
+    check("T10b windows cover the whole evidence, each under the embed limit",
+          all(len(w) <= _WINDOW_CHARS for w in ev_seen)
+          and sum(len(w) for w in ev_seen) >= len(long_ev)
+          and ev_seen[-1].endswith("default to 200"), str(len(ev_seen)))
+
+    # T10c: a long DRAFT is graded on all of it — a fabricated tail after a
+    # grounded head lowers the semantic score (the old 600-char head hid it).
+    head = "spark shuffle partitions default to 200 " * 15
+    tail = "the moon base launches tomorrow at dawn " * 60
+    r10c_head = gate.grade(head, ev)
+    r10c_full = gate.grade(head + tail, ev)
+    check("T10c fabricated tail beyond 600 chars is seen by the gate",
+          r10c_full.score < r10c_head.score, f"{r10c_full.score} vs {r10c_head.score}")
 
     # T11: score clamped to [0,1] even with a pathological embedder
     def weird_embed(texts: List[str]) -> List[List[float]]:
@@ -527,6 +590,15 @@ def _run_self_test() -> None:
     check("D7 pairwise names both sources",
           len(d3.pairwise) == 1 and d3.pairwise[0][0] == "a" and d3.pairwise[0][1] == "b",
           str(d3.pairwise))
+
+    # D7b: a long answer is compared on ALL of it: the disagreeing claim sits
+    # past 2,000 chars of shared preamble, and the windowed embedding sees it.
+    pre = "portfolio allocation context " * 80
+    d7b = detect_divergence(
+        [("a", pre + " spark spark spark " * 60), ("b", pre + " portfolio " * 60)],
+        embed_fn=scripted_embed)
+    check("D7b divergence visible past the first window of a long answer",
+          d7b.agreement < 0.99, str(d7b.agreement))
 
     # D8 (Stage 4.5.1 DoD): the frozen 12-fixture gate — 6/6 conflicts flagged,
     # 0/6 false flags, exact.

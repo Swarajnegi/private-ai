@@ -272,7 +272,7 @@ def _report() -> int:
         return 1
     flagged = sorted((f, k) for k, f in scores.items() if f > ECHO_CEILING)
     print(f"{len(scores)} turns scored; {len(flagged)} above ECHO_CEILING={ECHO_CEILING}")
-    for f, (ts, _sid) in sorted(flagged, reverse=True)[:20]:
+    for f, (ts, _sid) in sorted(flagged, reverse=True):
         print(f"  {f:6.1%}  {ts[:19]}")
     return 0
 

@@ -98,7 +98,6 @@ _MAX_TAGS = 8
 # than the retired detector's 0.60 because that floor was applied to a hand-rolled
 # weighted sum with a free 0.35 base, not to anything calibrated.
 _DEFAULT_SURFACE_FLOOR = 0.55
-_MAX_SURFACE_CHARS = 320
 
 # Per-run ceiling on candidates examined. Bounds spend on a long backlog: the first
 # real run has ~580 queue turns and ~570 KB entries behind it, and judging all of
@@ -215,22 +214,13 @@ class Consolidator:
                 findings = []      # a detector fault must never abort consolidation
 
         for finding in findings:
-            if finding.confidence < self._floor:
+            out = self.record_finding(finding, ts, seen_feed_ids)
+            if out["status"] == "below_floor":
                 skipped += 1
-                continue
-            iid = self._stable_id(finding)
-            if iid in seen_feed_ids:
-                continue  # already surfaced — never raise the same clash twice
-            insight = self._synthesize(finding, ts)
-
-            kb_res = self._safe_kb_write(insight, finding)
-            if kb_res.get("status") in ("appended", "updated"):
-                kb_writes += 1
-
-            self._append_feed(insight, ts)
-            seen_feed_ids.add(iid)
-            feed_writes += 1
-            insights.append(insight)
+            elif out["status"] == "surfaced":
+                feed_writes += 1
+                kb_writes += int(out["kb"].get("status") in ("appended", "updated"))
+                insights.append(out["insight"])
 
         return ConsolidationResult(
             ran_at=ts,
@@ -242,6 +232,29 @@ class Consolidator:
             notes=model.notes,
         )
 
+    def record_finding(self, finding: Any, ts: str,
+                       seen_feed_ids: Optional[set] = None) -> Dict[str, Any]:
+        """The one write path for a tension finding: floor, dedup, KB, feed.
+
+        Public since 2026-09-28 because findings no longer come only from a
+        scan: the agent parsing a turn (scripts/parse_turns.py) judges tension
+        against the priors it was handed, and its finding must land exactly
+        where a scanned one does, deduped against the same feed.
+
+        Returns {"status": "below_floor" | "duplicate" | "surfaced", ...}.
+        """
+        if finding.confidence < self._floor:
+            return {"status": "below_floor"}
+        seen = self._existing_feed_ids() if seen_feed_ids is None else seen_feed_ids
+        iid = self._stable_id(finding)
+        if iid in seen:
+            return {"status": "duplicate", "insight_id": iid}
+        insight = self._synthesize(finding, ts)
+        kb_res = self._safe_kb_write(insight, finding)
+        self._append_feed(insight, ts)
+        seen.add(iid)
+        return {"status": "surfaced", "insight_id": iid, "insight": insight, "kb": kb_res}
+
     # ---- synthesis -------------------------------------------------------
 
     def _synthesize(self, finding: Any, ts: str) -> LifeStateInsight:
@@ -252,7 +265,7 @@ class Consolidator:
         insight. A finding already carries the clash in words, so rephrasing it
         could only add drift and cost.
         """
-        surface = finding.surface_line()[:_MAX_SURFACE_CHARS]
+        surface = finding.surface_line()
         body = (
             f"Tension detected between something recorded on {finding.candidate_ts[:10]} "
             f"and KB {finding.prior_ref} ({finding.prior_ts[:10]}). "
@@ -443,6 +456,12 @@ def _run_self_test() -> None:
               and "reverses" in feed_rec["surface_line"].lower(),
               feed_rec["surface_line"])
 
+        long_which = "the priority was gated on personal data " * 20
+        ins = con._synthesize(finding(which=long_which), "2026-08-10T10:00:00+05:30")
+        check("T8c a long clash is surfaced whole, not cut at 320 chars",
+              long_which.strip() in ins.surface_line and len(ins.surface_line) > 320,
+              str(len(ins.surface_line)))
+
         # T9: idempotent — one clash is raised once, ever.
         res2 = asyncio.run(con.consolidate(window_days=14, now=now))
         check("T9 re-run does not duplicate the feed entry",
@@ -516,6 +535,22 @@ def _run_self_test() -> None:
         i = res.insights[0]
         check("T17 content hash matches content",
               i.kb_content_hash == hashlib.sha256(i.kb_content.encode()).hexdigest()[:16])
+
+        # T18-T20: record_finding is the write path a parse submission uses.
+        captured.clear()
+        con_r = Consolidator(engine=eng, append_fn=fake_append,
+                             feed_path=Path(td) / "feed7.jsonl")
+        f18 = finding(candidate="turn:2026-09-28T10:00:00+05:30")
+        r18 = con_r.record_finding(f18, "2026-09-28T10:00:00+05:30")
+        check("T18 record_finding writes one KB entry and one feed line",
+              r18["status"] == "surfaced" and len(captured) == 1
+              and len((Path(td) / "feed7.jsonl").read_text().splitlines()) == 1, str(r18))
+        r19 = con_r.record_finding(f18, "2026-09-28T11:00:00+05:30")
+        check("T19 recording the same clash again is a duplicate, no writes",
+              r19["status"] == "duplicate" and len(captured) == 1, str(r19))
+        r20 = con_r.record_finding(finding(candidate="x", confidence=0.1), "t")
+        check("T20 a finding below the floor is not recorded",
+              r20["status"] == "below_floor" and len(captured) == 1, str(r20))
 
     total = passed + len(failed)
     print(f"\n  Passed: {passed}/{total}")

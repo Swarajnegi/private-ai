@@ -91,7 +91,7 @@ class CorpusStatsTool(Tool):
                                 obs_samples.append({
                                     "ts": ts,
                                     "machine": m_name,
-                                    "user_preview": (user_text[:120] + "...") if len(user_text) > 120 else user_text,
+                                    "user_text": user_text,
                                 })
                         except Exception:
                             continue
@@ -120,7 +120,7 @@ class CorpusStatsTool(Tool):
                                 kb_samples.append({
                                     "type": entry_type,
                                     "tags": rec.get("tags", []),
-                                    "content_preview": (content[:120] + "...") if len(content) > 120 else content,
+                                    "content": content,
                                 })
                         except Exception:
                             continue

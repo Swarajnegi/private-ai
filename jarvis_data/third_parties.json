@@ -1,0 +1,62 @@
+{
+  "_comment": "People who appear in the user's life but never consented to being trained into model weights. Read by jarvis_core/specialists/third_parties.py, which replaces each identifier with its role placeholder in every artifact training consumes (blended_corpus.jsonl, sft_pairs*.jsonl). Tracked deliberately: the canonical corpus build runs on the work laptop, and a machine-local list would silently fail there. Adds no exposure — every identifier here is already tracked inside personal_life.md. To cover a new person, add an entry; check_pipeline's 'no third-party identity in training' invariant then enforces it. It CANNOT catch a person who is not listed.",
+  "people": [
+    {
+      "role": "partner",
+      "identifiers": [
+        "Shubha",
+        "Tobu"
+      ]
+    },
+    {
+      "role": "friend",
+      "identifiers": [
+        "Nikhilesh",
+        "DingDingess"
+      ]
+    },
+    {
+      "role": "friend",
+      "identifiers": [
+        "Pandey"
+      ]
+    },
+    {
+      "role": "sister's employer",
+      "identifiers": [
+        "ADP"
+      ]
+    },
+    {
+      "role": "hometown",
+      "identifiers": [
+        "Raigad"
+      ]
+    },
+    {
+      "role": "client interviewer",
+      "identifiers": [
+        "Sanket Kumar",
+        "Sanket"
+      ]
+    },
+    {
+      "role": "HR contact",
+      "identifiers": [
+        "Arshiya"
+      ]
+    },
+    {
+      "role": "HR contact",
+      "identifiers": [
+        "Akansha"
+      ]
+    },
+    {
+      "role": "client interviewer",
+      "identifiers": [
+        "Nitesh"
+      ]
+    }
+  ]
+}

@@ -152,7 +152,18 @@ class ModelPool:
             seed = (initial_health or {}).get(t.name)
             if seed is not None:
                 try:
-                    self._health[t.name] = _Health(**seed)
+                    h = _Health(**seed)
+                    # A carried-over cooldown is deliberate (Stage 4.3.1, T13):
+                    # the default clock is time.monotonic, which counts from
+                    # system boot and is shared across processes, so a hearth
+                    # restart keeps a still-running bench. After a REBOOT the
+                    # clock restarts near zero and a persisted value can sit
+                    # days in the future, benching a healthy model until uptime
+                    # catches up. Nothing legitimate is more than one cooldown
+                    # window ahead, so anything further is from another epoch.
+                    if h.cooldown_until - clock() > cooldown_s:
+                        h.cooldown_until = 0.0
+                    self._health[t.name] = h
                     continue
                 except TypeError:
                     pass  # unknown/missing keys in persisted data -> cold default
@@ -180,7 +191,13 @@ class ModelPool:
         cost_score = self._cost_hint(name)
         error_penalty = h.error_rate * _ERROR_PENALTY
         if strategy in ("priority", "order"):
-            return float(self._order.index(name)) + error_penalty
+            # The caller's order IS the policy. An error here is handled by
+            # failover on the call and by the cooldown storm-trip; adding a
+            # standing penalty meant one persisted failure (1 of 4 = +2.5)
+            # ranked the user's chosen model below the fallback forever —
+            # it was never tried again, so its error rate could never recover
+            # (measured 2026-09-26: every call went to openrouter/free).
+            return float(self._order.index(name))
         if strategy == "latency":
             return latency_score + error_penalty
         if strategy == "cost":
@@ -507,16 +524,31 @@ def _run_self_test() -> None:
 
     # T13 (Stage 4.3.1): initial_health seeds _Health from persisted state —
     # a target still "cooling down" from a prior ask() stays benched cold.
+    # A realistic persisted bench: set at now+cooldown_s by an earlier process
+    # in the same boot, so still inside one window from here.
     seeded = ModelPool(
         [FakeTarget("A"), FakeTarget("B")], clock=clock,
         initial_health={"A": {"avg_latency_s": 4.0, "request_count": 10,
-                              "error_count": 8, "cooldown_until": 500.0}},
+                              "error_count": 8, "cooldown_until": clock() + 30.0}},
     )
     st13 = seeded.status()
     check("T13 seeded target's cooldown carries over", st13["A"]["cooldown_remaining_s"] > 0, str(st13["A"]))
     check("T13b seeded target not selectable while its persisted cooldown holds",
           seeded.select().name == "B")
     check("T13c un-seeded target (B) still gets a cold default", st13["B"]["requests"] == 0)
+
+    # T13e: a bench persisted before a REBOOT sits far beyond one cooldown
+    # window (monotonic restarted near zero) and must not bench a healthy model.
+    epoch = ModelPool([FakeTarget("A"), FakeTarget("B")], strategy="priority", clock=clock,
+                      initial_health={"A": {"request_count": 4, "error_count": 1,
+                                            "cooldown_until": clock() + 86_400.0}})
+    check("T13e a cross-epoch cooldown (post-reboot) is discarded, not honoured",
+          epoch.status()["A"]["cooldown_remaining_s"] == 0.0 and epoch.select().name == "A")
+    # T13f: under priority, one past error must not rank the first choice below
+    # the fallback (the 2026-09-26 stuck-on-openrouter/free bug).
+    once = ModelPool([FakeTarget("A"), FakeTarget("B")], strategy="priority", clock=clock,
+                     initial_health={"A": {"request_count": 4, "error_count": 1}})
+    check("T13f priority keeps the caller's order despite a past error", once.select().name == "A")
 
     # T13d: malformed persisted health (unknown key) falls back to a cold
     # default instead of crashing pool construction.

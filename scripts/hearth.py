@@ -176,6 +176,8 @@ def main() -> int:
     p.add_argument("--port", type=int, default=int(os.environ.get("PORT", DEFAULT_PORT)))
     p.add_argument("--background", action="store_true",
                    help="detach and write a pid file; logs to jarvis_data/hearth.log")
+    p.add_argument("--no-warm", action="store_true",
+                   help="skip pre-loading speech, encoder and inhale at start")
     p.add_argument("--no-clock", action="store_true",
                    help="serve requests but run no scheduled jobs")
     p.add_argument("--status", action="store_true", help="query a running hearth")
@@ -242,6 +244,11 @@ def main() -> int:
 
     scheduler = None if args.no_clock else Scheduler(jobs=default_jobs())
     banner = "clock ON" if scheduler else "clock OFF"
+    if not args.no_warm:
+        # Pay the one-time model and index loads now, while nobody is waiting.
+        import threading
+        from jarvis_core.serve.hearth import warm_up
+        threading.Thread(target=warm_up, daemon=True, name="hearth-warm").start()
     print(f"hearth listening on http://{args.host}:{args.port}  ({banner})", flush=True)
     print(f"  token: {Path(DATA_ROOT) / '.hearth_token'}  (gitignored, 0600)", flush=True)
     try:

@@ -1,31 +1,33 @@
 """
-capture_gap_nudge.py — Claude Code UserPromptSubmit-hook: the missing trigger.
+capture_gap_nudge.py — Claude Code UserPromptSubmit-hook: the parse trigger.
 
-LAYER: Tools (Personalization capture — self-correction trigger)
+LAYER: Tools (Memory Contract — Claude Code's parse trigger)
 
 Registered as a `UserPromptSubmit` hook in .claude/settings.json. Fires BEFORE
 each assistant turn, so the nudge lands while there is still a turn left in
-which to act on it.
+which to act on it. The file keeps its old name because the manifest and every
+machine's settings.json register it by that name.
 
 =============================================================================
 THE BIG PICTURE: why this exists
 =============================================================================
 
-KB entry 474 (2026-08-19) diagnosed the root cause of a ~97% collapse in
-personality capture: "finishing a build is a trigger; noticing a personality
-signal has NO trigger." That diagnosis was logged — and then the very next
-few turns repeated the failure (2026-08-20: 3 of 9 turns captured, missing
-turns that carried planning-horizon, constraint-model and hypothesis-first
-signal). Diagnosis without a countermeasure is how a failure repeats.
+The Memory Contract (NERVOUS_SYSTEM.md §3, owner's decision 2026-09-28): the
+agent the owner is chatting with parses those turns, by the one rule in
+jarvis_core/agent/parse_rule.py, with no paid background LLM. On this host that
+agent is Claude, and willpower is not a mechanism — Antigravity's manual
+/memory produced zero records in months, and before this hook the "append to
+the KB" nudge here produced KB entries only when Claude happened to agree.
 
-Willpower is not a mechanism. This hook is the mechanism: it converts
-"did I remember to capture?" from something invisible into a number that
-appears in context every turn once it crosses a threshold.
+So the trigger is a number, not a reminder: parse_ledger.backlog() counts
+Claude Code turns that have no verdict under the current PARSE_RULE_VERSION.
+At _NUDGE_THRESHOLD or more, the instruction to parse appears in context,
+with the count and the oldest pending turn's age, before the user's request.
+Below it, silent — a nudge on every turn would be tuned out.
 
-Deliberately NOT a per-turn reminder. A nudge on every single turn would be
-noise, would be tuned out within a session, and would fire on genuinely empty
-procedural turns ("run it", "continue") where the standing directive itself
-says there is nothing to capture. It only speaks when a real gap has opened.
+This replaced the old "CAPTURE GAP: N turns since the last KB append" nudge:
+the parse writes the KB facts itself (with verbatim evidence), so a separate
+append reminder would ask for the same work twice, by two different rules.
 
 =============================================================================
 THE FLOW
@@ -33,16 +35,12 @@ THE FLOW
 
 STEP 1: stdin event. Unparseable -> silent exit 0.
         |
-STEP 2: read the newest timestamp in knowledge_base.jsonl (last capture).
+STEP 2: parse_ledger.backlog()["claude"] -> pending count + oldest ts.
+        UserPromptSubmit fires before this turn's Stop hook, so the queue
+        holds prior turns only — the backlog being measured already exists.
         |
-STEP 3: count observation_queue turns NEWER than that timestamp — i.e. real
-        turns that have happened since anything was last written down.
-        Ordering note: UserPromptSubmit fires before this turn's Stop hook,
-        so the queue holds prior turns only. That is correct — the gap being
-        measured is what has already gone uncaptured.
-        |
-STEP 4: gap >= _NUDGE_THRESHOLD -> emit ONE additionalContext line.
-        Below threshold -> silent. Always exit 0.
+STEP 3: pending >= _NUDGE_THRESHOLD -> emit ONE additionalContext block with
+        the exact commands. Below threshold -> silent. Always exit 0.
 
 Never raises, never blocks, never writes. A broken nudge must not cost a turn.
 """
@@ -51,77 +49,58 @@ from __future__ import annotations
 
 import json
 import sys
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from typing import Any, Dict, Optional
 
-# 2 is deliberate: 1 would fire constantly (a build turn legitimately produces a
-# Decision entry, not a Cognitive_Pattern, and the next turn is often still that
-# same work). 3+ lets a real gap open before anyone notices. 2 catches drift
-# while it is still one turn old.
-_NUDGE_THRESHOLD = 2
-
-# Above this, the message escalates — a long silent run means the standing
-# every-prompt directive has stopped operating, not that one turn was skipped.
-_ESCALATE_AT = 5
+# The contract's "about every 10 turns": ten unparsed turns is one full batch.
+_NUDGE_THRESHOLD = 10
+_BATCH = 10
+_IST = timezone(timedelta(hours=5, minutes=30))
 
 
-def _latest_kb_timestamp(kb_path: Path) -> str:
-    """Newest timestamp in the KB. Scans all lines — appends are not sorted."""
-    newest = ""
+def _python() -> str:
+    return "python" if sys.platform.startswith("win") else "python3"
+
+
+def _age(oldest_ts: str, now: Optional[datetime] = None) -> str:
     try:
-        with kb_path.open("r", encoding="utf-8") as f:
-            for line in f:
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    ts = json.loads(line).get("timestamp", "")
-                except json.JSONDecodeError:
-                    continue
-                if ts > newest:
-                    newest = ts
-    except OSError:
-        return ""
-    return newest
+        then = datetime.fromisoformat(oldest_ts)
+    except (TypeError, ValueError):
+        return "unknown age"
+    if then.tzinfo is None:
+        then = then.replace(tzinfo=_IST)
+    delta = (now or datetime.now(_IST)) - then
+    if delta.days >= 1:
+        return f"{delta.days} day(s) old ({oldest_ts})"
+    hours = int(delta.total_seconds() // 3600)
+    return f"{hours} hour(s) old ({oldest_ts})" if hours else f"under an hour old ({oldest_ts})"
 
 
-def _turns_since(queue_path: Path, since_ts: str) -> int:
-    if not since_ts:
-        return 0
-    n = 0
-    try:
-        with queue_path.open("r", encoding="utf-8") as f:
-            for line in f:
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    ts = json.loads(line).get("ts", "")
-                except json.JSONDecodeError:
-                    continue
-                if ts > since_ts:
-                    n += 1
-    except OSError:
-        return 0
-    return n
-
-
-def _message(gap: int) -> str:
-    if gap >= _ESCALATE_AT:
-        return (
-            f"CAPTURE GAP: {gap} turns since the last knowledge_base.jsonj append. "
-            "The standing every-prompt capture directive (KB 473) has stopped "
-            "operating, not merely slipped once. Before continuing the current task, "
-            "review those turns for user signal — especially behaviour deltas, "
-            "corrections, and short evaluative turns (brevity is NOT a capture "
-            "filter, per KB 485) — and append what is real."
-        )
+def message(pending: int, oldest_ts: str, now: Optional[datetime] = None) -> str:
+    py = _python()
     return (
-        f"CAPTURE GAP: {gap} turns since the last knowledge_base.jsonl append. "
-        "Check whether those turns carried signal about the user (mind, character, "
-        "behaviour change, corrections, stated purpose). If yes, append now rather "
-        "than at session end. If genuinely procedural, continue — that is the "
-        "directive's stated exception."
+        f"PARSE BACKLOG (Memory Contract, NERVOUS_SYSTEM.md §3): {pending} Claude Code "
+        f"turn(s) have no verdict under the current parse rule; the oldest is "
+        f"{_age(oldest_ts, now)}. You are the agent the owner chatted with, so parsing them "
+        "is your job, and nothing else will do it. BEFORE continuing with the user's request:\n"
+        f"  1. `{py} scripts/parse_turns.py --pending --host claude --limit {_BATCH}` — "
+        "a JSON packet with the rule, the whole turns, their whole session context and "
+        "the tension priors. If the harness saves the output to a file, Read that file IN "
+        "FULL (page with offset/limit). Never judge from a preview.\n"
+        "  2. Judge every offered turn by the rule text in the packet — exactly that rule, "
+        "no private variant.\n"
+        '  3. Write {"verdicts": [...]} (one per offered turn) to a scratchpad file, then '
+        f"`{py} scripts/parse_turns.py --submit <file> --agent claude/<your model id>`. "
+        "If it rejects a verdict, fix that verdict and resubmit; do not drop turns.\n"
+        "Then answer the user. Say in one line that you parsed N turns and what backlog remains."
     )
+
+
+def _claude_backlog() -> Dict[str, Any]:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "js-development"))
+    from jarvis_core.agent.parse_ledger import backlog  # type: ignore
+    return backlog().get("claude", {"pending": 0, "oldest": ""})
 
 
 def main() -> int:
@@ -132,17 +111,14 @@ def main() -> int:
         return 0
 
     try:
-        sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "js-development"))
-        from jarvis_core.config import DATA_ROOT, KB_PATH  # type: ignore
-
-        queue = Path(DATA_ROOT) / "observation_queue.jsonl"
-        gap = _turns_since(queue, _latest_kb_timestamp(Path(KB_PATH)))
-        if gap < _NUDGE_THRESHOLD:
+        slot = _claude_backlog()
+        pending = int(slot.get("pending") or 0)
+        if pending < _NUDGE_THRESHOLD:
             return 0
         print(json.dumps({
             "hookSpecificOutput": {
                 "hookEventName": "UserPromptSubmit",
-                "additionalContext": _message(gap),
+                "additionalContext": message(pending, str(slot.get("oldest") or "")),
             }
         }))
     except Exception:
@@ -151,10 +127,8 @@ def main() -> int:
 
 
 def _run_self_test() -> None:
-    import tempfile
-
     print("=" * 70)
-    print("  capture_gap_nudge.py -- Smoke Tests")
+    print("  capture_gap_nudge.py (parse trigger) -- Smoke Tests")
     print("=" * 70)
     passed = 0
     failed = []
@@ -166,32 +140,53 @@ def _run_self_test() -> None:
         else:
             failed.append(f"FAIL: {name}" + (f" ({hint})" if hint else ""))
 
-    with tempfile.TemporaryDirectory() as td:
-        kb = Path(td) / "kb.jsonl"
-        q = Path(td) / "q.jsonl"
+    now = datetime(2026, 9, 28, 18, 0, tzinfo=_IST)
+    msg = message(778, "2026-06-02T10:46:20+05:30", now)
+    check("T1 message names the exact pending and submit commands",
+          "parse_turns.py --pending --host claude --limit 10" in msg
+          and "parse_turns.py --submit" in msg and "--agent claude/" in msg, msg)
+    check("T2 message carries the count and the oldest age",
+          "778 Claude Code" in msg and "118 day(s) old" in msg, msg)
+    check("T3 message says before the user's request, and read in full",
+          "BEFORE continuing" in msg and "IN FULL" in msg)
+    check("T4 age degrades instead of raising on a bad timestamp",
+          _age("not-a-ts", now) == "unknown age" and "hour" in _age("2026-09-28T15:00:00+05:30", now))
 
-        kb.write_text("\n".join(json.dumps(r) for r in [
-            {"timestamp": "2026-08-20T10:00:00+05:30", "type": "Decision", "content": "a"},
-            {"timestamp": "2026-08-20T09:00:00+05:30", "type": "Idea", "content": "b"},
-        ]) + "\n", encoding="utf-8")
-        check("T1 newest timestamp wins over file order",
-              _latest_kb_timestamp(kb) == "2026-08-20T10:00:00+05:30")
+    import io
+    import contextlib
+    global _claude_backlog
+    real = _claude_backlog
 
-        q.write_text("\n".join(json.dumps(r) for r in [
-            {"ts": "2026-08-20T09:30:00+05:30"},   # before last KB append
-            {"ts": "2026-08-20T10:30:00+05:30"},   # after
-            {"ts": "2026-08-20T11:00:00+05:30"},   # after
-        ]) + "\n", encoding="utf-8")
-        check("T2 counts only turns newer than last append",
-              _turns_since(q, "2026-08-20T10:00:00+05:30") == 2)
+    def run_with(fake) -> str:
+        global _claude_backlog
+        _claude_backlog = fake
+        buf = io.StringIO()
+        old_stdin = sys.stdin
+        sys.stdin = io.StringIO('{"prompt": "hi"}')
+        try:
+            with contextlib.redirect_stdout(buf):
+                rc = main()
+        finally:
+            sys.stdin = old_stdin
+            _claude_backlog = real
+        return f"{rc}|{buf.getvalue()}"
 
-        check("T3 no KB timestamp -> no false alarm", _turns_since(q, "") == 0)
-        check("T4 missing files are silent",
-              _latest_kb_timestamp(Path(td) / "nope.jsonl") == ""
-              and _turns_since(Path(td) / "nope.jsonl", "2026-01-01") == 0)
-        check("T5 escalates past the long-run threshold",
-              "stopped operating" in _message(_ESCALATE_AT)
-              and "stopped operating" not in _message(_NUDGE_THRESHOLD))
+    below = run_with(lambda: {"pending": _NUDGE_THRESHOLD - 1, "oldest": "2026-09-28T10:00:00+05:30"})
+    check("T5 below threshold is silent", below == "0|", below)
+    at = run_with(lambda: {"pending": _NUDGE_THRESHOLD, "oldest": "2026-09-28T10:00:00+05:30"})
+    check("T6 at threshold emits one UserPromptSubmit additionalContext",
+          at.startswith("0|") and '"UserPromptSubmit"' in at and "PARSE BACKLOG" in at, at)
+
+    def boom():
+        raise RuntimeError("ledger broken")
+    broken = run_with(boom)
+    check("T7 a broken ledger is fail-soft: exit 0, no output", broken == "0|", broken)
+
+    try:
+        live = real()
+        check("T8 live ledger answers with a count", isinstance(live.get("pending"), int), str(live))
+    except Exception as exc:  # noqa: BLE001
+        check("T8 live ledger answers with a count", False, repr(exc))
 
     total = passed + len(failed)
     print(f"\n  Passed: {passed}/{total}")

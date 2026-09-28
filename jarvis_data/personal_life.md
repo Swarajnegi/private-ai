@@ -13,9 +13,12 @@
 > hard to purge. Add only what serves the model, and keep third-party detail to the minimum that
 > makes the user's own context legible.
 >
-> Note that this file is ingested whole into the personalization corpus
-> (`personalization_corpus.py` → `iter_personal_life_records`), so this header is itself training
-> data — which is why it must state the true storage situation rather than a stale one.
+> **Where this file goes (corrected 2026-09-28).** This header used to say the file is ingested
+> into the personalization corpus; that stopped on 2026-09-23 (`personalization_corpus.py` excludes
+> it, and the named people are redacted from every training artifact). Since 2026-09-28, by the
+> user's choice ("in context only"), everything below the first heading IS sent to JARVIS's model
+> as context (`brain/context_injector.py`), so JARVIS can talk about the people in the user's life.
+> Context, never training.
 >
 > Started 2026-08-15, at the user's own initiative ("point this mirror at other rooms").
 

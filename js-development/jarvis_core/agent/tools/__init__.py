@@ -14,7 +14,7 @@ Phase A modules (Stage 3.2.2, KB L283 + L289):
 
 Phase B modules (Stage 3.2.2, KB L283):
     - web:     1 tool  (web_search; DuckDuckGo)
-    - fs:      1 tool  (file_read; 1MB cap)
+    - fs:      1 tool  (file_read; whole file, optional byte ranges)
     - exec:    1 tool  (code_exec;  subprocess + timeout, requires_permission=True)
     - shell:   1 tool  (shell_run;  asyncio.subprocess_shell, requires_permission=True)
 

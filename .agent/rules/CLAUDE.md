@@ -49,6 +49,16 @@ In this repo you are **Chief Systems Architect & Strategic Co-Founder** for JARV
 
 ---
 
+## The Memory Contract (owner's decision 2026-09-28) — your duties here
+
+Full contract, one table per host: [NERVOUS_SYSTEM.md §3](NERVOUS_SYSTEM.md). The agent the owner chats with parses those turns, by ONE rule — `jarvis_core/agent/parse_rule.py`, the single source (`PARSE_RULE_VERSION` bumps re-offer old verdicts; never paraphrase it). No paid background LLM calls.
+- **Parse.** When the `UserPromptSubmit` nudge says `PARSE BACKLOG`, before the user's request: `python scripts/parse_turns.py --pending --host claude --limit 10`, judge every turn by the packet's rule, write `{"verdicts":[...]}` to a scratch file, `python scripts/parse_turns.py --submit <file> --agent claude/<model>`.
+- **Boot.** Raise any `PIPELINE HEALTH — BREACHED` notice with the owner first. Read `jarvis_data/cognitive_profile.md` and `jarvis_data/activity_digest.md` **in full** (the SessionStart notices give the Read pages) before the first reply.
+- **Never truncate.** A preview is not a read: when a harness or tool shows a preview or saves output to a file, read the file whole. Select what to show, never cut what is shown (`check_pipeline.py` enforces it).
+- **Test prompts only in ephemeral sessions** — anything else becomes a training turn.
+
+---
+
 ## Triple-runtime topology (Codex added 2026-09-10)
 
 | Machine | OS | Runtime | When | Role |

@@ -56,17 +56,19 @@ missed vocabulary mismatches live: "deploying" vs "deployment", "zero-rupee"
 vs "budget"; the superseding Decision surfaced in only ~1/3 runs):
     STEP 1: Compute cutoff datetime = now - days_back.
     STEP 2: Embed-index the whole KB once per (path, embedder) — cached by
-            file mtime+size; ~350 entries ≈ seconds on CPU, MiniLM truncates
-            each entry to its first ~1,000 chars (256-token model limit).
+            file mtime+size; ~350 entries ≈ seconds on CPU. MiniLM reads only
+            256 tokens, so a long entry is embedded as overlapping ~800-char
+            windows covering ALL of it, and it matches by its best window — a
+            fact in paragraph six is as findable as one in the first line.
     STEP 3: Score each in-window entry: 0.6·cosine(query, entry) +
             0.4·token-overlap; meta-entries (session-distill / trap-probe
             tags) ×0.3 — records ABOUT probes carry the probed question's
             vocabulary and must rank below the entries holding the ANSWER.
     STEP 4: Sort by (score rounded to 0.01, timestamp) DESC — near-ties
             break NEWEST-first (an autobiography that breaks ties oldest-
-            first recites its past as its present). Return top-N with
-            content heads (450 chars — full contents overflowed the ReAct
-            observation cap).
+            first recites its past as its present). Return top-N with their
+            WHOLE contents; keeping the observation inside the window is the
+            ReAct loop's job, done by paging, never by cutting here.
 
 bear_case_devil:
     STEP 1: Require llm_call DI (else clean error — fail loud).
@@ -243,7 +245,11 @@ class PriorSelfConsultInput(ToolInput):
 
 
 _EMBED_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
-_EMBED_HEAD_CHARS = 1000   # MiniLM truncates at 256 tokens — make the cut explicit
+# MiniLM silently drops everything past 256 tokens. ~800 chars of English is
+# ~200 tokens, so a window never reaches the model's own cut; the overlap keeps
+# a sentence that straddles a boundary whole in at least one window.
+_EMBED_WINDOW_CHARS = 800
+_EMBED_WINDOW_OVERLAP = 200
 _SEMANTIC_WEIGHT = 0.6     # cosine recall (vocabulary-mismatch-proof)
 _LEXICAL_WEIGHT = 0.4      # token-overlap precision (exact terms, ids, codes)
 # Recency prior — the trap-probe lesson (2026-06-12) made systematic. Pure
@@ -269,16 +275,31 @@ def _default_embed_fn() -> EmbedFn:
     return _DEFAULT_EMBED[0]
 
 
+def _text_windows(text: str) -> List[str]:
+    """Overlapping windows that together cover every character of `text`."""
+    if len(text) <= _EMBED_WINDOW_CHARS:
+        return [text]
+    step = _EMBED_WINDOW_CHARS - _EMBED_WINDOW_OVERLAP
+    return [text[i:i + _EMBED_WINDOW_CHARS]
+            for i in range(0, len(text) - _EMBED_WINDOW_OVERLAP, step)]
+
+
 def _kb_embed_index(kb_path: Path, embed_fn: EmbedFn) -> List[tuple]:
-    """[(ts, entry, unit_vec)] for the whole KB — cached by (path, embedder, mtime, size)."""
+    """[(ts, entry, [unit_vec per window])] for the whole KB — cached by
+    (path, embedder, mtime, size)."""
     st = kb_path.stat()
     key = (str(kb_path), id(embed_fn))
     cached = _KB_EMBED_CACHE.get(key)
     if cached and cached[0] == (st.st_mtime_ns, st.st_size):
         return cached[1]
     entries = list(_iter_kb(kb_path))
-    vecs = embed_fn([e.get("content", "")[:_EMBED_HEAD_CHARS] for e in entries]) if entries else []
-    index = [(_parse_iso_utc(e.get("timestamp", "")), e, v) for e, v in zip(entries, vecs)]
+    windows = [_text_windows(e.get("content", "")) for e in entries]
+    flat = embed_fn([w for ws in windows for w in ws]) if entries else []
+    index: List[tuple] = []
+    pos = 0
+    for e, ws in zip(entries, windows):
+        index.append((_parse_iso_utc(e.get("timestamp", "")), e, flat[pos:pos + len(ws)]))
+        pos += len(ws)
     _KB_EMBED_CACHE[key] = ((st.st_mtime_ns, st.st_size), index)
     return index
 
@@ -317,10 +338,6 @@ class PriorSelfConsultTool(CognitiveToolBase):
     # any entry covering >=~30% of the query.
     _META_TAGS = frozenset({"session-distill", "trap-probe"})
     _DEFAULT_META_WEIGHT = 0.3
-    # Head-truncate each hit: 5 FULL contents (~2,000 chars each for battle-plan
-    # class entries) silently overflowed the ReAct 4,000-char observation cap —
-    # ranks 4-5 were never actually seen by the model. 8 bounded hits fit.
-    _CONTENT_HEAD_CHARS = 450
 
     def __init__(self, *args: Any, meta_weight: float = _DEFAULT_META_WEIGHT,
                  embed_fn: Optional[EmbedFn] = None, **kwargs: Any) -> None:
@@ -354,12 +371,12 @@ class PriorSelfConsultTool(CognitiveToolBase):
 
         now = datetime.now(timezone.utc)
         hits: List[tuple[float, datetime, Dict[str, Any]]] = []
-        for ts, entry, vec in index:
+        for ts, entry, vecs in index:
             if type_filter and entry.get("type") not in type_filter:
                 continue
             if ts is None or ts < cutoff:
                 continue
-            semantic = max(0.0, _dot(query_vec, vec))
+            semantic = max((max(0.0, _dot(query_vec, v)) for v in vecs), default=0.0)
             lexical = _overlap_ratio(query_tokens, _tokenize(entry.get("content", "")))
             score = _SEMANTIC_WEIGHT * semantic + _LEXICAL_WEIGHT * lexical
             age_days = max(0.0, (now - ts).total_seconds() / 86400.0)
@@ -375,17 +392,13 @@ class PriorSelfConsultTool(CognitiveToolBase):
         # as "standing").
         hits.sort(key=lambda t: (round(t[0], 2), t[1]), reverse=True)
         top = hits[: tool_input.top_n]
-        def _content_head(text: str) -> str:
-            return (text[: self._CONTENT_HEAD_CHARS] + "…"
-                    if len(text) > self._CONTENT_HEAD_CHARS else text)
-
         return ToolResult(output={
             "results": [
                 {
                     "timestamp": e.get("timestamp"),
                     "type": e.get("type"),
                     "tags": e.get("tags", []),
-                    "content": _content_head(e.get("content", "")),
+                    "content": e.get("content", ""),
                     "match_score": round(score, 3),
                 }
                 for score, _, e in top
@@ -474,12 +487,12 @@ class BearCaseDevilTool(CognitiveToolBase):
             brace_match = re.search(r"\{.*\}", raw, re.DOTALL)
             json_str = brace_match.group(0) if brace_match else None
         if not json_str:
-            return ToolResult(error=f"LLM did not return JSON. Raw[:200]: {raw[:200]}")
+            return ToolResult(error=f"LLM did not return JSON. Raw response: {raw}")
 
         try:
             data = json.loads(json_str)
         except json.JSONDecodeError as e:
-            return ToolResult(error=f"JSON parse failed: {e}. Raw[:200]: {raw[:200]}")
+            return ToolResult(error=f"JSON parse failed: {e}. Raw response: {raw}")
 
         # Schema check: require all 3 keys
         missing = {"bear_case", "kill_switches", "worst_case_pnl"} - set(data.keys())
@@ -797,15 +810,41 @@ if __name__ == "__main__":
               and "DEFERRED" in r5f.output["results"][0]["content"],
               str([(r["type"], r["tags"]) for r in r5f.output["results"][:2]]))
 
-        # PSC7: hit contents are head-truncated so top_n results fit the ReAct
-        # observation cap (full contents silently overflowed it — trap probe)
+        # PSC7: hit contents are returned WHOLE — no head cut. Size is the
+        # ReAct loop's concern and it pages; a cut here was silent loss.
         psc_long = PriorSelfConsultTool(kb_path=kb_long_path, embed_fn=fake_embed)
         r5e = await safe_invoke(psc_long, {"query": "longform marker entry"})
-        check("PSC7 hit content head-truncated",
+        check("PSC7 hit content returned whole (3,000+ chars, tail intact)",
               r5e.is_success and r5e.output["count"] == 1
-              and len(r5e.output["results"][0]["content"]) <= 460
-              and r5e.output["results"][0]["content"].endswith("…"),
+              and r5e.output["results"][0]["content"].endswith("x" * 3000)
+              and "…" not in r5e.output["results"][0]["content"],
               str(len(r5e.output["results"][0]["content"]) if r5e.output["results"] else 0))
+
+        # PSC9: a fact deep in a long entry is FOUND — it is embedded through
+        # windows covering the whole entry, not a 1,000-char head.
+        with tempfile.NamedTemporaryFile("w", suffix=".jsonl", delete=False,
+                                         encoding="utf-8") as kbf3:
+            kbf3.write(json.dumps({
+                "timestamp": _days_ago(1), "type": "Decision", "tags": ["deep"],
+                "content": ("filler " * 900) + "the bridge reversal lives here",
+                "expiry": "Permanent"}) + "\n")
+            kb_deep_path = Path(kbf3.name)
+        seen_windows: List[str] = []
+
+        def recording_embed(texts: List[str]) -> List[List[float]]:
+            seen_windows.extend(texts)
+            return fake_embed(texts)
+
+        psc_deep = PriorSelfConsultTool(kb_path=kb_deep_path, embed_fn=recording_embed)
+        r5g = await safe_invoke(psc_deep, {"query": "bridge reversal"})
+        deep_len = len(("filler " * 900) + "the bridge reversal lives here")
+        check("PSC9 windows cover the whole entry; the deep fact is retrieved",
+              r5g.is_success and r5g.output["count"] == 1
+              and any("bridge reversal" in w for w in seen_windows)
+              and all(len(w) <= _EMBED_WINDOW_CHARS for w in seen_windows)
+              and sum(len(w) for w in seen_windows) >= deep_len,
+              str(r5g.error or r5g.output["count"]))
+        kb_deep_path.unlink(missing_ok=True)
 
         # -- bear_case_devil ----------------------------------------------
         bcd = BearCaseDevilTool(llm_call=mock_llm_good)

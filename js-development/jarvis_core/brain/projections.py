@@ -239,7 +239,7 @@ def domain_label_health() -> Optional[str]:
         return None
     if accuracy >= GOLD_MIN_ACCURACY:
         return None
-    worst = "; ".join(f"{m[0][:40]}... wanted {m[1]}, got {m[2]}" for m in misses[:3])
+    worst = "; ".join(f"{m[0]!r} wanted {m[1]}, got {m[2]}" for m in misses)
     return (f"DOMAIN CLASSIFIER DRIFTED — {accuracy:.0%} on the {len(GOLD)}-turn gold "
             f"set, below the {GOLD_MIN_ACCURACY:.0%} bar. Labels are being assigned "
             f"wrongly right now. Examples: {worst}. Fix the prototypes or add session "
@@ -278,7 +278,7 @@ def stale_line() -> Optional[str]:
     if drift:
         parts.append(drift)
     if collisions:
-        worst = ", ".join(f"id {eid} x{n}" for eid, n in sorted(collisions.items())[:5])
+        worst = ", ".join(f"id {eid} x{n}" for eid, n in sorted(collisions.items()))
         parts.append(
             f"KB ID COLLISION — {len(collisions)} duplicated id(s) ({worst}). Two "
             f"entries share an id, so anything joining on id silently picks one. "

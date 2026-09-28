@@ -18,7 +18,11 @@ Without file_read:
 
 With file_read:
     -> Agent emits {"tool": "file_read", "input": {"path": "...", ...}}.
-    -> Returns {"content", "path", "bytes_read"}.
+    -> Returns {"content", "path", "bytes_read", "size_bytes", "next_offset",
+       "complete"} — the WHOLE file by default. Nothing is cut: a caller that
+       wants a range asks for one (offset + max_bytes) and is told where the
+       next range starts. Keeping a huge read inside the context window is the
+       ReAct loop's job, and it does it by paging, never by clipping.
     -> Concurrency-safe (read-only). requires_permission=False at Stage 3.2
        (path-traversal/sensitive-path gating happens at STEAL #9 permission
        engine in 3.4 — that's where the AT-engine knows whether path 'foo'
@@ -34,16 +38,17 @@ WHY NO FILE_WRITE here:
 THE FLOW
 =============================================================================
 
-STEP 1: Agent emits {"tool":"file_read","input":{"path": "...", "max_bytes": 1_000_000}}.
+STEP 1: Agent emits {"tool":"file_read","input":{"path": "..."}} (optionally
+        "offset" and "max_bytes" to read one range).
         |
         v
-STEP 2: Pydantic validates path is a string + max_bytes in [1, 10_000_000].
+STEP 2: Open file in binary mode, seek to offset, read to EOF (or max_bytes),
+        decode with `encoding`. A range that ends inside a multi-byte
+        character ends before it, and next_offset points at it.
         |
         v
-STEP 3: Open file in binary mode, read up to max_bytes, decode with `encoding`.
-        |
-        v
-STEP 4: Return ToolResult(output={"content": str, "path": str, "bytes_read": int}).
+STEP 3: Return ToolResult(output={"content", "path", "bytes_read",
+        "size_bytes", "offset", "next_offset", "complete"}).
 
 =============================================================================
 """
@@ -51,6 +56,7 @@ STEP 4: Return ToolResult(output={"content": str, "path": str, "bytes_read": int
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Optional
 
 from pydantic import Field
 
@@ -69,9 +75,15 @@ class FileReadInput(ToolInput):
         json_schema_extra={"aliases": [
             "file_path", "filepath", "file_name", "filename", "file", "fname"]})
     encoding: str = Field(default="utf-8", description="Text encoding (default utf-8).")
-    max_bytes: int = Field(
-        default=1_000_000, ge=1, le=10_000_000,
-        description="Max bytes to read (default 1MB; cap 10MB). Larger files are truncated.",
+    offset: int = Field(
+        default=0, ge=0,
+        description="Byte offset to start reading at (default 0 = start of file).",
+    )
+    max_bytes: Optional[int] = Field(
+        default=None, ge=1,
+        description=("Optional: read only this many bytes from offset. Default = "
+                     "the whole rest of the file. A partial read returns "
+                     "next_offset so the rest can be read with another call."),
     )
 
 
@@ -81,13 +93,13 @@ class FileReadInput(ToolInput):
 
 @Tool.register("file_read")
 class FileReadTool(Tool):
-    """Read a local file (capped at max_bytes). Read-only."""
+    """Read a local file, whole or by explicit byte range. Read-only."""
 
     name = "file_read"
     description = (
-        "Read a local file from disk. Returns content as a decoded string "
-        "plus the resolved absolute path and bytes actually read. Capped at "
-        "max_bytes (default 1MB); larger files are truncated cleanly. "
+        "Read a local file from disk. Returns the WHOLE file as a decoded string "
+        "plus the resolved absolute path, size_bytes and bytes_read. Optional "
+        "offset/max_bytes read one byte range and return next_offset for the rest. "
         "Read-only — does not modify files. Requires an EXACT path to a file "
         "that exists; if you don't know it, call file_search FIRST to locate it "
         "(by filename or content) — do not guess filenames."
@@ -114,27 +126,40 @@ class FileReadTool(Tool):
             return ToolResult(error=f"Path is not a regular file: {resolved}")
 
         try:
+            size = resolved.stat().st_size
             with resolved.open("rb") as f:
-                raw = f.read(tool_input.max_bytes)
+                f.seek(tool_input.offset)
+                raw = f.read() if tool_input.max_bytes is None else f.read(tool_input.max_bytes)
         except PermissionError as e:
             return ToolResult(error=f"Permission denied: {e}")
         except OSError as e:
             return ToolResult(error=f"OS error reading file: {e}")
 
+        end = tool_input.offset + len(raw)
         try:
             content = raw.decode(tool_input.encoding)
         except UnicodeDecodeError as e:
-            return ToolResult(
-                error=f"Decode failed at byte {e.start} with encoding "
-                      f"'{tool_input.encoding}': {e.reason}"
-            )
+            # A requested range can end inside a multi-byte character. End the
+            # range before it; next_offset then starts the next read ON it.
+            if end < size and e.reason == "unexpected end of data":
+                raw = raw[:e.start]
+                end = tool_input.offset + len(raw)
+                content = raw.decode(tool_input.encoding)
+            else:
+                return ToolResult(
+                    error=f"Decode failed at byte {tool_input.offset + e.start} with "
+                          f"encoding '{tool_input.encoding}': {e.reason}"
+                )
 
-        truncated = len(raw) == tool_input.max_bytes
+        complete = end >= size
         return ToolResult(output={
             "content": content,
             "path": str(resolved),
+            "size_bytes": size,
+            "offset": tool_input.offset,
             "bytes_read": len(raw),
-            "truncated": truncated,
+            "next_offset": None if complete else end,
+            "complete": complete,
         })
 
 
@@ -165,18 +190,31 @@ if __name__ == "__main__":
             assert r1.is_success, f"got {r1}"
             assert r1.output["content"].startswith("Hello JARVIS")
             assert r1.output["bytes_read"] == len("Hello JARVIS\nLine 2\n")
-            assert r1.output["truncated"] is False
+            assert r1.output["complete"] is True and r1.output["next_offset"] is None
             print(f"  [OK] reads normal file ({r1.output['bytes_read']} bytes)")
 
-            # 2. Truncation
-            big = "x" * 5000
-            with open(tmp_path, "w") as f:
+            # 2. NO CUT: a 3 MB file (3x the old 1 MB limit) is read whole.
+            big = ("0123456789" * 100 + "\n") * 3000 + "TAIL"
+            with open(tmp_path, "w", encoding="utf-8", newline="") as f:
                 f.write(big)
-            r2 = await safe_invoke(tool, {"path": tmp_path, "max_bytes": 100})
-            assert r2.is_success
-            assert r2.output["bytes_read"] == 100
-            assert r2.output["truncated"] is True
-            print(f"  [OK] truncates at max_bytes (100 of 5000)")
+            r2 = await safe_invoke(tool, {"path": tmp_path})
+            assert r2.is_success and r2.output["content"] == big, r2.output.get("bytes_read")
+            assert r2.output["complete"] is True
+            print(f"  [OK] 3 MB file read WHOLE ({r2.output['bytes_read']} bytes, tail present)")
+
+            # 2b. Explicit ranges page through the whole file, losslessly,
+            # including a range boundary that falls inside a multi-byte char.
+            text = "\u00e9" * 5001 + "END"
+            with open(tmp_path, "w", encoding="utf-8", newline="") as f:
+                f.write(text)
+            parts, off = [], 0
+            while off is not None:
+                rp = await safe_invoke(tool, {"path": tmp_path, "offset": off, "max_bytes": 777})
+                assert rp.is_success, rp.error
+                parts.append(rp.output["content"])
+                off = rp.output["next_offset"]
+            assert "".join(parts) == text
+            print(f"  [OK] {len(parts)} byte ranges reassemble the file exactly (UTF-8 safe)")
 
             # 3. Non-existent file
             r3 = await safe_invoke(tool, {"path": "/no/such/file/exists.xyz"})
@@ -197,10 +235,10 @@ if __name__ == "__main__":
             assert r5_ok.is_success and r5_ok.output["content"] == "café"
             print(f"  [OK] encoding override works; bad encoding surfaces clean error")
 
-            # 6. Validation: max_bytes out of range
-            r6 = await safe_invoke(tool, {"path": tmp_path, "max_bytes": 999_999_999})
+            # 6. Validation: a non-positive range length is rejected
+            r6 = await safe_invoke(tool, {"path": tmp_path, "max_bytes": 0})
             assert r6.is_error
-            print(f"  [OK] out-of-range max_bytes rejected by Pydantic")
+            print(f"  [OK] non-positive max_bytes rejected by Pydantic")
 
             # 7. Concurrency-safe + no permission
             assert tool.is_concurrency_safe is True
@@ -225,7 +263,7 @@ if __name__ == "__main__":
             os.unlink(tmp_path)
 
         print("=" * 60)
-        print("  All 9 smoke tests passed.")
+        print("  All 10 smoke tests passed.")
         print("=" * 60)
 
     asyncio.run(run())

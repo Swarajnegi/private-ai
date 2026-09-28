@@ -77,6 +77,7 @@ from jarvis_core.agent.capture import (
     strip_harness_blocks,
 )
 from jarvis_core.brain.llm_client import build_llm_call
+from jarvis_core.brain.targets import DEFAULT_MAX_TOKENS
 from jarvis_core.agent.mind import MindResult
 from jarvis_core.agent.react import TERMINATED_ERROR, TERMINATED_MAX_ITERATIONS
 from jarvis_core.brain.boot import BootReport, assemble_mind
@@ -207,22 +208,12 @@ def _evidence_from(mind_result: MindResult) -> List[str]:
     return out
 
 
-def _evidence_digest(items: List[str], per_item: int = 700, total: int = 3500) -> str:
-    """A compact, bounded digest of gathered tool outputs for the reasoning critic
-    so it judges the answer against what WAS retrieved (not blind). Empty when no
-    evidence — critique() then falls back to its blind path unchanged."""
-    if not items:
-        return ""
-    parts: List[str] = []
-    used = 0
-    for i, it in enumerate(items, 1):
-        chunk = f"[{i}] {str(it).strip()[:per_item]}"
-        if used + len(chunk) > total:
-            parts.append(f"… (+{len(items) - i + 1} more observations, truncated)")
-            break
-        parts.append(chunk)
-        used += len(chunk)
-    return "\n".join(parts)
+def _evidence_digest(items: List[str]) -> str:
+    """Every gathered tool output, whole, numbered, for the reasoning critic so it
+    judges the answer against what WAS retrieved (not blind) — a critic shown a
+    clipped observation would flag a claim whose support sat past the cut. Empty
+    when no evidence — critique() then falls back to its blind path unchanged."""
+    return "\n".join(f"[{i}] {str(it).strip()}" for i, it in enumerate(items, 1))
 
 
 def _is_unparsed_answer(text: str) -> bool:
@@ -255,6 +246,11 @@ _UNPARSED_GROUNDS = (
     "answer did not parse into prose — model emitted a malformed/structured "
     "fragment; suppressed at the orchestrator output gate"
 )
+
+
+def _failed_turn_marker(diagnosis: str) -> str:
+    cause = diagnosis.strip().rstrip(".")
+    return f"[no answer: {cause}. The question above is still open.]"
 
 
 def _degenerate_diagnosis(result: MindResult) -> Tuple[str, str]:
@@ -330,8 +326,9 @@ def _read_roadmap_status_summary(root: Optional[Path] = None) -> str:
     if start == -1:
         return ""
     end = text.find("\n---", start)
-    section = text[start: end if end != -1 else start + 1500]
-    return section.strip()
+    if end == -1:
+        end = text.find("\n## ", start + len(marker))
+    return text[start: end if end != -1 else len(text)].strip()
 
 
 async def ask(
@@ -498,10 +495,14 @@ async def ask(
         profile = getattr(primary, "profile", None) if use_profile else None
         profile_label = getattr(primary, "profile_label", "pooled") if use_profile else None
     else:
+        # max_tokens is always sent: omitted, OpenRouter reserves the model's
+        # whole output window (65,536 for Gemini Flash) against the balance and
+        # refuses with HTTP 402 even a one-line answer (2026-09-27).
         client = llm_call or build_llm_call(budget_usd=budget_usd,
                                             reasoning_effort=reasoning_effort,
                                             timeout_s=target_timeout_s,
-                                            max_retries=target_max_retries)
+                                            max_retries=target_max_retries,
+                                            max_tokens=DEFAULT_MAX_TOKENS)
         if hasattr(client, "pick_free_model") and not getattr(client, "model", ""):
             await client.pick_free_model()
         model = str(getattr(client, "model", "") or "")
@@ -591,10 +592,10 @@ async def ask(
         out = str(tr.error) if getattr(tr, "error", None) else str(tr.output)
         tag = "tool!ERR" if getattr(tr, "error", None) else "tool    "
         try:
-            printer(f"  {tag}: {tc.name} -> {out[:140]}{'...' if len(out) > 140 else ''}")
+            printer(f"  {tag}: {tc.name} -> {out}")
         except Exception:
-            safe_out = out[:140].encode("ascii", errors="replace").decode("ascii")
-            printer(f"  {tag}: {tc.name} -> {safe_out}{'...' if len(out) > 140 else ''}")
+            safe_out = out.encode("ascii", errors="replace").decode("ascii")
+            printer(f"  {tag}: {tc.name} -> {safe_out}")
 
     # Structural safety gate: a degenerate (raw/empty/tool-shaped) emission is
     # never presented, stored, or distilled as an answer. The honest fallback
@@ -603,7 +604,8 @@ async def ask(
     degenerate = _is_unparsed_answer(result.answer)
     if degenerate:
         msg, grounds = _degenerate_diagnosis(result)
-        found = f" Retrieved this session: {evidence[0][:200]}…" if evidence else ""
+        failure_cause = msg
+        found = (" Retrieved this session:\n" + _evidence_digest(evidence)) if evidence else ""
         answer = msg + found
         report = ConfidenceReport(0.0, "ESCALATE", (grounds,))
     else:
@@ -650,7 +652,8 @@ async def ask(
                 critic_budget = (round(budget_usd * _CRITIC_BUDGET_FRACTION, 6)
                                  if budget_usd is not None else None)
                 factory = critic_factory or (
-                    lambda m: build_llm_call(budget_usd=critic_budget, model=m))
+                    lambda m: build_llm_call(budget_usd=critic_budget, model=m,
+                                             max_tokens=DEFAULT_MAX_TOKENS))
                 try:
                     critic_client = factory(cm)
                     rgate = ReasoningGate(critic_client)
@@ -731,7 +734,7 @@ async def ask(
                         f"({'CONFLICT' if conflict_detected else 'clear'}) — {conflict_detail}")
 
             if conflict_detected:
-                disagreement = "; ".join(f"{s.model} says: {s.answer.strip()[:200]}"
+                disagreement = "; ".join(f"{s.model} says: {s.answer.strip()}"
                                          for s in ok_sources)
                 escalation_question = conflict_detail
                 answer = (
@@ -763,7 +766,7 @@ async def ask(
                 turn={"user_text": strip_harness_blocks(question),
                       "assistant_summary": answer,
                       "model": model},
-                cwd=cwd,
+                cwd=cwd, host="jarvis",
             )
             if obs is not None:
                 obs["chat_label"] = "terminal-ask"   # not the repo dir name — the limb
@@ -777,9 +780,12 @@ async def ask(
     # chit-chat ("hi who are you") is ESCALATE-but-fine and MUST be threaded; only
     # the unparsed honest-fallback is skipped (no dangling half-turn, no feeding
     # "I couldn't produce a clean answer" back as context).
-    if not degenerate:
-        cstore.append_turn(sess.session_id, "user", strip_harness_blocks(question))
-        cstore.append_turn(sess.session_id, "assistant", answer)
+    # A failed turn still keeps the QUESTION, with a short marker in place of
+    # the answer: on 2026-09-27 a spoken correction died on a 402 and, unstored,
+    # the next turns had no idea the user had objected at all.
+    cstore.append_turn(sess.session_id, "user", strip_harness_blocks(question))
+    cstore.append_turn(sess.session_id, "assistant",
+                       answer if not degenerate else _failed_turn_marker(failure_cause))
 
     ledger: Dict[str, Any] = {}
     if route_pool is not None and llm_call is None:
@@ -931,7 +937,7 @@ async def _awareness() -> int:
         print("=" * 70)
         r = await ask(q)
         verdict, reason = _judge_awareness(label, r, today_iso)
-        rows.append((label, verdict, reason, r.answer.strip()[:90]))
+        rows.append((label, verdict, reason, r.answer.strip()))
     print("\n" + "=" * 70)
     print("  GATE A — AWARENESS SCORECARD")
     print("=" * 70)
@@ -1597,15 +1603,29 @@ def _run_self_test() -> None:
                   not any("FOOBAR123" in m.get("content", "") for m in r24.mind.react.messages)
                   and cs.turn_count("thread-B") == 2)
 
-            # T25: a DEGENERATE answer is NOT persisted (no dangling/poison turn)
+            # T25: a DEGENERATE answer is not stored as an answer, but the question
+            # is kept with a short marker so the next turn knows it went unanswered
             await ask("trigger degenerate persist",
                       llm_call=scripted([json.dumps([{"tool_name": "calculator", "description": "x"}]),
                                          '{"oops": "not a tool call"}', '{"oops": "again"}',
                                          '{"oops": "still"}', json.dumps([{"tool_name": "calculator", "description": "x"}]),
                                          '{"oops": "x"}', '{"oops": "y"}', '{"oops": "z"}']),
                       session="deg-thread", **common)
-            check("T25 degenerate answer NOT persisted to the transcript",
-                  cs.turn_count("deg-thread") == 0, str(cs.turn_count("deg-thread")))
+            deg_turns = cs.load_context("deg-thread", "x")
+            marker25 = deg_turns[-1]["content"]
+            check("T25 degenerate turn keeps the question + the WHOLE no-answer cause",
+                  cs.turn_count("deg-thread") == 2
+                  and marker25.startswith("[no answer: I couldn't produce a clean answer")
+                  and marker25.endswith("The question above is still open.]")
+                  and ("Not a retrieval miss" in marker25 or "not a memory gap" in marker25),
+                  str(deg_turns))
+            long_cause = "the provider errored mid-run (" + "detail " * 60 + "); retry later."
+            check("T25b the failed-turn marker carries the full cause, past 160 chars",
+                  long_cause.rstrip(".") in _failed_turn_marker(long_cause))
+            items25 = ["x" * 5000 + " tail-one", "y" * 5000 + " tail-two"]
+            digest25 = _evidence_digest(items25)
+            check("T25c the critic's evidence digest holds every observation whole",
+                  all(it in digest25 for it in items25) and "truncated" not in digest25)
 
             # T26: a real chit-chat answer that scores ESCALATE (no evidence) IS persisted
             # — the correction: gate persistence on STRUCTURAL degeneracy, not the verdict.

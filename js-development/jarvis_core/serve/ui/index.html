@@ -2,32 +2,128 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="color-scheme" content="dark" />
-    <meta name="theme-color" content="#050608" />
-    <title>JARVIS / Personal intelligence</title>
-    <link
-      rel="icon"
-      type="image/svg+xml"
-      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23050608'/%3E%3Ccircle cx='16' cy='16' r='11' fill='none' stroke='%23e5bb7f'/%3E%3Ccircle cx='16' cy='16' r='6' fill='none' stroke='%2376bfff'/%3E%3Ccircle cx='16' cy='16' r='2' fill='%23fff1d9'/%3E%3C/svg%3E"
-    />
-    <script type="module" crossorigin src="/ui/assets/index-ByJky0vb.js"></script>
-    <link rel="stylesheet" crossorigin href="/ui/assets/index-Bre3-E9_.css">
+    <title>J.A.R.V.I.S</title>
+    <link rel="icon" href="/ui/favicon.svg" type="image/svg+xml" />
+    <script type="module" crossorigin src="/ui/assets/index-ol5wSFd1.js"></script>
+    <link rel="stylesheet" crossorigin href="/ui/assets/index-BpdIxf9C.css">
   </head>
-  <body>
-    <div id="app">
-      <p
-        style="
-          color: #eee;
-          background: #050608;
-          padding: 30px;
-          font: 18px system-ui;
-        "
-      >
-        Loading JARVIS… Open the workspace at
-        <a href="http://127.0.0.1:8756/">127.0.0.1:8756</a> if you opened this
-        file directly.
-      </p>
+  <body class="arriving">
+    <canvas id="field" aria-hidden="true"></canvas>
+    <div id="field-fallback" class="field-fallback" hidden aria-hidden="true"></div>
+
+    <header class="bar">
+      <a class="mark" href="#core" aria-label="J.A.R.V.I.S — core">J.A.R.V.I.S</a>
+      <nav class="acts" aria-label="Sections">
+        <a href="#core" data-act="core" aria-current="true">01 <span>Core</span></a>
+        <a href="#sessions" data-act="sessions">02 <span>Sessions</span></a>
+        <a href="#system" data-act="system">03 <span>System</span></a>
+      </nav>
+      <div class="bar-right">
+        <button id="handsfree" class="chip" type="button" aria-pressed="false" title="Hands-free listening (H)">
+          <i class="dot"></i><span class="chip-label">Hands-free</span> <b>Off</b>
+        </button>
+        <button id="speak" class="chip" type="button" aria-pressed="true" title="Spoken replies (V)">
+          <span class="chip-label">Voice</span> <b>On</b>
+        </button>
+        <button id="free" class="chip" type="button" aria-pressed="false" title="Use only free models (F)">
+          <span class="chip-label">Free models</span> <b>Off</b>
+        </button>
+      </div>
+    </header>
+
+    <main>
+      <section id="core" class="act act-core" aria-label="Core">
+        <div class="hud hud-left">
+          <p class="micro"><em>Exp_00</em> // cognitive core</p>
+          <h1 class="core-title" id="core-title">Waking</h1>
+        </div>
+        <div class="hud hud-right">
+          <span class="micro dim">Core state</span>
+          <ol class="states" id="states" aria-live="polite">
+            <li data-state="idle">Idle</li>
+            <li data-state="listening">Listening</li>
+            <li data-state="thinking">Thinking</li>
+            <li data-state="speaking">Speaking</li>
+          </ol>
+        </div>
+
+        <div class="caption" aria-live="polite">
+          <p id="heard" class="heard"></p>
+          <p id="whisper" class="whisper">Awaiting the field.</p>
+        </div>
+
+        <div class="facts" aria-label="Engine">
+          <p class="fact-head"><i class="led" id="link-led"></i><span id="link-state">Connecting</span></p>
+          <ul class="fact-list">
+            <li>Session: <span id="session-id">—</span></li>
+            <li>Ears: <span id="fact-ears">—</span></li>
+            <li>Voice: <span id="fact-voice">—</span></li>
+            <li>Brain: <span id="fact-brain">—</span></li>
+          </ul>
+        </div>
+
+        <div class="protocol" aria-label="Interaction protocol">
+          <p class="micro dim">Interaction protocol</p>
+          <p class="keys"><kbd>H</kbd> Hands-free · <kbd>Esc</kbd> Stop · <kbd>V</kbd> Voice · <kbd>F</kbd> Free · <kbd>D</kbd> Dialogue</p>
+        </div>
+
+        <aside class="dialogue" id="dialogue" aria-label="Conversation">
+          <header class="dialogue-head">
+            <button id="dialogue-toggle" class="dossier" type="button" aria-expanded="true" title="Dialogue (D)">
+              <i class="led gold"></i> Dialogue <kbd>D</kbd>
+            </button>
+            <button id="free-alt" class="link free-alt" type="button" aria-pressed="false" title="Use only free models">Free: <b>Off</b></button>
+            <button id="new-session" class="link" type="button">New conversation</button>
+          </header>
+          <ol id="turns" class="turns"></ol>
+        </aside>
+
+        <form id="composer" class="composer" autocomplete="off">
+          <button id="mic" class="mic" type="button" aria-label="Listen" title="Listen (Space when not typing)">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
+          </button>
+          <label class="sr" for="prompt">Message JARVIS</label>
+          <input id="prompt" name="prompt" type="text" placeholder="Speak, or type to JARVIS" enterkeyhint="send" />
+          <button id="send" class="send" type="submit" aria-label="Send">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h13M13 6l6 6-6 6"/></svg>
+          </button>
+        </form>
+      </section>
+
+      <section id="sessions" class="act act-sessions" aria-label="Sessions">
+        <p class="kicker">02 / Sessions</p>
+        <h2>Every conversation, kept.</h2>
+        <p class="lede">Resume any thread. The record is the hearth's, written after every answer — this page only reads it.</p>
+        <div id="session-grid" class="grid"></div>
+      </section>
+
+      <section id="system" class="act act-system" aria-label="System">
+        <p class="kicker">03 / System</p>
+        <h2>The hearth, as it actually is.</h2>
+        <p class="lede">Live state from <code>/v1/health</code>, including every breach <code>scripts/pipeline_health.py</code> finds. Nothing on this page is decorative.</p>
+        <div id="system-grid" class="cells"></div>
+      </section>
+    </main>
+
+    <footer class="foot">
+      <span>© 2026 J.A.R.V.I.S · private · runs on this machine</span>
+      <button id="motion" class="link" type="button" aria-pressed="false">Pause motion</button>
+    </footer>
+
+    <div id="gate" class="gate" role="dialog" aria-modal="true" aria-labelledby="gate-title">
+      <div class="gate-inner">
+        <p class="micro"><em>Exp 00</em> // private cognitive orchestrator</p>
+        <h1 id="gate-title" class="sr">J.A.R.V.I.S</h1>
+        <form id="token-form" class="token-form" hidden>
+          <label class="micro" for="token">Hearth token</label>
+          <input id="token" type="password" autocomplete="off" spellcheck="false" placeholder="paste jarvis_data/.hearth_token" />
+        </form>
+        <p id="gate-error" class="gate-error" role="alert"></p>
+        <button id="enter" class="enter" type="button">Enter the field <span aria-hidden="true">↓</span></button>
+      </div>
     </div>
+
   </body>
 </html>

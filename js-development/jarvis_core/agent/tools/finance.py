@@ -48,7 +48,7 @@ portfolio_state:
     STEP 1: Read strategy.md (cache on first call).
     STEP 2: Extract version (regex on "v\\d+\\.\\d+").
     STEP 3: Extract "Current Allocation" / "Allocation" section text.
-    STEP 4: Return {version, allocation_text, full_strategy_preview}.
+    STEP 4: Return {version, allocation_text, strategy_text (the WHOLE doc)}.
 
 trigger_monitor (callable form):
     STEP 1: Read strategy.md.
@@ -142,10 +142,7 @@ class FinanceToolBase(Tool):
 # =============================================================================
 
 class PortfolioStateInput(ToolInput):
-    preview_chars: int = Field(
-        default=2000, ge=200, le=10000,
-        description="Max chars of strategy.md to include in the preview.",
-    )
+    """No arguments: the tool always returns the whole strategy document."""
 
 
 @Tool.register("portfolio_state")
@@ -155,7 +152,7 @@ class PortfolioStateTool(FinanceToolBase):
     name = "portfolio_state"
     description = (
         "Return the structured allocation plan from Finance/strategy.md: "
-        "version + allocation section + preview of full strategy. Stage 3.2 "
+        "version + allocation section + the full strategy text. Stage 3.2 "
         "is a strategy-only stub; Stage 5+ extension wires live broker APIs "
         "(Groww + INDmoney + bank balances) to return actual position values. "
         "The strategy-vs-live split is intentional — the plan rarely lies; "
@@ -180,7 +177,7 @@ class PortfolioStateTool(FinanceToolBase):
             "version": version,
             "strategy_path": str(self._strategy_path),
             "allocation_text": allocation_text,
-            "preview": content[: tool_input.preview_chars],
+            "strategy_text": content,
             "total_strategy_chars": len(content),
             "stage_note": (
                 "Stage 3.2: returns strategy.md slices (the PLAN). "
@@ -389,8 +386,9 @@ Capital allocation plan for Swaraj. Phased architecture.
         check("PS1 version extracted", r1.is_success and r1.output["version"] == "2.7")
         check("PS1 allocation text found",
               r1.is_success and "NVIDIA" in r1.output["allocation_text"])
-        check("PS1 preview length capped",
-              r1.is_success and len(r1.output["preview"]) <= 2000)
+        check("PS1 whole strategy returned, not a preview",
+              r1.is_success and r1.output["strategy_text"] == strategy_path.read_text(encoding="utf-8")
+              and len(r1.output["strategy_text"]) == r1.output["total_strategy_chars"])
         check("PS1 stage_note present",
               r1.is_success and "Stage 3.2" in r1.output["stage_note"])
 

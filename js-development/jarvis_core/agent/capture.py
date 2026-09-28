@@ -74,26 +74,28 @@ from jarvis_core.config import DATA_ROOT  # noqa: E402
 _IST = timezone(timedelta(hours=5, minutes=30))
 QUEUE_PATH = Path(DATA_ROOT) / "observation_queue.jsonl"
 
-# Raised 2026-08-19 after the capture audit measured real truncation loss against
-# the live queue: at the old caps (2000 / 400) 44 of 466 user turns (9.4%) were cut
-# mid-message and 335 of 466 assistant summaries (72%) hit the ceiling exactly.
-# The user's directive is that every prompt should yield capture-able signal about
-# mind/character/behaviour-change — a 400-char assistant cap cannot preserve WHY a
-# decision was reached, only that one was, so the queue could not reconstruct the
-# reasoning it exists to preserve. User side is the higher-value half (their own
-# words are the voice-corpus signal) and gets the bigger raise.
+# NO CAP on either side (user directive, 2026-09-18). The history stays because
+# it records what the ceilings cost, and therefore why re-adding one is a
+# regression rather than a tidy-up: at 2000/400 (before 2026-08-19) 335 of 466
+# assistant summaries (72%) hit the ceiling exactly; at 2000 (before
+# 2026-09-18) 268 of 1420 (18.9%) still did. A cap cannot preserve WHY a
+# decision was reached, only that one was — and a row cut mid-thought is the
+# single failure this queue exists to prevent.
 #
-# Raised again 2026-09-18, assistant side only, when a second Claude Code host
-# was being set up and the user asked why this conversation would not travel to
-# it. The answer was that it DOES travel — this queue is tracked and pushed — but
-# measurement showed 268 of 1420 assistant summaries (18.9%) sitting exactly at
-# the 2000 ceiling, i.e. cut mid-thought. The 2026-08-19 note above already
-# states the goal ("a cap cannot preserve WHY a decision was reached") and 2000
-# was still failing it on one turn in five. Cost measured before changing it:
-# the whole queue is 11 MB, so the worst case across every truncated row is a
-# couple of MB — trivial against losing the reasoning tail of a fifth of them.
-MAX_USER_CHARS = 8000
-MAX_ASSISTANT_CHARS = 8000
+# Two facts make unbounded correct here rather than reckless. FIRST, this queue
+# is a DERIVED, FLATTENED view — one row per turn, user text plus joined
+# assistant text — so it is not the complete record even with no cap at all:
+# tool calls, tool results and thinking blocks were never in it. The complete
+# record is Claude Code's own transcript, which extract_turn reads and which is
+# already untruncated on disk. SECOND, build_observation — the path every
+# non-hook adapter uses — never truncated, so Codex and Antigravity turns have
+# always been stored whole. Capping only here made the host with the richest
+# transcripts the only one that lost text.
+#
+# COST, measured before the change: 11 MB across 1424 rows. This file is
+# git-TRACKED, pushed, and merge=union across three agents, so if size ever
+# becomes a sync problem the fix is to prune or externalize OLD rows — not to
+# re-truncate new ones, which loses the reasoning tail permanently.
 
 # --- Secret redaction (same classes as react.py R1/M11 + correlation _scrub) ---
 _REDACTORS = [
@@ -148,6 +150,9 @@ _HARNESS_TAGS = (
     "ide_opened_file", "ide_selection", "system-reminder", "task-notification",
     "local-command-caveat", "local-command-stdout", "command-name",
     "command-message", "command-args", "user-prompt-submit-hook",
+    # Codex automation envelope: a scheduled run replays stored instructions
+    # inside <heartbeat>; nobody typed them at that moment.
+    "heartbeat", "automation_id",
 )
 _HARNESS_PAIRED = re.compile(
     r"<(" + "|".join(_HARNESS_TAGS) + r")\b[^>]*>.*?</\1>", re.DOTALL | re.IGNORECASE)
@@ -295,8 +300,8 @@ def extract_turn(transcript_path: str) -> Optional[Dict[str, str]]:
                     break
 
     return {
-        "user_text": user_text[:MAX_USER_CHARS],
-        "assistant_summary": "\n".join(assistant_parts)[:MAX_ASSISTANT_CHARS],
+        "user_text": user_text,
+        "assistant_summary": "\n".join(assistant_parts),
         "model": model,
     }
 
@@ -307,7 +312,7 @@ def extract_turn(transcript_path: str) -> Optional[Dict[str, str]]:
 
 def build_observation(
     event: Dict[str, Any], turn: Dict[str, str], cwd: str,
-    ts: Optional[str] = None,
+    ts: Optional[str] = None, host: str = "",
 ) -> Optional[Dict[str, Any]]:
     """One redacted queue record, or None if nothing capturable.
 
@@ -319,12 +324,17 @@ def build_observation(
     which corrupts every timestamp-ordered consumer downstream: recall.py's
     day-by-day grouping, tension.py's "only the past can be a prior" filter,
     and the domain-label projection's (ts, session_id) key.
+
+    `host` names the agent the owner was talking to (claude / codex /
+    antigravity / jarvis). The owner's rule (2026-09-28) is that the agent in
+    the chat parses its own turns, so parse_ledger must know whose turn this
+    is; written here it is never guessed from cwd or session-id shape.
     """
     user_text = redact(turn.get("user_text", ""))
     assistant_summary = redact(turn.get("assistant_summary", ""))
     if not user_text.strip():
         return None
-    return {
+    obs: Dict[str, Any] = {
         "ts": ts or ist_now_iso(),
         "session_id": event.get("session_id", ""),
         "machine": os.environ.get(
@@ -344,6 +354,9 @@ def build_observation(
             "domain_guess": guess_domain(cwd, user_text + " " + assistant_summary),
         },
     }
+    if host:
+        obs["host"] = host
+    return obs
 
 
 def append_observation(record: Dict[str, Any], queue_path: Path = QUEUE_PATH) -> None:
@@ -377,7 +390,8 @@ def _ends_with_newline(handle: Any) -> bool:
         return True
 
 
-def capture_stop_event(event: Dict[str, Any], queue_path: Path = QUEUE_PATH) -> Optional[Dict[str, Any]]:
+def capture_stop_event(event: Dict[str, Any], queue_path: Path = QUEUE_PATH,
+                       host: str = "") -> Optional[Dict[str, Any]]:
     """The one-call organ entry an adapter uses. Returns the appended record,
     or None (nothing capturable / loop guard). NEVER raises."""
     try:
@@ -388,7 +402,7 @@ def capture_stop_event(event: Dict[str, Any], queue_path: Path = QUEUE_PATH) -> 
         turn = extract_turn(transcript_path) if transcript_path else None
         if turn is None:
             return None
-        record = build_observation(event, turn, cwd)
+        record = build_observation(event, turn, cwd, host=host)
         if record is None:
             return None
         append_observation(record, queue_path)
@@ -428,6 +442,10 @@ def _run_self_test() -> None:
     check("T3 system-reminder stripped mid-text",
           (lambda s: "actual question" in s and "noise" not in s)(
               strip_harness_blocks("hi <system-reminder>noise here</system-reminder> actual question")))
+    check("T3c a Codex automation heartbeat is an envelope, not owner text",
+          strip_harness_blocks("<heartbeat>\r\n  <automation_id>daily-x</automation_id>\r\n"
+                               "  <instructions>\r\nrefresh the desk\r\n  </instructions>\r\n"
+                               "</heartbeat>\n").strip() == "")
     check("T4 plain text untouched", strip_harness_blocks("hello world").strip() == "hello world")
     check("T5 code with < and > NOT stripped",
           strip_harness_blocks("if x < y and a > b: return [i for i in xs]")
@@ -544,6 +562,13 @@ def _run_self_test() -> None:
         check("T20 omitting ts still defaults to live capture's now (unchanged behavior)",
               obs_default is not None and obs_default["ts"] != historical_ts
               and obs_default["ts"].startswith("20"), str(obs_default and obs_default["ts"]))
+        check("T21 an explicit host is recorded; omitting it writes no host key",
+              build_observation({"session_id": "s"}, {"user_text": "x"}, "/r", host="codex")["host"]
+              == "codex" and "host" not in obs_default)
+        q21 = Path(td) / "q21.jsonl"
+        rec21 = capture_stop_event(dict(event), queue_path=q21, host="claude")
+        check("T22 capture_stop_event threads host into the queue row",
+              rec21 is not None and json.loads(q21.read_text().splitlines()[0]).get("host") == "claude")
 
     total = passed + len(failed)
     print(f"\n  Passed: {passed}/{total}")

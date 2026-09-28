@@ -164,25 +164,26 @@ def inv_no_exact_duplicates(a: Artifacts) -> List[Finding]:
 
 
 def inv_blend_duplication_is_explained(a: Artifacts) -> List[Finding]:
-    """The blend legitimately contains some text twice — but only some.
+    """The blend must contain NO text twice. Tightened 2026-09-18.
 
-    THIS INVARIANT WAS WRONG IN ITS FIRST FORM and the correction is the point.
-    It flagged every duplicate in `blended_corpus.jsonl` as a defect. After both
-    source corpora were deduped it still reported 9.9%, because the blend
-    CONCATENATES two corpora that legitimately share source material:
-    `personalization_corpus` says outright that `professional_reasoning` is
-    "intentionally double-counted — the same comment blocks also remain in
-    engineer_corpus's client_work records."
+    THIS INVARIANT HAS NOW BEEN WRONG IN TWO DIFFERENT DIRECTIONS, and the
+    sequence is the lesson. V1 flagged every duplicate as a defect and failed
+    on intended behaviour. V2 (2026-09-08) relaxed to "no duplication I cannot
+    ACCOUNT for" — every repeat had to be explained by a text present in both
+    source corpora — and passed ever after.
 
-    A check that fails on intended behaviour trains people to ignore it, which
-    is worse than no check. So the assertion is not "no duplication" but "no
-    duplication I cannot ACCOUNT for": every repeated blend record must be
-    explained by a text present in both source corpora. Anything beyond that is
-    new duplication and fails.
+    V2 PASSED WHILE THE DEFECT IT DESCRIBED WAS REAL. Its own docstring said
+    312 of the 338 repeats "has never been written down as deliberate", and it
+    printed that line on every run for ten days while reporting OK. ACCOUNTED
+    FOR IS NOT THE SAME AS CORRECT: reconciling a number explains where it came
+    from, not whether it should exist. The 338 were being trained twice per
+    epoch — upsampling the thin personalization set behind the back of
+    _PERSONALIZATION_REPEATS=1, which exists precisely to prevent that.
 
-    The explained portion is printed rather than swallowed, because 312 of the
-    338 are KB entries reaching both corpora and — unlike the 17 client_work
-    ones — that has never been written down as deliberate.
+    blend_corpus.py now assigns shared text to personalization and drops the
+    engineer copy, so the honest assertion is again the strict one: zero
+    repeats. The overlap is still REPORTED, because it is the quantity that
+    ownership decides and a future reader should see it move.
     """
     if not a.blend:
         return [Finding("blend duplication is explained", UNKNOWN, "artifact absent")]
@@ -192,12 +193,12 @@ def inv_blend_duplication_is_explained(a: Artifacts) -> List[Finding]:
     redundant = sum(n - 1 for n in counts.values() if n > 1)
     overlap = {str(r.get("text", "")) for r in a.engineer} & {
         str(r.get("text", "")) for r in a.personalization}
-    unexplained = redundant - len(overlap)
     return [Finding(
-        "blend duplication is explained",
-        OK if unexplained <= 0 else FAIL,
-        f"{redundant} repeats, {len(overlap)} explained by cross-corpus overlap"
-        + (f", {unexplained} UNEXPLAINED" if unexplained > 0 else " (all accounted for)"))]
+        "blend trains no text twice",
+        OK if redundant == 0 else FAIL,
+        f"{redundant} repeats in the blend; {len(overlap)} shared text(s) "
+        f"owned by personalization, engineer copy dropped"
+        + ("" if redundant == 0 else " — SOMETHING IS CONCATENATING AGAIN"))]
 
 
 def inv_pair_targets_are_owner_prose(a: Artifacts) -> List[Finding]:
@@ -331,6 +332,289 @@ def inv_records_are_well_formed(a: Artifacts) -> List[Finding]:
     return findings
 
 
+def inv_no_third_party_identity(a: Artifacts) -> List[Finding]:
+    """No named third party reaches an artifact training consumes (2026-09-23).
+
+    Excluding personal_life.md from the corpus was not enough: a partner's name
+    was still in 6 blend records and 1 SFT pair, arriving through the very
+    conversations that file had been distilled from. Redaction lives in
+    blend_corpus.py and build_sft_pairs.write_jsonl; this catches any future
+    writer that bypasses them. Reports ROLES, never names, so the check's own
+    output cannot leak what it guards. It cannot see a person who is not
+    listed in jarvis_data/third_parties.json — nothing here can.
+    """
+    name = "no third-party identity in training"
+    try:
+        from jarvis_core.specialists import third_parties
+    except ImportError:
+        return [Finding(name, UNKNOWN, "third_parties unavailable")]
+    try:
+        people = third_parties.load(a.root / "jarvis_data" / "third_parties.json")
+    except FileNotFoundError:
+        return [Finding(name, UNKNOWN, "third_parties.json absent")]
+    if not (a.blend or a.pairs or a.heldout):
+        return [Finding(name, UNKNOWN, "training artifacts absent")]
+    leaks: List[str] = []
+    for label, rows in (("blend", a.blend), ("sft_pairs", a.pairs), ("sft_pairs_heldout", a.heldout)):
+        for r in rows:
+            text = str(r.get("text") or "") + json.dumps(r.get("messages", ""), ensure_ascii=False)
+            leaks.extend(f"{label}:{role}" for role in third_parties.roles_present(text, people))
+    if not leaks:
+        return [Finding(name, OK, f"{len(people)} identifiers checked across blend + SFT pairs, none present")]
+    counts = collections.Counter(leaks)
+    return [Finding(name, FAIL, ", ".join(f"{k} x{v}" for k, v in counts.most_common()))]
+
+
+
+# =============================================================================
+# NO TRUNCATION (owner directive 2026-09-28). Three places cut text silently:
+# the profile's per-entry caps, the inhale's per-provider caps and 6,000-char
+# total, and session_writer's 160/220-char heads. Each was removed; these make
+# sure none comes back. They take a repo root rather than Artifacts so
+# pipeline_health can run them without loading 25 MB of corpora.
+# =============================================================================
+
+_CUT_MARKER = "…"
+_MIN_PREFIX_MATCH = 100
+# Status providers carry no owner state and one of them (Projection integrity)
+# loads an embedding model, ~100 s cold. They are left out of the boot inhale
+# rebuilt here; everything that can carry the profile or personal life stays.
+_STATUS_ONLY_PROVIDERS = frozenset({"Projection integrity", "Pipeline health"})
+
+
+def _norm(text: Any) -> str:
+    return " ".join(str(text or "").split())
+
+
+def _kb_rows(root: Path) -> List[Dict[str, Any]]:
+    return [r for r in _load(root / "jarvis_data" / "knowledge_base.jsonl") if isinstance(r, dict)]
+
+
+def trunc_profile_entries_whole(root: Path) -> List[Finding]:
+    """Every KB entry profile_synth selects appears WHOLE in the profile.
+
+    Checked by content presence, not by section names, so a new section (the
+    People one being added 2026-09-28) needs no change here. Only the KB
+    entries the profile was synthesised FROM are compared — its header records
+    that count — so an entry appended after the last synth is a stale
+    projection (check_projections' job), not a truncation.
+    """
+    import re
+    import tempfile
+    from datetime import datetime, timedelta, timezone
+    name = "profile carries every selected entry whole"
+    profile = root / "jarvis_data" / "cognitive_profile.md"
+    kb = root / "jarvis_data" / "knowledge_base.jsonl"
+    if not profile.exists() or not kb.exists():
+        return [Finding(name, UNKNOWN, "profile or KB absent")]
+    text = profile.read_text(encoding="utf-8", errors="replace")
+    m = re.search(r"\((\d+) entries\)", text)
+    lines = [ln for ln in kb.read_text(encoding="utf-8", errors="replace").splitlines() if ln.strip()]
+    synthesised_from = int(m.group(1)) if m else len(lines)
+    sys.path.insert(0, str(_REPO_ROOT / "scripts"))
+    import profile_synth  # type: ignore
+    ist = timezone(timedelta(hours=5, minutes=30))
+    when = datetime.fromtimestamp(profile.stat().st_mtime, ist)
+    with tempfile.TemporaryDirectory() as td:
+        snapshot = Path(td) / "kb.jsonl"
+        snapshot.write_text("\n".join(lines[:synthesised_from]) + "\n", encoding="utf-8")
+        buckets, _stats = profile_synth._bucket(snapshot, Path(td) / "index.sqlite3", when)
+    selected = [e for bucket in buckets.values() for e in bucket]
+    body = _norm(text)
+    missing = [e for e in selected if _norm(e.content) not in body]
+    if not missing:
+        return [Finding(name, OK, f"{len(selected)} selected entries, every one present whole")]
+    cut = [e for e in missing if _norm(e.content)[:120] in body]
+    return [Finding(
+        name, FAIL,
+        f"{len(missing)} of {len(selected)} selected entries are not in the profile whole "
+        f"({len(cut)} present but CUT, {len(missing) - len(cut)} absent): ids "
+        + ", ".join(str(e.id) for e in missing)
+        + ". Fix: python scripts/profile_synth.py, then find the cap that returned",
+        [f"{e.id}: {_norm(e.content)[:90]}" for e in missing[:3]])]
+
+
+def default_inhales(root: Path) -> Dict[str, str]:
+    """The voice inhale (voice_path._default_inhale) and the boot inhale
+    (context_injector default providers), built from `root`'s files."""
+    from jarvis_core.brain import context_injector as ci
+    from jarvis_core.brain.voice_path import _default_inhale
+    data = root / "jarvis_data"
+    saved = (ci._DEFAULT_PROFILE_PATH, ci._DEFAULT_PERSONAL_LIFE_PATH)
+    patch = Path(saved[0]).resolve() != (data / "cognitive_profile.md").resolve()
+    if patch:
+        ci._DEFAULT_PROFILE_PATH = data / "cognitive_profile.md"
+        ci._DEFAULT_PERSONAL_LIFE_PATH = data / "personal_life.md"
+    try:
+        with ci.pipeline_health_suppressed():
+            voice = _default_inhale()
+            boot = ci.ContextInjector([s for s in ci.default_providers()
+                                       if s.name not in _STATUS_ONLY_PROVIDERS]).inhale().block
+    finally:
+        if patch:
+            ci._DEFAULT_PROFILE_PATH, ci._DEFAULT_PERSONAL_LIFE_PATH = saved
+    return {"voice inhale": voice, "boot inhale": boot}
+
+
+def _personal_life_body(text: str) -> str:
+    lines = text.splitlines()
+    for i, line in enumerate(lines):
+        if line.startswith("## "):
+            return "\n".join(lines[i:]).strip()
+    return text.strip()
+
+
+def trunc_inhales_carry_whole_state(root: Path,
+                                    inhales: Optional[Dict[str, str]] = None) -> List[Finding]:
+    """Both inhales carry the WHOLE profile and the whole personal-life body.
+
+    Compared after the outbound airlock, because redact_outbound removing a
+    client identifier is policy, not truncation: the expected text is the file
+    passed through the same redaction the inhale applies.
+    """
+    from jarvis_core.brain.outbound_policy import redact_outbound
+    data = root / "jarvis_data"
+    sources: Dict[str, str] = {}
+    profile, life = data / "cognitive_profile.md", data / "personal_life.md"
+    if profile.exists():
+        sources["cognitive_profile.md"] = profile.read_text(encoding="utf-8", errors="replace").strip()
+    if life.exists():
+        sources["personal_life.md body"] = _personal_life_body(life.read_text(encoding="utf-8", errors="replace"))
+    if not sources:
+        return [Finding("inhales carry whole profile + personal life", UNKNOWN, "neither file exists")]
+    blocks = inhales if inhales is not None else default_inhales(root)
+    findings: List[Finding] = []
+    for block_name, block in blocks.items():
+        for source_name, raw in sources.items():
+            expected = redact_outbound(raw).text.strip()
+            name = f"{block_name} carries whole {source_name}"
+            if not expected:
+                findings.append(Finding(name, UNKNOWN, "source is empty"))
+            elif expected in block:
+                findings.append(Finding(name, OK, f"{len(expected):,} chars, whole"))
+            else:
+                how = "present but CUT" if expected[:200] in block else "ABSENT"
+                findings.append(Finding(
+                    name, FAIL,
+                    f"{how}: the {len(expected):,}-char {source_name} is not in the "
+                    f"{len(block):,}-char {block_name}. Something is cutting or dropping "
+                    f"it — see brain/context_injector.py and brain/voice_path.py VOICE_SECTIONS"))
+    return findings
+
+
+def _split_distill(content: str) -> Optional[Tuple[str, str]]:
+    head, sep, _tail = content.rpartition(" | tools: ")
+    if not sep or "Q: " not in head or " | A: " not in head:
+        return None
+    q, _, a = head.split("Q: ", 1)[1].partition(" | A: ")
+    return q, a
+
+
+def _conversation_turns(root: Path) -> List[Tuple[str, str, str]]:
+    """(file name, user text, following assistant text) for every UI/terminal turn."""
+    out: List[Tuple[str, str, str]] = []
+    conv = root / "jarvis_data" / "conversations"
+    if not conv.is_dir():
+        return out
+    for path in sorted(conv.glob("*.jsonl")):
+        rows = _load(path)
+        for i, rec in enumerate(rows):
+            if rec.get("role") != "user":
+                continue
+            answer = next((str(r.get("content", "")) for r in rows[i + 1:]
+                           if r.get("role") == "assistant"), "")
+            out.append((path.name, str(rec.get("content", "")), answer))
+    return out
+
+
+def trunc_session_distills_whole(root: Path) -> List[Finding]:
+    """Every session-distill KB entry holds its FULL question and answer.
+
+    A distill is cut when its Q or A ends in the "…" marker the old 160/220-char
+    heads added, or when a conversation file on disk holds a longer text the KB
+    copy is a strict prefix of. An entry is repaired by a later KB entry tagged
+    `repairs-kb-<id>` — the KB is append-only, so a repair is an addition,
+    never an edit.
+    """
+    name = "session distills hold the full Q and A"
+    rows = _kb_rows(root)
+    distills = [r for r in rows if "session-distill" in (r.get("tags") or [])]
+    if not distills:
+        return [Finding(name, UNKNOWN, "no session-distill entries")]
+    repaired = {str(t)[len("repairs-kb-"):] for r in rows for t in (r.get("tags") or [])
+                if str(t).startswith("repairs-kb-")}
+    turns = _conversation_turns(root)
+    cut: List[Tuple[Any, str]] = []
+    unparseable: List[Any] = []
+    for r in distills:
+        rid = r.get("id")
+        parts = _split_distill(str(r.get("content", "")))
+        if parts is None:
+            unparseable.append(rid)
+            continue
+        q, a = parts
+        q_norm, a_norm = _norm(q.rstrip().rstrip(_CUT_MARKER)), _norm(a.rstrip().rstrip(_CUT_MARKER))
+        marked = q.rstrip().endswith(_CUT_MARKER) or a.rstrip().endswith(_CUT_MARKER)
+        # A short question is a prefix of too many others to identify its
+        # conversation by prefix alone; below that length only an exact match counts.
+        source = next(((f, u, ans) for f, u, ans in turns
+                       if _norm(u) == q_norm or (len(q_norm) >= _MIN_PREFIX_MATCH
+                                                 and _norm(u).startswith(q_norm))), None)
+        longer_on_disk = bool(source) and (
+            len(_norm(source[1])) > len(q_norm)
+            or (_norm(source[2]).startswith(a_norm) and len(_norm(source[2])) > len(a_norm)))
+        if not (marked or longer_on_disk) or str(rid) in repaired:
+            continue
+        where = f"full text in conversations/{source[0]}" if source else "no conversation file on disk"
+        cut.append((rid, where))
+    findings = []
+    if cut:
+        recoverable = sum(1 for _, w in cut if w.startswith("full text"))
+        findings.append(Finding(
+            name, FAIL,
+            f"{len(cut)} of {len(distills)} session distills are CUT (ids "
+            + ", ".join(str(rid) for rid, _ in cut)
+            + f"); {recoverable} recoverable from a conversation file. Repair by "
+              "appending the whole Q/A tagged repairs-kb-<id>",
+            [f"KB {rid}: {w}" for rid, w in cut[:3]]))
+    else:
+        findings.append(Finding(name, OK, f"{len(distills)} session distills, all whole"))
+    if unparseable:
+        findings.append(Finding("session distills are parseable", UNKNOWN,
+                                "no 'Q: … | A: … | tools:' shape in ids "
+                                + ", ".join(str(i) for i in unparseable)))
+    return findings
+
+
+TRUNCATION_CHECKS: Tuple[Callable[[Path], List[Finding]], ...] = (
+    trunc_profile_entries_whole,
+    trunc_inhales_carry_whole_state,
+    trunc_session_distills_whole,
+)
+
+
+def truncation_findings(root: Optional[Path] = None,
+                        inhales: Optional[Dict[str, str]] = None) -> List[Finding]:
+    """The no-truncation invariants alone. An exception is a FAIL naming the
+    check, never a silent pass — a check that cannot run proves nothing."""
+    base = Path(root or _REPO_ROOT)
+    findings: List[Finding] = []
+    for fn in TRUNCATION_CHECKS:
+        try:
+            if fn is trunc_inhales_carry_whole_state:
+                findings.extend(fn(base, inhales))
+            else:
+                findings.extend(fn(base))
+        except Exception as exc:                        # noqa: BLE001
+            findings.append(Finding(fn.__name__, FAIL, f"check raised {type(exc).__name__}: {exc}"))
+    return findings
+
+
+def inv_no_truncation(a: Artifacts) -> List[Finding]:
+    """Owner directive 2026-09-28: no text is cut anywhere on its way to JARVIS."""
+    return truncation_findings(a.root)
+
+
 INVARIANTS: Tuple[Callable[[Artifacts], List[Finding]], ...] = (
     inv_no_exact_duplicates,   # includes inv_blend_duplication_is_explained
     inv_pair_targets_are_owner_prose,
@@ -339,6 +623,8 @@ INVARIANTS: Tuple[Callable[[Artifacts], List[Finding]], ...] = (
     inv_no_prompt_monoculture,
     inv_ui_answers_keep_their_question,
     inv_records_are_well_formed,
+    inv_no_third_party_identity,
+    inv_no_truncation,
 )
 
 
@@ -349,7 +635,7 @@ def run(root: Optional[Path] = None) -> List[Finding]:
         try:
             findings.extend(fn(artifacts))
         except Exception as exc:                        # noqa: BLE001
-            findings.append(Finding(fn.__name__, UNKNOWN, f"check raised: {exc}"[:150]))
+            findings.append(Finding(fn.__name__, UNKNOWN, f"check raised: {type(exc).__name__}: {exc}"))
     return findings
 
 
@@ -447,24 +733,116 @@ def _self_test() -> int:
               all(x.status == UNKNOWN for x in f), True)
         check("T10 UNKNOWN does not make the run fail", report(f), 0)
 
-        # T12/T13: blend duplication is judged against the source overlap, not
-        # against zero — the first version of this check failed on intended
-        # behaviour, which is how a check teaches people to ignore it.
+        # T12/T13: the blend must train no text twice. This assertion has been
+        # wrong in BOTH directions historically - v1 failed on intended
+        # behaviour and taught people to ignore it; v2 relaxed to "explained by
+        # the source overlap" and then PASSED for ten days while 312 records
+        # were genuinely trained twice. It is strict again, which is only
+        # honest now that blend_corpus.py assigns shared text to
+        # personalization and drops the engineer copy.
         write(root, "jarvis_data/training_corpus/engineer_corpus.jsonl", [{"text": "shared"}])
         write(root, "jarvis_data/training_corpus/personalization_corpus.jsonl",
               [{"text": "shared"}])
         write(root, "jarvis_data/training_corpus/blended_corpus.jsonl",
-              [{"text": "shared"}, {"text": "shared"}])
-        check("T12 duplication explained by cross-corpus overlap passes",
-              status_of(run(root), "blend duplication"), OK)
+              [{"text": "shared"}])
+        check("T12 shared text kept ONCE passes",
+              status_of(run(root), "blend trains no text twice"), OK)
         write(root, "jarvis_data/training_corpus/blended_corpus.jsonl",
-              [{"text": "shared"}, {"text": "shared"}, {"text": "new"}, {"text": "new"}])
-        check("T13 duplication BEYOND the overlap fails",
-              status_of(run(root), "blend duplication"), FAIL)
+              [{"text": "shared"}, {"text": "shared"}])
+        check("T13 shared text concatenated TWICE fails",
+              status_of(run(root), "blend trains no text twice"), FAIL)
+
+        # T14/T15: a listed third party anywhere training reads is a FAIL.
+        (root / "jarvis_data" / "third_parties.json").write_text(json.dumps(
+            {"people": [{"role": "partner", "identifiers": ["Alice"]}]}), encoding="utf-8")
+        write(root, "jarvis_data/training_corpus/blended_corpus.jsonl", [{"text": "met Alice today"}])
+        check("T14 a listed third party in the blend fails",
+              status_of(run(root), "no third-party identity"), FAIL)
+        write(root, "jarvis_data/training_corpus/blended_corpus.jsonl", [{"text": "met [partner] today"}])
+        check("T15 the same record, redacted, passes",
+              status_of(run(root), "no third-party identity"), OK)
 
         write(root, "jarvis_data/training_corpus/engineer_corpus.jsonl",
               [{"text": "dup"}, {"text": "dup"}])
         check("T11 report() exits non-zero on a real failure", report(run(root)), 1)
+
+    # T16-T25: the no-truncation invariants, each against its own temp root.
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        data = root / "jarvis_data"
+        data.mkdir(parents=True)
+        long_identity = "Identity: I grew up in the hills and want to build JARVIS. " + "detail " * 400 + "IDENTITY-END"
+        kb_rows = [
+            {"id": 1, "timestamp": "2026-09-01T10:00:00+05:30", "type": "Cognitive_Profile",
+             "tags": ["identity"], "content": long_identity},
+            {"id": 2, "timestamp": "2026-09-02T10:00:00+05:30", "type": "System_Protocol",
+             "tags": ["DIRECTIVE"], "content": "DIRECTIVE: never truncate anything. PROTOCOL-END"},
+        ]
+        write(root, "jarvis_data/knowledge_base.jsonl", kb_rows)
+        sys.path.insert(0, str(_REPO_ROOT / "scripts"))
+        import profile_synth  # type: ignore
+        profile_text = profile_synth.synthesize(kb_path=data / "knowledge_base.jsonl",
+                                                db_path=Path(tmp) / "idx.sqlite3")
+        (data / "cognitive_profile.md").write_text(profile_text, encoding="utf-8")
+        check("T16 a profile holding every selected entry whole passes",
+              trunc_profile_entries_whole(root)[0].status, OK)
+        (data / "cognitive_profile.md").write_text(profile_text.replace("IDENTITY-END", ""), encoding="utf-8")
+        f16 = trunc_profile_entries_whole(root)[0]
+        check("T17 a profile entry cut short is caught, and named as CUT",
+              (f16.status, "present but CUT" in f16.detail), (FAIL, True))
+        (data / "cognitive_profile.md").write_text(profile_text, encoding="utf-8")
+        write(root, "jarvis_data/knowledge_base.jsonl", kb_rows + [
+            {"id": 3, "timestamp": "2026-09-03T10:00:00+05:30", "type": "System_Protocol",
+             "tags": ["DIRECTIVE"], "content": "DIRECTIVE: added after the last synth."}])
+        check("T18 an entry appended after the last synth is staleness, not truncation",
+              trunc_profile_entries_whole(root)[0].status, OK)
+
+        (data / "personal_life.md").write_text(
+            "# Personal Life\n\n> storage policy\n\n## Relationships\n- Partner: Alicia. LIFE-END\n",
+            encoding="utf-8")
+        whole = {"voice inhale": "## x\n" + profile_text + "\n## Relationships\n- Partner: Alicia. LIFE-END",
+                 "boot inhale": profile_text + "\n## Relationships\n- Partner: Alicia. LIFE-END"}
+        check("T19 inhales carrying the whole profile and personal life pass",
+              {f.status for f in trunc_inhales_carry_whole_state(root, whole)}, {OK})
+        cut = dict(whole, **{"voice inhale": profile_text[:2500]})
+        bad = [f for f in trunc_inhales_carry_whole_state(root, cut) if f.status == FAIL]
+        check("T20 a 2,500-char cut of the profile in the voice inhale is caught",
+              sorted(f.name for f in bad),
+              ["voice inhale carries whole cognitive_profile.md", "voice inhale carries whole personal_life.md body"])
+        real_inhales = default_inhales(root)
+        check("T21 the REAL voice and boot inhales, built from these files, carry both whole",
+              {f.status for f in trunc_inhales_carry_whole_state(root, real_inhales)}, {OK})
+
+        q_long = "How should the parse rule treat corrections? " + "context " * 30
+        a_long = "It should keep them whole. " + "because " * 60
+        write(root, "jarvis_data/conversations/conv-20260901T100000-1.jsonl", [
+            {"ts": "2026-09-01T10:00:00+05:30", "role": "user", "content": q_long},
+            {"ts": "2026-09-01T10:00:00+05:30", "role": "assistant", "content": a_long}])
+
+        def distill(i: int, q: str, a: str, tags: Sequence[str] = ("session-distill", "terminal")) -> Dict[str, Any]:
+            return {"id": i, "timestamp": "2026-09-01T10:00:00+05:30", "type": "Episodic", "tags": list(tags),
+                    "content": f"Terminal session distill (m): Q: {q} | A: {a} | tools: none | "
+                               f"confidence: OK 0.9 | spend: $0.0000"}
+        write(root, "jarvis_data/knowledge_base.jsonl", [distill(10, q_long.strip(), a_long.strip())])
+        check("T22 a distill equal to its conversation passes",
+              trunc_session_distills_whole(root)[0].status, OK)
+        flat_q = " ".join(q_long.split())
+        write(root, "jarvis_data/knowledge_base.jsonl", [distill(11, flat_q[:160] + "…", a_long[:220] + "…")])
+        f23 = trunc_session_distills_whole(root)[0]
+        check("T23 the old 160/220-char heads are caught, with the id and where the full text is",
+              (f23.status, "ids 11" in f23.detail, "1 recoverable" in f23.detail), (FAIL, True, True))
+        write(root, "jarvis_data/knowledge_base.jsonl", [distill(12, flat_q, " ".join(a_long.split())[:150])])
+        check("T24 an answer cut WITHOUT a marker is caught against the conversation file",
+              trunc_session_distills_whole(root)[0].status, FAIL)
+        write(root, "jarvis_data/knowledge_base.jsonl", [
+            distill(11, flat_q[:160] + "…", a_long[:220] + "…"),
+            distill(13, flat_q, " ".join(a_long.split()), tags=("session-distill", "repairs-kb-11"))])
+        check("T25 a cut distill repaired by an entry tagged repairs-kb-<id> passes",
+              trunc_session_distills_whole(root)[0].status, OK)
+        check("T25b truncation_findings turns a crashing check into a FAIL, never a pass",
+              any(f.status == FAIL and "raised" in f.detail
+                  for f in truncation_findings(root, inhales={"voice inhale": None})),  # type: ignore[dict-item]
+              True)
 
     print("=" * 78)
     print("  check_pipeline self-test")

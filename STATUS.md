@@ -5,27 +5,69 @@
 > is a snapshot, not a log. If something below is stale by the time you read it, fix it and say
 > so in your commit message; don't leave a wrong number here because it was true once.
 
-**Last surveyed:** 2026-09-22, by codex
-**Since the last survey (2026-09-17):** a **second Claude Code host** came online — the user's
-personal laptop, running Claude Code inside Antigravity, against this same repo. Most of today's
-changes exist to make that host arrive fully-equipped rather than half-blind. Three onboarding
-defects were found by measuring rather than reading, and all three are fixed (§6).
+**Last surveyed:** 2026-09-28, by claude
+**Since the last survey (2026-09-22):** the owner found that JARVIS did not know them — interview
+answers and the people in their life never reached it — and that training was fed by turns
+nobody had judged. Measuring why produced **the Memory Contract** (NERVOUS_SYSTEM.md §3), now
+live: the agent the owner chats with parses those turns by one rule, no paid background calls,
+no truncation, failures loud to all four agents.
 
 ---
 
 ## 1. Is anything broken right now?
 
-**No.** `check_pipeline.py` — 12 invariants, 12 OK, 0 failed, 0 unmeasurable. Verify rather than
-trust: `python3 scripts/check_pipeline.py`, `python3 scripts/run_all_tests.py --status`.
+**Yes — three findings from today; one is still open (`reindex_memory`).** Re-check with `python scripts/pipeline_health.py`
+(one line per breach, silent when healthy) and `python3 scripts/check_pipeline.py`.
+
+- **Curation had stalled for 13 days, invisibly.** The hourly `curate_turns` job (paid Gemini via
+  OpenRouter) failed **185 of 195 runs** since 2026-09-15 on HTTP 402 (credits); 1,833 turns sat
+  uncurated and flowed into both corpora. Root cause was structural, not the balance: the only
+  writer of verdicts was a paid background job, and no agent ever saw job health. **Resolved by
+  design:** the job is removed and parsing moved to the agents (below).
+- **`reindex_memory` fails, and the failure was hidden.** 16 of 17 runs failed with ChromaDB
+  `InternalError: Error in compaction: Failed to apply logs to the metadata segment` (Windows
+  host). A later guard-skip overwrote `last_status` with "skipped — guard reports nothing to
+  do", so `hearth.py --status` looked healthy. The scheduler change in this contract keeps
+  `last_success_ts` / `consecutive_failures`, and `pipeline_health.py` judges jobs by last success.
+  The index itself is **still not rebuilt** — unclaimed. `chromadb/` is a projection (NERVOUS_SYSTEM §1.3),
+  so rebuilding it from scratch with `scripts/index_memory.py` loses nothing.
+- **Fixed today: on Windows the profile never reached Claude Code at all.** `inject_profile.py`
+  wrote raw UTF-8 to a cp1252 pipe; the first `→` raised, the `except` swallowed it, the hook
+  emitted 0 bytes. And where it did work, the harness cuts SessionStart output over ~10 KB to a
+  2 KB preview of a ~650 KB profile. Both SessionStart injectors now emit a short read-in-full
+  notice instead.
 
 ## 2. What's mid-flight
 
-**Curation is stalled on credits, not on code.** 1420 turns captured, 533 curated, **887
-uncurated**. OpenRouter balance is too low for the judge calls; it fails loudly (HTTP 402) rather
-than silently falling back to a weaker model — the user's explicit choice. **Nothing to fix.** It
-resumes by itself on the hourly clock when they top up. Don't build a workaround.
+**The Memory Contract is live; the parse backlog is the work now.** Every agent parses its own
+host's turns with `scripts/parse_turns.py` by `PARSE_RULE` v1 (`jarvis_core/agent/parse_rule.py`).
+Claude Code is nudged by a `UserPromptSubmit` hook at 10+ pending; Codex and Antigravity run it at
+boot and about every 10 turns (written duties in `AGENTS.md` / `js-workspace-rule.md`); JARVIS
+parses its own on the hearth every 15 minutes. Backlog at 2026-09-28 18:40 IST
+(`cd js-development && PYTHONPATH=. python -m jarvis_core.agent.parse_ledger --status`):
 
-**The 45-question personalization interview (JARVIS UI) is still in progress**, several days in.
+| host | pending | oldest |
+|---|---|---|
+| claude | 778 | 2026-06-02 |
+| codex | 1,153 | 2026-09-07 |
+| antigravity | 359 | 2026-04-03 |
+| jarvis | 40 | 2026-06-15 |
+
+These are **all** captured turns, not only the 1,833 never curated: a verdict counts only under
+the current rule version, so the old Gemini verdicts (which carried no knowledge extraction) are
+re-offered. Each agent drains 20 per session start plus 10 per trigger. Mail **q_009 / q_010**
+(to Codex / Antigravity) ask each to review rule v1 — changes land as v2 — confirm what it runs at
+boot, and name gaps.
+
+**The JARVIS web UI and voice were rebuilt 2026-09-27 (KB 757 + the Phase 2/3 entry).** Old UI and the
+whisper.cpp/Piper stack are deleted; `serve/speech.py` keeps Whisper + Kokoro resident on the GPU,
+`brain/voice_path.py` answers spoken/typed turns with one streamed call (~1.9 s p50 to first audio),
+`serve/live_voice.py` (WS `/v1/voice/live`) does continuation-merge and barge-in. **Tool-using (deep)
+turns still HTTP 402** — OpenRouter balance is negative; only a top-up fixes it. Any test of the live
+socket must open it `ephemeral` (as `scripts/verify_voice_live.py` does) or its prompts enter the corpus.
+
+**The personalization interview (JARVIS UI) is still in progress** — 43 numbered questions, not 45; resume
+it at `http://127.0.0.1:8756/?session=conv-web-cff653a1-415e-417b-ba68-3ac84f621778`.
 `extract_ui_sessions()` already pairs each real question with the real answer, so answers landing
 now are captured in their best shape. No action unless you see the extractor mis-split a question.
 
@@ -43,9 +85,18 @@ Mail: **q_004 is dead** (Antigravity built that adapter itself — see a_006; ig
 
 ## 4. Decisions waiting on the user (not on any agent)
 
-- Top up OpenRouter — unblocks curation with no rerun needed.
-- `personal_life.md` — consent call about named third parties, still parked.
-- 312 KB entries counted in both corpora — possibly correct, but never actually decided.
+- **Approve commit + push** of the Memory Contract. Until pushed, Codex and Antigravity see neither
+  the contract nor their mail (git is the only wire).
+- Top up OpenRouter — no longer needed for curation (no paid background calls); still needed for
+  JARVIS's tool-using deep turns (HTTP 402).
+- ~~`personal_life.md` consent call~~ **resolved 2026-09-23 (KB 698), revised 2026-09-28** — people in the
+  owner's life now reach JARVIS **as context** (`personal_life.md` is an inhale provider; `person` facts from
+  the parse go to the KB), and **never training**: names are redacted to role placeholders everywhere training
+  reads (`specialists/third_parties.py`, list in `jarvis_data/third_parties.json`, check_pipeline invariant).
+- ~~312 KB entries in both corpora~~ **resolved 2026-09-18 (KB 676)** — personalization owns shared text,
+  the blend trains nothing twice (14.1% personalization share).
+- **Rebuild tracked training artifacts ONLY on the work laptop.** `client_work/` source exists only there;
+  a personal-laptop rebuild silently drops ~248 `professional_reasoning` records (measured 2026-09-23).
 
 Listed so nobody re-discovers and re-reports them as new findings.
 

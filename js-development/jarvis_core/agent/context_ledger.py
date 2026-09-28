@@ -263,6 +263,51 @@ class ContextLedger:
         return spans, msgs
 
 
+class MemoryLedger:
+    """Process-local ledger with ContextLedger's interface, for a run with no session.
+
+    The ReAct loop pages oversized content instead of cutting it, and paging
+    needs somewhere to put the verbatim text. A loop built without a session
+    (no session id -> no on-disk ledger) still gets that guarantee for the
+    life of the run, without writing an orphan file into jarvis_data/context/.
+    Same content addressing and checksum-on-read as the on-disk ledger.
+    """
+
+    def __init__(self) -> None:
+        self._spans: Dict[str, List[Dict[str, str]]] = {}
+
+    def archive_span(self, messages: List[Dict[str, str]]) -> Optional[LedgerHandle]:
+        if not messages:
+            return None
+        handle = _span_digest(messages)
+        self._spans[handle] = [
+            {"role": str(m.get("role", "")), "content": str(m.get("content", ""))}
+            for m in messages
+        ]
+        chars = sum(len(m["content"]) for m in self._spans[handle])
+        return LedgerHandle(handle=handle, message_count=len(messages), chars=chars)
+
+    def expand_span(self, handle: str) -> Optional[List[Dict[str, str]]]:
+        want = (handle or "").strip()
+        if want.startswith(HANDLE_PREFIX):
+            want = want[len(HANDLE_PREFIX):]
+        msgs = self._spans.get(want)
+        if msgs is None or _span_digest(msgs) != want:
+            return None
+        return [dict(m) for m in msgs]
+
+    def expand_all(self, handles: List[str]) -> List[Dict[str, str]]:
+        out: List[Dict[str, str]] = []
+        for h in handles:
+            span = self.expand_span(h)
+            if span:
+                out.extend(span)
+        return out
+
+    def stats(self) -> Tuple[int, int]:
+        return len(self._spans), sum(len(v) for v in self._spans.values())
+
+
 # =============================================================================
 # SMOKE TESTS (offline — temp dirs only, no network, no shared state)
 # =============================================================================
@@ -363,6 +408,17 @@ def _run_self_test() -> None:
         led = ContextLedger("never-written", root=Path(td))
         check("T17 reading a session with no file degrades quietly",
               led.expand_span("a" * 16) is None and led.stats() == (0, 0))
+
+    # T18-T20 -- the process-local ledger behaves like the on-disk one.
+    mem = MemoryLedger()
+    big = [{"role": "tool", "content": "b" * 200_000}]
+    hm = mem.archive_span(big)
+    check("T18 MemoryLedger archives a 200K-char span and returns a handle",
+          hm is not None and hm.chars == 200_000)
+    check("T19 MemoryLedger expands it byte-identical, prefixed or not",
+          mem.expand_span(hm.token) == big and mem.expand_span(hm.handle) == big)
+    check("T20 MemoryLedger unknown handle -> None, handle matches disk form",
+          mem.expand_span("0" * 16) is None and hm.handle == _span_digest(big))
 
     print("-" * 70)
     print(f"  {passed} passed, {len(failed)} failed")

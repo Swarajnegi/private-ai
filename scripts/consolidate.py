@@ -7,7 +7,6 @@ LAYER: Agent (Cognitive Synthesis Loop — the missing runner)
 Run with:
     python3 scripts/consolidate.py --dry-run     # inspect, write nothing
     python3 scripts/consolidate.py               # deterministic, no LLM, ₹0
-    python3 scripts/consolidate.py --llm         # richer synthesis via OpenRouter
 
 =============================================================================
 THE BIG PICTURE
@@ -46,6 +45,16 @@ Both sources now feed one organ: this runner drains the Claude Code queue, and
 Mind's heartbeat still runs the same Consolidator during `--ask`. The heartbeat
 path is deliberately untouched.
 
+NO MODEL CALL, BY THE OWNER'S RULE (2026-09-28). This runner used to build a
+paid tension judge (TensionDetector + TensionJudge over OpenRouter) and scan
+40 candidates a day with it. Background jobs make no paid LLM calls now: the
+agent the owner was talking to parses its own turns by parse_rule.PARSE_RULE,
+and that verdict carries the tension judgement against the priors it was
+handed. scripts/parse_turns.py writes it through Consolidator.record_finding,
+the same KB + life_state_feed path a scan used, so the surfacing organ reads
+one feed either way. What stays here is the part that never needed a model:
+the behavioural activity model.
+
 NOT A LICENCE TO LOWER THE BAR: the 0.60 surface floor is epistemic control. On
 the day this shipped the best live link scored 0.592 and correctly produced
 NOTHING. A consolidator that always finds something is a consolidator that
@@ -60,15 +69,14 @@ STEP 1: Rate-limit on ATTEMPT — if behavioral_state_model.jsonl was written
         or not anything clears the floor, so "found nothing" does not read as
         "never ran" and re-trigger on every turn.
         |
-STEP 2: Build CrossDomainCorrelationEngine (reads observation_queue.jsonl) and
-        Consolidator, with llm_call only when --llm is passed.
+STEP 2: Build CrossDomainCorrelationEngine (reads observation_queue.jsonl),
+        with no model.
         |
-STEP 3: --dry-run stops here and prints the model: turns, domains, links and
-        which would clear the floor. Writes nothing.
+STEP 3: --dry-run stops here and prints the model: turns and domains.
+        Writes nothing.
         |
-STEP 4: Otherwise await consolidate(): links >= floor are synthesized, written
-        to the KB through scripts/kb_append.py (the single write path) and
-        appended to the feed for life_state_monitor to drain next session.
+STEP 4: Otherwise await consolidate(), which persists the behavioural model.
+        Tension findings arrive through parse submissions, not from here.
 =============================================================================
 """
 
@@ -80,7 +88,6 @@ import json
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Optional
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(_REPO_ROOT / "js-development"))
@@ -109,47 +116,6 @@ def _already_ran_today(marker_path: Path, now: datetime) -> bool:
     return mtime.date() == now.date()
 
 
-def _build_llm_call():
-    """Only imported when --llm is passed: the default path must stay ₹0."""
-    from jarvis_core.brain.llm_client import build_llm_call
-    return build_llm_call()
-
-
-def _build_detector(args):
-    """The tension detector, or None with the reason printed.
-
-    UNLIKE the retired link path, this one CANNOT degrade to a deterministic
-    template — judging whether a new claim contradicts an old one is not
-    expressible as a formula, which is precisely why the formula-based detector
-    produced nothing worth reading for 80 days. So a missing model means NO
-    findings, said out loud, rather than a fabricated one.
-    """
-    from jarvis_core.agent.tension import TensionDetector, TensionJudge
-    from jarvis_core.brain.llm_client import build_llm_call
-    from jarvis_core.brain.boot import MEMORY_COLLECTION
-
-    try:
-        from jarvis_core.memory.store import JarvisMemoryStore
-        from jarvis_core.agent.memory_manager import MemoryManager
-        store = JarvisMemoryStore()
-        store.__enter__()
-        retriever = MemoryManager(store=store, collection_name=MEMORY_COLLECTION)
-    except Exception as e:
-        print(f"[consolidate] no retriever ({type(e).__name__}: {e}) — "
-              f"tension detection DISABLED this run")
-        return None
-
-    try:
-        judge_llm = build_llm_call(budget_usd=None)
-    except Exception as e:
-        print(f"[consolidate] no judge model ({type(e).__name__}) — "
-              f"tension detection DISABLED this run")
-        return None
-
-    return TensionDetector(retriever=retriever, judge=TensionJudge(judge_llm),
-                           confidence_floor=args.floor)
-
-
 async def _run(args: argparse.Namespace) -> int:
     now = datetime.now(_IST)
     feed_path = Path(args.feed) if args.feed else _FEED_PATH
@@ -158,17 +124,7 @@ async def _run(args: argparse.Namespace) -> int:
         print("[consolidate] already ran today — skipping (--force to override)")
         return 0
 
-    llm_call = None
-    if args.llm:
-        try:
-            llm_call = _build_llm_call()
-        except Exception as e:
-            # Degrading to the template is correct: the consolidator's own
-            # contract says the loop still runs without a model.
-            print(f"[consolidate] llm unavailable ({type(e).__name__}) — "
-                  f"falling back to deterministic template")
-
-    engine = CrossDomainCorrelationEngine(llm_call=llm_call)
+    engine = CrossDomainCorrelationEngine()
     model = await engine.build_model(window_days=args.window, now=now)
 
     print(f"[consolidate] window={args.window}d  turns={model.total_turns}  "
@@ -176,36 +132,15 @@ async def _run(args: argparse.Namespace) -> int:
     for d in model.domains:
         print(f"    domain  {d.domain:<20} {d.turn_count:>4} turns")
 
-    # THE DETECTOR (2026-09-09). The engine above is telemetry; insights come from
-    # here — what the user is doing now, judged against their own past decisions
-    # and failures. Needs BOTH a retriever (the existing chromadb KB index, no new
-    # index) and a judge model. Missing either means no findings, reported plainly
-    # rather than silently producing nothing.
-    detector = _build_detector(args)
-
     if args.dry_run:
-        findings = await detector.scan(limit=args.scan_limit, advance=False) if detector else []
-        print(f"[consolidate] --dry-run: {len(findings)} finding(s), nothing written")
-        for f in findings:
-            print(f"    {f.relation:<11} {f.confidence:.2f}  {f.surface_line()[:110]}")
+        print("[consolidate] --dry-run: nothing written")
         return 0
 
-    consolidator = Consolidator(engine=engine, llm_call=llm_call,
-                               feed_path=feed_path,
-                               confidence_floor=args.floor,
-                               detector=detector)
-    result = await consolidator.consolidate(window_days=args.window, now=now)
-
-    print(f"[consolidate] kb_writes={result.kb_writes}  "
-          f"feed_writes={result.feed_writes}  "
-          f"skipped_low_confidence={result.skipped_low_confidence}")
-    for insight in result.insights:
-        print(f"    surfaced-able  {insight.confidence:.3f}  "
-              f"{insight.surface_line[:100]}")
-    if not result.insights:
-        print("[consolidate] no tension found — the correct outcome when nothing "
-              "the user did contradicts what they already decided. Silence here "
-              "is a result, not a failure.")
+    consolidator = Consolidator(engine=engine, feed_path=feed_path,
+                               confidence_floor=args.floor)
+    await consolidator.consolidate(window_days=args.window, now=now)
+    print("[consolidate] behavioural model persisted. Tension is judged by the agent "
+          "parsing each turn (scripts/parse_turns.py), not by a background model.")
     return 0
 
 
@@ -214,15 +149,9 @@ def main() -> int:
         description="Run the sleep-time consolidator over the capture queue.")
     p.add_argument("--window", type=int, default=21,
                    help="days of observation history to model (default 21)")
-    p.add_argument("--scan-limit", type=int, default=40, dest="scan_limit",
-                   help="max candidates judged per run (bounds spend on a backlog: "
-                        "the first run has ~580 queue turns behind it)")
     p.add_argument("--floor", type=float, default=0.55,
                    help="confidence floor for surfacing (default 0.60 — do not "
                         "lower this to manufacture output)")
-    p.add_argument("--llm", action="store_true",
-                   help="use an LLM for synthesis prose (costs money); default "
-                        "is the deterministic template")
     p.add_argument("--dry-run", action="store_true",
                    help="print the model and exit without writing")
     p.add_argument("--force", action="store_true",

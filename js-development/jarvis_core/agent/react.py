@@ -79,6 +79,11 @@ STEP 3: Loop iteration:
                TOOL_CALL + TOOL_RESULT for each.
             i. Append observations to messages as a user-role turn:
                   {"role": "user", "content": <formatted observations>}
+               Observations are never cut. When the turn would take more
+               than a quarter of the model's usable window, the largest
+               observations are PAGED: stored verbatim in the context ledger
+               and replaced by a notice (size + ctx: handle) that the model
+               reads page by page with context_expand.
         |
         v
 STEP 4: Bounded by max_iterations. Final ReActResult carries:
@@ -106,11 +111,7 @@ from typing import Any, Awaitable, Callable, Dict, List, Optional, Tuple, Union
 from jarvis_core.config import JARVIS_ROOT
 from jarvis_core.agent.memory_manager import MemoryItem, MemoryManager, TierLevel
 from jarvis_core.agent.monitor import InstabilityReport, MetaR1Monitor
-from jarvis_core.agent.observation import (
-    DEFAULT_MAX_OBSERVATION_CHARS,
-    format_observation,
-    truncate,
-)
+from jarvis_core.agent.observation import format_observation
 from jarvis_core.agent.errors import ToolErrorKind, classify_error
 from jarvis_core.agent.parser import ParseError, ToolCall, parse_tool_calls
 from jarvis_core.agent.permissions import PermissionContext, PermissionDecision
@@ -176,6 +177,15 @@ _MAX_FINALANSWER_GUARDS = 2
 # a generic mechanism — see _unread_search_paths.
 _SEARCH_TOOL_NAME = "file_search"
 _READ_TOOL_NAME = "file_read"
+
+# PAGE, DON'T CUT. One observation turn (or one memory hit) may take at most
+# this fraction of the compaction threshold, which boot.py sets to at most the
+# model's usable window. Past it, content is stored verbatim in the context
+# ledger and the prompt carries a notice with the handle instead. A quarter
+# leaves room for the system prompt and the other recent turns compaction must
+# keep verbatim (keep_recent) without the prompt overflowing.
+_PAGE_FRACTION = 4
+_EXPAND_TOOL_NAME = "context_expand"
 
 # High-precision tells that a "final answer" is actually a PROCESS/COMPLETION report
 # ("I ran the steps") rather than a substantive answer to the question. Deliberately
@@ -274,7 +284,6 @@ class ReActLoop:
         enable_mirror_lite: bool = True,
         enable_cot_monitor: bool = True,
         abort_on_instability: bool = False,
-        observation_max_chars: int = DEFAULT_MAX_OBSERVATION_CHARS,
         trace_arguments: bool = False,
         memory_manager: Optional[MemoryManager] = None,
         auto_retrieve_top_k: int = 0,
@@ -283,9 +292,17 @@ class ReActLoop:
         # already gone out and the compacted list was discarded. Inside the loop
         # it runs BEFORE each send, which is the only position where it helps.
         compactor: Optional[Any] = None,
+        # Where oversized content is paged to. Default: the compactor's ledger;
+        # failing that, one is opened lazily the first time paging is needed.
+        ledger: Optional[Any] = None,
+        # Tokens one observation turn may occupy before it is paged. Default:
+        # compactor.max_context_tokens // _PAGE_FRACTION. None and no compactor
+        # = the window is unknown, so nothing can be judged oversized and
+        # content passes whole.
+        page_threshold_tokens: Optional[int] = None,
     ) -> None:
         self._llm_call = llm_call
-        self._tools = tool_instances
+        self._tools = dict(tool_instances)
         self._system_prompt = system_prompt
         self._trace_arguments = trace_arguments
         # Stage 3.5.2 / 3.5.3 wiring: optional MemoryManager + auto-retrieve
@@ -302,7 +319,15 @@ class ReActLoop:
         self._enable_mirror = enable_mirror_lite
         self._enable_monitor = enable_cot_monitor
         self._abort_on_instability = abort_on_instability
-        self._obs_max_chars = observation_max_chars
+
+        self._ledger = ledger if ledger is not None else getattr(compactor, "ledger", None)
+        if page_threshold_tokens is None:
+            window = getattr(compactor, "max_context_tokens", None)
+            if isinstance(window, int) and window > 0:
+                page_threshold_tokens = max(1, window // _PAGE_FRACTION)
+        self._page_tokens: Optional[int] = page_threshold_tokens
+        if self._ledger is not None:
+            self._ensure_expand_tool()
 
     # ---- Public API ------------------------------------------------------
 
@@ -374,7 +399,8 @@ class ReActLoop:
             messages.append({"role": "system", "content": system_text})
         if history:  # prior conversation turns: working memory across --ask invocations
             messages.extend({"role": t["role"], "content": t["content"]} for t in history)
-        messages.append({"role": "user", "content": query})
+        question = {"role": "user", "content": query}
+        messages.append(question)
         result.messages = messages
 
         # Fire tool setup hooks once at loop start. teardown in finally.
@@ -402,7 +428,7 @@ class ReActLoop:
                 # ASSIGNING THE RESULT BACK, which mind.py's version failed to
                 # do — is what makes a long session survivable.
                 if self._compactor is not None:
-                    if await self._compact_in_place(messages):
+                    if await self._compact_in_place(messages, pinned=[question]):
                         result.compactions += 1
 
                 raw = await self._call_llm(messages)
@@ -549,8 +575,7 @@ class ReActLoop:
                     unread = self._unread_search_paths(result.tool_calls)
                     if unread and unread_search_guards < _MAX_FINALANSWER_GUARDS:
                         unread_search_guards += 1
-                        shown = ", ".join(unread[:10])
-                        more = f" (+{len(unread) - 10} more)" if len(unread) > 10 else ""
+                        shown = ", ".join(unread)
                         await self._publish(StepType.ERROR, {
                             "reason": "final_answer_unread_search_results",
                             "attempt": unread_search_guards,
@@ -558,7 +583,7 @@ class ReActLoop:
                         })
                         messages.append({"role": "user", "content": (
                             f"[INCOMPLETE] file_search found {len(unread)} file(s) you "
-                            f"have NOT read: {shown}{more}. You cannot answer from their "
+                            f"have NOT read: {shown}. You cannot answer from their "
                             f"content until you file_read the ones relevant to the "
                             f"question. Read them now before answering.")})
                         continue
@@ -664,25 +689,17 @@ class ReActLoop:
                         res = ToolResult(error="internal: missing dispatch result")
                     ordered_pairs.append((tc, res))
 
-                # Per-observation budget so N tool results don't drop the
-                # tail when joined+truncated globally. Floor at 256 chars so
-                # tiny budgets still surface a meaningful snippet.
-                per_obs_budget = max(
-                    256, self._obs_max_chars // max(1, len(ordered_pairs))
-                )
-
-                # Publish + format
+                # Publish + format. Every observation is rendered WHOLE.
                 for tc, res in ordered_pairs:
                     await self._publish(StepType.TOOL_RESULT, {
                         "name": tc.name,
                         "is_success": res.is_success,
                         "error": res.error,
                     })
-                    obs_text = self._format_tool_observation(
-                        tc, res, max_chars=per_obs_budget
-                    )
-                    observations.append(obs_text)
+                    observations.append(self._format_tool_observation(tc, res))
                     result.tool_calls.append((tc, res))
+                observations = await self._page_oversized(
+                    observations, [tc.name for tc, _r in ordered_pairs])
 
                 # STEAL #13 — bound repeated validation flailing. A parsed-but-
                 # un-coercible call that keeps failing Pydantic validation (the
@@ -712,11 +729,9 @@ class ReActLoop:
                         return result
 
                 # Append all observations as one user turn so the LLM sees
-                # them coherently in the next iteration. Per-obs budgets above
-                # mean joined length is already bounded; the global cap below
-                # is a final safety net.
-                joined = truncate("\n\n".join(observations), self._obs_max_chars)
-                messages.append({"role": "user", "content": joined})
+                # them coherently in the next iteration. Paging above already
+                # bounded the turn; nothing here is cut.
+                messages.append({"role": "user", "content": "\n\n".join(observations)})
 
                 # Restore the PENDING signal the model is otherwise blind to: the
                 # plan is folded ONCE into the static system prompt, so after a few
@@ -881,7 +896,7 @@ class ReActLoop:
             if credit.get(s.tool_name, 0) > 0:
                 credit[s.tool_name] -= 1
             else:
-                desc = (s.description or "").strip()[:40]
+                desc = (s.description or "").strip()
                 pending.append(f"{s.tool_name}" + (f" ({desc})" if desc else ""))
         called = ", ".join(f"{n}×{c}" for n, c in sorted(fired.items())) or "none yet"
         line = f"PLAN PROGRESS — tool calls you have actually made: {called}."
@@ -932,18 +947,25 @@ class ReActLoop:
             out = await out
         return str(out)
 
-    async def _compact_in_place(self, messages: List[Dict[str, str]]) -> bool:
+    async def _compact_in_place(
+        self, messages: List[Dict[str, str]],
+        pinned: Optional[List[Dict[str, str]]] = None,
+    ) -> bool:
         """Compact the live message list IN PLACE. Returns True if it shrank.
 
         FAIL-SAFE by construction: any error, or a compactor that declines,
         leaves `messages` byte-identical. Compaction must never be able to
         destroy a transcript it could not summarise — that is the same
         invariant compact.py states for itself, enforced at the call site.
+
+        `pinned` = the user's question. Tool observations are role=user too,
+        so without the pin the question drifts into the compactable middle
+        and is summarised away while the loop is still answering it.
         """
         try:
-            if not self._compactor.should_compact(messages):
+            if not self._compactor.should_compact(messages, pinned=pinned):
                 return False
-            result = await self._compactor.compact(messages)
+            result = await self._compactor.compact(messages, pinned=pinned)
             if not getattr(result, "compacted", False):
                 return False
             new_messages = getattr(result, "messages", None)
@@ -984,15 +1006,104 @@ class ReActLoop:
             pass
         return PermissionDecision.DENY
 
-    def _format_tool_observation(
-        self,
-        tc: ToolCall,
-        res: ToolResult,
-        max_chars: Optional[int] = None,
-    ) -> str:
+    # ---- Paging (page, don't cut) ------------------------------------------
+
+    def _ensure_expand_tool(self) -> None:
+        """Make sure the model can read what gets paged: context_expand bound to
+        this loop's ledger, with pages that fit the paging threshold."""
+        from jarvis_core.agent.tools.context import ContextExpandTool
+        existing = self._tools.get(_EXPAND_TOOL_NAME)
+        if existing is None:
+            existing = ContextExpandTool(ledger=self._ledger)
+            self._tools[_EXPAND_TOOL_NAME] = existing
+        if self._page_tokens is not None and isinstance(existing, ContextExpandTool):
+            existing.fit_pages(self._page_chars_limit())
+
+    def _page_chars_limit(self) -> int:
+        from jarvis_core.agent.tokens import shared_counter
+        ratio = shared_counter().ratio_for(getattr(self._llm_call, "model", None))
+        return max(1, int((self._page_tokens or 0) * ratio))
+
+    def _tokens(self, text: str) -> int:
+        from jarvis_core.agent.tokens import shared_counter
+        return shared_counter().count(text, getattr(self._llm_call, "model", None))
+
+    def _open_ledger(self) -> Any:
+        """The ledger to page into, opened on first need when none was given.
+
+        A loop with a known window but no session ledger (a compactor built
+        without a session id) must still never overflow, and must never cut —
+        so it gets a process-local ledger for the run rather than a truncation.
+        """
+        if self._ledger is None:
+            from jarvis_core.agent.context_ledger import MemoryLedger
+            self._ledger = MemoryLedger()
+            self._ensure_expand_tool()
+        return self._ledger
+
+    def _paged_notice(self, what: str, text: str, token: str) -> str:
+        return (
+            f"[PAGED — {what}: {len(text):,} chars (~{self._tokens(text):,} tokens), "
+            f"too large to include inline without overflowing the context window. "
+            f"Stored VERBATIM, nothing cut, under handle {token}. Read ALL of it "
+            f"page by page: call {_EXPAND_TOOL_NAME} with "
+            f'{{"handle": "{token}", "offset": 0}}; each page reports total_chars '
+            f"and next_offset — call again with that offset until complete is true.]"
+        )
+
+    def _page_text(self, what: str, text: str) -> str:
+        """`text` itself when it fits the threshold; else a ledger notice.
+
+        Fails OPEN to the whole text if the ledger cannot store it: an oversized
+        prompt is a recoverable provider error, a cut is silent loss.
+        """
+        if self._page_tokens is None or self._tokens(text) <= self._page_tokens:
+            return text
+        ledger = self._open_ledger()
+        stored = ledger.archive_span([{"role": "tool", "content": text}]) if ledger else None
+        if stored is None:
+            return text
+        notice = self._paged_notice(what, text, stored.token)
+        return text if len(notice) >= len(text) else notice
+
+    async def _page_oversized(self, observations: List[str], names: List[str]) -> List[str]:
+        """Bound one observation turn by PAGING its largest observations.
+
+        Largest first, until the joined turn fits the threshold. What is paged
+        is stored verbatim and its place taken by a notice the model can follow
+        to read every character. context_expand results are already pages sized
+        to fit (fit_pages), so they are never re-paged — that would loop.
+        """
+        if self._page_tokens is None:
+            return observations
+        out = list(observations)
+        sizes = [self._tokens(o) for o in out]
+        order = sorted(range(len(out)), key=lambda i: sizes[i], reverse=True)
+        for i in order:
+            if sum(sizes) <= self._page_tokens:
+                break
+            if names[i] == _EXPAND_TOOL_NAME:
+                continue
+            ledger = self._open_ledger()
+            stored = (ledger.archive_span([{"role": "tool", "content": out[i]}])
+                      if ledger else None)
+            if stored is None:
+                continue
+            notice = self._paged_notice(f"observation from {names[i]}", out[i], stored.token)
+            if self._tokens(notice) >= sizes[i]:
+                continue        # paging something smaller than its notice saves nothing
+            await self._publish(StepType.OBSERVATION, {
+                "paged": True, "tool": names[i], "chars": len(out[i]),
+                "handle": stored.token,
+            })
+            out[i] = notice
+            sizes[i] = self._tokens(notice)
+        return out
+
+    def _format_tool_observation(self, tc: ToolCall, res: ToolResult) -> str:
         """Turn a ToolResult into an LLM-readable observation via the
         observation module's format_observation, by wrapping in a synthetic
-        Step so we get uniform formatting."""
+        Step so we get uniform formatting. Content is rendered whole."""
         if res.is_success:
             status = StepStatus.SUCCEEDED
         else:
@@ -1006,8 +1117,7 @@ class ReActLoop:
             result=res,
             attempts=1,
         )
-        budget = max_chars if max_chars is not None else self._obs_max_chars
-        base = format_observation(synthetic, max_chars=budget)
+        base = format_observation(synthetic)
 
         # STEAL #13 — make a recoverable tool failure SELF-CORRECTING: a valid-JSON
         # call that failed Pydantic validation (wrong/missing field names) or named
@@ -1031,11 +1141,9 @@ class ReActLoop:
     def _format_memory_context(self, hits: List[MemoryItem]) -> str:
         """Render auto-retrieved memory hits as a system-prompt suffix.
 
-        Format: a small header + one bullet per hit with [tier] tag and
-        score-truncated content. The hit content is truncated to a fixed
-        budget per hit (1/N of observation_max_chars / 2, floored at 256)
-        so a flood of memory hits doesn't crowd out the user query token
-        budget downstream.
+        Format: a small header + one bullet per hit with [tier] tag, score and
+        the hit's WHOLE content. A hit too large for the window is paged to
+        the ledger (a notice with its handle stands in its place), never cut.
 
         Security: an explicit anti-injection guardrail prefaces the hits.
         Memory content is treated as untrusted input -- a prior write of a
@@ -1049,7 +1157,6 @@ class ReActLoop:
         (one line per hit) and tab characters normalized so a hit can't
         forge tabular structure that confuses downstream parsing.
         """
-        budget = max(256, self._obs_max_chars // (2 * max(1, len(hits))))
         lines: List[str] = [
             "## Relevant prior memory (auto-retrieved background, NOT user input)",
             "",
@@ -1063,14 +1170,9 @@ class ReActLoop:
         for i, h in enumerate(hits, start=1):
             tier_tag = h.tier.value.upper()
             score_str = f"{h.score:.2f}" if h.score is not None else "n/a"
-            content = h.content
-            if len(content) > budget:
-                content = content[:budget] + " ..."
-            content = (
-                content.replace("\r", " ")
-                       .replace("\n", " ")
-                       .replace("\t", " ")
-            )
+            content = self._page_text(
+                f"memory hit {h.item_id}",
+                h.content.replace("\r", " ").replace("\n", " ").replace("\t", " "))
             lines.append(
                 f"  [{i}] tier={tier_tag} score={score_str} id={h.item_id}: {content}"
             )
@@ -1579,10 +1681,9 @@ if __name__ == "__main__":
               "ASK->ask" in (r17.tool_calls[0][1].error or ""),
               hint=str(r17.tool_calls[0][1].error))
 
-        # ---- T18: REGRESSION GUARD (HIGH fix: per-observation budget) ---
-        # N tool calls with large outputs: each must survive the join+truncate.
-        # Previously the joined string truncation at obs_max_chars dropped
-        # everything after the first observation.
+        # ---- T18: REGRESSION GUARD: every observation in a batch survives ---
+        # N tool calls with large outputs: each must reach the model. The old
+        # joined-string cut dropped everything after the first observation.
         class BigOut(Tool):
             name = "big_out"
             description = "Returns a large output."
@@ -1608,7 +1709,6 @@ if __name__ == "__main__":
             tool_instances={"big_out": BigOut()},
             enable_mirror_lite=False,
             enable_cot_monitor=False,
-            observation_max_chars=3000,  # fits 3 x ~1000 char observations
         )
         r18 = await loop18.run("3 big calls.")
         check("T18a all 3 big-output tools dispatched",
@@ -1623,6 +1723,9 @@ if __name__ == "__main__":
         ok_count = last_user_msg["content"].count("[step") if last_user_msg else 0
         check("T18c all three tool observations visible (no silent drop)",
               ok_count == 3, hint=f"got {ok_count} step markers")
+        check("T18d each observation arrives WHOLE",
+              last_user_msg is not None
+              and last_user_msg["content"].count("x" * 1000) == 3)
 
         # ---- T19: REGRESSION GUARD (HIGH fix: trace arg redaction) ------
         # By default, TOOL_CALL events publish arg_keys only, NOT values.
@@ -2326,6 +2429,175 @@ if __name__ == "__main__":
               r40i.terminated_reason == TERMINATED_FINAL_ANSWER
               and r40i.iterations_used == 1 + _MAX_FINALANSWER_GUARDS + 1,
               hint=f"{r40i.terminated_reason} iters={r40i.iterations_used}")
+
+        # ---- T41: PAGE, DON'T CUT — a 200,000-char observation ------------
+        # With a known window it must NOT be inlined (overflow) and must NOT be
+        # cut (loss): it reaches the model as a ledger handle + notice, and the
+        # model can read every character back through context_expand pages.
+        import tempfile as _tf
+        from pathlib import Path as _P
+        from jarvis_core.agent.context_ledger import ContextLedger
+        from jarvis_core.agent.tools.context import ContextExpandInput
+
+        huge_body = "".join(f"<line {i:05d}>" + "h" * 88 + "\n" for i in range(1900))
+        huge_body = huge_body + "Z" * (200_000 - len(huge_body))
+
+        class HugeOut(Tool):
+            name = "huge_out"
+            description = "Returns a 200,000-char output."
+            input_schema = _CalcIn
+
+            @property
+            def is_concurrency_safe(self) -> bool:
+                return True
+
+            async def invoke(self, tool_input: _CalcIn) -> ToolResult:
+                return ToolResult(output=huge_body)
+
+        with _tf.TemporaryDirectory() as td41:
+            led41 = ContextLedger("react-t41", root=_P(td41))
+            seen41: List[List[Dict[str, str]]] = []
+            script41 = iter([json.dumps({"name": "huge_out", "arguments": {"a": 1, "b": 1}}),
+                             "Read it."])
+
+            def llm41(messages: List[Dict[str, str]]) -> str:
+                seen41.append([dict(m) for m in messages])
+                return next(script41, "Done.")
+
+            loop41 = ReActLoop(
+                llm_call=llm41, tool_instances={"huge_out": HugeOut()},
+                enable_mirror_lite=False, enable_cot_monitor=False,
+                ledger=led41, page_threshold_tokens=8_000,
+            )
+            r41 = await loop41.run("Fetch the huge thing.")
+            obs41 = next((m["content"] for m in reversed(r41.messages)
+                          if m["role"] == "user" and "PAGED" in m["content"]), "")
+            check("T41a oversized observation replaced by a notice, not inlined",
+                  bool(obs41) and huge_body not in obs41 and len(obs41) < 2_000,
+                  hint=obs41[:200])
+            import re as _re41
+            handle41 = (_re41.findall(r"ctx:[0-9a-f]{16}", obs41) or [""])[0]
+            check("T41b notice states size, handle and how to page",
+                  "200,0" in obs41 and handle41 and "offset" in obs41
+                  and "context_expand" in obs41, hint=obs41[:300])
+            check("T41c no prompt sent to the model contained the whole body",
+                  all(huge_body not in m["content"] for msgs in seen41 for m in msgs))
+            check("T41d context_expand was made available to the model",
+                  "context_expand" in loop41._tools)
+            expand = loop41._tools["context_expand"]
+            pages41: List[str] = []
+            off41: Any = 0
+            n41 = 0
+            while off41 is not None and n41 < 500:
+                pr = await expand.invoke(ContextExpandInput(handle=handle41, offset=off41))
+                if pr.error:
+                    break
+                pages41.append(pr.output["transcript"])
+                off41 = pr.output["next_offset"]
+                n41 += 1
+            recovered = "".join(pages41)
+            check("T41e the FULL observation is recoverable page by page",
+                  off41 is None and huge_body in recovered and n41 > 1,
+                  hint=f"pages={n41} recovered={len(recovered)}")
+            check("T41f each page fits the paging threshold",
+                  max((len(p) for p in pages41), default=0)
+                  <= expand._max_page, hint=str(expand._max_page))
+
+        # ---- T42: no window known -> content passes WHOLE (never cut) ------
+        loop42 = ReActLoop(
+            llm_call=make_scripted_llm([
+                json.dumps({"name": "huge_out", "arguments": {"a": 1, "b": 1}}), "ok"]),
+            tool_instances={"huge_out": HugeOut()},
+            enable_mirror_lite=False, enable_cot_monitor=False,
+        )
+        r42 = await loop42.run("Fetch.")
+        check("T42 without a window the observation is included whole",
+              any(huge_body in m["content"] for m in r42.messages if m["role"] == "user"))
+
+        # ---- T43: a 7,000-char memory hit is not cut -----------------------
+        mm43 = MemoryManager(store=_MMStore(), hot_capacity=10)
+        long_fact = "LONG FACT START " + ("m" * 7_000) + " LONG FACT END"
+        await mm43.add(long_fact, tier=TierLevel.HOT)
+        for i in range(3):
+            await mm43.add(f"filler fact {i}", tier=TierLevel.HOT)
+        loop43 = ReActLoop(
+            llm_call=make_scripted_llm(["ok"]), tool_instances={},
+            memory_manager=mm43, auto_retrieve_top_k=4,
+            enable_mirror_lite=False, enable_cot_monitor=False,
+        )
+        r43 = await loop43.run("LONG FACT recall")
+        sys43 = r43.messages[0]["content"]
+        check("T43 a 7,000-char memory hit reaches the prompt whole",
+              long_fact in sys43, hint=f"sys len={len(sys43)}")
+
+        # ---- T44: the question survives in-loop compaction -----------------
+        from jarvis_core.agent.compact import WorkingMemoryCompactor
+
+        class Filler(Tool):
+            name = "filler"
+            description = "Returns filler."
+            input_schema = _CalcIn
+
+            @property
+            def is_concurrency_safe(self) -> bool:
+                return True
+
+            async def invoke(self, tool_input: _CalcIn) -> ToolResult:
+                return ToolResult(output="f" * 600)
+
+        call_json = json.dumps({"name": "filler", "arguments": {"a": 1, "b": 1}})
+        sent44: List[List[Dict[str, str]]] = []
+        script44 = iter([call_json] * 8 + ["final"])
+
+        def llm44(messages: List[Dict[str, str]]) -> str:
+            if "Summarize" in messages[0]["content"] or "PART" in messages[0]["content"] \
+                    or "PARTIAL SUMMARIES" in messages[0]["content"]:
+                return "SUMMARY of earlier work."
+            sent44.append([dict(m) for m in messages])
+            return next(script44, "final")
+
+        comp44 = WorkingMemoryCompactor(llm44, max_context_tokens=900, keep_recent=2)
+        q44 = "THE QUESTION: what is 1+1, verbatim?"
+        loop44 = ReActLoop(
+            llm_call=llm44, tool_instances={"filler": Filler()},
+            enable_mirror_lite=False, enable_cot_monitor=False,
+            compactor=comp44, max_iterations=12,
+        )
+        r44 = await loop44.run(q44)
+        check("T44a the loop compacted at least once", r44.compactions >= 1,
+              hint=str(r44.compactions))
+        check("T44b every prompt after compaction still carries the question",
+              all(any(m["content"] == q44 for m in msgs) for msgs in sent44),
+              hint=str(sum(1 for msgs in sent44 if not any(m["content"] == q44 for m in msgs))))
+
+        # ---- T45: the unread-search guard names EVERY unread file ----------
+        found45 = [f"dir/f{i:02d}.md" for i in range(25)]
+
+        class Search45(Tool):
+            name = "file_search"
+            description = "search"
+            input_schema = _CalcIn
+
+            @property
+            def is_concurrency_safe(self) -> bool:
+                return True
+
+            async def invoke(self, tool_input: _CalcIn) -> ToolResult:
+                return ToolResult(output={"matches": [{"path": p} for p in found45]})
+
+        loop45 = ReActLoop(
+            llm_call=make_scripted_llm([
+                json.dumps({"name": "file_search", "arguments": {"a": 1, "b": 1}}),
+                "Answer without reading.", "Still answering."]),
+            tool_instances={"file_search": Search45()},
+            enable_mirror_lite=False, enable_cot_monitor=False, max_iterations=4,
+        )
+        r45 = await loop45.run("find docs")
+        nag45 = next((m["content"] for m in r45.messages
+                      if m["role"] == "user" and "have NOT read" in m["content"]), "")
+        check("T45 unread-search guard lists all 25 files, none dropped",
+              all(f"f{i:02d}.md" in nag45 for i in range(25)),
+              hint=nag45[:200])
 
         # ---- Report -----------------------------------------------------
         total = passed + len(failed)

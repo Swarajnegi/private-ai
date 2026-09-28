@@ -133,6 +133,15 @@ class RouteTarget(ABC):
 # Part 2: API_MODEL — OpenRouter (live)
 # =============================================================================
 
+# Every pool target states an output ceiling. Left unset, OpenRouter reserves
+# the MODEL's maximum (65 536 tokens on some) against the balance before the
+# call runs, so a request whose real answer is a few hundred tokens was refused
+# with HTTP 402 whenever the balance ran low (llm_client.py explains the
+# 2026-09-15 instance; the hearth hit it on every deep voice turn 2026-09-27).
+# 8 192 still fits a full teaching-depth answer.
+DEFAULT_MAX_TOKENS = 8192
+
+
 class OpenRouterTarget(RouteTarget):
     """An OpenRouter-hosted model. Always-ready; lifecycle hooks are no-ops
     (ensure_ready lazily picks a free model only if none was configured)."""
@@ -151,6 +160,7 @@ class OpenRouterTarget(RouteTarget):
         cost_tracker: Optional[Any] = None,
         timeout_s: Optional[float] = None,
         max_retries: Optional[int] = None,
+        max_tokens: Optional[int] = DEFAULT_MAX_TOKENS,
     ) -> None:
         self._registry = registry or ProfileRegistry()
         self._use_profile = use_profile
@@ -161,7 +171,8 @@ class OpenRouterTarget(RouteTarget):
             # per-client budget alone can't see peers' spend across failover.
             client = build_llm_call(budget_usd=budget_usd, model=model,
                                     cost_tracker=cost_tracker,
-                                    timeout_s=timeout_s, max_retries=max_retries)
+                                    timeout_s=timeout_s, max_retries=max_retries,
+                                    max_tokens=max_tokens)
         self._client = client
         self.name = name or (str(getattr(client, "model", "")) or model or "openrouter")
         self._resolve_profile()
