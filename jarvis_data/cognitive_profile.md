@@ -1,6 +1,6 @@
 # Cognitive Profile — Model of the User
 
-> Auto-synthesized by `scripts/profile_synth.py` from `knowledge_base.jsonl` (814 entries). Injected into every chat via the SessionStart hook. Regenerate after KB updates. Every entry is shown in full, dated, and appears in one section only.
+> Auto-synthesized by `scripts/profile_synth.py` from `knowledge_base.jsonl` (811 entries). Injected into every chat via the SessionStart hook. Regenerate after KB updates. Every entry is shown in full, dated, and appears in one section only.
 
 ## Who you are
 _Durable identity — career, ambitions, philosophy, how you see yourself. Oldest first; later entries update earlier ones._
@@ -547,7 +547,6 @@ _Who the people around you are, and what they are to you. Oldest first; later en
 - [2026-09-29 · Cognitive_Pattern] The owner tests JARVIS by calling it a wrong name, to see whether it pushes back and asserts its identity and shows a preference of its own, and dislikes a forced conclusion after being called out. Evidence, in the owner's words (2026-06-11, claude): "I called you that to see if you will push back or mention that you're jarvis and not friday"
 - [2026-09-29 · Cognitive_Pattern] The owner wants JARVIS to infer the unspoken and see around the edges with wisdom and empathy, applying that metacognition to everything, not only to the one behaviour that was corrected. Evidence, in the owner's words (2026-06-11, claude): "I want you to infer the unspoken, have the consciousness to see around the edges using wisdom and human empathy"
 - [2026-09-29 · Cognitive_Pattern] The owner prefers to work through a long syllabus one item at a time, section by section, rather than all at once. Evidence, in the owner's words (2026-06-23, claude): "I think we should proceed with each of these required sills section one by one"
-- [2026-09-29 · Cognitive_Pattern] The owner wants the assistant to bring them closer to the real job they envision. Evidence, in the owner's words (2026-09-29, jarvis): "bring you closer to the real job"
 - [2026-09-29 · Cognitive_Pattern] The owner is sceptical of fixes that are only prompt engineering: they want to be shown that JARVIS's capabilities come from the architecture it was built with, not from prompts. Evidence, in the owner's words (2026-06-12, claude): "that is just prompt engineering"
 - [2026-09-29 · Cognitive_Pattern] The owner wants every built agent and memory capability available in the user-facing entry point, so they can test the whole system, even with a weaker model. Evidence, in the owner's words (2026-06-15, claude): "i want full capabilities of agent and memory layers we've built in --ask"
 - [2026-09-29 · Cognitive_Pattern] The owner values avoiding rate limits and recurring costs for AI coding assistants. Evidence, in the owner's words (2026-04-04, antigravity): "no rate limits and no cost forever"

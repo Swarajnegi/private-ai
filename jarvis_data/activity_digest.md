@@ -6,12 +6,12 @@
 > the DISTILLED, 7-day, human-readable form (observation_queue.jsonl
 > itself is also tracked; corrected 2026-09-10, this line used to
 > falsely claim otherwise).
-> Generated 2026-09-29T09:22:53+05:30 on unknown.
+> Generated 2026-09-29T18:37:14+05:30 on unknown.
 
-RECENT ACTIVITY — your own captured turns across ALL chats, last 7 days (674 turns, 16 chats). Source: local observation_queue.jsonl — this is your actual per-prompt activity log, NOT git. Use it to stay aware of what you have been working on across chats.
-SELF-STATE: latest captured turn was produced by claude-sonnet-5-5 on unknown — brain swaps this window: claude-opus-5 -> claude-opus-5-5 (2026-09-23); claude-opus-5-5 -> nvidia/nemotron-3-super-120b-a12b:free (2026-09-26); nvidia/nemotron-3-super-120b-a12b:free -> claude-opus-5-5 (2026-09-26); claude-opus-5-5 -> nvidia/nemotron-3-super-120b-a12b:free (2026-09-28); nvidia/nemotron-3-super-120b-a12b:free -> openrouter/free (2026-09-28); openrouter/free -> nvidia/nemotron-3-super-120b-a12b:free (2026-09-28); nvidia/nemotron-3-super-120b-a12b:free -> claude-opus-5-5 (2026-09-28); claude-opus-5-5 -> nvidia/nemotron-3-super-120b-a12b:free (2026-09-28); nvidia/nemotron-3-super-120b-a12b:free -> claude-opus-5-5 (2026-09-28); claude-opus-5-5 -> nvidia/nemotron-3-super-120b-a12b:free (2026-09-28); nvidia/nemotron-3-super-120b-a12b:free -> claude-opus-5-5 (2026-09-28); claude-opus-5-5 -> nvidia/nemotron-3-super-120b-a12b:free (2026-09-28); nvidia/nemotron-3-super-120b-a12b:free -> claude-opus-5-5 (2026-09-28); claude-opus-5-5 -> claude-sonnet-5-5 (2026-09-29); claude-sonnet-5-5 -> nvidia/nemotron-3-super-120b-a12b:free (2026-09-29); nvidia/nemotron-3-super-120b-a12b:free -> openrouter/free (2026-09-29); openrouter/free -> nvidia/nemotron-3-super-120b-a12b:free (2026-09-29); nvidia/nemotron-3-super-120b-a12b:free -> claude-sonnet-5-5 (2026-09-29).
+RECENT ACTIVITY — your own captured turns across ALL chats, last 7 days (668 turns, 14 chats). Source: local observation_queue.jsonl — this is your actual per-prompt activity log, NOT git. Use it to stay aware of what you have been working on across chats.
+SELF-STATE: latest captured turn was produced by claude-sonnet-5-5 on unknown — brain swaps this window: claude-opus-5 -> claude-opus-5-5 (2026-09-23); claude-opus-5-5 -> nvidia/nemotron-3-super-120b-a12b:free (2026-09-26); nvidia/nemotron-3-super-120b-a12b:free -> claude-opus-5-5 (2026-09-26); claude-opus-5-5 -> claude-sonnet-5-5 (2026-09-29); claude-sonnet-5-5 -> claude-opus-5-5 (2026-09-29); claude-opus-5-5 -> claude-sonnet-5-5 (2026-09-29); claude-sonnet-5-5 -> claude-opus-5-5 (2026-09-29); claude-opus-5-5 -> claude-sonnet-5-5 (2026-09-29).
 
-- 2026-09-29 (Tue): 26 turns [5 chat(s)] — unknown×16, ai-ml×4, finance×4, data-engineering×1, jarvis-build×1
+- 2026-09-29 (Tue): 41 turns [5 chat(s)] — unknown×27, ai-ml×8, finance×3, data-engineering×2, jarvis-build×1
     • Fine, put all the info we've gathered about these 2 features in memory, we'll come back to it later.
       For now give me the updated android apk and ios web app link
     • 1. Redacting client identifiers from the capture queue and shards before any push. The queue is tracked in git, so client names already sit in it. Nothing is pushed until you decide.
@@ -19,7 +19,9 @@ SELF-STATE: latest captured turn was produced by claude-sonnet-5-5 on unknown �
       do #2
       for #1, you can redact, but make sure that all of deepclone frameowork along with the tes_cases_orchestrator job i created and all test notebooks inside that job are propelry commited and pushed and used in training along with session learnings etc
     • get the latest pull and tell me if anything's been assigned to you to implement, check the agent mail as well
-- 2026-09-28 (Mon): 61 turns [5 chat(s)] — unknown×41, finance×11, jarvis-build×7, data-engineering×2
+    • check out this video for new strategies for viral-shorts clips that we cna use to make shorts for youtube
+      https://youtu.be/a-yeaMDQN8w?si=Lm5beEEboxZoWhDm
+- 2026-09-28 (Mon): 50 turns [4 chat(s)] — unknown×31, finance×11, jarvis-build×7, data-engineering×1
     • E:\Clipping\autoclipper\out\
       i want you to give me the proper Title and Deescription with proper hashtags so people get inclined to click on the videos on youtube.
       Give for each of the 5 clips in the two folders inside E:\Clipping\autoclipper\out\
@@ -183,13 +185,12 @@ SELF-STATE: latest captured turn was produced by claude-sonnet-5-5 on unknown �
     • [https://github.com/calesthio/OpenMontage.git](https://github.com/calesthio/OpenMontage.git)
       check this repo and tell me what it can do for us in terms of clipping videos that go viral exactly like the shorts links i shared with you earlier.
       And tell me if at any point i will need money if i use this.
-- 2026-09-22 (Tue): 83 turns [5 chat(s)] — unknown×47, finance×30, ai-ml×6
-    • Complete the tier 2 and 3 that were left earlier and check the agent mail
-    • alright man, just do a proper research on what is the cheapest way that i can make realistic AI GUC content.
+- 2026-09-22 (Tue): 73 turns [4 chat(s)] — unknown×42, finance×29, ai-ml×2
     • alright man, just do a proper research on what is the cheapest way that i can make realistic AI GUC content it must be Maya only.&#x20;
       I have signed into this: "[https://app.heygen.com/home](https://app.heygen.com/home)" check if this would work
     • pressing on key settings still give sthe legacy android UI type list, make it into the same platte as the AI card, and clearly seperate the free and paid models.
       Also see if there's room to optimize the syncing of app and answering of AI.
+    • try and see if you can use the capcut app on my pc to edit the valorant clips exactly likt in the yt shorts links i gave you
     • fine, remove the returns one and keep only corpus one as the only graph.
       also, the AI part, the AI's answer must not be very long, it must analyse everything from analyst prediction to revenue to teh company's outlook and innovation and news etc to suggest a hold, trim or buy and breifly why.
       The answers currently no matter what model i use are very very elaborated and long.
