@@ -1,9 +1,15 @@
 #!/usr/bin/env python3
-"""Evaluate the current Tier 1 commitment surfacing against labelled real cases.
+"""Evaluate Tier 1 dormancy surfacing against labelled real cases.
 
-This is a snapshot check, not a substitute for the quiet-week run required by
-DORMANCY_SPEC.md. It makes the small positive set and missing run history loud.
-No model, embedding, Chroma, network, or training call is made.
+LAYER: Memory (absence measurement)
+
+THE BIG PICTURE
+Tier 2 must not be built merely because Tier 1 feels incomplete. A pinned
+registry snapshot and append-only run history make the evidence gate testable.
+
+THE FLOW
+Load the labelled snapshot, score exact due decisions, then inspect seven days
+of scheduled run events. No model, embedding, Chroma or training call is made.
 """
 from __future__ import annotations
 
@@ -63,15 +69,30 @@ def evaluate(gold_path: Path = GOLD) -> dict:
     runs = int(job.get("runs") or 0)
     failures = int(job.get("failures") or 0)
     expected_runs = math.ceil(WEEK_SECONDS / CHECK_INTERVAL_SECONDS)
-    events = [json.loads(line) for line in RUN_LOG.read_text(encoding="utf-8").splitlines()
-              if line.strip()] if RUN_LOG.exists() else []
-    timestamps = sorted(datetime.fromisoformat(str(event["ts"])).timestamp() for event in events
-                        if event.get("status") == "ok")
+    timestamps = []
+    event_count = 0
+    if RUN_LOG.exists():
+        with RUN_LOG.open(encoding="utf-8") as handle:
+            for line in handle:
+                if not line.strip():
+                    continue
+                event_count += 1
+                event = json.loads(line)
+                if event.get("status") == "ok":
+                    timestamps.append(datetime.fromisoformat(str(event["ts"])).timestamp())
+    timestamps.sort()
     week_start = time.time() - WEEK_SECONDS
     recent = [timestamp for timestamp in timestamps if timestamp >= week_start]
     bounds = [week_start, *recent, time.time()]
     max_gap = max((right - left for left, right in zip(bounds, bounds[1:])), default=WEEK_SECONDS)
     coverage = len(recent) >= expected_runs and max_gap <= CHECK_INTERVAL_SECONDS * 1.5
+    gate_reasons = []
+    if not coverage:
+        gate_reasons.append("no auditable seven-day run coverage")
+    if fn == 0:
+        gate_reasons.append("no confirmed Tier 1 miss")
+    if tp + fn < 5:
+        gate_reasons.append("too few positive cases to infer broad recall")
     return {
         "snapshot_date": SNAPSHOT_DATE.isoformat(),
         "registry_git_blob": SNAPSHOT_GIT_BLOB,
@@ -82,10 +103,10 @@ def evaluate(gold_path: Path = GOLD) -> dict:
         "tp": tp, "fn": fn, "fp": fp, "tn": tn, "rows": rows,
         "quiet_week": {"covered": coverage, "runs": runs, "expected_runs": expected_runs,
                        "failures": failures, "first_seen_ts": first_seen,
-                       "per_run_due_history_available": bool(events),
+                       "per_run_due_history_available": event_count > 0,
                        "logged_week_runs": len(recent), "max_gap_seconds": round(max_gap)},
-        "tier2_gate_met": False,
-        "tier2_gate_reason": "No confirmed Tier 1 miss and no auditable seven-day per-run due history; one positive is too small to infer broad recall.",
+        "tier2_gate_met": not gate_reasons,
+        "tier2_gate_reason": "; ".join(gate_reasons) or "quiet-week and labelled missed cases justify a Tier 2 experiment",
     }
 
 
