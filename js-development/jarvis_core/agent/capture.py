@@ -69,6 +69,7 @@ except ImportError:
     _HAS_FCNTL = False
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))  # standalone-run safety
+from jarvis_core.agent.client_infra import mask as mask_client_infra  # noqa: E402
 from jarvis_core.config import DATA_ROOT  # noqa: E402
 
 _IST = timezone(timedelta(hours=5, minutes=30))
@@ -330,8 +331,11 @@ def build_observation(
     the chat parses its own turns, so parse_ledger must know whose turn this
     is; written here it is never guessed from cwd or session-id shape.
     """
-    user_text = redact(turn.get("user_text", ""))
-    assistant_summary = redact(turn.get("assistant_summary", ""))
+    # The queue is tracked in git: mask the client's infrastructure identifiers
+    # before a pasted pipeline reaches it (specialists keep client CODE by the
+    # owner's decision; only the environment names are pseudonymised).
+    user_text = mask_client_infra(redact(turn.get("user_text", "")))[0]
+    assistant_summary = mask_client_infra(redact(turn.get("assistant_summary", "")))[0]
     if not user_text.strip():
         return None
     obs: Dict[str, Any] = {

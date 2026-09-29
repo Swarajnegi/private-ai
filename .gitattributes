@@ -45,3 +45,7 @@
 *.lock     text -merge
 package-lock.json   text -merge
 bun.lock           text -merge
+
+# -- Context-store shards (2026-09-28): append-only gzip members, one writer ---
+# machine per path (shards/<machine>/...), so no merge driver is ever needed.
+jarvis_data/context_store/shards/**/*.jsonl.gz  binary

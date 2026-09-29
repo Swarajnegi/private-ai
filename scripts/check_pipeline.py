@@ -280,6 +280,33 @@ def inv_no_prompt_monoculture(a: Artifacts) -> List[Finding]:
         [p[:80] for p in list(over)[:3]])]
 
 
+def inv_client_records_survive(a: Artifacts) -> List[Finding]:
+    """A build must never drop the client-work training records (2026-09-28).
+
+    A rebuild on a machine without client_work/ shrank engineer `client_work`
+    669 -> 17 and personalization `professional_reasoning` 265 -> 17, and the
+    shrunken corpus was committed. Each corpus must hold at least every record
+    in training_corpus/client_work_snapshot.jsonl (specialists/client_snapshot.py).
+    """
+    snap = a.root / "jarvis_data" / "training_corpus" / "client_work_snapshot.jsonl"
+    if not snap.exists():
+        return [Finding("client records survive", UNKNOWN, "no client_work_snapshot.jsonl")]
+    want = {"engineer": set(), "personalization": set()}
+    for row in _load(snap):
+        if row.get("corpus") in want:
+            want[row["corpus"]].add(str(row.get("source_path")))
+    have = {
+        "engineer": {str(r.get("source_path")) for r in a.engineer if r.get("source_type") == "client_work"},
+        "personalization": {str(r.get("source_path")) for r in a.personalization
+                            if r.get("source_type") == "professional_reasoning"},
+    }
+    lost = {c: len(want[c] - have[c]) for c in want if want[c] - have[c]}
+    return [Finding(
+        "client records survive", OK if not lost else FAIL,
+        f"{sum(len(v) for v in want.values())} snapshot records all present in the corpora"
+        if not lost else f"corpus is missing snapshot records: {lost} (a rebuild dropped client work)")]
+
+
 def inv_ui_answers_keep_their_question(a: Artifacts) -> List[Finding]:
     """UI answers were paired with a synthetic prompt, discarding the real one.
 
@@ -615,16 +642,54 @@ def inv_no_truncation(a: Artifacts) -> List[Finding]:
     return truncation_findings(a.root)
 
 
+def inv_shards_are_safe_to_push(a: Artifacts) -> List[Finding]:
+    """Context-store shards (git-tracked): size limit, no credential, no client source.
+
+    Checks the files, not the writer's intent: every shard under 50,000,000
+    bytes, no unmasked credential-shaped token, and no tool call/result that
+    touches a client_work/<project>/ file left unstubbed.
+    """
+    from jarvis_core.memory import episode_store as es
+    shards = a.root / "jarvis_data" / "context_store" / "shards"
+    files = es.shard_files(shards)
+    if not files:
+        return [Finding("shards are safe to push", UNKNOWN, "no shard files")]
+    big, secret, client = [], [], []
+    records = 0
+    for f in files:
+        if f.stat().st_size >= es.SHARD_LIMIT_BYTES:
+            big.append(f"{f.relative_to(shards).as_posix()} ({f.stat().st_size} bytes)")
+        for rec in es.iter_shard(f):
+            records += 1
+            text = str(rec.get("content") or "") + json.dumps(rec.get("tool") or {}, ensure_ascii=False)
+            if any(rx.search(text) for rx in es._SECRET_PATTERNS):
+                secret.append(str(rec.get("id")))
+            if (rec.get("role") in ("tool_call", "tool_result") and not rec.get("stub")
+                    and es._CLIENT_PATH.search(text)):
+                client.append(str(rec.get("id")))
+    out = [Finding("shards: every file < 50,000,000 bytes", FAIL if big else OK,
+                   ", ".join(big[:5]) if big else f"{len(files)} files"),
+           Finding("shards: no unmasked credential", FAIL if secret else OK,
+                   f"{len(secret)} records" if secret else f"{records} records scanned",
+                   examples=secret[:5]),
+           Finding("shards: no client_work tool content", FAIL if client else OK,
+                   f"{len(client)} records" if client else f"{records} records scanned",
+                   examples=client[:5])]
+    return out
+
+
 INVARIANTS: Tuple[Callable[[Artifacts], List[Finding]], ...] = (
     inv_no_exact_duplicates,   # includes inv_blend_duplication_is_explained
     inv_pair_targets_are_owner_prose,
     inv_heldout_is_isolated,
     inv_curation_traces_to_queue,
     inv_no_prompt_monoculture,
+    inv_client_records_survive,
     inv_ui_answers_keep_their_question,
     inv_records_are_well_formed,
     inv_no_third_party_identity,
     inv_no_truncation,
+    inv_shards_are_safe_to_push,
 )
 
 
@@ -843,6 +908,24 @@ def _self_test() -> int:
               any(f.status == FAIL and "raised" in f.detail
                   for f in truncation_findings(root, inhales={"voice inhale": None})),  # type: ignore[dict-item]
               True)
+
+    # T26-T28: shard safety, on a hand-built shard in a temp root.
+    import gzip as _gz
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        sd = root / "jarvis_data" / "context_store" / "shards" / "m" / "codex" / "2026-09"
+        sd.mkdir(parents=True)
+        good = {"id": "turn:codex:s:0", "role": "tool_result", "content": "ok", "tool": None}
+        (sd / "a.jsonl.gz").write_bytes(_gz.compress((json.dumps(good) + chr(10)).encode()))
+        check("T26 a clean shard passes all three shard checks",
+              {f.status for f in inv_shards_are_safe_to_push(Artifacts(root))}, {OK})
+        leak = {"id": "turn:codex:s:1", "role": "assistant", "content": "ghp_" + "a" * 36}
+        cw = {"id": "turn:codex:s:2", "role": "tool_call", "content": "cat client_work/acme/x.py"}
+        (sd / "b.jsonl.gz").write_bytes(_gz.compress("".join(json.dumps(r) + chr(10) for r in (leak, cw)).encode()))
+        found = {f.name: f.status for f in inv_shards_are_safe_to_push(Artifacts(root))}
+        check("T27 an unmasked token is caught", found["shards: no unmasked credential"], FAIL)
+        check("T28 unstubbed client_work tool content is caught",
+              found["shards: no client_work tool content"], FAIL)
 
     print("=" * 78)
     print("  check_pipeline self-test")

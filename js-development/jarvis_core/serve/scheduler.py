@@ -153,12 +153,20 @@ class Job:
     timeout_seconds: float = _DEFAULT_TIMEOUT
     initial_delay_seconds: float = 0.0
     description: str = ""
+    retry_after_failure_seconds: float = 0.0
 
-    def is_due(self, now: float, last_run: float, started_at: float) -> bool:
-        """True when the cadence has elapsed and the startup delay has passed."""
+    def is_due(self, now: float, last_run: float, started_at: float,
+               failed: bool = False) -> bool:
+        """True when the cadence has elapsed and the startup delay has passed.
+        After a failed run a job with `retry_after_failure_seconds` comes due
+        that much sooner, so one transient clash does not leave it red for a
+        whole interval."""
         if now - started_at < self.initial_delay_seconds:
             return False
-        return (now - last_run) >= self.interval_seconds
+        interval = self.interval_seconds
+        if failed and self.retry_after_failure_seconds > 0:
+            interval = min(interval, self.retry_after_failure_seconds)
+        return (now - last_run) >= interval
 
 
 @dataclass
@@ -291,6 +299,7 @@ def default_jobs(python: Optional[str] = None,
             argv=(py, str(scripts / "index_memory.py")),
             guard=guard_for("chromadb"),
             interval_seconds=12 * HOUR,
+            retry_after_failure_seconds=30 * 60.0,
             timeout_seconds=1800.0,
             initial_delay_seconds=300.0,
             description="re-embed the knowledge base into chromadb when stale"),
@@ -325,6 +334,14 @@ def default_jobs(python: Optional[str] = None,
             description="promote JARVIS-relevant items from Codex's own "
                         "(global, session-scoped) memory into the one "
                         "authoritative knowledge_base.jsonl"),
+        Job(name="ingest_episodes",
+            argv=(py, str(base / "scripts" / "ingest_episodes.py")),
+            interval_seconds=HOUR,
+            timeout_seconds=900.0,
+            initial_delay_seconds=270.0,
+            description="copy every host's FULL transcript (tool calls, outputs, "
+                        "reasoning, compactions) into the verbatim episode store, "
+                        "write this machine's shards, merge the other machine's"),
         Job(name="interview_to_kb",
             argv=(py, str(base / "scripts" / "interview_to_kb.py")),
             interval_seconds=HOUR,
@@ -554,7 +571,7 @@ class Scheduler:
         ran: List[str] = []
         for job in self._jobs:
             st = self._state(job.name)
-            if not job.is_due(now, st.last_run, ready_from):
+            if not job.is_due(now, st.last_run, ready_from, st.consecutive_failures > 0):
                 continue
             # A job whose last real run failed is retried WITHOUT its guard:
             # the guard can say "fresh" about an artifact the failed run left
@@ -722,6 +739,10 @@ def _run_self_test() -> None:
         clock = FakeClock()
 
         # T1-T3: due logic.
+        rj = Job("r", ("true",), interval_seconds=1000.0, retry_after_failure_seconds=60.0)
+        check("T23 a failed job with a retry interval comes due sooner; a healthy one does not",
+              rj.is_due(100.0, 0.0, 0.0, failed=True) and not rj.is_due(100.0, 0.0, 0.0, failed=False)
+              and not rj.is_due(30.0, 0.0, 0.0, failed=True))
         job = Job("j", ("true",), interval_seconds=100.0, initial_delay_seconds=10.0)
         check("T1 a job is not due before its initial delay elapses",
               not job.is_due(now=1005.0, last_run=0.0, started_at=1000.0))

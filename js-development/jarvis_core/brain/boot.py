@@ -392,7 +392,8 @@ def assemble_mind(
         # no session -> no ledger -> the old lossy behaviour, and the boundary
         # message says so out loud rather than implying history is safe.
         compactor = WorkingMemoryCompactor(
-            llm_call, max_context_tokens=threshold, ledger=ledger)
+            llm_call, max_context_tokens=threshold, ledger=ledger,
+            episode_session=session_id or None)
     except Exception:
         compactor = None  # a broken compactor must never block a boot
 

@@ -84,7 +84,7 @@ LAYER: Specialists (Corpus Assembly) — Stage 5.2.2
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, Generator, Optional
+from typing import Any, Dict, Generator, List, Optional
 
 from jarvis_core.agent.capture import redact
 from jarvis_core.config import DATA_ROOT, JARVIS_ROOT, KB_PATH, SPECIALIST_CORPUS_ROOT
@@ -567,12 +567,28 @@ def iter_error_log_records() -> Generator[CorpusRecord, None, None]:
 _HYGIENE_SOURCES = frozenset({"chat_history"})
 _MIN_RECORD_CHARS = 100
 
+def iter_client_work_with_snapshot() -> Generator[CorpusRecord, None, None]:
+    """Live records where the client source exists, plus the snapshot's record for
+    every source_path this machine could not regenerate. Absence of a source is
+    not deletion: see specialists/client_snapshot.py (669 -> 17 on 2026-09-28)."""
+    from jarvis_core.specialists import client_snapshot
+    live: List[Dict[str, Any]] = []
+    for rec in iter_client_work_records():
+        live.append({"source_type": rec.source_type, "source_path": rec.source_path,
+                     "text": rec.text, "metadata": rec.metadata})
+        yield rec
+    for carried in client_snapshot.carry_forward("engineer", {r["source_path"] for r in live}):
+        yield CorpusRecord(source_type=carried["source_type"], source_path=carried["source_path"],
+                           text=carried["text"], metadata=carried.get("metadata", {}))
+    client_snapshot.refresh("engineer", live)
+
+
 _SOURCE_ITERATORS = (
     ("jarvis_core_code", lambda dropped: iter_jarvis_core_records()),
     ("kb_entry", lambda dropped: iter_kb_records(dropped=dropped)),
     ("chat_history", lambda dropped: iter_chat_history_records(dropped=dropped)),
     ("de_corpus", lambda dropped: iter_de_corpus_records()),
-    ("client_work", lambda dropped: iter_client_work_records()),
+    ("client_work", lambda dropped: iter_client_work_with_snapshot()),
     ("error_log", lambda dropped: iter_error_log_records()),
 )
 

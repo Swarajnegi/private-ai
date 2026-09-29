@@ -67,6 +67,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
+from jarvis_core.locking import exclusive_lock
 from jarvis_core.config import (
     BACKUP_ROOT,
     DB_ROOT,
@@ -437,13 +438,19 @@ class JarvisMemoryStore:
         # This is the key upgrade from add().
         # Re-running ingest on the same PDF now reflects any updated metadata
         # (e.g., new 'specialist' field) without requiring a collection wipe.
+        # One writer at a time ACROSS PROCESSES. The hearth keeps a client open
+        # for its whole life while its jobs write from subprocesses; two
+        # processes compacting the same log produced "Error in compaction:
+        # Failed to apply logs to the metadata segment" on 16 of 17
+        # reindex_memory runs (2026-09-11 to 09-28).
         try:
-            collection.upsert(
-                embeddings=embeddings,
-                documents=documents,
-                metadatas=metadatas,
-                ids=ids,
-            )
+            with exclusive_lock(self._db_path.parent / ".chroma_write.lock"):
+                collection.upsert(
+                    embeddings=embeddings,
+                    documents=documents,
+                    metadatas=metadatas,
+                    ids=ids,
+                )
         except Exception as exc:
             err_msg = str(exc).lower()
             if "compaction" in err_msg or "metadata segment" in err_msg or "failed to apply logs" in err_msg:

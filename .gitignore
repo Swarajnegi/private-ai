@@ -306,3 +306,20 @@ artifacts/voice-test/
 .tmp/ui-shots/
 .tmp/austensor-ref/
 .tmp/removed-jarvis-tests-2026-09-28/
+
+# ---- context store (2026-09-28, Context Store Phase 2) ------------------------
+# The verbatim episode store is machine-local (full tool outputs, ~GBs). What
+# travels is shards/<machine>/<host>/<YYYY-MM>[-partN].jsonl.gz — TRACKED, each
+# file written by exactly one machine. Rebuild episodes/ on a fresh clone with
+# `python scripts/ingest_episodes.py` (own hosts + merge of every shard).
+jarvis_data/context_store/episodes/
+jarvis_data/context_store/manifest.jsonl
+jarvis_data/context_store/*.lock
+jarvis_data/context_store/**/*.lock
+# Episode index (Phase 3): a PROJECTION, rebuilt from episodes/ + the KB by
+# `python scripts/index_episodes.py --rebuild`. Vectors live in chromadb/ (untracked).
+jarvis_data/context_store/episodes_fts.sqlite3*
+jarvis_data/context_store/candidates/
+jarvis_data/.chroma_write.lock
+jarvis_data/.chroma_write.lock*
+jarvis_data/fact_provenance.jsonl.lock

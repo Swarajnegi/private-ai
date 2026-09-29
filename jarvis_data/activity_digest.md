@@ -6,12 +6,15 @@
 > the DISTILLED, 7-day, human-readable form (observation_queue.jsonl
 > itself is also tracked; corrected 2026-09-10, this line used to
 > falsely claim otherwise).
-> Generated 2026-09-28T19:05:53+05:30 on unknown.
+> Generated 2026-09-29T06:04:56+05:30 on unknown.
 
-RECENT ACTIVITY — your own captured turns across ALL chats, last 7 days (626 turns, 15 chats). Source: local observation_queue.jsonl — this is your actual per-prompt activity log, NOT git. Use it to stay aware of what you have been working on across chats.
-SELF-STATE: latest captured turn was produced by nvidia/nemotron-3-super-120b-a12b:free on unknown — brain swaps this window: claude-opus-5 -> claude-opus-5-5 (2026-09-23); claude-opus-5-5 -> nvidia/nemotron-3-super-120b-a12b:free (2026-09-26); nvidia/nemotron-3-super-120b-a12b:free -> claude-opus-5-5 (2026-09-26); claude-opus-5-5 -> nvidia/nemotron-3-super-120b-a12b:free (2026-09-28); nvidia/nemotron-3-super-120b-a12b:free -> openrouter/free (2026-09-28); openrouter/free -> nvidia/nemotron-3-super-120b-a12b:free (2026-09-28); nvidia/nemotron-3-super-120b-a12b:free -> claude-opus-5-5 (2026-09-28); claude-opus-5-5 -> nvidia/nemotron-3-super-120b-a12b:free (2026-09-28); nvidia/nemotron-3-super-120b-a12b:free -> claude-opus-5-5 (2026-09-28); claude-opus-5-5 -> nvidia/nemotron-3-super-120b-a12b:free (2026-09-28); nvidia/nemotron-3-super-120b-a12b:free -> claude-opus-5-5 (2026-09-28); claude-opus-5-5 -> nvidia/nemotron-3-super-120b-a12b:free (2026-09-28).
+RECENT ACTIVITY — your own captured turns across ALL chats, last 7 days (654 turns, 15 chats). Source: local observation_queue.jsonl — this is your actual per-prompt activity log, NOT git. Use it to stay aware of what you have been working on across chats.
+SELF-STATE: latest captured turn was produced by claude-opus-5-5 on unknown — brain swaps this window: claude-opus-5 -> claude-opus-5-5 (2026-09-23); claude-opus-5-5 -> nvidia/nemotron-3-super-120b-a12b:free (2026-09-26); nvidia/nemotron-3-super-120b-a12b:free -> claude-opus-5-5 (2026-09-26); claude-opus-5-5 -> nvidia/nemotron-3-super-120b-a12b:free (2026-09-28); nvidia/nemotron-3-super-120b-a12b:free -> openrouter/free (2026-09-28); openrouter/free -> nvidia/nemotron-3-super-120b-a12b:free (2026-09-28); nvidia/nemotron-3-super-120b-a12b:free -> claude-opus-5-5 (2026-09-28); claude-opus-5-5 -> nvidia/nemotron-3-super-120b-a12b:free (2026-09-28); nvidia/nemotron-3-super-120b-a12b:free -> claude-opus-5-5 (2026-09-28); claude-opus-5-5 -> nvidia/nemotron-3-super-120b-a12b:free (2026-09-28); nvidia/nemotron-3-super-120b-a12b:free -> claude-opus-5-5 (2026-09-28); claude-opus-5-5 -> nvidia/nemotron-3-super-120b-a12b:free (2026-09-28); nvidia/nemotron-3-super-120b-a12b:free -> claude-opus-5-5 (2026-09-28).
 
-- 2026-09-28 (Mon): 39 turns [5 chat(s)] — unknown×29, finance×5, jarvis-build×4, data-engineering×1
+- 2026-09-29 (Tue): 6 turns [2 chat(s)] — ai-ml×2, finance×2, unknown×2
+    • Fine, put all the info we've gathered about these 2 features in memory, we'll come back to it later.
+      For now give me the updated android apk and ios web app link
+- 2026-09-28 (Mon): 61 turns [5 chat(s)] — unknown×41, finance×11, jarvis-build×7, data-engineering×2
     • E:\Clipping\autoclipper\out\
       i want you to give me the proper Title and Deescription with proper hashtags so people get inclined to click on the videos on youtube.
       Give for each of the 5 clips in the two folders inside E:\Clipping\autoclipper\out\

@@ -69,3 +69,40 @@ def exclusive_lock(path: Path) -> Iterator[None]:
             elif msvcrt is not None:
                 lock_file.seek(0)
                 msvcrt.locking(lock_file.fileno(), msvcrt.LK_UNLCK, 1)
+
+
+@contextmanager
+def try_exclusive_lock(path: Path) -> Iterator[bool]:
+    """Like ``exclusive_lock`` but never waits: yields False when another holder has it.
+
+    For hot-path callers (a hook with a timeout) that must skip work rather
+    than block behind a long-running writer.
+    """
+    lock_path = path.with_suffix(path.suffix + ".lock")
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    with lock_path.open("a+b") as lock_file:
+        acquired = False
+        try:
+            if fcntl is not None:
+                fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+            elif msvcrt is not None:
+                lock_file.seek(0, os.SEEK_END)
+                if lock_file.tell() == 0:
+                    lock_file.write(b"0")
+                    lock_file.flush()
+                lock_file.seek(0)
+                msvcrt.locking(lock_file.fileno(), msvcrt.LK_NBLCK, 1)
+            else:
+                raise RuntimeError("no supported file-locking primitive on this platform")
+            acquired = True
+        except OSError:
+            acquired = False
+        try:
+            yield acquired
+        finally:
+            if acquired:
+                if fcntl is not None:
+                    fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+                elif msvcrt is not None:
+                    lock_file.seek(0)
+                    msvcrt.locking(lock_file.fileno(), msvcrt.LK_UNLCK, 1)

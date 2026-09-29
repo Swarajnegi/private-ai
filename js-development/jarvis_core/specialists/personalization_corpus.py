@@ -86,7 +86,7 @@ import json
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, Generator, Optional
+from typing import Any, Dict, Generator, List, Optional
 
 from jarvis_core.agent.capture import redact
 from jarvis_core.config import DATA_ROOT, SPECIALIST_CORPUS_ROOT
@@ -613,12 +613,28 @@ def iter_user_voice_records(
 _HYGIENE_SOURCES = frozenset({"user_voice"})
 _MIN_RECORD_CHARS = 100
 
+def iter_professional_reasoning_with_snapshot() -> Generator[CorpusRecord, None, None]:
+    """Live records where the client source exists, plus the snapshot's record for
+    every source_path this machine could not regenerate. Absence of a source is
+    not deletion: see specialists/client_snapshot.py (265 -> 17 on 2026-09-28)."""
+    from jarvis_core.specialists import client_snapshot
+    live: List[Dict[str, Any]] = []
+    for rec in iter_professional_reasoning_records():
+        live.append({"source_type": rec.source_type, "source_path": rec.source_path,
+                     "text": rec.text, "metadata": rec.metadata})
+        yield rec
+    for carried in client_snapshot.carry_forward("personalization", {r["source_path"] for r in live}):
+        yield CorpusRecord(source_type=carried["source_type"], source_path=carried["source_path"],
+                           text=carried["text"], metadata=carried.get("metadata", {}))
+    client_snapshot.refresh("personalization", live)
+
+
 _SOURCE_ITERATORS = (
     ("kb_identity", lambda dropped: iter_kb_identity_records()),
     ("kb_judgment", lambda dropped: iter_kb_judgment_records()),
     ("written_reasoning", lambda dropped: iter_written_reasoning_records()),
     ("literature", lambda dropped: iter_literature_records()),
-    ("professional_reasoning", lambda dropped: iter_professional_reasoning_records()),
+    ("professional_reasoning", lambda dropped: iter_professional_reasoning_with_snapshot()),
     ("user_voice", lambda dropped: iter_user_voice_records(dropped=dropped)),
 )
 

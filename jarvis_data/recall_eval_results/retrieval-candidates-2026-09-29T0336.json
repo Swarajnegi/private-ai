@@ -1,0 +1,6041 @@
+{
+ "embeddinggemma": {
+  "skipped": "OSError: You are trying to access a gated repo.\nMake sure to have access to it at https://huggingface.co/google/embeddinggemma-300m.\n401 Client Error. (Request ID: Root=1-6abab9b8-283658ef209295520be2f99f;94a7"
+ },
+ "minilm": {
+  "build_s": 531,
+  "stats": {
+   "system_events_skipped": 14218,
+   "system_chars_skipped": 42248134,
+   "embedded": 65259,
+   "embedded_chars": 47300136,
+   "sources_synced": 285,
+   "seconds": 530.6,
+   "overflow_windows": 0
+  },
+  "status": {
+   "units": 65259,
+   "by_source": {
+    "compaction": 8806,
+    "doc": 1144,
+    "exchange": 52292,
+    "kb": 1518,
+    "queue": 1499
+   },
+   "body_chars": 43478402,
+   "sources": 285,
+   "vectors": 65259,
+   "embedder": "sentence-transformers/all-MiniLM-L6-v2",
+   "updated": "2026-09-29T00:41:08.611+05:30",
+   "fts_bytes": 309215232
+  },
+  "summary": {
+   "information_extraction": {
+    "n": 21,
+    "unreachable_q": 0,
+    "r@5": 0.857,
+    "cov@5": 0.762,
+    "r@10": 0.905,
+    "cov@10": 0.833,
+    "r@20": 0.905,
+    "cov@20": 0.849
+   },
+   "multi_session": {
+    "n": 14,
+    "unreachable_q": 0,
+    "r@5": 0.357,
+    "cov@5": 0.108,
+    "r@10": 0.571,
+    "cov@10": 0.214,
+    "r@20": 0.571,
+    "cov@20": 0.264
+   },
+   "temporal": {
+    "n": 14,
+    "unreachable_q": 0,
+    "r@5": 0.643,
+    "cov@5": 0.524,
+    "r@10": 0.714,
+    "cov@10": 0.655,
+    "r@20": 0.786,
+    "cov@20": 0.726
+   },
+   "knowledge_update": {
+    "n": 16,
+    "unreachable_q": 0,
+    "r@5": 0.812,
+    "cov@5": 0.667,
+    "r@10": 0.875,
+    "cov@10": 0.729,
+    "r@20": 0.875,
+    "cov@20": 0.802
+   },
+   "abstention": {
+    "n": 13,
+    "unreachable_q": 0,
+    "r@5": 0.462,
+    "cov@5": 0.385,
+    "r@10": 0.462,
+    "cov@10": 0.462,
+    "r@20": 0.538,
+    "cov@20": 0.538
+   },
+   "overall": {
+    "n": 78,
+    "unreachable_q": 0,
+    "r@5": 0.654,
+    "cov@5": 0.519,
+    "r@10": 0.731,
+    "cov@10": 0.607,
+    "r@20": 0.756,
+    "cov@20": 0.661
+   },
+   "answerable": {
+    "n": 65,
+    "unreachable_q": 0,
+    "r@5": 0.692,
+    "cov@5": 0.546,
+    "r@10": 0.785,
+    "cov@10": 0.636,
+    "r@20": 0.8,
+    "cov@20": 0.685
+   }
+  },
+  "latency": {
+   "p50_ms": 267.4,
+   "p95_ms": 377.8,
+   "first_ms": 5417.2
+  },
+  "rows": [
+   {
+    "id": "ie-01",
+    "ability": "information_extraction",
+    "first_hit": 4,
+    "targets": 3,
+    "reachable": 3,
+    "unreachable": [],
+    "covered_at": {
+     "file:jarvis_data/personal_life.md": 4
+    },
+    "top": [
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda|x3335|w32",
+     "queue|queue:2026-08-22T22:09:04+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "file:jarvis_data/personal_life.md|s3|w0"
+    ]
+   },
+   {
+    "id": "ie-02",
+    "ability": "information_extraction",
+    "first_hit": 0,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {
+     "file:jarvis_data/personal_life.md": 0,
+     "queue:2026-08-16T20:10:17+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14": 4
+    },
+    "top": [
+     "file:jarvis_data/personal_life.md|s4|w0",
+     "ep:codex:01a0dcdc-7e56-7520-9e71-f08d82dabc1d|x475|w38",
+     "queue|queue:2026-08-26T12:27:01+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w1",
+     "file:jarvis_data/cognitive_profile.md|s1|w35",
+     "queue|queue:2026-08-16T20:10:17+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0"
+    ]
+   },
+   {
+    "id": "ie-03",
+    "ability": "information_extraction",
+    "first_hit": 0,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {
+     "queue:2026-08-16T20:10:17+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14": 0,
+     "file:jarvis_data/personal_life.md": 1
+    },
+    "top": [
+     "queue|queue:2026-08-16T20:10:17+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "file:jarvis_data/personal_life.md|s1|w0",
+     "ep:codex:01a0dcdc-7e56-7520-9e71-f08d82dabc1d|x475|w37",
+     "ep:claude:480533f5-b826-4f30-8987-03758af2f98c|x14801|w5",
+     "file:knowledge/Finance/strategy.md|s8|w1"
+    ]
+   },
+   {
+    "id": "ie-04",
+    "ability": "information_extraction",
+    "first_hit": 0,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {
+     "queue:2026-08-16T20:10:17+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14": 0,
+     "file:jarvis_data/personal_life.md": 1
+    },
+    "top": [
+     "queue|queue:2026-08-16T20:10:17+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "file:jarvis_data/personal_life.md|s1|w0",
+     "ep:codex:01a0dcdc-7e56-7520-9e71-f08d82dabc1d|x475|w37",
+     "kb|kb:785|w1",
+     "ep:antigravity:5a76f739-b07e-447a-bef2-2282a2f4417c|x111|w0"
+    ]
+   },
+   {
+    "id": "ie-05",
+    "ability": "information_extraction",
+    "first_hit": null,
+    "targets": 4,
+    "reachable": 4,
+    "unreachable": [],
+    "covered_at": {},
+    "top": [
+     "kb|kb:831|w0",
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda|x3146|w7",
+     "ep:antigravity:5a76f739-b07e-447a-bef2-2282a2f4417c|x968|w31",
+     "ep:codex:01a0bd72-ec67-71d2-86a6-b28ea5f4edb6|x18|w18",
+     "file:jarvis_data/cognitive_profile.md|s1|w55"
+    ]
+   },
+   {
+    "id": "ie-06",
+    "ability": "information_extraction",
+    "first_hit": 0,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {
+     "queue:2026-08-16T20:10:17+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14": 0,
+     "file:jarvis_data/personal_life.md": 1
+    },
+    "top": [
+     "queue|queue:2026-08-16T20:10:17+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w1",
+     "file:jarvis_data/personal_life.md|s5|w0",
+     "ep:claude:e5b92b99-c971-4c78-a7f9-f06f19d666e8.agent-a714a6b9acb3e4c2a|x0|w8",
+     "queue|queue:2026-09-01T17:18:29+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "ep:claude:e5b92b99-c971-4c78-a7f9-f06f19d666e8.agent-a0b09b1a9d6b3f3f3|x0|w8"
+    ]
+   },
+   {
+    "id": "ie-07",
+    "ability": "information_extraction",
+    "first_hit": 0,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {
+     "file:jarvis_data/personal_life.md": 0,
+     "queue:2026-08-16T20:10:17+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14": 1
+    },
+    "top": [
+     "file:jarvis_data/personal_life.md|s5|w0",
+     "queue|queue:2026-08-16T20:10:17+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w1",
+     "ep:claude:e5b92b99-c971-4c78-a7f9-f06f19d666e8|x372|w28",
+     "ep:codex:01a0dcdc-7e62-7c73-8a09-6aa3aebb67b2|x408|w91",
+     "ep:claude:e5b92b99-c971-4c78-a7f9-f06f19d666e8|x372|w21"
+    ]
+   },
+   {
+    "id": "ie-08",
+    "ability": "information_extraction",
+    "first_hit": 0,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {
+     "turn:jarvis:conv-web-cff653a1-415e-417b-ba68-3ac84f621778:3": 0,
+     "kb:784": 4
+    },
+    "top": [
+     "ep:jarvis:conv-web-cff653a1-415e-417b-ba68-3ac84f621778|x2|w3",
+     "ep:jarvis:conv-web-cff653a1-415e-417b-ba68-3ac84f621778|x2|w0",
+     "ep:jarvis:conv-web-cff653a1-415e-417b-ba68-3ac84f621778|x2|w1",
+     "ep:jarvis:conv-web-cff653a1-415e-417b-ba68-3ac84f621778|x2|w2",
+     "kb|kb:784|w0"
+    ]
+   },
+   {
+    "id": "ie-09",
+    "ability": "information_extraction",
+    "first_hit": 2,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {
+     "kb:784": 2,
+     "turn:jarvis:conv-web-cff653a1-415e-417b-ba68-3ac84f621778:3": 7
+    },
+    "top": [
+     "kb|kb:828|w0",
+     "kb|kb:646|w1",
+     "kb|kb:784|w1",
+     "file:jarvis_data/cognitive_profile.md|s1|w47",
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda|x3335|w33"
+    ]
+   },
+   {
+    "id": "ie-10",
+    "ability": "information_extraction",
+    "first_hit": 0,
+    "targets": 3,
+    "reachable": 3,
+    "unreachable": [],
+    "covered_at": {
+     "kb:787": 0,
+     "turn:jarvis:conv-web-cff653a1-415e-417b-ba68-3ac84f621778:11": 2,
+     "turn:jarvis:conv-web-cff653a1-415e-417b-ba68-3ac84f621778:9": 10
+    },
+    "top": [
+     "kb|kb:787|w0",
+     "file:jarvis_data/cognitive_profile.md|s1|w52",
+     "ep:jarvis:conv-web-cff653a1-415e-417b-ba68-3ac84f621778|x10|w0",
+     "kb|kb:648|w1",
+     "ep:jarvis:conv-20260911T155453-2960|x6|w0"
+    ]
+   },
+   {
+    "id": "ie-11",
+    "ability": "information_extraction",
+    "first_hit": 0,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {
+     "kb:788": 0,
+     "turn:jarvis:conv-web-cff653a1-415e-417b-ba68-3ac84f621778:13": 3
+    },
+    "top": [
+     "kb|kb:788|w0",
+     "file:jarvis_data/cognitive_profile.md|s1|w53",
+     "ep:jarvis:conv-web-cff653a1-415e-417b-ba68-3ac84f621778|x10|w0",
+     "ep:jarvis:conv-web-cff653a1-415e-417b-ba68-3ac84f621778|x12|w1",
+     "ep:jarvis:conv-web-cff653a1-415e-417b-ba68-3ac84f621778|x12|w0"
+    ]
+   },
+   {
+    "id": "ie-12",
+    "ability": "information_extraction",
+    "first_hit": 7,
+    "targets": 1,
+    "reachable": 1,
+    "unreachable": [],
+    "covered_at": {
+     "kb:line266": 7
+    },
+    "top": [
+     "ep:codex:01a09623-f6cb-7743-b552-76a42d14af29|x18|w26",
+     "ep:codex:01a09623-f6cb-7743-b552-76a42d14af29|p1|w160",
+     "ep:codex:01a09623-f6cb-7743-b552-76a42d14af29|p1|w94",
+     "ep:codex:01a09623-f6cb-7743-b552-76a42d14af29|x26|w71",
+     "ep:codex:01a09623-f6cb-7743-b552-76a42d14af29|p1|w297"
+    ]
+   },
+   {
+    "id": "ie-13",
+    "ability": "information_extraction",
+    "first_hit": 0,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {
+     "kb:804": 0,
+     "queue:2026-06-02T16:04:53+05:30|4e986828-f710-435e-8c75-b81b046b5aba": 1
+    },
+    "top": [
+     "kb|kb:804|w0",
+     "queue|queue:2026-06-02T16:04:53+05:30|4e986828-f710-435e-8c75-b81b046b5aba|w0",
+     "kb|kb:372|w0",
+     "queue|queue:2026-06-15T14:49:56+05:30|terminal-20260615T144914-44774|w0",
+     "queue|queue:2026-06-03T09:16:47+05:30|4e986828-f710-435e-8c75-b81b046b5aba|w0"
+    ]
+   },
+   {
+    "id": "ie-14",
+    "ability": "information_extraction",
+    "first_hit": 0,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {
+     "kb:line99": 0
+    },
+    "top": [
+     "kb|kb:line99|w0",
+     "file:jarvis_data/cognitive_profile.md|s1|w1",
+     "queue|queue:2026-08-08T15:45:01+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "ep:codex:01a0dcdc-8467-7c20-92bf-e2a66b8e8c27|x790|w20",
+     "ep:claude:480533f5-b826-4f30-8987-03758af2f98c|x1436|w21"
+    ]
+   },
+   {
+    "id": "ie-15",
+    "ability": "information_extraction",
+    "first_hit": 3,
+    "targets": 1,
+    "reachable": 1,
+    "unreachable": [],
+    "covered_at": {
+     "kb:436": 3
+    },
+    "top": [
+     "kb|kb:516|w0",
+     "queue|queue:2026-07-23T09:33:03+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "file:jarvis_data/cognitive_profile.md|s1|w39",
+     "kb|kb:436|w0",
+     "file:jarvis_data/cognitive_profile.md|s1|w21"
+    ]
+   },
+   {
+    "id": "ie-16",
+    "ability": "information_extraction",
+    "first_hit": null,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {},
+    "top": [
+     "ep:codex:01a09e1a-377c-7841-adfb-00aab4171c9a|x17|w22",
+     "ep:codex:01a0874a-5494-7121-9874-3f8089067932|p5255|w60",
+     "ep:codex:01a09e0b-2579-7962-ad0b-ac053363daae|x3|w47",
+     "ep:codex:01a0874a-5494-7121-9874-3f8089067932|x4699|w4",
+     "ep:codex:01a0874a-5494-7121-9874-3f8089067932|p5255|w57"
+    ]
+   },
+   {
+    "id": "ie-17",
+    "ability": "information_extraction",
+    "first_hit": 0,
+    "targets": 1,
+    "reachable": 1,
+    "unreachable": [],
+    "covered_at": {
+     "file:jarvis_data/personal_life.md": 0
+    },
+    "top": [
+     "file:jarvis_data/personal_life.md|s6|w0",
+     "file:jarvis_data/cognitive_profile.md|s4|w207",
+     "queue|queue:2026-08-22T12:18:28+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "kb|kb:523|w0",
+     "queue|queue:2026-08-22T12:54:55+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0"
+    ]
+   },
+   {
+    "id": "ie-18",
+    "ability": "information_extraction",
+    "first_hit": 0,
+    "targets": 1,
+    "reachable": 1,
+    "unreachable": [],
+    "covered_at": {
+     "kb:436": 0
+    },
+    "top": [
+     "kb|kb:436|w1",
+     "file:jarvis_data/cognitive_profile.md|s1|w22",
+     "kb|kb:436|w3",
+     "queue|queue:2026-07-23T09:49:45+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "kb|kb:436|w2"
+    ]
+   },
+   {
+    "id": "ie-19",
+    "ability": "information_extraction",
+    "first_hit": 0,
+    "targets": 1,
+    "reachable": 1,
+    "unreachable": [],
+    "covered_at": {
+     "kb:416": 0
+    },
+    "top": [
+     "kb|kb:416|w0",
+     "file:jarvis_data/cognitive_profile.md|s4|w335",
+     "kb|kb:408|w1",
+     "kb|kb:line232|w1",
+     "kb|kb:416|w1"
+    ]
+   },
+   {
+    "id": "ie-20",
+    "ability": "information_extraction",
+    "first_hit": 0,
+    "targets": 1,
+    "reachable": 1,
+    "unreachable": [],
+    "covered_at": {
+     "kb:line74": 0
+    },
+    "top": [
+     "kb|kb:line74|w0",
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda.agent-a7322b1c89e12327a|x0|w36",
+     "ep:antigravity:1c4a4e49-d66b-4af8-b53f-b9f6aed953df|x92|w10",
+     "kb|kb:line155|w0",
+     "ep:antigravity:77cd437e-1b74-4668-8497-0bbe43eaeba3|x71|w16"
+    ]
+   },
+   {
+    "id": "ie-21",
+    "ability": "information_extraction",
+    "first_hit": 0,
+    "targets": 1,
+    "reachable": 1,
+    "unreachable": [],
+    "covered_at": {
+     "file:jarvis_data/personal_life.md": 0
+    },
+    "top": [
+     "file:jarvis_data/personal_life.md|s6|w0",
+     "queue|queue:2026-08-16T20:21:37+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "queue|queue:2026-06-15T14:49:56+05:30|terminal-20260615T144914-44774|w0",
+     "kb|kb:372|w0",
+     "file:jarvis_data/personal_life.md|s2|w0"
+    ]
+   },
+   {
+    "id": "ms-01",
+    "ability": "multi_session",
+    "first_hit": 1,
+    "targets": 8,
+    "reachable": 8,
+    "unreachable": [],
+    "covered_at": {
+     "kb:784": 1,
+     "kb:787": 15
+    },
+    "top": [
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda|x3335|w0",
+     "kb|kb:784|w2",
+     "kb|kb:470|w1",
+     "kb|kb:646|w2",
+     "file:jarvis_data/cognitive_profile.md|s1|w48"
+    ]
+   },
+   {
+    "id": "ms-02",
+    "ability": "multi_session",
+    "first_hit": 4,
+    "targets": 4,
+    "reachable": 4,
+    "unreachable": [],
+    "covered_at": {
+     "kb:531": 4,
+     "file:.agent/rules/JARVIS_ENDGAME.md": 8,
+     "kb:429": 10
+    },
+    "top": [
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda.agent-a7322b1c89e12327a|x0|w3",
+     "queue|queue:2026-09-01T16:14:04+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w3",
+     "queue|queue:2026-08-04T10:29:22+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "file:.agent/rules/CLAUDE.md|s11|w0",
+     "kb|kb:531|w2"
+    ]
+   },
+   {
+    "id": "ms-03",
+    "ability": "multi_session",
+    "first_hit": null,
+    "targets": 4,
+    "reachable": 4,
+    "unreachable": [],
+    "covered_at": {},
+    "top": [
+     "ep:jarvis:conv-20260911T155453-2960|x6|w1",
+     "ep:jarvis:conv-web-cff653a1-415e-417b-ba68-3ac84f621778|x0|w1",
+     "ep:antigravity:986802ce-24ac-404b-9f74-8cd3e18fe2e7|x1234|w15",
+     "ep:antigravity:986802ce-24ac-404b-9f74-8cd3e18fe2e7|x1234|w43",
+     "ep:antigravity:986802ce-24ac-404b-9f74-8cd3e18fe2e7|x1234|w20"
+    ]
+   },
+   {
+    "id": "ms-04",
+    "ability": "multi_session",
+    "first_hit": 2,
+    "targets": 5,
+    "reachable": 5,
+    "unreachable": [],
+    "covered_at": {
+     "kb:528": 2
+    },
+    "top": [
+     "queue|queue:2026-09-05T23:25:28+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "ep:codex:01a08f22-c9ad-7b20-995b-b603a9166825|x59|w15",
+     "kb|kb:528|w0",
+     "file:.agent/rules/JARVIS_ENDGAME.md|s3|w0",
+     "queue|queue:2026-09-10T07:39:38+05:30|ec1f2c86-5691-4ea5-93f8-a61e82f042ea|w0"
+    ]
+   },
+   {
+    "id": "ms-05",
+    "ability": "multi_session",
+    "first_hit": 0,
+    "targets": 5,
+    "reachable": 5,
+    "unreachable": [],
+    "covered_at": {
+     "turn:claude:21c8c171-fbcb-417d-b486-7be331d5beda:3335": 3,
+     "kb:789": 7
+    },
+    "top": [
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda|x3335|w32",
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda|x3335|w0"
+    ]
+   },
+   {
+    "id": "ms-06",
+    "ability": "multi_session",
+    "first_hit": 5,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {
+     "kb:757": 5
+    },
+    "top": [
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda.agent-a20b26a24c93706a4|x0|w0",
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda|x1238|w162",
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda|p2505|w27",
+     "ep:antigravity:77cd437e-1b74-4668-8497-0bbe43eaeba3|x142|w685",
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda|x962|w42"
+    ]
+   },
+   {
+    "id": "ms-07",
+    "ability": "multi_session",
+    "first_hit": null,
+    "targets": 7,
+    "reachable": 7,
+    "unreachable": [],
+    "covered_at": {},
+    "top": [
+     "queue|queue:2026-07-31T09:27:29+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "ep:antigravity:986802ce-24ac-404b-9f74-8cd3e18fe2e7|x1234|w18",
+     "file:jarvis_data/cognitive_profile.md|s4|w372",
+     "ep:antigravity:986802ce-24ac-404b-9f74-8cd3e18fe2e7|x1234|w41",
+     "ep:antigravity:986802ce-24ac-404b-9f74-8cd3e18fe2e7|x1234|w13"
+    ]
+   },
+   {
+    "id": "ms-08",
+    "ability": "multi_session",
+    "first_hit": 8,
+    "targets": 3,
+    "reachable": 3,
+    "unreachable": [],
+    "covered_at": {
+     "kb:784": 8,
+     "turn:jarvis:conv-web-cff653a1-415e-417b-ba68-3ac84f621778:3": 15
+    },
+    "top": [
+     "queue|queue:2026-08-16T19:52:36+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "kb|kb:646|w1",
+     "ep:jarvis:conv-web-cff653a1-415e-417b-ba68-3ac84f621778|x8|w0",
+     "kb|kb:787|w0",
+     "file:jarvis_data/cognitive_profile.md|s1|w52"
+    ]
+   },
+   {
+    "id": "ms-09",
+    "ability": "multi_session",
+    "first_hit": 8,
+    "targets": 5,
+    "reachable": 5,
+    "unreachable": [],
+    "covered_at": {
+     "kb:307": 8
+    },
+    "top": [
+     "queue|queue:2026-08-16T20:21:37+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "queue|queue:2026-06-15T14:49:56+05:30|terminal-20260615T144914-44774|w0",
+     "kb|kb:784|w0",
+     "kb|kb:459|w0",
+     "kb|kb:459|w3"
+    ]
+   },
+   {
+    "id": "ms-10",
+    "ability": "multi_session",
+    "first_hit": null,
+    "targets": 4,
+    "reachable": 3,
+    "unreachable": [
+     "conv:conv-web-cff653a1-415e-417b-ba68-3ac84f621778.jsonl#18"
+    ],
+    "covered_at": {},
+    "top": [
+     "ep:jarvis:conv-web-cff653a1-415e-417b-ba68-3ac84f621778|x0|w0",
+     "ep:codex:01a0dcdc-7e56-7520-9e71-f08d82dabc1d|x457|w6",
+     "ep:codex:01a0dcdc-7e56-7520-9e71-f08d82dabc1d|x1|w63",
+     "ep:jarvis:conv-web-cff653a1-415e-417b-ba68-3ac84f621778|x0|w4",
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda.agent-a39b0b962dbf6df6d|x0|w19"
+    ]
+   },
+   {
+    "id": "ms-11",
+    "ability": "multi_session",
+    "first_hit": null,
+    "targets": 3,
+    "reachable": 3,
+    "unreachable": [],
+    "covered_at": {},
+    "top": [
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda.agent-a8e7e12718ef2fb11|x0|w0",
+     "queue|queue:2026-06-10T12:15:39+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "ep:codex:01a0874a-5494-7121-9874-3f8089067932|p3936|w23",
+     "ep:codex:01a0874a-5494-7121-9874-3f8089067932|p4187|w23",
+     "ep:codex:01a0874a-5494-7121-9874-3f8089067932|p4552|w23"
+    ]
+   },
+   {
+    "id": "ms-12",
+    "ability": "multi_session",
+    "first_hit": null,
+    "targets": 4,
+    "reachable": 4,
+    "unreachable": [],
+    "covered_at": {},
+    "top": [
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda|x3335|w24",
+     "kb|kb:645|w3",
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda|x3335|w23",
+     "kb|kb:741|w1",
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda|x3335|w33"
+    ]
+   },
+   {
+    "id": "ms-13",
+    "ability": "multi_session",
+    "first_hit": null,
+    "targets": 3,
+    "reachable": 3,
+    "unreachable": [],
+    "covered_at": {},
+    "top": [
+     "ep:codex:01a0dcdc-8467-7c20-92bf-e2a66b8e8c27|x3163|w115",
+     "ep:codex:01a0dcdc-8467-7c20-92bf-e2a66b8e8c27|x3593|w0",
+     "ep:claude:480533f5-b826-4f30-8987-03758af2f98c|x14949|w1",
+     "ep:codex:01a0dcdc-8467-7c20-92bf-e2a66b8e8c27|x3163|w320",
+     "ep:codex:01a0bd7d-3917-7ee3-9367-c5a92e5e1b7c|p4638|w59"
+    ]
+   },
+   {
+    "id": "ms-14",
+    "ability": "multi_session",
+    "first_hit": 0,
+    "targets": 3,
+    "reachable": 3,
+    "unreachable": [],
+    "covered_at": {
+     "kb:799": 0
+    },
+    "top": [
+     "kb|kb:799|w0",
+     "queue|queue:2026-06-04T11:53:15+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w1",
+     "ep:jarvis:conv-web-ca175336-ca24-42a5-9492-542b0133a6d6|x15|w2",
+     "queue|queue:2026-06-04T11:53:15+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w2",
+     "queue|queue:2026-06-10T12:15:39+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0"
+    ]
+   },
+   {
+    "id": "t-01",
+    "ability": "temporal",
+    "first_hit": null,
+    "targets": 11,
+    "reachable": 11,
+    "unreachable": [],
+    "covered_at": {},
+    "top": [
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda.agent-a7322b1c89e12327a|x0|w3",
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda.agent-a2cf0bfe731b9f600|x0|w6",
+     "ep:codex:01a0dcdc-7e62-7c73-8a09-6aa3aebb67b2|x195|w52",
+     "queue|queue:2026-06-16T14:45:59+05:30|a375d25c-823d-4a49-87e3-84584d114b35|w0",
+     "ep:antigravity:986802ce-24ac-404b-9f74-8cd3e18fe2e7|x521|w4"
+    ]
+   },
+   {
+    "id": "t-02",
+    "ability": "temporal",
+    "first_hit": 0,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {
+     "turn:claude:21c8c171-fbcb-417d-b486-7be331d5beda:3050": 0,
+     "kb:781": 3
+    },
+    "top": [
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda|x3050|w0",
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda|x3050|w3",
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda|x3050|w1",
+     "kb|kb:781|w0",
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda|x3008|w1"
+    ]
+   },
+   {
+    "id": "t-03",
+    "ability": "temporal",
+    "first_hit": 6,
+    "targets": 1,
+    "reachable": 1,
+    "unreachable": [],
+    "covered_at": {
+     "kb:436": 6
+    },
+    "top": [
+     "queue|queue:2026-07-23T09:43:51+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "queue|queue:2026-07-23T09:49:45+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "queue|queue:2026-07-23T09:40:35+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "queue|queue:2026-08-22T22:09:04+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "file:jarvis_data/cognitive_profile.md|s1|w21"
+    ]
+   },
+   {
+    "id": "t-04",
+    "ability": "temporal",
+    "first_hit": 1,
+    "targets": 1,
+    "reachable": 1,
+    "unreachable": [],
+    "covered_at": {
+     "kb:436": 1
+    },
+    "top": [
+     "file:jarvis_data/cognitive_profile.md|s1|w21",
+     "kb|kb:436|w0",
+     "queue|queue:2026-07-23T09:43:51+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "queue|queue:2026-09-02T08:50:49+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "kb|kb:516|w0"
+    ]
+   },
+   {
+    "id": "t-05",
+    "ability": "temporal",
+    "first_hit": 1,
+    "targets": 1,
+    "reachable": 1,
+    "unreachable": [],
+    "covered_at": {
+     "kb:322": 1
+    },
+    "top": [
+     "file:jarvis_data/cognitive_profile.md|s4|w404",
+     "kb|kb:322|w0",
+     "ep:codex:01a08f68-f872-7963-8cfd-8a4f627af016|x9|w56",
+     "ep:codex:01a08f68-f872-7963-8cfd-8a4f627af016|x2|w97",
+     "ep:codex:01a08f68-f872-7963-8cfd-8a4f627af016|x17|w32"
+    ]
+   },
+   {
+    "id": "t-06",
+    "ability": "temporal",
+    "first_hit": 1,
+    "targets": 1,
+    "reachable": 1,
+    "unreachable": [],
+    "covered_at": {
+     "kb:437": 1
+    },
+    "top": [
+     "file:jarvis_data/cognitive_profile.md|s5|w15",
+     "kb|kb:437|w0",
+     "queue|queue:2026-07-27T09:20:29+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "ep:codex:01a08f22-c9ad-7b20-995b-b603a9166825|x59|w27",
+     "kb|kb:428|w2"
+    ]
+   },
+   {
+    "id": "t-07",
+    "ability": "temporal",
+    "first_hit": null,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {},
+    "top": [
+     "ep:jarvis:conv-web-cff653a1-415e-417b-ba68-3ac84f621778|x16|w0",
+     "ep:jarvis:conv-web-cff653a1-415e-417b-ba68-3ac84f621778|x0|w4",
+     "ep:codex:01a0dcdc-7e56-7520-9e71-f08d82dabc1d|x457|w6",
+     "ep:jarvis:conv-web-cff653a1-415e-417b-ba68-3ac84f621778|x0|w0",
+     "ep:codex:01a0dcdc-7e56-7520-9e71-f08d82dabc1d|x1|w63"
+    ]
+   },
+   {
+    "id": "t-08",
+    "ability": "temporal",
+    "first_hit": 0,
+    "targets": 1,
+    "reachable": 1,
+    "unreachable": [],
+    "covered_at": {
+     "kb:403": 0
+    },
+    "top": [
+     "kb|kb:403|w0",
+     "queue|queue:2026-06-18T16:54:36+05:30|4e986828-f710-435e-8c75-b81b046b5aba|w0",
+     "queue|queue:2026-06-24T12:12:35+05:30|4e986828-f710-435e-8c75-b81b046b5aba|w0",
+     "kb|kb:line99|w1",
+     "kb|kb:line99|w0"
+    ]
+   },
+   {
+    "id": "t-09",
+    "ability": "temporal",
+    "first_hit": 1,
+    "targets": 3,
+    "reachable": 3,
+    "unreachable": [],
+    "covered_at": {
+     "turn:jarvis:conv-web-cff653a1-415e-417b-ba68-3ac84f621778:1": 1,
+     "turn:jarvis:conv-20260911T155453-2960:7": 9
+    },
+    "top": [
+     "kb|kb:825|w0",
+     "ep:jarvis:conv-web-cff653a1-415e-417b-ba68-3ac84f621778|x0|w0",
+     "ep:jarvis:conv-web-cff653a1-415e-417b-ba68-3ac84f621778|x0|w4",
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda.agent-a39b0b962dbf6df6d|x0|w59",
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda.agent-a39b0b962dbf6df6d|x0|w19"
+    ]
+   },
+   {
+    "id": "t-10",
+    "ability": "temporal",
+    "first_hit": 0,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {
+     "kb:line237": 0,
+     "kb:line177": 3
+    },
+    "top": [
+     "kb|kb:line237|w0",
+     "kb|kb:line237|w2",
+     "file:jarvis_data/cognitive_profile.md|s4|w488",
+     "kb|kb:line177|w0",
+     "ep:antigravity:986802ce-24ac-404b-9f74-8cd3e18fe2e7|x1234|w33"
+    ]
+   },
+   {
+    "id": "t-11",
+    "ability": "temporal",
+    "first_hit": null,
+    "targets": 1,
+    "reachable": 1,
+    "unreachable": [],
+    "covered_at": {},
+    "top": [
+     "ep:jarvis:conv-web-ca175336-ca24-42a5-9492-542b0133a6d6|x6|w0",
+     "ep:codex:01a0dcdc-8467-7c20-92bf-e2a66b8e8c27|x3593|w107",
+     "kb|kb:611|w3",
+     "ep:codex:01a0dcdc-7e56-7520-9e71-f08d82dabc1d|x1|w101",
+     "kb|kb:810|w0"
+    ]
+   },
+   {
+    "id": "t-12",
+    "ability": "temporal",
+    "first_hit": 11,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {
+     "kb:307": 11
+    },
+    "top": [
+     "kb|kb:371|w0",
+     "queue|queue:2026-06-15T14:48:15+05:30|terminal-20260615T144733-44233|w0",
+     "queue|queue:2026-06-12T14:41:32+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "ep:codex:01a0c206-a3c5-7983-9def-bea53a109cc3|x29|w18",
+     "file:knowledge/Finance/strategy.md|s19|w2"
+    ]
+   },
+   {
+    "id": "t-13",
+    "ability": "temporal",
+    "first_hit": 0,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {
+     "queue:2026-08-16T20:10:17+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14": 0,
+     "file:jarvis_data/personal_life.md": 11
+    },
+    "top": [
+     "queue|queue:2026-08-16T20:10:17+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w2",
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda|x3335|w35",
+     "queue|queue:2026-08-22T22:09:04+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0"
+    ]
+   },
+   {
+    "id": "t-14",
+    "ability": "temporal",
+    "first_hit": 2,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {
+     "kb:671": 2,
+     "turn:claude:21c8c171-fbcb-417d-b486-7be331d5beda:402": 9
+    },
+    "top": [
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda|x2616|w5",
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda.agent-a194138f4231f19f2|x0|w32",
+     "kb|kb:671|w0",
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda|x763|w8",
+     "file:jarvis_data/cognitive_profile.md|s7|w80"
+    ]
+   },
+   {
+    "id": "ku-01",
+    "ability": "knowledge_update",
+    "first_hit": null,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {},
+    "top": [
+     "ep:codex:01a0874a-5494-7121-9874-3f8089067932|p3480|w146",
+     "ep:codex:01a0dcdc-7e56-7520-9e71-f08d82dabc1d|x1|w208",
+     "ep:codex:01a0874a-5494-7121-9874-3f8089067932|x4890|w19",
+     "file:jarvis_data/cognitive_profile.md|s7|w68",
+     "ep:codex:01a0874a-5494-7121-9874-3f8089067932|p3078|w144"
+    ]
+   },
+   {
+    "id": "ku-02",
+    "ability": "knowledge_update",
+    "first_hit": 0,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {
+     "kb:789": 0
+    },
+    "top": [
+     "kb|kb:789|w0",
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda|x3335|w3",
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda|x3335|w33",
+     "kb|kb:467|w0",
+     "kb|kb:467|w1"
+    ]
+   },
+   {
+    "id": "ku-03",
+    "ability": "knowledge_update",
+    "first_hit": 0,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {
+     "turn:claude:21c8c171-fbcb-417d-b486-7be331d5beda:402": 0,
+     "kb:671": 11
+    },
+    "top": [
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda|x402|w0",
+     "ep:codex:01a0dcdc-7e56-7520-9e71-f08d82dabc1d|x242|w0",
+     "ep:codex:01a0dcdc-7e56-7520-9e71-f08d82dabc1d|x205|w35",
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda|x332|w13",
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda|x3564|w61"
+    ]
+   },
+   {
+    "id": "ku-04",
+    "ability": "knowledge_update",
+    "first_hit": 4,
+    "targets": 3,
+    "reachable": 3,
+    "unreachable": [],
+    "covered_at": {
+     "kb:760": 4,
+     "kb:781": 12
+    },
+    "top": [
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda|x3050|w3",
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda|x3008|w1",
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda|x3050|w1",
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda|x1238|w165",
+     "kb|kb:760|w1"
+    ]
+   },
+   {
+    "id": "ku-05",
+    "ability": "knowledge_update",
+    "first_hit": 0,
+    "targets": 3,
+    "reachable": 3,
+    "unreachable": [],
+    "covered_at": {
+     "kb:line177": 0,
+     "file:.agent/rules/CLAUDE.md": 1,
+     "kb:line237": 7
+    },
+    "top": [
+     "kb|kb:line177|w0",
+     "file:.agent/rules/CLAUDE.md|s2|w1",
+     "ep:antigravity:98b630f0-35c7-4d01-adc8-eaa52723d18a|x0|w16",
+     "file:jarvis_data/cognitive_profile.md|s4|w488",
+     "file:jarvis_data/cognitive_profile.md|s4|w492"
+    ]
+   },
+   {
+    "id": "ku-06",
+    "ability": "knowledge_update",
+    "first_hit": 6,
+    "targets": 3,
+    "reachable": 3,
+    "unreachable": [],
+    "covered_at": {
+     "kb:line178": 6,
+     "file:.agent/rules/JARVIS_ENDGAME.md": 10
+    },
+    "top": [
+     "ep:antigravity:45b4b335-aaf2-499b-b2dd-1a36dbded492|x512|w0",
+     "ep:antigravity:45b4b335-aaf2-499b-b2dd-1a36dbded492|x512|w2",
+     "ep:antigravity:45b4b335-aaf2-499b-b2dd-1a36dbded492|x512|w3",
+     "queue|queue:2026-06-04T10:38:02+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w1",
+     "kb|kb:797|w0"
+    ]
+   },
+   {
+    "id": "ku-07",
+    "ability": "knowledge_update",
+    "first_hit": 1,
+    "targets": 3,
+    "reachable": 3,
+    "unreachable": [],
+    "covered_at": {
+     "kb:429": 1,
+     "file:.agent/rules/JARVIS_ENDGAME.md": 3,
+     "kb:463": 7
+    },
+    "top": [
+     "file:jarvis_data/cognitive_profile.md|s4|w324",
+     "kb|kb:429|w0",
+     "ep:codex:01a0dcdc-7e56-7520-9e71-f08d82dabc1d|x295|w10",
+     "file:.agent/rules/JARVIS_ENDGAME.md|s10|w4",
+     "file:.agent/rules/JARVIS_ENDGAME.md|s10|w3"
+    ]
+   },
+   {
+    "id": "ku-08",
+    "ability": "knowledge_update",
+    "first_hit": 0,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {
+     "kb:538": 0,
+     "queue:2026-09-07T10:01:31+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14": 1
+    },
+    "top": [
+     "kb|kb:538|w0",
+     "queue|queue:2026-09-07T10:01:31+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "file:jarvis_data/cognitive_profile.md|s4|w177",
+     "ep:codex:01a09bf6-4bb2-7a03-b747-bdb19102fff7|x3|w82",
+     "file:jarvis_data/cognitive_profile.md|s4|w178"
+    ]
+   },
+   {
+    "id": "ku-09",
+    "ability": "knowledge_update",
+    "first_hit": null,
+    "targets": 1,
+    "reachable": 1,
+    "unreachable": [],
+    "covered_at": {},
+    "top": [
+     "ep:codex:01a0dcdc-7e56-7520-9e71-f08d82dabc1d|x1|w126",
+     "ep:codex:01a0dcdc-7e56-7520-9e71-f08d82dabc1d|x1|w21",
+     "ep:codex:01a08f37-ac52-71b1-9c05-90c72002b6cd|x13|w66",
+     "queue|queue:2026-09-08T10:30:33+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "ep:codex:01a0dcdc-7e56-7520-9e71-f08d82dabc1d|x238|w3"
+    ]
+   },
+   {
+    "id": "ku-10",
+    "ability": "knowledge_update",
+    "first_hit": 0,
+    "targets": 3,
+    "reachable": 2,
+    "unreachable": [
+     "file:.gitignore"
+    ],
+    "covered_at": {
+     "kb:518": 0,
+     "file:.agent/rules/CLAUDE.md": 4
+    },
+    "top": [
+     "kb|kb:518|w0",
+     "file:jarvis_data/cognitive_profile.md|s4|w214",
+     "queue|queue:2026-09-05T23:25:28+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w3",
+     "ep:codex:01a0dcdc-7e56-7520-9e71-f08d82dabc1d|x295|w8",
+     "file:.agent/rules/CLAUDE.md|s13|w1"
+    ]
+   },
+   {
+    "id": "ku-11",
+    "ability": "knowledge_update",
+    "first_hit": 0,
+    "targets": 1,
+    "reachable": 1,
+    "unreachable": [],
+    "covered_at": {
+     "kb:436": 0
+    },
+    "top": [
+     "kb|kb:436|w2",
+     "file:jarvis_data/cognitive_profile.md|s1|w23",
+     "file:jarvis_data/cognitive_profile.md|s1|w14",
+     "kb|kb:436|w3",
+     "kb|kb:line291|w0"
+    ]
+   },
+   {
+    "id": "ku-12",
+    "ability": "knowledge_update",
+    "first_hit": 0,
+    "targets": 1,
+    "reachable": 1,
+    "unreachable": [],
+    "covered_at": {
+     "file:knowledge/Finance/strategy.md": 0
+    },
+    "top": [
+     "file:knowledge/Finance/strategy.md|s39|w1",
+     "file:knowledge/Finance/strategy.md|s10|w2",
+     "file:knowledge/Finance/strategy.md|s11|w0",
+     "file:knowledge/Finance/strategy.md|s11|w1",
+     "file:knowledge/Finance/strategy.md|s5|w0"
+    ]
+   },
+   {
+    "id": "ku-13",
+    "ability": "knowledge_update",
+    "first_hit": 3,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {
+     "kb:757": 3,
+     "kb:760": 4
+    },
+    "top": [
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda.agent-a8e7e12718ef2fb11|x0|w50",
+     "ep:codex:01a0874a-5494-7121-9874-3f8089067932|x5129|w14",
+     "ep:codex:01a0874a-5494-7121-9874-3f8089067932|x5129|w20",
+     "kb|kb:757|w0",
+     "kb|kb:760|w1"
+    ]
+   },
+   {
+    "id": "ku-14",
+    "ability": "knowledge_update",
+    "first_hit": 0,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {
+     "kb:531": 0,
+     "file:.agent/rules/JARVIS_ENDGAME.md": 1
+    },
+    "top": [
+     "kb|kb:531|w2",
+     "file:.agent/rules/JARVIS_ENDGAME.md|s3|w2",
+     "file:.agent/rules/JARVIS_ENDGAME.md|s10|w4",
+     "ep:jarvis:conv-20260911T155453-2960|x0|w3",
+     "file:jarvis_data/cognitive_profile.md|s4|w189"
+    ]
+   },
+   {
+    "id": "ku-15",
+    "ability": "knowledge_update",
+    "first_hit": 2,
+    "targets": 1,
+    "reachable": 1,
+    "unreachable": [],
+    "covered_at": {
+     "kb:line291": 2
+    },
+    "top": [
+     "file:jarvis_data/cognitive_profile.md|s1|w14",
+     "queue|queue:2026-07-31T09:03:41+05:30|4b5e640b-84c2-45d3-a9af-b32f6bfc3818|w0",
+     "kb|kb:line291|w0",
+     "kb|kb:436|w1",
+     "queue|queue:2026-06-18T16:54:36+05:30|4e986828-f710-435e-8c75-b81b046b5aba|w0"
+    ]
+   },
+   {
+    "id": "ku-16",
+    "ability": "knowledge_update",
+    "first_hit": 1,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {
+     "kb:364": 1,
+     "kb:312": 4
+    },
+    "top": [
+     "file:jarvis_data/cognitive_profile.md|s1|w20",
+     "kb|kb:364|w0",
+     "kb|kb:372|w0",
+     "queue|queue:2026-06-15T14:49:56+05:30|terminal-20260615T144914-44774|w0",
+     "kb|kb:312|w0"
+    ]
+   },
+   {
+    "id": "ab-01",
+    "ability": "abstention",
+    "first_hit": 0,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {
+     "queue:2026-08-16T20:10:17+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14": 0,
+     "file:jarvis_data/personal_life.md": 4
+    },
+    "top": [
+     "queue|queue:2026-08-16T20:10:17+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "file:knowledge/Finance/strategy.md|s8|w1",
+     "ep:claude:480533f5-b826-4f30-8987-03758af2f98c|x5082|w0",
+     "ep:codex:01a0dcdc-8467-7c20-92bf-e2a66b8e8c27|x2815|w0",
+     "file:jarvis_data/personal_life.md|s1|w0"
+    ]
+   },
+   {
+    "id": "ab-02",
+    "ability": "abstention",
+    "first_hit": null,
+    "targets": 1,
+    "reachable": 1,
+    "unreachable": [],
+    "covered_at": {},
+    "top": [
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda.agent-a7322b1c89e12327a|x0|w69",
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda.agent-a7322b1c89e12327a|x0|w50",
+     "ep:codex:01a0dcdc-7e62-7c73-8a09-6aa3aebb67b2|x133|w15",
+     "ep:codex:01a0dcdc-7e62-7c73-8a09-6aa3aebb67b2|x133|w14",
+     "ep:codex:01a0c98b-e926-70f1-a514-9e2e94e33780|x3|w77"
+    ]
+   },
+   {
+    "id": "ab-03",
+    "ability": "abstention",
+    "first_hit": null,
+    "targets": 1,
+    "reachable": 1,
+    "unreachable": [],
+    "covered_at": {},
+    "top": [
+     "ep:codex:01a0dcdc-7e62-7c73-8a09-6aa3aebb67b2|x551|w6",
+     "ep:codex:01a0dcdc-7e62-7c73-8a09-6aa3aebb67b2|x551|w4",
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda.agent-a7322b1c89e12327a|x0|w69",
+     "ep:codex:01a0dcdc-7e62-7c73-8a09-6aa3aebb67b2|x551|w5",
+     "ep:claude:e5b92b99-c971-4c78-a7f9-f06f19d666e8|x1285|w5"
+    ]
+   },
+   {
+    "id": "ab-04",
+    "ability": "abstention",
+    "first_hit": 0,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {
+     "file:jarvis_data/personal_life.md": 0,
+     "queue:2026-08-16T20:10:17+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14": 1
+    },
+    "top": [
+     "file:jarvis_data/personal_life.md|s4|w0",
+     "queue|queue:2026-08-16T20:10:17+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "ep:codex:01a0dcdc-7e56-7520-9e71-f08d82dabc1d|x475|w38",
+     "file:jarvis_data/cognitive_profile.md|s1|w35",
+     "kb|kb:502|w1"
+    ]
+   },
+   {
+    "id": "ab-05",
+    "ability": "abstention",
+    "first_hit": 1,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {
+     "file:jarvis_data/personal_life.md": 1,
+     "queue:2026-08-16T20:10:17+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14": 6
+    },
+    "top": [
+     "ep:codex:01a0dcdc-7e56-7520-9e71-f08d82dabc1d|x475|w38",
+     "file:jarvis_data/personal_life.md|s4|w0",
+     "ep:codex:01a0dcdc-7e56-7520-9e71-f08d82dabc1d|x475|w57",
+     "ep:codex:01a0dcdc-7e56-7520-9e71-f08d82dabc1d|x475|w39",
+     "queue|queue:2026-09-06T00:20:11+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0"
+    ]
+   },
+   {
+    "id": "ab-06",
+    "ability": "abstention",
+    "first_hit": 0,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {
+     "queue:2026-08-16T20:10:17+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14": 0,
+     "file:jarvis_data/personal_life.md": 1
+    },
+    "top": [
+     "queue|queue:2026-08-16T20:10:17+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "file:jarvis_data/personal_life.md|s1|w0",
+     "ep:codex:01a09b84-837c-7b40-a5dd-58324458de21|x6|w0",
+     "ep:codex:01a0ba99-985e-7ed3-b19e-aaf7b7dec2ff|x15|w7",
+     "ep:codex:01a0bd72-ec67-71d2-86a6-b28ea5f4edb6|x3|w47"
+    ]
+   },
+   {
+    "id": "ab-07",
+    "ability": "abstention",
+    "first_hit": 1,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {
+     "queue:2026-08-22T22:09:04+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14": 1,
+     "file:jarvis_data/personal_life.md": 7
+    },
+    "top": [
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda|x3335|w32",
+     "queue|queue:2026-08-22T22:09:04+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "file:jarvis_data/cognitive_profile.md|s7|w135",
+     "ep:codex:01a0dcdc-7e56-7520-9e71-f08d82dabc1d|x475|w57"
+    ]
+   },
+   {
+    "id": "ab-08",
+    "ability": "abstention",
+    "first_hit": null,
+    "targets": 1,
+    "reachable": 1,
+    "unreachable": [],
+    "covered_at": {},
+    "top": [
+     "ep:codex:01a0dcdc-7e62-7c73-8a09-6aa3aebb67b2|x387|w3",
+     "ep:codex:01a0dcdc-7e62-7c73-8a09-6aa3aebb67b2|x387|w7",
+     "ep:claude:e5b92b99-c971-4c78-a7f9-f06f19d666e8|x1285|w2",
+     "ep:codex:01a0dcdc-7e62-7c73-8a09-6aa3aebb67b2|x387|w4",
+     "ep:codex:01a0dcdc-7e62-7c73-8a09-6aa3aebb67b2|x387|w9"
+    ]
+   },
+   {
+    "id": "ab-09",
+    "ability": "abstention",
+    "first_hit": 0,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {
+     "file:jarvis_data/personal_life.md": 0,
+     "queue:2026-08-16T20:10:17+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14": 2
+    },
+    "top": [
+     "file:jarvis_data/personal_life.md|s4|w0",
+     "ep:codex:01a0dcdc-7e56-7520-9e71-f08d82dabc1d|x475|w38",
+     "queue|queue:2026-08-16T20:10:17+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "queue|queue:2026-08-26T12:27:01+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w1",
+     "file:jarvis_data/cognitive_profile.md|s1|w35"
+    ]
+   },
+   {
+    "id": "ab-10",
+    "ability": "abstention",
+    "first_hit": 13,
+    "targets": 1,
+    "reachable": 1,
+    "unreachable": [],
+    "covered_at": {
+     "file:jarvis_data/personal_life.md": 13
+    },
+    "top": [
+     "ep:codex:01a0dcdc-7e62-7c73-8a09-6aa3aebb67b2|x195|w52",
+     "ep:codex:01a09b84-837c-7b40-a5dd-58324458de21|x150|w0",
+     "ep:codex:01a0dcdc-7e62-7c73-8a09-6aa3aebb67b2|x195|w49",
+     "ep:codex:01a09b84-837c-7b40-a5dd-58324458de21|x150|w3",
+     "ep:codex:01a09b84-837c-7b40-a5dd-58324458de21|x150|w1"
+    ]
+   },
+   {
+    "id": "ab-11",
+    "ability": "abstention",
+    "first_hit": null,
+    "targets": 1,
+    "reachable": 1,
+    "unreachable": [],
+    "covered_at": {},
+    "top": [
+     "kb|kb:848|w0",
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda|x3335|w32",
+     "queue|queue:2026-08-22T22:09:04+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0"
+    ]
+   },
+   {
+    "id": "ab-12",
+    "ability": "abstention",
+    "first_hit": null,
+    "targets": 1,
+    "reachable": 1,
+    "unreachable": [],
+    "covered_at": {},
+    "top": [
+     "ep:codex:01a0dcdc-8467-7c20-92bf-e2a66b8e8c27|x94|w79",
+     "ep:claude:480533f5-b826-4f30-8987-03758af2f98c|x194|w38",
+     "queue|queue:2026-09-18T12:34:43+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w2",
+     "ep:codex:01a0dcdc-7e56-7520-9e71-f08d82dabc1d|x475|w57",
+     "ep:codex:01a0ba99-985e-7ed3-b19e-aaf7b7dec2ff|x9|w60"
+    ]
+   },
+   {
+    "id": "ab-13",
+    "ability": "abstention",
+    "first_hit": null,
+    "targets": 1,
+    "reachable": 1,
+    "unreachable": [],
+    "covered_at": {},
+    "top": [
+     "ep:claude:480533f5-b826-4f30-8987-03758af2f98c|x13991|w16",
+     "ep:codex:01a0dcdc-8467-7c20-92bf-e2a66b8e8c27|x7593|w15",
+     "ep:claude:480533f5-b826-4f30-8987-03758af2f98c|x13991|w17",
+     "ep:claude:480533f5-b826-4f30-8987-03758af2f98c.agent-ae353497230e9dd23|x0|w29",
+     "ep:codex:01a0dcdc-8467-7c20-92bf-e2a66b8e8c27|x7593|w16"
+    ]
+   }
+  ]
+ },
+ "bge-small": {
+  "build_s": 1077,
+  "stats": {
+   "system_events_skipped": 14218,
+   "system_chars_skipped": 42248134,
+   "embedded": 30417,
+   "embedded_chars": 43032935,
+   "sources_synced": 285,
+   "seconds": 1076.8,
+   "overflow_windows": 0
+  },
+  "status": {
+   "units": 30417,
+   "by_source": {
+    "compaction": 3898,
+    "doc": 551,
+    "exchange": 24133,
+    "kb": 906,
+    "queue": 929
+   },
+   "body_chars": 41270420,
+   "sources": 285,
+   "vectors": 30417,
+   "embedder": "BAAI/bge-small-en-v1.5",
+   "updated": "2026-09-29T00:59:38.671+05:30",
+   "fts_bytes": 183189504
+  },
+  "summary": {
+   "information_extraction": {
+    "n": 21,
+    "unreachable_q": 0,
+    "r@5": 0.857,
+    "cov@5": 0.746,
+    "r@10": 0.905,
+    "cov@10": 0.817,
+    "r@20": 0.905,
+    "cov@20": 0.817
+   },
+   "multi_session": {
+    "n": 14,
+    "unreachable_q": 0,
+    "r@5": 0.429,
+    "cov@5": 0.108,
+    "r@10": 0.5,
+    "cov@10": 0.213,
+    "r@20": 0.5,
+    "cov@20": 0.308
+   },
+   "temporal": {
+    "n": 14,
+    "unreachable_q": 0,
+    "r@5": 0.786,
+    "cov@5": 0.702,
+    "r@10": 0.857,
+    "cov@10": 0.762,
+    "r@20": 0.857,
+    "cov@20": 0.821
+   },
+   "knowledge_update": {
+    "n": 16,
+    "unreachable_q": 0,
+    "r@5": 0.812,
+    "cov@5": 0.656,
+    "r@10": 0.875,
+    "cov@10": 0.75,
+    "r@20": 0.875,
+    "cov@20": 0.854
+   },
+   "abstention": {
+    "n": 13,
+    "unreachable_q": 0,
+    "r@5": 0.462,
+    "cov@5": 0.346,
+    "r@10": 0.462,
+    "cov@10": 0.423,
+    "r@20": 0.538,
+    "cov@20": 0.538
+   },
+   "overall": {
+    "n": 78,
+    "unreachable_q": 0,
+    "r@5": 0.692,
+    "cov@5": 0.539,
+    "r@10": 0.744,
+    "cov@10": 0.619,
+    "r@20": 0.756,
+    "cov@20": 0.688
+   },
+   "answerable": {
+    "n": 65,
+    "unreachable_q": 0,
+    "r@5": 0.738,
+    "cov@5": 0.577,
+    "r@10": 0.8,
+    "cov@10": 0.659,
+    "r@20": 0.8,
+    "cov@20": 0.718
+   }
+  },
+  "latency": {
+   "p50_ms": 488.9,
+   "p95_ms": 794.3,
+   "first_ms": 4896.0
+  },
+  "rows": [
+   {
+    "id": "ie-01",
+    "ability": "information_extraction",
+    "first_hit": 3,
+    "targets": 3,
+    "reachable": 3,
+    "unreachable": [],
+    "covered_at": {
+     "kb:789": 3,
+     "file:jarvis_data/personal_life.md": 4
+    },
+    "top": [
+     "queue|queue:2026-08-22T22:09:04+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "kb|kb:789|w0",
+     "file:jarvis_data/personal_life.md|s3|w0"
+    ]
+   },
+   {
+    "id": "ie-02",
+    "ability": "information_extraction",
+    "first_hit": 0,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {
+     "file:jarvis_data/personal_life.md": 0,
+     "queue:2026-08-16T20:10:17+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14": 6
+    },
+    "top": [
+     "file:jarvis_data/personal_life.md|s4|w0",
+     "file:jarvis_data/cognitive_profile.md|s1|w16",
+     "kb|kb:502|w0",
+     "ep:codex:01a0dcdc-7e56-7520-9e71-f08d82dabc1d|x475|w17",
+     "ep:codex:01a0dcdc-7e56-7520-9e71-f08d82dabc1d|x475|w18"
+    ]
+   },
+   {
+    "id": "ie-03",
+    "ability": "information_extraction",
+    "first_hit": 0,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {
+     "queue:2026-08-16T20:10:17+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14": 0,
+     "file:jarvis_data/personal_life.md": 1
+    },
+    "top": [
+     "queue|queue:2026-08-16T20:10:17+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "file:jarvis_data/personal_life.md|s1|w0",
+     "ep:claude:480533f5-b826-4f30-8987-03758af2f98c|p6516|w10",
+     "ep:codex:01a0dcdc-7e56-7520-9e71-f08d82dabc1d|x475|w17",
+     "ep:codex:01a0dcdc-7e56-7520-9e71-f08d82dabc1d|x475|w53"
+    ]
+   },
+   {
+    "id": "ie-04",
+    "ability": "information_extraction",
+    "first_hit": 0,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {
+     "file:jarvis_data/personal_life.md": 0
+    },
+    "top": [
+     "file:jarvis_data/personal_life.md|s1|w0",
+     "ep:codex:01a0dcdc-8467-7c20-92bf-e2a66b8e8c27|x6101|w192",
+     "ep:codex:01a0904d-bf48-79f1-b997-3cca4d1e33b6|x111|w16",
+     "ep:codex:01a0904d-bf48-79f1-b997-3cca4d1e33b6|x91|w19",
+     "ep:codex:01a0904d-bf48-79f1-b997-3cca4d1e33b6|x87|w21"
+    ]
+   },
+   {
+    "id": "ie-05",
+    "ability": "information_extraction",
+    "first_hit": null,
+    "targets": 4,
+    "reachable": 4,
+    "unreachable": [],
+    "covered_at": {},
+    "top": [
+     "ep:antigravity:77cd437e-1b74-4668-8497-0bbe43eaeba3|x16|w1",
+     "kb|kb:831|w0",
+     "ep:antigravity:5a76f739-b07e-447a-bef2-2282a2f4417c|x2297|w0",
+     "ep:codex:01a0dcdc-7e56-7520-9e71-f08d82dabc1d|x457|w1",
+     "ep:antigravity:5a76f739-b07e-447a-bef2-2282a2f4417c|x2451|w26"
+    ]
+   },
+   {
+    "id": "ie-06",
+    "ability": "information_extraction",
+    "first_hit": 0,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {
+     "file:jarvis_data/personal_life.md": 0,
+     "queue:2026-08-16T20:10:17+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14": 1
+    },
+    "top": [
+     "file:jarvis_data/personal_life.md|s5|w0",
+     "queue|queue:2026-08-16T20:10:17+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "queue|queue:2026-09-01T17:18:29+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "ep:codex:01a0dcdc-8467-7c20-92bf-e2a66b8e8c27|x2830|w17",
+     "ep:codex:01a0dcdc-8467-7c20-92bf-e2a66b8e8c27|x2830|w71"
+    ]
+   },
+   {
+    "id": "ie-07",
+    "ability": "information_extraction",
+    "first_hit": 0,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {
+     "file:jarvis_data/personal_life.md": 0
+    },
+    "top": [
+     "file:jarvis_data/personal_life.md|s5|w0",
+     "ep:claude:e5b92b99-c971-4c78-a7f9-f06f19d666e8|x372|w12",
+     "ep:codex:01a0dcdc-8467-7c20-92bf-e2a66b8e8c27|x7468|w4",
+     "ep:codex:01a0dcdc-8467-7c20-92bf-e2a66b8e8c27|x7468|w19",
+     "ep:codex:01a0dcdc-7e62-7c73-8a09-6aa3aebb67b2|x562|w5"
+    ]
+   },
+   {
+    "id": "ie-08",
+    "ability": "information_extraction",
+    "first_hit": 0,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {
+     "turn:jarvis:conv-web-cff653a1-415e-417b-ba68-3ac84f621778:3": 0,
+     "kb:784": 1
+    },
+    "top": [
+     "ep:jarvis:conv-web-cff653a1-415e-417b-ba68-3ac84f621778|x2|w1",
+     "kb|kb:784|w0",
+     "file:jarvis_data/cognitive_profile.md|s1|w21",
+     "file:jarvis_data/cognitive_profile.md|s7|w59",
+     "ep:antigravity:e387d971-c749-4131-b058-fcf2445433ae|x0|w0"
+    ]
+   },
+   {
+    "id": "ie-09",
+    "ability": "information_extraction",
+    "first_hit": 8,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {
+     "turn:jarvis:conv-web-cff653a1-415e-417b-ba68-3ac84f621778:3": 8,
+     "kb:784": 9
+    },
+    "top": [
+     "kb|kb:828|w0",
+     "kb|kb:646|w0",
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda|x3335|w14",
+     "file:jarvis_data/cognitive_profile.md|s1|w21",
+     "ep:antigravity:fb1b349b-6038-4488-88a7-959c82459fac|x299|w122"
+    ]
+   },
+   {
+    "id": "ie-10",
+    "ability": "information_extraction",
+    "first_hit": 0,
+    "targets": 3,
+    "reachable": 3,
+    "unreachable": [],
+    "covered_at": {
+     "kb:787": 0,
+     "turn:jarvis:conv-web-cff653a1-415e-417b-ba68-3ac84f621778:11": 1,
+     "turn:jarvis:conv-web-cff653a1-415e-417b-ba68-3ac84f621778:9": 2
+    },
+    "top": [
+     "kb|kb:787|w0",
+     "ep:jarvis:conv-web-cff653a1-415e-417b-ba68-3ac84f621778|x10|w0",
+     "ep:jarvis:conv-web-cff653a1-415e-417b-ba68-3ac84f621778|x8|w0",
+     "file:jarvis_data/cognitive_profile.md|s1|w23",
+     "ep:jarvis:conv-web-cff653a1-415e-417b-ba68-3ac84f621778|x6|w0"
+    ]
+   },
+   {
+    "id": "ie-11",
+    "ability": "information_extraction",
+    "first_hit": 0,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {
+     "kb:788": 0,
+     "turn:jarvis:conv-web-cff653a1-415e-417b-ba68-3ac84f621778:13": 3
+    },
+    "top": [
+     "kb|kb:788|w0",
+     "ep:jarvis:conv-web-cff653a1-415e-417b-ba68-3ac84f621778|x10|w0",
+     "kb|kb:651|w0",
+     "ep:jarvis:conv-web-cff653a1-415e-417b-ba68-3ac84f621778|x12|w0",
+     "file:jarvis_data/cognitive_profile.md|s1|w24"
+    ]
+   },
+   {
+    "id": "ie-12",
+    "ability": "information_extraction",
+    "first_hit": 2,
+    "targets": 1,
+    "reachable": 1,
+    "unreachable": [],
+    "covered_at": {
+     "kb:line266": 2
+    },
+    "top": [
+     "ep:codex:01a09623-f6cb-7743-b552-76a42d14af29|p1|w135",
+     "ep:codex:01a09623-f6cb-7743-b552-76a42d14af29|x18|w12",
+     "kb|kb:line266|w0",
+     "ep:codex:01a09623-f6cb-7743-b552-76a42d14af29|x10|w26",
+     "ep:codex:01a09623-f6cb-7743-b552-76a42d14af29|p1|w72"
+    ]
+   },
+   {
+    "id": "ie-13",
+    "ability": "information_extraction",
+    "first_hit": 0,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {
+     "kb:804": 0,
+     "queue:2026-06-02T16:04:53+05:30|4e986828-f710-435e-8c75-b81b046b5aba": 1
+    },
+    "top": [
+     "kb|kb:804|w0",
+     "queue|queue:2026-06-02T16:04:53+05:30|4e986828-f710-435e-8c75-b81b046b5aba|w0",
+     "kb|kb:372|w0",
+     "queue|queue:2026-06-15T14:49:56+05:30|terminal-20260615T144914-44774|w0",
+     "ep:antigravity:986802ce-24ac-404b-9f74-8cd3e18fe2e7|x521|w1"
+    ]
+   },
+   {
+    "id": "ie-14",
+    "ability": "information_extraction",
+    "first_hit": 0,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {
+     "kb:line99": 0
+    },
+    "top": [
+     "kb|kb:line99|w0",
+     "queue|queue:2026-09-05T23:37:55+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "queue|queue:2026-09-03T10:01:06+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "queue|queue:2026-09-03T10:04:11+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "ep:codex:01a0dcdc-8467-7c20-92bf-e2a66b8e8c27|x5185|w12"
+    ]
+   },
+   {
+    "id": "ie-15",
+    "ability": "information_extraction",
+    "first_hit": 3,
+    "targets": 1,
+    "reachable": 1,
+    "unreachable": [],
+    "covered_at": {
+     "kb:436": 3
+    },
+    "top": [
+     "queue|queue:2026-07-23T09:33:03+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "kb|kb:516|w0",
+     "queue|queue:2026-09-02T08:50:49+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "kb|kb:436|w0",
+     "file:jarvis_data/cognitive_profile.md|s1|w17"
+    ]
+   },
+   {
+    "id": "ie-16",
+    "ability": "information_extraction",
+    "first_hit": null,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {},
+    "top": [
+     "ep:codex:01a09e0b-2579-7962-ad0b-ac053363daae|x3|w22",
+     "ep:codex:01a09e1a-377c-7841-adfb-00aab4171c9a|x14|w11",
+     "ep:codex:01a09e1a-377c-7841-adfb-00aab4171c9a|x25|w10",
+     "ep:codex:01a0874a-5494-7121-9874-3f8089067932|p5255|w25",
+     "ep:codex:01a0874a-5494-7121-9874-3f8089067932|p5047|w25"
+    ]
+   },
+   {
+    "id": "ie-17",
+    "ability": "information_extraction",
+    "first_hit": 0,
+    "targets": 1,
+    "reachable": 1,
+    "unreachable": [],
+    "covered_at": {
+     "file:jarvis_data/personal_life.md": 0
+    },
+    "top": [
+     "file:jarvis_data/personal_life.md|s6|w0",
+     "file:jarvis_data/cognitive_profile.md|s4|w92",
+     "queue|queue:2026-08-22T12:54:55+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "queue|queue:2026-08-22T12:18:28+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "queue|queue:2026-08-16T20:21:37+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0"
+    ]
+   },
+   {
+    "id": "ie-18",
+    "ability": "information_extraction",
+    "first_hit": 0,
+    "targets": 1,
+    "reachable": 1,
+    "unreachable": [],
+    "covered_at": {
+     "kb:436": 0
+    },
+    "top": [
+     "kb|kb:436|w0",
+     "file:jarvis_data/cognitive_profile.md|s1|w10",
+     "kb|kb:436|w1",
+     "queue|queue:2026-07-23T09:49:45+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "queue|queue:2026-07-23T09:55:52+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0"
+    ]
+   },
+   {
+    "id": "ie-19",
+    "ability": "information_extraction",
+    "first_hit": 0,
+    "targets": 1,
+    "reachable": 1,
+    "unreachable": [],
+    "covered_at": {
+     "kb:416": 0
+    },
+    "top": [
+     "kb|kb:416|w0",
+     "file:jarvis_data/cognitive_profile.md|s4|w150",
+     "kb|kb:408|w0",
+     "kb|kb:line181|w0",
+     "file:jarvis_data/cognitive_profile.md|s4|w236"
+    ]
+   },
+   {
+    "id": "ie-20",
+    "ability": "information_extraction",
+    "first_hit": 0,
+    "targets": 1,
+    "reachable": 1,
+    "unreachable": [],
+    "covered_at": {
+     "kb:line74": 0
+    },
+    "top": [
+     "kb|kb:line74|w0",
+     "ep:antigravity:1c4a4e49-d66b-4af8-b53f-b9f6aed953df|x92|w4",
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda.agent-a7322b1c89e12327a|x0|w15",
+     "ep:antigravity:1c4a4e49-d66b-4af8-b53f-b9f6aed953df|x92|w3",
+     "ep:antigravity:1c4a4e49-d66b-4af8-b53f-b9f6aed953df|x92|w2"
+    ]
+   },
+   {
+    "id": "ie-21",
+    "ability": "information_extraction",
+    "first_hit": 0,
+    "targets": 1,
+    "reachable": 1,
+    "unreachable": [],
+    "covered_at": {
+     "file:jarvis_data/personal_life.md": 0
+    },
+    "top": [
+     "file:jarvis_data/personal_life.md|s6|w0",
+     "queue|queue:2026-08-16T20:21:37+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "queue|queue:2026-06-15T14:49:56+05:30|terminal-20260615T144914-44774|w0",
+     "kb|kb:372|w0",
+     "file:jarvis_data/cognitive_profile.md|s3|w11"
+    ]
+   },
+   {
+    "id": "ms-01",
+    "ability": "multi_session",
+    "first_hit": 0,
+    "targets": 8,
+    "reachable": 8,
+    "unreachable": [],
+    "covered_at": {
+     "kb:771": 0,
+     "kb:784": 5,
+     "kb:787": 12
+    },
+    "top": [
+     "kb|kb:771|w0",
+     "file:jarvis_data/cognitive_profile.md|s1|w22",
+     "ep:jarvis:conv-web-cff653a1-415e-417b-ba68-3ac84f621778|x2|w1"
+    ]
+   },
+   {
+    "id": "ms-02",
+    "ability": "multi_session",
+    "first_hit": 4,
+    "targets": 4,
+    "reachable": 4,
+    "unreachable": [],
+    "covered_at": {
+     "kb:531": 4,
+     "file:.agent/rules/JARVIS_ENDGAME.md": 5,
+     "kb:429": 10,
+     "kb:463": 12
+    },
+    "top": [
+     "queue|queue:2026-08-04T10:29:22+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "file:.agent/rules/CLAUDE.md|s11|w0",
+     "kb|kb:313|w1",
+     "kb|kb:line42|w0",
+     "kb|kb:531|w1"
+    ]
+   },
+   {
+    "id": "ms-03",
+    "ability": "multi_session",
+    "first_hit": null,
+    "targets": 4,
+    "reachable": 4,
+    "unreachable": [],
+    "covered_at": {},
+    "top": [
+     "ep:antigravity:986802ce-24ac-404b-9f74-8cd3e18fe2e7|x1234|w17",
+     "ep:antigravity:986802ce-24ac-404b-9f74-8cd3e18fe2e7|x1234|w9",
+     "ep:antigravity:986802ce-24ac-404b-9f74-8cd3e18fe2e7|x1234|w8",
+     "ep:jarvis:conv-20260911T155453-2960|x6|w0",
+     "ep:codex:01a0874a-5494-7121-9874-3f8089067932|x4192|w0"
+    ]
+   },
+   {
+    "id": "ms-04",
+    "ability": "multi_session",
+    "first_hit": 1,
+    "targets": 5,
+    "reachable": 5,
+    "unreachable": [],
+    "covered_at": {
+     "kb:528": 1
+    },
+    "top": [
+     "queue|queue:2026-09-05T23:25:28+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "kb|kb:528|w0",
+     "file:.agent/rules/JARVIS_ENDGAME.md|s3|w0",
+     "queue|queue:2026-09-10T07:39:38+05:30|ec1f2c86-5691-4ea5-93f8-a61e82f042ea|w0",
+     "file:.agent/rules/JARVIS_ENDGAME.md|s27|w0"
+    ]
+   },
+   {
+    "id": "ms-05",
+    "ability": "multi_session",
+    "first_hit": 0,
+    "targets": 5,
+    "reachable": 5,
+    "unreachable": [],
+    "covered_at": {
+     "turn:claude:21c8c171-fbcb-417d-b486-7be331d5beda:3335": 6,
+     "kb:789": 7
+    },
+    "top": [
+     "kb|kb:848|w0"
+    ]
+   },
+   {
+    "id": "ms-06",
+    "ability": "multi_session",
+    "first_hit": 6,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {
+     "kb:757": 6,
+     "kb:760": 17
+    },
+    "top": [
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda.agent-a20b26a24c93706a4|x0|w0",
+     "ep:codex:01a0874a-5494-7121-9874-3f8089067932|x1225|w5",
+     "ep:jarvis:conv-web-ca175336-ca24-42a5-9492-542b0133a6d6|x19|w1",
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda.agent-a965c518500b6a65a|x0|w0",
+     "ep:codex:01a0874a-5494-7121-9874-3f8089067932|x4|w8"
+    ]
+   },
+   {
+    "id": "ms-07",
+    "ability": "multi_session",
+    "first_hit": null,
+    "targets": 7,
+    "reachable": 7,
+    "unreachable": [],
+    "covered_at": {},
+    "top": [
+     "ep:antigravity:986802ce-24ac-404b-9f74-8cd3e18fe2e7|x1234|w8",
+     "ep:antigravity:986802ce-24ac-404b-9f74-8cd3e18fe2e7|x1234|w16",
+     "ep:antigravity:986802ce-24ac-404b-9f74-8cd3e18fe2e7|x1234|w18",
+     "queue|queue:2026-08-03T04:08:49+05:30|conv-20260803T040735-118740|w3",
+     "file:jarvis_data/cognitive_profile.md|s4|w180"
+    ]
+   },
+   {
+    "id": "ms-08",
+    "ability": "multi_session",
+    "first_hit": null,
+    "targets": 3,
+    "reachable": 3,
+    "unreachable": [],
+    "covered_at": {},
+    "top": [
+     "queue|queue:2026-08-16T19:52:36+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "kb|kb:787|w0",
+     "kb|kb:735|w1",
+     "ep:jarvis:conv-web-cff653a1-415e-417b-ba68-3ac84f621778|x16|w1",
+     "file:jarvis_data/cognitive_profile.md|s1|w23"
+    ]
+   },
+   {
+    "id": "ms-09",
+    "ability": "multi_session",
+    "first_hit": 1,
+    "targets": 5,
+    "reachable": 5,
+    "unreachable": [],
+    "covered_at": {
+     "kb:804": 1,
+     "kb:307": 12
+    },
+    "top": [
+     "queue|queue:2026-08-16T20:21:37+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "kb|kb:804|w0",
+     "kb|kb:784|w0",
+     "ep:codex:01a0dcdc-7e56-7520-9e71-f08d82dabc1d|x457|w3",
+     "queue|queue:2026-06-15T14:49:56+05:30|terminal-20260615T144914-44774|w0"
+    ]
+   },
+   {
+    "id": "ms-10",
+    "ability": "multi_session",
+    "first_hit": null,
+    "targets": 4,
+    "reachable": 3,
+    "unreachable": [
+     "conv:conv-web-cff653a1-415e-417b-ba68-3ac84f621778.jsonl#18"
+    ],
+    "covered_at": {},
+    "top": [
+     "ep:codex:01a0dcdc-7e56-7520-9e71-f08d82dabc1d|x457|w3",
+     "kb|kb:825|w0",
+     "ep:jarvis:conv-web-cff653a1-415e-417b-ba68-3ac84f621778|x0|w1",
+     "ep:jarvis:conv-web-cff653a1-415e-417b-ba68-3ac84f621778|x0|w0",
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda.agent-a7322b1c89e12327a|x0|w1"
+    ]
+   },
+   {
+    "id": "ms-11",
+    "ability": "multi_session",
+    "first_hit": null,
+    "targets": 3,
+    "reachable": 3,
+    "unreachable": [],
+    "covered_at": {},
+    "top": [
+     "ep:jarvis:conv-web-cff653a1-415e-417b-ba68-3ac84f621778|x0|w0",
+     "ep:jarvis:conv-20260911T155453-2960|x6|w0",
+     "queue|queue:2026-06-10T12:15:39+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "ep:jarvis:conv-20260911T155453-2960|x6|w1"
+    ]
+   },
+   {
+    "id": "ms-12",
+    "ability": "multi_session",
+    "first_hit": null,
+    "targets": 4,
+    "reachable": 4,
+    "unreachable": [],
+    "covered_at": {},
+    "top": [
+     "ep:jarvis:conv-web-ca175336-ca24-42a5-9492-542b0133a6d6|x13|w0",
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda|x3335|w10",
+     "ep:jarvis:conv-20260911T155453-2960|x2|w0",
+     "ep:codex:01a0904d-bf48-79f1-b997-3cca4d1e33b6|p1|w23",
+     "file:jarvis_data/cognitive_profile.md|s4|w86"
+    ]
+   },
+   {
+    "id": "ms-13",
+    "ability": "multi_session",
+    "first_hit": null,
+    "targets": 3,
+    "reachable": 3,
+    "unreachable": [],
+    "covered_at": {},
+    "top": [
+     "ep:claude:480533f5-b826-4f30-8987-03758af2f98c.agent-a8dd7bb4bb0023baf|x0|w0",
+     "ep:codex:01a0bd7d-3917-7ee3-9367-c5a92e5e1b7c|x450|w6",
+     "ep:codex:01a0dcdc-8467-7c20-92bf-e2a66b8e8c27|x751|w0",
+     "ep:codex:01a0bd7d-3917-7ee3-9367-c5a92e5e1b7c|p3086|w9",
+     "ep:codex:01a0bd7d-3917-7ee3-9367-c5a92e5e1b7c|p3281|w9"
+    ]
+   },
+   {
+    "id": "ms-14",
+    "ability": "multi_session",
+    "first_hit": 0,
+    "targets": 3,
+    "reachable": 3,
+    "unreachable": [],
+    "covered_at": {
+     "kb:799": 0
+    },
+    "top": [
+     "kb|kb:799|w0",
+     "ep:jarvis:conv-web-ca175336-ca24-42a5-9492-542b0133a6d6|x15|w1",
+     "ep:jarvis:conv-web-ca175336-ca24-42a5-9492-542b0133a6d6|x15|w0",
+     "queue|queue:2026-09-01T16:50:51+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "kb|kb:619|w1"
+    ]
+   },
+   {
+    "id": "t-01",
+    "ability": "temporal",
+    "first_hit": null,
+    "targets": 11,
+    "reachable": 11,
+    "unreachable": [],
+    "covered_at": {},
+    "top": [
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda.agent-a2cf0bfe731b9f600|x0|w2",
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda.agent-a7322b1c89e12327a|x0|w1",
+     "queue|queue:2026-06-16T14:45:59+05:30|a375d25c-823d-4a49-87e3-84584d114b35|w0",
+     "file:knowledge/Finance/strategy.md|s44|w0",
+     "ep:antigravity:986802ce-24ac-404b-9f74-8cd3e18fe2e7|x521|w1"
+    ]
+   },
+   {
+    "id": "t-02",
+    "ability": "temporal",
+    "first_hit": 0,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {
+     "turn:claude:21c8c171-fbcb-417d-b486-7be331d5beda:3050": 0,
+     "kb:781": 1
+    },
+    "top": [
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda|x3050|w0",
+     "kb|kb:781|w0",
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda.agent-a7322b1c89e12327a|x0|w1",
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda|x3050|w1",
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda|x3014|w2"
+    ]
+   },
+   {
+    "id": "t-03",
+    "ability": "temporal",
+    "first_hit": 4,
+    "targets": 1,
+    "reachable": 1,
+    "unreachable": [],
+    "covered_at": {
+     "kb:436": 4
+    },
+    "top": [
+     "queue|queue:2026-08-16T20:21:37+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "queue|queue:2026-07-23T09:43:51+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "queue|queue:2026-07-23T09:49:45+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "queue|queue:2026-07-23T09:40:35+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "kb|kb:436|w0"
+    ]
+   },
+   {
+    "id": "t-04",
+    "ability": "temporal",
+    "first_hit": 1,
+    "targets": 1,
+    "reachable": 1,
+    "unreachable": [],
+    "covered_at": {
+     "kb:436": 1
+    },
+    "top": [
+     "queue|queue:2026-07-23T09:43:51+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "kb|kb:436|w0",
+     "file:jarvis_data/cognitive_profile.md|s1|w9",
+     "kb|kb:516|w0",
+     "queue|queue:2026-09-02T08:50:49+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0"
+    ]
+   },
+   {
+    "id": "t-05",
+    "ability": "temporal",
+    "first_hit": 1,
+    "targets": 1,
+    "reachable": 1,
+    "unreachable": [],
+    "covered_at": {
+     "kb:322": 1
+    },
+    "top": [
+     "file:jarvis_data/cognitive_profile.md|s4|w181",
+     "kb|kb:322|w0",
+     "file:jarvis_data/cognitive_profile.md|s4|w180",
+     "ep:codex:01a08f68-f872-7963-8cfd-8a4f627af016|x21|w11",
+     "ep:codex:01a08f68-f872-7963-8cfd-8a4f627af016|x2|w44"
+    ]
+   },
+   {
+    "id": "t-06",
+    "ability": "temporal",
+    "first_hit": 1,
+    "targets": 1,
+    "reachable": 1,
+    "unreachable": [],
+    "covered_at": {
+     "kb:437": 1
+    },
+    "top": [
+     "queue|queue:2026-07-27T09:20:29+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "kb|kb:437|w0",
+     "kb|kb:428|w0",
+     "kb|kb:433|w1",
+     "kb|kb:line295|w1"
+    ]
+   },
+   {
+    "id": "t-07",
+    "ability": "temporal",
+    "first_hit": null,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {},
+    "top": [
+     "ep:codex:01a0dcdc-7e56-7520-9e71-f08d82dabc1d|x457|w3",
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda|x3283|w4",
+     "ep:jarvis:conv-web-cff653a1-415e-417b-ba68-3ac84f621778|x16|w0",
+     "file:jarvis_data/cognitive_profile.md|s1|w8",
+     "kb|kb:479|w0"
+    ]
+   },
+   {
+    "id": "t-08",
+    "ability": "temporal",
+    "first_hit": 0,
+    "targets": 1,
+    "reachable": 1,
+    "unreachable": [],
+    "covered_at": {
+     "kb:403": 0
+    },
+    "top": [
+     "kb|kb:403|w0",
+     "queue|queue:2026-06-18T16:54:36+05:30|4e986828-f710-435e-8c75-b81b046b5aba|w0",
+     "kb|kb:804|w0",
+     "queue|queue:2026-06-24T12:12:35+05:30|4e986828-f710-435e-8c75-b81b046b5aba|w0",
+     "kb|kb:line99|w0"
+    ]
+   },
+   {
+    "id": "t-09",
+    "ability": "temporal",
+    "first_hit": 2,
+    "targets": 3,
+    "reachable": 3,
+    "unreachable": [],
+    "covered_at": {
+     "turn:jarvis:conv-web-cff653a1-415e-417b-ba68-3ac84f621778:1": 2,
+     "turn:jarvis:conv-20260911T155453-2960:7": 8,
+     "kb:784": 16
+    },
+    "top": [
+     "ep:codex:01a0dcdc-7e56-7520-9e71-f08d82dabc1d|x457|w3",
+     "kb|kb:825|w0",
+     "ep:jarvis:conv-web-cff653a1-415e-417b-ba68-3ac84f621778|x0|w1",
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda.agent-a965c518500b6a65a|x0|w2",
+     "ep:jarvis:conv-web-cff653a1-415e-417b-ba68-3ac84f621778|x0|w0"
+    ]
+   },
+   {
+    "id": "t-10",
+    "ability": "temporal",
+    "first_hit": 1,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {
+     "kb:line237": 1,
+     "kb:line177": 4
+    },
+    "top": [
+     "ep:antigravity:986802ce-24ac-404b-9f74-8cd3e18fe2e7|x0|w3",
+     "kb|kb:line237|w0",
+     "ep:antigravity:986802ce-24ac-404b-9f74-8cd3e18fe2e7|x1234|w15",
+     "kb|kb:line237|w1",
+     "kb|kb:line177|w0"
+    ]
+   },
+   {
+    "id": "t-11",
+    "ability": "temporal",
+    "first_hit": 1,
+    "targets": 1,
+    "reachable": 1,
+    "unreachable": [],
+    "covered_at": {
+     "kb:563": 1
+    },
+    "top": [
+     "kb|kb:615|w0",
+     "kb|kb:563|w0",
+     "ep:jarvis:conv-web-ca175336-ca24-42a5-9492-542b0133a6d6|x6|w0",
+     "kb|kb:810|w0",
+     "ep:codex:01a08f37-ac52-71b1-9c05-90c72002b6cd|x13|w29"
+    ]
+   },
+   {
+    "id": "t-12",
+    "ability": "temporal",
+    "first_hit": 6,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {
+     "kb:307": 6
+    },
+    "top": [
+     "kb|kb:371|w0",
+     "queue|queue:2026-06-15T14:48:15+05:30|terminal-20260615T144733-44233|w0",
+     "ep:antigravity:986802ce-24ac-404b-9f74-8cd3e18fe2e7|x521|w1",
+     "ep:antigravity:986802ce-24ac-404b-9f74-8cd3e18fe2e7|x2025|w40",
+     "ep:codex:01a0c206-a3c5-7983-9def-bea53a109cc3|x29|w8"
+    ]
+   },
+   {
+    "id": "t-13",
+    "ability": "temporal",
+    "first_hit": 2,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {
+     "queue:2026-08-16T20:10:17+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14": 2,
+     "file:jarvis_data/personal_life.md": 15
+    },
+    "top": [
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda|x3335|w14",
+     "queue|queue:2026-08-16T20:10:17+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "file:jarvis_data/cognitive_profile.md|s1|w16"
+    ]
+   },
+   {
+    "id": "t-14",
+    "ability": "temporal",
+    "first_hit": 0,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {
+     "kb:671": 0,
+     "turn:claude:21c8c171-fbcb-417d-b486-7be331d5beda:402": 2
+    },
+    "top": [
+     "kb|kb:671|w0",
+     "kb|kb:743|w0",
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda|x402|w0",
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda|x402|w3",
+     "ep:codex:01a0dcdc-7e56-7520-9e71-f08d82dabc1d|x242|w16"
+    ]
+   },
+   {
+    "id": "ku-01",
+    "ability": "knowledge_update",
+    "first_hit": null,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {},
+    "top": [
+     "ep:codex:01a0874a-5494-7121-9874-3f8089067932|x106|w0",
+     "file:jarvis_data/cognitive_profile.md|s4|w200",
+     "ep:codex:01a0965d-8161-7f41-a546-743e09e90927|x22|w25",
+     "ep:codex:01a0874a-5494-7121-9874-3f8089067932|x1093|w2",
+     "ep:codex:01a0874a-5494-7121-9874-3f8089067932|p3078|w63"
+    ]
+   },
+   {
+    "id": "ku-02",
+    "ability": "knowledge_update",
+    "first_hit": 0,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {
+     "kb:789": 0,
+     "file:jarvis_data/personal_life.md": 1
+    },
+    "top": [
+     "kb|kb:789|w0",
+     "file:jarvis_data/personal_life.md|s0|w0",
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda|x3335|w14",
+     "file:jarvis_data/cognitive_profile.md|s4|w6",
+     "file:.agent/rules/JARVIS_ENDGAME.md|s6|w1"
+    ]
+   },
+   {
+    "id": "ku-03",
+    "ability": "knowledge_update",
+    "first_hit": 0,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {
+     "turn:claude:21c8c171-fbcb-417d-b486-7be331d5beda:402": 0,
+     "kb:671": 10
+    },
+    "top": [
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda|x402|w0",
+     "ep:codex:01a0dcdc-7e56-7520-9e71-f08d82dabc1d|x242|w0",
+     "ep:codex:01a0dcdc-7e56-7520-9e71-f08d82dabc1d|x205|w16",
+     "file:jarvis_data/cognitive_profile.md|s7|w36",
+     "ep:antigravity:986802ce-24ac-404b-9f74-8cd3e18fe2e7|x2025|w12"
+    ]
+   },
+   {
+    "id": "ku-04",
+    "ability": "knowledge_update",
+    "first_hit": 4,
+    "targets": 3,
+    "reachable": 3,
+    "unreachable": [],
+    "covered_at": {
+     "kb:781": 4,
+     "kb:757": 10,
+     "kb:760": 13
+    },
+    "top": [
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda|x3050|w0",
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda|x1238|w70",
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda|x3008|w0",
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda.agent-a8e7e12718ef2fb11|x0|w0",
+     "kb|kb:781|w0"
+    ]
+   },
+   {
+    "id": "ku-05",
+    "ability": "knowledge_update",
+    "first_hit": 0,
+    "targets": 3,
+    "reachable": 3,
+    "unreachable": [],
+    "covered_at": {
+     "kb:line177": 0,
+     "file:.agent/rules/CLAUDE.md": 1,
+     "kb:line237": 3
+    },
+    "top": [
+     "kb|kb:line177|w0",
+     "file:.agent/rules/CLAUDE.md|s2|w0",
+     "ep:antigravity:45b4b335-aaf2-499b-b2dd-1a36dbded492|x0|w0",
+     "kb|kb:line237|w0",
+     "ep:antigravity:986802ce-24ac-404b-9f74-8cd3e18fe2e7|x1234|w15"
+    ]
+   },
+   {
+    "id": "ku-06",
+    "ability": "knowledge_update",
+    "first_hit": 3,
+    "targets": 3,
+    "reachable": 3,
+    "unreachable": [],
+    "covered_at": {
+     "kb:line178": 3,
+     "file:.agent/rules/JARVIS_ENDGAME.md": 4
+    },
+    "top": [
+     "ep:antigravity:45b4b335-aaf2-499b-b2dd-1a36dbded492|x512|w0",
+     "kb|kb:797|w0",
+     "queue|queue:2026-06-04T10:38:02+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "kb|kb:line178|w0",
+     "file:.agent/rules/JARVIS_ENDGAME.md|s4|w0"
+    ]
+   },
+   {
+    "id": "ku-07",
+    "ability": "knowledge_update",
+    "first_hit": 1,
+    "targets": 3,
+    "reachable": 3,
+    "unreachable": [],
+    "covered_at": {
+     "kb:429": 1,
+     "file:.agent/rules/JARVIS_ENDGAME.md": 2,
+     "kb:463": 4
+    },
+    "top": [
+     "file:jarvis_data/cognitive_profile.md|s4|w145",
+     "kb|kb:429|w0",
+     "file:.agent/rules/JARVIS_ENDGAME.md|s10|w1",
+     "file:jarvis_data/cognitive_profile.md|s4|w131",
+     "kb|kb:463|w0"
+    ]
+   },
+   {
+    "id": "ku-08",
+    "ability": "knowledge_update",
+    "first_hit": 0,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {
+     "kb:538": 0,
+     "queue:2026-09-07T10:01:31+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14": 1
+    },
+    "top": [
+     "kb|kb:538|w0",
+     "queue|queue:2026-09-07T10:01:31+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "ep:codex:01a09bf6-4bb2-7a03-b747-bdb19102fff7|x3|w38",
+     "queue|queue:2026-09-07T10:08:55+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "file:jarvis_data/cognitive_profile.md|s4|w80"
+    ]
+   },
+   {
+    "id": "ku-09",
+    "ability": "knowledge_update",
+    "first_hit": null,
+    "targets": 1,
+    "reachable": 1,
+    "unreachable": [],
+    "covered_at": {},
+    "top": [
+     "ep:codex:01a0dcdc-7e56-7520-9e71-f08d82dabc1d|x1|w71",
+     "ep:codex:01a0dcdc-7e56-7520-9e71-f08d82dabc1d|x1|w70",
+     "ep:codex:01a0dcdc-7e56-7520-9e71-f08d82dabc1d|x1|w89",
+     "ep:codex:01a0dcdc-7e56-7520-9e71-f08d82dabc1d|x1|w96",
+     "kb|kb:547|w1"
+    ]
+   },
+   {
+    "id": "ku-10",
+    "ability": "knowledge_update",
+    "first_hit": 0,
+    "targets": 3,
+    "reachable": 2,
+    "unreachable": [
+     "file:.gitignore"
+    ],
+    "covered_at": {
+     "kb:518": 0,
+     "file:.agent/rules/CLAUDE.md": 6
+    },
+    "top": [
+     "kb|kb:518|w0",
+     "ep:claude:480533f5-b826-4f30-8987-03758af2f98c|p6516|w11",
+     "kb|kb:509|w1",
+     "ep:codex:01a0874a-5494-7121-9874-3f8089067932|p3078|w63",
+     "file:jarvis_data/cognitive_profile.md|s4|w104"
+    ]
+   },
+   {
+    "id": "ku-11",
+    "ability": "knowledge_update",
+    "first_hit": 0,
+    "targets": 1,
+    "reachable": 1,
+    "unreachable": [],
+    "covered_at": {
+     "kb:436": 0
+    },
+    "top": [
+     "kb|kb:436|w1",
+     "kb|kb:436|w0",
+     "kb|kb:line291|w0",
+     "queue|queue:2026-07-31T09:03:41+05:30|4b5e640b-84c2-45d3-a9af-b32f6bfc3818|w0",
+     "file:jarvis_data/cognitive_profile.md|s4|w193"
+    ]
+   },
+   {
+    "id": "ku-12",
+    "ability": "knowledge_update",
+    "first_hit": 0,
+    "targets": 1,
+    "reachable": 1,
+    "unreachable": [],
+    "covered_at": {
+     "file:knowledge/Finance/strategy.md": 0
+    },
+    "top": [
+     "file:knowledge/Finance/strategy.md|s10|w1",
+     "file:knowledge/Finance/strategy.md|s11|w0",
+     "file:knowledge/Finance/strategy.md|s39|w2",
+     "file:knowledge/Finance/strategy.md|s5|w0",
+     "file:knowledge/Finance/strategy.md|s39|w0"
+    ]
+   },
+   {
+    "id": "ku-13",
+    "ability": "knowledge_update",
+    "first_hit": 5,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {
+     "kb:760": 5,
+     "kb:757": 7
+    },
+    "top": [
+     "ep:codex:01a0874a-5494-7121-9874-3f8089067932|x5129|w6",
+     "ep:codex:01a0874a-5494-7121-9874-3f8089067932|x5129|w9",
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda.agent-a8e7e12718ef2fb11|x0|w21",
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda.agent-a8e7e12718ef2fb11|x0|w24",
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda.agent-a8e7e12718ef2fb11|x0|w0"
+    ]
+   },
+   {
+    "id": "ku-14",
+    "ability": "knowledge_update",
+    "first_hit": 2,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {
+     "kb:531": 2,
+     "file:.agent/rules/JARVIS_ENDGAME.md": 17
+    },
+    "top": [
+     "ep:antigravity:986802ce-24ac-404b-9f74-8cd3e18fe2e7|x1238|w2",
+     "ep:codex:01a0874a-5494-7121-9874-3f8089067932|x44|w2",
+     "kb|kb:531|w0",
+     "ep:codex:01a0c926-a0a1-71d3-b72c-3f342baa8273|x3|w28",
+     "ep:antigravity:986802ce-24ac-404b-9f74-8cd3e18fe2e7|x671|w0"
+    ]
+   },
+   {
+    "id": "ku-15",
+    "ability": "knowledge_update",
+    "first_hit": 1,
+    "targets": 1,
+    "reachable": 1,
+    "unreachable": [],
+    "covered_at": {
+     "kb:line291": 1
+    },
+    "top": [
+     "queue|queue:2026-07-31T09:03:41+05:30|4b5e640b-84c2-45d3-a9af-b32f6bfc3818|w0",
+     "kb|kb:line291|w0",
+     "kb|kb:436|w1",
+     "queue|queue:2026-06-18T16:54:36+05:30|4e986828-f710-435e-8c75-b81b046b5aba|w0",
+     "file:jarvis_data/cognitive_profile.md|s1|w10"
+    ]
+   },
+   {
+    "id": "ku-16",
+    "ability": "knowledge_update",
+    "first_hit": 0,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {
+     "kb:364": 0,
+     "kb:312": 4
+    },
+    "top": [
+     "kb|kb:364|w0",
+     "file:jarvis_data/cognitive_profile.md|s1|w9",
+     "kb|kb:372|w0",
+     "queue|queue:2026-06-15T14:49:56+05:30|terminal-20260615T144914-44774|w0",
+     "kb|kb:312|w0"
+    ]
+   },
+   {
+    "id": "ab-01",
+    "ability": "abstention",
+    "first_hit": 1,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {
+     "queue:2026-08-16T20:10:17+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14": 1,
+     "file:jarvis_data/personal_life.md": 6
+    },
+    "top": [
+     "ep:codex:01a0dcdc-7e56-7520-9e71-f08d82dabc1d|x475|w53",
+     "queue|queue:2026-08-16T20:10:17+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "ep:claude:480533f5-b826-4f30-8987-03758af2f98c|x5082|w0",
+     "ep:claude:480533f5-b826-4f30-8987-03758af2f98c|p6516|w10",
+     "file:knowledge/Finance/strategy.md|s8|w0"
+    ]
+   },
+   {
+    "id": "ab-02",
+    "ability": "abstention",
+    "first_hit": null,
+    "targets": 1,
+    "reachable": 1,
+    "unreachable": [],
+    "covered_at": {},
+    "top": [
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda.agent-a7322b1c89e12327a|x0|w21",
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda.agent-a7322b1c89e12327a|x0|w29",
+     "ep:antigravity:fb1b349b-6038-4488-88a7-959c82459fac|x299|w37",
+     "ep:codex:01a0dcdc-7e62-7c73-8a09-6aa3aebb67b2|x133|w6",
+     "ep:antigravity:fb1b349b-6038-4488-88a7-959c82459fac|x299|w40"
+    ]
+   },
+   {
+    "id": "ab-03",
+    "ability": "abstention",
+    "first_hit": null,
+    "targets": 1,
+    "reachable": 1,
+    "unreachable": [],
+    "covered_at": {},
+    "top": [
+     "ep:codex:01a0dcdc-7e62-7c73-8a09-6aa3aebb67b2|x551|w2",
+     "ep:codex:01a0dcdc-7e62-7c73-8a09-6aa3aebb67b2|x551|w3",
+     "ep:codex:01a0dcdc-7e62-7c73-8a09-6aa3aebb67b2|x551|w1",
+     "ep:claude:e5b92b99-c971-4c78-a7f9-f06f19d666e8|x1285|w2",
+     "ep:claude:e5b92b99-c971-4c78-a7f9-f06f19d666e8|x1086|w1"
+    ]
+   },
+   {
+    "id": "ab-04",
+    "ability": "abstention",
+    "first_hit": 0,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {
+     "file:jarvis_data/personal_life.md": 0,
+     "queue:2026-08-16T20:10:17+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14": 1
+    },
+    "top": [
+     "file:jarvis_data/personal_life.md|s4|w0",
+     "queue|queue:2026-08-16T20:10:17+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "file:jarvis_data/cognitive_profile.md|s1|w16",
+     "ep:codex:01a0dcdc-7e56-7520-9e71-f08d82dabc1d|x475|w17",
+     "kb|kb:502|w0"
+    ]
+   },
+   {
+    "id": "ab-05",
+    "ability": "abstention",
+    "first_hit": 0,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {
+     "file:jarvis_data/personal_life.md": 0,
+     "queue:2026-08-16T20:10:17+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14": 11
+    },
+    "top": [
+     "file:jarvis_data/personal_life.md|s4|w0",
+     "ep:codex:01a0dcdc-7e56-7520-9e71-f08d82dabc1d|x475|w17",
+     "ep:codex:01a0dcdc-7e56-7520-9e71-f08d82dabc1d|x475|w18",
+     "ep:codex:01a0dcdc-7e56-7520-9e71-f08d82dabc1d|x475|w26",
+     "queue|queue:2026-09-06T00:20:11+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0"
+    ]
+   },
+   {
+    "id": "ab-06",
+    "ability": "abstention",
+    "first_hit": 0,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {
+     "queue:2026-08-16T20:10:17+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14": 0,
+     "file:jarvis_data/personal_life.md": 5
+    },
+    "top": [
+     "queue|queue:2026-08-16T20:10:17+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "file:jarvis_data/cognitive_profile.md|s1|w22",
+     "ep:jarvis:conv-20260911T155453-2960|x6|w1",
+     "file:jarvis_data/cognitive_profile.md|s1|w23",
+     "ep:jarvis:conv-web-cff653a1-415e-417b-ba68-3ac84f621778|x4|w0"
+    ]
+   },
+   {
+    "id": "ab-07",
+    "ability": "abstention",
+    "first_hit": 0,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {
+     "queue:2026-08-22T22:09:04+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14": 0,
+     "file:jarvis_data/personal_life.md": 3
+    },
+    "top": [
+     "queue|queue:2026-08-22T22:09:04+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "kb|kb:789|w0",
+     "file:jarvis_data/personal_life.md|s3|w0"
+    ]
+   },
+   {
+    "id": "ab-08",
+    "ability": "abstention",
+    "first_hit": null,
+    "targets": 1,
+    "reachable": 1,
+    "unreachable": [],
+    "covered_at": {},
+    "top": [
+     "ep:codex:01a0dcdc-7e62-7c73-8a09-6aa3aebb67b2|x387|w3",
+     "ep:codex:01a0dcdc-7e62-7c73-8a09-6aa3aebb67b2|x387|w1",
+     "ep:codex:01a0dcdc-7e62-7c73-8a09-6aa3aebb67b2|x387|w4",
+     "ep:codex:01a0dcdc-7e62-7c73-8a09-6aa3aebb67b2|x387|w5",
+     "ep:codex:01a0dcdc-7e62-7c73-8a09-6aa3aebb67b2|x387|w2"
+    ]
+   },
+   {
+    "id": "ab-09",
+    "ability": "abstention",
+    "first_hit": 0,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {
+     "file:jarvis_data/personal_life.md": 0,
+     "queue:2026-08-16T20:10:17+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14": 2
+    },
+    "top": [
+     "file:jarvis_data/personal_life.md|s4|w0",
+     "file:jarvis_data/cognitive_profile.md|s1|w16",
+     "queue|queue:2026-08-16T20:10:17+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "kb|kb:502|w0",
+     "ep:codex:01a0dcdc-7e56-7520-9e71-f08d82dabc1d|x475|w17"
+    ]
+   },
+   {
+    "id": "ab-10",
+    "ability": "abstention",
+    "first_hit": 14,
+    "targets": 1,
+    "reachable": 1,
+    "unreachable": [],
+    "covered_at": {
+     "file:jarvis_data/personal_life.md": 14
+    },
+    "top": [
+     "ep:codex:01a0dcdc-7e62-7c73-8a09-6aa3aebb67b2|x195|w23",
+     "ep:codex:01a0dcdc-7e62-7c73-8a09-6aa3aebb67b2|x195|w24",
+     "ep:codex:01a09b84-837c-7b40-a5dd-58324458de21|x150|w0",
+     "queue|queue:2026-08-16T20:10:17+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "ep:codex:01a09b84-837c-7b40-a5dd-58324458de21|x174|w0"
+    ]
+   },
+   {
+    "id": "ab-11",
+    "ability": "abstention",
+    "first_hit": null,
+    "targets": 1,
+    "reachable": 1,
+    "unreachable": [],
+    "covered_at": {},
+    "top": [
+     "kb|kb:848|w0",
+     "queue|queue:2026-08-22T22:09:04+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "file:jarvis_data/cognitive_profile.md|s7|w61"
+    ]
+   },
+   {
+    "id": "ab-12",
+    "ability": "abstention",
+    "first_hit": null,
+    "targets": 1,
+    "reachable": 1,
+    "unreachable": [],
+    "covered_at": {},
+    "top": [
+     "queue|queue:2026-09-18T12:34:43+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w1",
+     "ep:codex:01a0c051-611d-7a50-9f2e-1ec11857825d|x1483|w3",
+     "queue|queue:2026-09-18T12:34:43+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "ep:jarvis:conv-web-ca175336-ca24-42a5-9492-542b0133a6d6|x15|w0",
+     "ep:codex:01a0dcdc-7e56-7520-9e71-f08d82dabc1d|x295|w7"
+    ]
+   },
+   {
+    "id": "ab-13",
+    "ability": "abstention",
+    "first_hit": null,
+    "targets": 1,
+    "reachable": 1,
+    "unreachable": [],
+    "covered_at": {},
+    "top": [
+     "ep:codex:01a0dcdc-8467-7c20-92bf-e2a66b8e8c27|x7593|w7",
+     "ep:claude:480533f5-b826-4f30-8987-03758af2f98c|x13991|w7",
+     "ep:codex:01a0dcdc-8467-7c20-92bf-e2a66b8e8c27|x5075|w138",
+     "ep:codex:01a0dcdc-8467-7c20-92bf-e2a66b8e8c27|x7301|w138",
+     "ep:codex:01a0dcdc-8467-7c20-92bf-e2a66b8e8c27|x7595|w48"
+    ]
+   }
+  ]
+ },
+ "bge-base": {
+  "build_s": 3592,
+  "stats": {
+   "system_events_skipped": 14218,
+   "system_chars_skipped": 42248134,
+   "embedded": 30434,
+   "embedded_chars": 43054955,
+   "sources_synced": 285,
+   "seconds": 3592.3,
+   "overflow_windows": 0
+  },
+  "status": {
+   "units": 30434,
+   "by_source": {
+    "compaction": 3898,
+    "doc": 551,
+    "exchange": 24150,
+    "kb": 906,
+    "queue": 929
+   },
+   "body_chars": 41291131,
+   "sources": 285,
+   "vectors": 30434,
+   "embedder": "BAAI/bge-base-en-v1.5",
+   "updated": "2026-09-29T02:00:21.100+05:30",
+   "fts_bytes": 183349248
+  },
+  "summary": {
+   "information_extraction": {
+    "n": 21,
+    "unreachable_q": 0,
+    "r@5": 0.857,
+    "cov@5": 0.77,
+    "r@10": 0.905,
+    "cov@10": 0.841,
+    "r@20": 0.905,
+    "cov@20": 0.841
+   },
+   "multi_session": {
+    "n": 14,
+    "unreachable_q": 0,
+    "r@5": 0.5,
+    "cov@5": 0.152,
+    "r@10": 0.5,
+    "cov@10": 0.199,
+    "r@20": 0.5,
+    "cov@20": 0.267
+   },
+   "temporal": {
+    "n": 14,
+    "unreachable_q": 0,
+    "r@5": 0.857,
+    "cov@5": 0.738,
+    "r@10": 0.857,
+    "cov@10": 0.762,
+    "r@20": 0.857,
+    "cov@20": 0.798
+   },
+   "knowledge_update": {
+    "n": 16,
+    "unreachable_q": 0,
+    "r@5": 0.812,
+    "cov@5": 0.708,
+    "r@10": 0.875,
+    "cov@10": 0.792,
+    "r@20": 0.938,
+    "cov@20": 0.844
+   },
+   "abstention": {
+    "n": 13,
+    "unreachable_q": 0,
+    "r@5": 0.462,
+    "cov@5": 0.385,
+    "r@10": 0.462,
+    "cov@10": 0.385,
+    "r@20": 0.538,
+    "cov@20": 0.5
+   },
+   "overall": {
+    "n": 78,
+    "unreachable_q": 0,
+    "r@5": 0.718,
+    "cov@5": 0.576,
+    "r@10": 0.744,
+    "cov@10": 0.625,
+    "r@20": 0.769,
+    "cov@20": 0.674
+   },
+   "answerable": {
+    "n": 65,
+    "unreachable_q": 0,
+    "r@5": 0.769,
+    "cov@5": 0.615,
+    "r@10": 0.8,
+    "cov@10": 0.674,
+    "r@20": 0.815,
+    "cov@20": 0.709
+   }
+  },
+  "latency": {
+   "p50_ms": 476.1,
+   "p95_ms": 799.2,
+   "first_ms": 4921.1
+  },
+  "rows": [
+   {
+    "id": "ie-01",
+    "ability": "information_extraction",
+    "first_hit": 3,
+    "targets": 3,
+    "reachable": 3,
+    "unreachable": [],
+    "covered_at": {
+     "kb:789": 3,
+     "file:jarvis_data/personal_life.md": 4
+    },
+    "top": [
+     "queue|queue:2026-08-22T22:09:04+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "kb|kb:789|w0",
+     "file:jarvis_data/personal_life.md|s3|w0"
+    ]
+   },
+   {
+    "id": "ie-02",
+    "ability": "information_extraction",
+    "first_hit": 0,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {
+     "file:jarvis_data/personal_life.md": 0,
+     "queue:2026-08-16T20:10:17+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14": 6
+    },
+    "top": [
+     "file:jarvis_data/personal_life.md|s4|w0",
+     "file:jarvis_data/cognitive_profile.md|s1|w16",
+     "kb|kb:502|w0",
+     "ep:codex:01a0dcdc-7e56-7520-9e71-f08d82dabc1d|x475|w17",
+     "ep:codex:01a0dcdc-7e56-7520-9e71-f08d82dabc1d|x475|w18"
+    ]
+   },
+   {
+    "id": "ie-03",
+    "ability": "information_extraction",
+    "first_hit": 0,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {
+     "queue:2026-08-16T20:10:17+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14": 0,
+     "file:jarvis_data/personal_life.md": 1
+    },
+    "top": [
+     "queue|queue:2026-08-16T20:10:17+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "file:jarvis_data/personal_life.md|s1|w0",
+     "ep:claude:480533f5-b826-4f30-8987-03758af2f98c|p6516|w10",
+     "ep:codex:01a0dcdc-7e56-7520-9e71-f08d82dabc1d|x475|w17",
+     "ep:codex:01a0dcdc-7e56-7520-9e71-f08d82dabc1d|x475|w53"
+    ]
+   },
+   {
+    "id": "ie-04",
+    "ability": "information_extraction",
+    "first_hit": 0,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {
+     "file:jarvis_data/personal_life.md": 0
+    },
+    "top": [
+     "file:jarvis_data/personal_life.md|s1|w0",
+     "ep:codex:01a0dcdc-8467-7c20-92bf-e2a66b8e8c27|x6101|w192",
+     "ep:codex:01a0904d-bf48-79f1-b997-3cca4d1e33b6|x111|w16",
+     "ep:antigravity:5a76f739-b07e-447a-bef2-2282a2f4417c|x198|w2",
+     "ep:antigravity:5a76f739-b07e-447a-bef2-2282a2f4417c|x2243|w0"
+    ]
+   },
+   {
+    "id": "ie-05",
+    "ability": "information_extraction",
+    "first_hit": null,
+    "targets": 4,
+    "reachable": 4,
+    "unreachable": [],
+    "covered_at": {},
+    "top": [
+     "ep:codex:01a0c98b-ae72-7a00-9eec-98cdfb9a5cc0|x10|w35",
+     "kb|kb:831|w0",
+     "ep:antigravity:986802ce-24ac-404b-9f74-8cd3e18fe2e7|x743|w0",
+     "ep:antigravity:5a76f739-b07e-447a-bef2-2282a2f4417c|x308|w0",
+     "ep:codex:01a0dcdc-7e56-7520-9e71-f08d82dabc1d|x457|w1"
+    ]
+   },
+   {
+    "id": "ie-06",
+    "ability": "information_extraction",
+    "first_hit": 0,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {
+     "file:jarvis_data/personal_life.md": 0,
+     "queue:2026-08-16T20:10:17+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14": 1
+    },
+    "top": [
+     "file:jarvis_data/personal_life.md|s5|w0",
+     "queue|queue:2026-08-16T20:10:17+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "queue|queue:2026-09-01T17:18:29+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "ep:codex:01a0dcdc-8467-7c20-92bf-e2a66b8e8c27|x3459|w9",
+     "ep:codex:01a0dcdc-8467-7c20-92bf-e2a66b8e8c27|x2830|w17"
+    ]
+   },
+   {
+    "id": "ie-07",
+    "ability": "information_extraction",
+    "first_hit": 0,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {
+     "file:jarvis_data/personal_life.md": 0,
+     "queue:2026-08-16T20:10:17+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14": 2
+    },
+    "top": [
+     "file:jarvis_data/personal_life.md|s5|w0",
+     "ep:claude:e5b92b99-c971-4c78-a7f9-f06f19d666e8|x372|w12",
+     "queue|queue:2026-08-16T20:10:17+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "ep:codex:01a0dcdc-7e62-7c73-8a09-6aa3aebb67b2|x562|w5",
+     "kb|kb:646|w0"
+    ]
+   },
+   {
+    "id": "ie-08",
+    "ability": "information_extraction",
+    "first_hit": 0,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {
+     "turn:jarvis:conv-web-cff653a1-415e-417b-ba68-3ac84f621778:3": 0,
+     "kb:784": 2
+    },
+    "top": [
+     "ep:jarvis:conv-web-cff653a1-415e-417b-ba68-3ac84f621778|x2|w1",
+     "ep:jarvis:conv-web-cff653a1-415e-417b-ba68-3ac84f621778|x2|w0",
+     "kb|kb:784|w0",
+     "file:jarvis_data/cognitive_profile.md|s1|w21",
+     "ep:antigravity:e387d971-c749-4131-b058-fcf2445433ae|x0|w0"
+    ]
+   },
+   {
+    "id": "ie-09",
+    "ability": "information_extraction",
+    "first_hit": 8,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {
+     "turn:jarvis:conv-web-cff653a1-415e-417b-ba68-3ac84f621778:3": 8,
+     "kb:784": 9
+    },
+    "top": [
+     "kb|kb:828|w0",
+     "kb|kb:646|w0",
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda|x3335|w14",
+     "file:jarvis_data/cognitive_profile.md|s1|w21",
+     "ep:antigravity:fb1b349b-6038-4488-88a7-959c82459fac|x299|w122"
+    ]
+   },
+   {
+    "id": "ie-10",
+    "ability": "information_extraction",
+    "first_hit": 0,
+    "targets": 3,
+    "reachable": 3,
+    "unreachable": [],
+    "covered_at": {
+     "kb:787": 0,
+     "turn:jarvis:conv-web-cff653a1-415e-417b-ba68-3ac84f621778:11": 1,
+     "turn:jarvis:conv-web-cff653a1-415e-417b-ba68-3ac84f621778:9": 2
+    },
+    "top": [
+     "kb|kb:787|w0",
+     "ep:jarvis:conv-web-cff653a1-415e-417b-ba68-3ac84f621778|x10|w0",
+     "ep:jarvis:conv-web-cff653a1-415e-417b-ba68-3ac84f621778|x8|w0",
+     "file:jarvis_data/cognitive_profile.md|s1|w23",
+     "ep:jarvis:conv-web-cff653a1-415e-417b-ba68-3ac84f621778|x6|w0"
+    ]
+   },
+   {
+    "id": "ie-11",
+    "ability": "information_extraction",
+    "first_hit": 0,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {
+     "kb:788": 0,
+     "turn:jarvis:conv-web-cff653a1-415e-417b-ba68-3ac84f621778:13": 3
+    },
+    "top": [
+     "kb|kb:788|w0",
+     "ep:jarvis:conv-web-cff653a1-415e-417b-ba68-3ac84f621778|x10|w0",
+     "kb|kb:651|w0",
+     "ep:jarvis:conv-web-cff653a1-415e-417b-ba68-3ac84f621778|x12|w0",
+     "file:jarvis_data/cognitive_profile.md|s1|w24"
+    ]
+   },
+   {
+    "id": "ie-12",
+    "ability": "information_extraction",
+    "first_hit": 4,
+    "targets": 1,
+    "reachable": 1,
+    "unreachable": [],
+    "covered_at": {
+     "kb:line266": 4
+    },
+    "top": [
+     "ep:codex:01a09623-f6cb-7743-b552-76a42d14af29|x30|w29",
+     "ep:codex:01a09623-f6cb-7743-b552-76a42d14af29|p1|w135",
+     "ep:codex:01a09623-f6cb-7743-b552-76a42d14af29|x18|w12",
+     "ep:codex:01a09623-f6cb-7743-b552-76a42d14af29|x26|w33",
+     "kb|kb:line266|w0"
+    ]
+   },
+   {
+    "id": "ie-13",
+    "ability": "information_extraction",
+    "first_hit": 0,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {
+     "kb:804": 0,
+     "queue:2026-06-02T16:04:53+05:30|4e986828-f710-435e-8c75-b81b046b5aba": 1
+    },
+    "top": [
+     "kb|kb:804|w0",
+     "queue|queue:2026-06-02T16:04:53+05:30|4e986828-f710-435e-8c75-b81b046b5aba|w0",
+     "kb|kb:372|w0",
+     "queue|queue:2026-06-15T14:49:56+05:30|terminal-20260615T144914-44774|w0",
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda.agent-a7322b1c89e12327a|x0|w13"
+    ]
+   },
+   {
+    "id": "ie-14",
+    "ability": "information_extraction",
+    "first_hit": 0,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {
+     "kb:line99": 0
+    },
+    "top": [
+     "kb|kb:line99|w0",
+     "queue|queue:2026-09-05T23:37:55+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "queue|queue:2026-09-01T16:14:04+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "ep:codex:01a0dcdc-8467-7c20-92bf-e2a66b8e8c27|x5185|w12",
+     "ep:codex:01a0dcdc-8467-7c20-92bf-e2a66b8e8c27|x6479|w12"
+    ]
+   },
+   {
+    "id": "ie-15",
+    "ability": "information_extraction",
+    "first_hit": 3,
+    "targets": 1,
+    "reachable": 1,
+    "unreachable": [],
+    "covered_at": {
+     "kb:436": 3
+    },
+    "top": [
+     "queue|queue:2026-07-23T09:33:03+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "kb|kb:516|w0",
+     "queue|queue:2026-09-02T08:50:49+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "kb|kb:436|w0",
+     "file:jarvis_data/cognitive_profile.md|s1|w17"
+    ]
+   },
+   {
+    "id": "ie-16",
+    "ability": "information_extraction",
+    "first_hit": null,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {},
+    "top": [
+     "ep:codex:01a09e0b-2579-7962-ad0b-ac053363daae|x3|w22",
+     "ep:codex:01a09e1a-377c-7841-adfb-00aab4171c9a|x14|w11",
+     "ep:codex:01a09e1a-377c-7841-adfb-00aab4171c9a|x25|w10",
+     "ep:codex:01a0874a-5494-7121-9874-3f8089067932|p5255|w25",
+     "ep:codex:01a0874a-5494-7121-9874-3f8089067932|p5047|w25"
+    ]
+   },
+   {
+    "id": "ie-17",
+    "ability": "information_extraction",
+    "first_hit": 0,
+    "targets": 1,
+    "reachable": 1,
+    "unreachable": [],
+    "covered_at": {
+     "file:jarvis_data/personal_life.md": 0
+    },
+    "top": [
+     "file:jarvis_data/personal_life.md|s6|w0",
+     "file:jarvis_data/cognitive_profile.md|s4|w92",
+     "queue|queue:2026-08-22T12:54:55+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "queue|queue:2026-08-22T12:18:28+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "queue|queue:2026-08-16T20:21:37+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0"
+    ]
+   },
+   {
+    "id": "ie-18",
+    "ability": "information_extraction",
+    "first_hit": 0,
+    "targets": 1,
+    "reachable": 1,
+    "unreachable": [],
+    "covered_at": {
+     "kb:436": 0
+    },
+    "top": [
+     "kb|kb:436|w0",
+     "file:jarvis_data/cognitive_profile.md|s1|w10",
+     "kb|kb:436|w1",
+     "queue|queue:2026-07-23T09:49:45+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "queue|queue:2026-07-23T09:55:52+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0"
+    ]
+   },
+   {
+    "id": "ie-19",
+    "ability": "information_extraction",
+    "first_hit": 0,
+    "targets": 1,
+    "reachable": 1,
+    "unreachable": [],
+    "covered_at": {
+     "kb:416": 0
+    },
+    "top": [
+     "kb|kb:416|w0",
+     "file:jarvis_data/cognitive_profile.md|s4|w150",
+     "kb|kb:408|w0",
+     "kb|kb:line181|w0",
+     "file:jarvis_data/cognitive_profile.md|s4|w236"
+    ]
+   },
+   {
+    "id": "ie-20",
+    "ability": "information_extraction",
+    "first_hit": 0,
+    "targets": 1,
+    "reachable": 1,
+    "unreachable": [],
+    "covered_at": {
+     "kb:line74": 0
+    },
+    "top": [
+     "kb|kb:line74|w0",
+     "ep:antigravity:1c4a4e49-d66b-4af8-b53f-b9f6aed953df|x92|w4",
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda.agent-a7322b1c89e12327a|x0|w15",
+     "ep:antigravity:1c4a4e49-d66b-4af8-b53f-b9f6aed953df|x92|w3",
+     "ep:antigravity:1c4a4e49-d66b-4af8-b53f-b9f6aed953df|x92|w2"
+    ]
+   },
+   {
+    "id": "ie-21",
+    "ability": "information_extraction",
+    "first_hit": 0,
+    "targets": 1,
+    "reachable": 1,
+    "unreachable": [],
+    "covered_at": {
+     "file:jarvis_data/personal_life.md": 0
+    },
+    "top": [
+     "file:jarvis_data/personal_life.md|s6|w0",
+     "queue|queue:2026-08-16T20:21:37+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "queue|queue:2026-06-15T14:49:56+05:30|terminal-20260615T144914-44774|w0",
+     "kb|kb:372|w0",
+     "file:jarvis_data/cognitive_profile.md|s3|w11"
+    ]
+   },
+   {
+    "id": "ms-01",
+    "ability": "multi_session",
+    "first_hit": 0,
+    "targets": 8,
+    "reachable": 8,
+    "unreachable": [],
+    "covered_at": {
+     "kb:771": 0,
+     "kb:784": 3,
+     "kb:785": 10,
+     "kb:787": 11
+    },
+    "top": [
+     "kb|kb:771|w0",
+     "kb|kb:470|w0",
+     "kb|kb:784|w0",
+     "queue|queue:2026-08-16T19:52:36+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0"
+    ]
+   },
+   {
+    "id": "ms-02",
+    "ability": "multi_session",
+    "first_hit": 4,
+    "targets": 4,
+    "reachable": 4,
+    "unreachable": [],
+    "covered_at": {
+     "kb:531": 4,
+     "file:.agent/rules/JARVIS_ENDGAME.md": 5,
+     "kb:429": 11,
+     "kb:463": 13
+    },
+    "top": [
+     "queue|queue:2026-08-04T10:29:22+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "file:.agent/rules/CLAUDE.md|s11|w0",
+     "kb|kb:313|w1",
+     "kb|kb:line42|w0",
+     "kb|kb:531|w1"
+    ]
+   },
+   {
+    "id": "ms-03",
+    "ability": "multi_session",
+    "first_hit": null,
+    "targets": 4,
+    "reachable": 4,
+    "unreachable": [],
+    "covered_at": {},
+    "top": [
+     "ep:antigravity:986802ce-24ac-404b-9f74-8cd3e18fe2e7|x1234|w17",
+     "ep:antigravity:986802ce-24ac-404b-9f74-8cd3e18fe2e7|x1234|w9",
+     "ep:antigravity:986802ce-24ac-404b-9f74-8cd3e18fe2e7|x1234|w8",
+     "ep:jarvis:conv-20260911T155453-2960|x6|w0",
+     "ep:codex:01a0874a-5494-7121-9874-3f8089067932|x4192|w0"
+    ]
+   },
+   {
+    "id": "ms-04",
+    "ability": "multi_session",
+    "first_hit": 1,
+    "targets": 5,
+    "reachable": 5,
+    "unreachable": [],
+    "covered_at": {
+     "kb:528": 1
+    },
+    "top": [
+     "queue|queue:2026-09-05T23:25:28+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "kb|kb:528|w0",
+     "file:.agent/rules/JARVIS_ENDGAME.md|s3|w0",
+     "queue|queue:2026-09-10T07:39:38+05:30|ec1f2c86-5691-4ea5-93f8-a61e82f042ea|w0",
+     "file:.agent/rules/JARVIS_ENDGAME.md|s27|w0"
+    ]
+   },
+   {
+    "id": "ms-05",
+    "ability": "multi_session",
+    "first_hit": 0,
+    "targets": 5,
+    "reachable": 5,
+    "unreachable": [],
+    "covered_at": {
+     "turn:claude:21c8c171-fbcb-417d-b486-7be331d5beda:3335": 6,
+     "kb:789": 7
+    },
+    "top": [
+     "kb|kb:848|w0"
+    ]
+   },
+   {
+    "id": "ms-06",
+    "ability": "multi_session",
+    "first_hit": null,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {},
+    "top": [
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda|p2505|w1",
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda|x2616|w38",
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda.agent-a20b26a24c93706a4|x0|w0",
+     "ep:codex:01a0874a-5494-7121-9874-3f8089067932|x1225|w5",
+     "ep:jarvis:conv-web-ca175336-ca24-42a5-9492-542b0133a6d6|x19|w1"
+    ]
+   },
+   {
+    "id": "ms-07",
+    "ability": "multi_session",
+    "first_hit": null,
+    "targets": 7,
+    "reachable": 7,
+    "unreachable": [],
+    "covered_at": {},
+    "top": [
+     "ep:antigravity:986802ce-24ac-404b-9f74-8cd3e18fe2e7|x1234|w8",
+     "ep:antigravity:986802ce-24ac-404b-9f74-8cd3e18fe2e7|x1234|w16",
+     "ep:antigravity:986802ce-24ac-404b-9f74-8cd3e18fe2e7|x1234|w18",
+     "queue|queue:2026-08-03T04:08:49+05:30|conv-20260803T040735-118740|w3",
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda|x1238|w27"
+    ]
+   },
+   {
+    "id": "ms-08",
+    "ability": "multi_session",
+    "first_hit": null,
+    "targets": 3,
+    "reachable": 3,
+    "unreachable": [],
+    "covered_at": {},
+    "top": [
+     "queue|queue:2026-08-16T19:52:36+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "kb|kb:829|w0",
+     "kb|kb:787|w0",
+     "ep:jarvis:conv-web-cff653a1-415e-417b-ba68-3ac84f621778|x16|w1"
+    ]
+   },
+   {
+    "id": "ms-09",
+    "ability": "multi_session",
+    "first_hit": 1,
+    "targets": 5,
+    "reachable": 5,
+    "unreachable": [],
+    "covered_at": {
+     "kb:804": 1,
+     "kb:307": 11
+    },
+    "top": [
+     "queue|queue:2026-08-16T20:21:37+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "kb|kb:804|w0",
+     "kb|kb:784|w0",
+     "ep:codex:01a0dcdc-7e56-7520-9e71-f08d82dabc1d|x457|w3",
+     "queue|queue:2026-06-15T14:49:56+05:30|terminal-20260615T144914-44774|w0"
+    ]
+   },
+   {
+    "id": "ms-10",
+    "ability": "multi_session",
+    "first_hit": null,
+    "targets": 4,
+    "reachable": 3,
+    "unreachable": [
+     "conv:conv-web-cff653a1-415e-417b-ba68-3ac84f621778.jsonl#18"
+    ],
+    "covered_at": {},
+    "top": [
+     "ep:codex:01a0dcdc-7e56-7520-9e71-f08d82dabc1d|x457|w3",
+     "kb|kb:825|w0",
+     "ep:jarvis:conv-web-cff653a1-415e-417b-ba68-3ac84f621778|x0|w1",
+     "ep:jarvis:conv-web-cff653a1-415e-417b-ba68-3ac84f621778|x0|w0",
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda.agent-a7322b1c89e12327a|x0|w1"
+    ]
+   },
+   {
+    "id": "ms-11",
+    "ability": "multi_session",
+    "first_hit": null,
+    "targets": 3,
+    "reachable": 3,
+    "unreachable": [],
+    "covered_at": {},
+    "top": [
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda|x3188|w0",
+     "ep:jarvis:conv-web-cff653a1-415e-417b-ba68-3ac84f621778|x0|w0",
+     "ep:jarvis:conv-20260911T155453-2960|x6|w0",
+     "queue|queue:2026-06-10T12:15:39+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "ep:jarvis:conv-20260911T155453-2960|x6|w1"
+    ]
+   },
+   {
+    "id": "ms-12",
+    "ability": "multi_session",
+    "first_hit": 0,
+    "targets": 4,
+    "reachable": 4,
+    "unreachable": [],
+    "covered_at": {
+     "kb:789": 0,
+     "file:.agent/rules/JARVIS_ENDGAME.md": 2
+    },
+    "top": [
+     "kb|kb:789|w0",
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda|x3335|w10",
+     "file:.agent/rules/JARVIS_ENDGAME.md|s6|w1",
+     "queue|queue:2026-07-15T10:48:38+05:30|019f6433-da9c-7691-b1fd-e0fc193c3e7b|w1",
+     "ep:codex:01a09e1a-377c-7841-adfb-00aab4171c9a|x21|w1"
+    ]
+   },
+   {
+    "id": "ms-13",
+    "ability": "multi_session",
+    "first_hit": null,
+    "targets": 3,
+    "reachable": 3,
+    "unreachable": [],
+    "covered_at": {},
+    "top": [
+     "ep:claude:480533f5-b826-4f30-8987-03758af2f98c.agent-a8dd7bb4bb0023baf|x0|w0",
+     "ep:codex:01a0dcdc-8467-7c20-92bf-e2a66b8e8c27|x751|w0",
+     "ep:codex:01a0bd7d-3917-7ee3-9367-c5a92e5e1b7c|p4252|w9",
+     "ep:codex:01a0bd7d-3917-7ee3-9367-c5a92e5e1b7c|p3086|w9",
+     "ep:codex:01a0bd7d-3917-7ee3-9367-c5a92e5e1b7c|p3717|w9"
+    ]
+   },
+   {
+    "id": "ms-14",
+    "ability": "multi_session",
+    "first_hit": 0,
+    "targets": 3,
+    "reachable": 3,
+    "unreachable": [],
+    "covered_at": {
+     "kb:799": 0
+    },
+    "top": [
+     "kb|kb:799|w0",
+     "ep:jarvis:conv-web-ca175336-ca24-42a5-9492-542b0133a6d6|x15|w1",
+     "ep:jarvis:conv-web-ca175336-ca24-42a5-9492-542b0133a6d6|x15|w0",
+     "kb|kb:619|w1",
+     "ep:codex:01a09e1a-377c-7841-adfb-00aab4171c9a|x14|w10"
+    ]
+   },
+   {
+    "id": "t-01",
+    "ability": "temporal",
+    "first_hit": null,
+    "targets": 11,
+    "reachable": 11,
+    "unreachable": [],
+    "covered_at": {},
+    "top": [
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda.agent-a2cf0bfe731b9f600|x0|w2",
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda.agent-a7322b1c89e12327a|x0|w1",
+     "ep:codex:01a0dcdc-7e62-7c73-8a09-6aa3aebb67b2|x39|w38",
+     "file:knowledge/Finance/strategy.md|s44|w0",
+     "ep:antigravity:986802ce-24ac-404b-9f74-8cd3e18fe2e7|x521|w1"
+    ]
+   },
+   {
+    "id": "t-02",
+    "ability": "temporal",
+    "first_hit": 0,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {
+     "turn:claude:21c8c171-fbcb-417d-b486-7be331d5beda:3050": 0,
+     "kb:781": 1
+    },
+    "top": [
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda|x3050|w0",
+     "kb|kb:781|w0",
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda.agent-a7322b1c89e12327a|x0|w1",
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda|x3050|w1",
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda|x3014|w2"
+    ]
+   },
+   {
+    "id": "t-03",
+    "ability": "temporal",
+    "first_hit": 4,
+    "targets": 1,
+    "reachable": 1,
+    "unreachable": [],
+    "covered_at": {
+     "kb:436": 4
+    },
+    "top": [
+     "queue|queue:2026-08-16T20:21:37+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "queue|queue:2026-07-23T09:43:51+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "queue|queue:2026-07-23T09:49:45+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "queue|queue:2026-07-23T09:40:35+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "kb|kb:436|w0"
+    ]
+   },
+   {
+    "id": "t-04",
+    "ability": "temporal",
+    "first_hit": 1,
+    "targets": 1,
+    "reachable": 1,
+    "unreachable": [],
+    "covered_at": {
+     "kb:436": 1
+    },
+    "top": [
+     "queue|queue:2026-07-23T09:43:51+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "kb|kb:436|w0",
+     "file:jarvis_data/cognitive_profile.md|s1|w9",
+     "kb|kb:516|w0",
+     "queue|queue:2026-09-02T08:50:49+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0"
+    ]
+   },
+   {
+    "id": "t-05",
+    "ability": "temporal",
+    "first_hit": 1,
+    "targets": 1,
+    "reachable": 1,
+    "unreachable": [],
+    "covered_at": {
+     "kb:322": 1
+    },
+    "top": [
+     "file:jarvis_data/cognitive_profile.md|s4|w181",
+     "kb|kb:322|w0",
+     "file:jarvis_data/cognitive_profile.md|s4|w180",
+     "ep:codex:01a08f68-f872-7963-8cfd-8a4f627af016|x21|w11",
+     "ep:codex:01a08f68-f872-7963-8cfd-8a4f627af016|x2|w44"
+    ]
+   },
+   {
+    "id": "t-06",
+    "ability": "temporal",
+    "first_hit": 1,
+    "targets": 1,
+    "reachable": 1,
+    "unreachable": [],
+    "covered_at": {
+     "kb:437": 1
+    },
+    "top": [
+     "queue|queue:2026-07-27T09:20:29+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "kb|kb:437|w0",
+     "kb|kb:433|w1",
+     "queue|queue:2026-07-18T14:33:34+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "kb|kb:line295|w1"
+    ]
+   },
+   {
+    "id": "t-07",
+    "ability": "temporal",
+    "first_hit": null,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {},
+    "top": [
+     "ep:codex:01a0dcdc-7e56-7520-9e71-f08d82dabc1d|x457|w3",
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda|x3283|w4",
+     "file:jarvis_data/cognitive_profile.md|s1|w8",
+     "ep:jarvis:conv-20260911T155453-2960|x6|w5",
+     "kb|kb:479|w0"
+    ]
+   },
+   {
+    "id": "t-08",
+    "ability": "temporal",
+    "first_hit": 0,
+    "targets": 1,
+    "reachable": 1,
+    "unreachable": [],
+    "covered_at": {
+     "kb:403": 0
+    },
+    "top": [
+     "kb|kb:403|w0",
+     "queue|queue:2026-06-18T16:54:36+05:30|4e986828-f710-435e-8c75-b81b046b5aba|w0",
+     "kb|kb:804|w0",
+     "queue|queue:2026-06-24T12:12:35+05:30|4e986828-f710-435e-8c75-b81b046b5aba|w0",
+     "kb|kb:line99|w0"
+    ]
+   },
+   {
+    "id": "t-09",
+    "ability": "temporal",
+    "first_hit": 2,
+    "targets": 3,
+    "reachable": 3,
+    "unreachable": [],
+    "covered_at": {
+     "turn:jarvis:conv-web-cff653a1-415e-417b-ba68-3ac84f621778:1": 2,
+     "turn:jarvis:conv-20260911T155453-2960:7": 7
+    },
+    "top": [
+     "ep:codex:01a0dcdc-7e56-7520-9e71-f08d82dabc1d|x457|w3",
+     "kb|kb:825|w0",
+     "ep:jarvis:conv-web-cff653a1-415e-417b-ba68-3ac84f621778|x0|w1",
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda.agent-a965c518500b6a65a|x0|w2",
+     "ep:jarvis:conv-web-cff653a1-415e-417b-ba68-3ac84f621778|x0|w0"
+    ]
+   },
+   {
+    "id": "t-10",
+    "ability": "temporal",
+    "first_hit": 1,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {
+     "kb:line237": 1,
+     "kb:line177": 4
+    },
+    "top": [
+     "ep:antigravity:986802ce-24ac-404b-9f74-8cd3e18fe2e7|x0|w3",
+     "kb|kb:line237|w0",
+     "ep:antigravity:986802ce-24ac-404b-9f74-8cd3e18fe2e7|x1234|w15",
+     "kb|kb:line237|w1",
+     "kb|kb:line177|w0"
+    ]
+   },
+   {
+    "id": "t-11",
+    "ability": "temporal",
+    "first_hit": 1,
+    "targets": 1,
+    "reachable": 1,
+    "unreachable": [],
+    "covered_at": {
+     "kb:563": 1
+    },
+    "top": [
+     "kb|kb:615|w0",
+     "kb|kb:563|w0",
+     "ep:jarvis:conv-web-ca175336-ca24-42a5-9492-542b0133a6d6|x6|w0",
+     "kb|kb:810|w0",
+     "ep:codex:01a08f37-ac52-71b1-9c05-90c72002b6cd|x13|w29"
+    ]
+   },
+   {
+    "id": "t-12",
+    "ability": "temporal",
+    "first_hit": 4,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {
+     "kb:307": 4
+    },
+    "top": [
+     "kb|kb:371|w0",
+     "ep:antigravity:986802ce-24ac-404b-9f74-8cd3e18fe2e7|x2025|w40",
+     "ep:antigravity:986802ce-24ac-404b-9f74-8cd3e18fe2e7|x2025|w15",
+     "ep:codex:01a0dcdc-8467-7c20-92bf-e2a66b8e8c27|x6101|w73",
+     "kb|kb:307|w0"
+    ]
+   },
+   {
+    "id": "t-13",
+    "ability": "temporal",
+    "first_hit": 2,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {
+     "queue:2026-08-16T20:10:17+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14": 2,
+     "file:jarvis_data/personal_life.md": 13
+    },
+    "top": [
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda|x3335|w14",
+     "queue|queue:2026-08-16T20:10:17+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "file:jarvis_data/cognitive_profile.md|s1|w16"
+    ]
+   },
+   {
+    "id": "t-14",
+    "ability": "temporal",
+    "first_hit": 1,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {
+     "kb:671": 1,
+     "turn:claude:21c8c171-fbcb-417d-b486-7be331d5beda:402": 3
+    },
+    "top": [
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda.agent-a194138f4231f19f2|x0|w14",
+     "kb|kb:671|w0",
+     "kb|kb:743|w0",
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda|x402|w0",
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda|x402|w3"
+    ]
+   },
+   {
+    "id": "ku-01",
+    "ability": "knowledge_update",
+    "first_hit": null,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {},
+    "top": [
+     "file:jarvis_data/cognitive_profile.md|s4|w200",
+     "file:jarvis_data/cognitive_profile.md|s7|w30",
+     "ep:codex:01a09957-47e5-7282-8f8d-1dde09bd7f3b|x3|w31",
+     "ep:codex:01a09957-47e5-7282-8f8d-1dde09bd7f3b|x3|w28",
+     "ep:codex:01a0965d-8161-7f41-a546-743e09e90927|x22|w24"
+    ]
+   },
+   {
+    "id": "ku-02",
+    "ability": "knowledge_update",
+    "first_hit": 0,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {
+     "kb:789": 0,
+     "file:jarvis_data/personal_life.md": 1
+    },
+    "top": [
+     "kb|kb:789|w0",
+     "file:jarvis_data/personal_life.md|s0|w0",
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda|x3335|w14",
+     "file:jarvis_data/cognitive_profile.md|s4|w6",
+     "file:.agent/rules/JARVIS_ENDGAME.md|s6|w1"
+    ]
+   },
+   {
+    "id": "ku-03",
+    "ability": "knowledge_update",
+    "first_hit": 0,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {
+     "turn:claude:21c8c171-fbcb-417d-b486-7be331d5beda:402": 0,
+     "kb:671": 11
+    },
+    "top": [
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda|x402|w0",
+     "ep:codex:01a0dcdc-7e56-7520-9e71-f08d82dabc1d|x242|w0",
+     "ep:codex:01a0dcdc-7e56-7520-9e71-f08d82dabc1d|x205|w16",
+     "file:jarvis_data/cognitive_profile.md|s7|w36",
+     "ep:antigravity:986802ce-24ac-404b-9f74-8cd3e18fe2e7|x2025|w12"
+    ]
+   },
+   {
+    "id": "ku-04",
+    "ability": "knowledge_update",
+    "first_hit": 12,
+    "targets": 3,
+    "reachable": 3,
+    "unreachable": [],
+    "covered_at": {
+     "kb:760": 12
+    },
+    "top": [
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda|x3050|w0",
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda|x2977|w3",
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda|x1238|w70",
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda|x3008|w0",
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda.agent-a8e7e12718ef2fb11|x0|w0"
+    ]
+   },
+   {
+    "id": "ku-05",
+    "ability": "knowledge_update",
+    "first_hit": 1,
+    "targets": 3,
+    "reachable": 3,
+    "unreachable": [],
+    "covered_at": {
+     "kb:line177": 1,
+     "file:.agent/rules/CLAUDE.md": 2,
+     "kb:line237": 4
+    },
+    "top": [
+     "ep:antigravity:986802ce-24ac-404b-9f74-8cd3e18fe2e7|x0|w3",
+     "kb|kb:line177|w0",
+     "file:.agent/rules/CLAUDE.md|s2|w0",
+     "ep:antigravity:45b4b335-aaf2-499b-b2dd-1a36dbded492|x0|w0",
+     "kb|kb:line237|w0"
+    ]
+   },
+   {
+    "id": "ku-06",
+    "ability": "knowledge_update",
+    "first_hit": 3,
+    "targets": 3,
+    "reachable": 3,
+    "unreachable": [],
+    "covered_at": {
+     "kb:line178": 3,
+     "file:.agent/rules/JARVIS_ENDGAME.md": 8
+    },
+    "top": [
+     "ep:antigravity:45b4b335-aaf2-499b-b2dd-1a36dbded492|x512|w0",
+     "kb|kb:797|w0",
+     "queue|queue:2026-06-04T10:38:02+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "kb|kb:line178|w0",
+     "ep:antigravity:986802ce-24ac-404b-9f74-8cd3e18fe2e7|x1234|w5"
+    ]
+   },
+   {
+    "id": "ku-07",
+    "ability": "knowledge_update",
+    "first_hit": 1,
+    "targets": 3,
+    "reachable": 3,
+    "unreachable": [],
+    "covered_at": {
+     "kb:429": 1,
+     "file:.agent/rules/JARVIS_ENDGAME.md": 2,
+     "kb:463": 4
+    },
+    "top": [
+     "file:jarvis_data/cognitive_profile.md|s4|w145",
+     "kb|kb:429|w0",
+     "file:.agent/rules/JARVIS_ENDGAME.md|s10|w1",
+     "file:jarvis_data/cognitive_profile.md|s4|w131",
+     "kb|kb:463|w0"
+    ]
+   },
+   {
+    "id": "ku-08",
+    "ability": "knowledge_update",
+    "first_hit": 0,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {
+     "kb:538": 0,
+     "queue:2026-09-07T10:01:31+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14": 1
+    },
+    "top": [
+     "kb|kb:538|w0",
+     "queue|queue:2026-09-07T10:01:31+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "ep:codex:01a09bf6-4bb2-7a03-b747-bdb19102fff7|x3|w38",
+     "queue|queue:2026-09-07T10:08:55+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "file:jarvis_data/cognitive_profile.md|s4|w80"
+    ]
+   },
+   {
+    "id": "ku-09",
+    "ability": "knowledge_update",
+    "first_hit": 0,
+    "targets": 1,
+    "reachable": 1,
+    "unreachable": [],
+    "covered_at": {
+     "kb:668": 0
+    },
+    "top": [
+     "kb|kb:668|w0",
+     "ep:codex:01a0dcdc-7e56-7520-9e71-f08d82dabc1d|x1|w71",
+     "ep:codex:01a0dcdc-7e56-7520-9e71-f08d82dabc1d|x1|w70",
+     "ep:codex:01a0dcdc-7e56-7520-9e71-f08d82dabc1d|x1|w89",
+     "ep:codex:01a0dcdc-7e56-7520-9e71-f08d82dabc1d|x1|w96"
+    ]
+   },
+   {
+    "id": "ku-10",
+    "ability": "knowledge_update",
+    "first_hit": 0,
+    "targets": 3,
+    "reachable": 2,
+    "unreachable": [
+     "file:.gitignore"
+    ],
+    "covered_at": {
+     "kb:518": 0,
+     "file:.agent/rules/CLAUDE.md": 4
+    },
+    "top": [
+     "kb|kb:518|w0",
+     "ep:claude:480533f5-b826-4f30-8987-03758af2f98c|p6516|w11",
+     "ep:codex:01a0874a-5494-7121-9874-3f8089067932|p3078|w63",
+     "file:jarvis_data/cognitive_profile.md|s4|w95",
+     "file:.agent/rules/CLAUDE.md|s13|w0"
+    ]
+   },
+   {
+    "id": "ku-11",
+    "ability": "knowledge_update",
+    "first_hit": 0,
+    "targets": 1,
+    "reachable": 1,
+    "unreachable": [],
+    "covered_at": {
+     "kb:436": 0
+    },
+    "top": [
+     "kb|kb:436|w1",
+     "kb|kb:436|w0",
+     "kb|kb:line291|w0",
+     "queue|queue:2026-07-31T09:03:41+05:30|4b5e640b-84c2-45d3-a9af-b32f6bfc3818|w0",
+     "file:jarvis_data/cognitive_profile.md|s4|w193"
+    ]
+   },
+   {
+    "id": "ku-12",
+    "ability": "knowledge_update",
+    "first_hit": 0,
+    "targets": 1,
+    "reachable": 1,
+    "unreachable": [],
+    "covered_at": {
+     "file:knowledge/Finance/strategy.md": 0
+    },
+    "top": [
+     "file:knowledge/Finance/strategy.md|s10|w1",
+     "file:knowledge/Finance/strategy.md|s11|w0",
+     "file:knowledge/Finance/strategy.md|s39|w2",
+     "file:knowledge/Finance/strategy.md|s39|w0",
+     "file:knowledge/Finance/strategy.md|s35|w0"
+    ]
+   },
+   {
+    "id": "ku-13",
+    "ability": "knowledge_update",
+    "first_hit": 6,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {
+     "kb:760": 6,
+     "kb:757": 8
+    },
+    "top": [
+     "ep:codex:01a0874a-5494-7121-9874-3f8089067932|x5129|w6",
+     "ep:codex:01a0874a-5494-7121-9874-3f8089067932|x5129|w9",
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda.agent-a8e7e12718ef2fb11|x0|w21",
+     "ep:codex:01a0874a-5494-7121-9874-3f8089067932|x5129|w8",
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda.agent-a8e7e12718ef2fb11|x0|w24"
+    ]
+   },
+   {
+    "id": "ku-14",
+    "ability": "knowledge_update",
+    "first_hit": 3,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {
+     "kb:531": 3
+    },
+    "top": [
+     "ep:antigravity:986802ce-24ac-404b-9f74-8cd3e18fe2e7|x1238|w2",
+     "ep:codex:01a0874a-5494-7121-9874-3f8089067932|x44|w2",
+     "file:jarvis_data/cognitive_profile.md|s5|w6",
+     "kb|kb:531|w0",
+     "ep:codex:01a0c926-a0a1-71d3-b72c-3f342baa8273|x3|w28"
+    ]
+   },
+   {
+    "id": "ku-15",
+    "ability": "knowledge_update",
+    "first_hit": 1,
+    "targets": 1,
+    "reachable": 1,
+    "unreachable": [],
+    "covered_at": {
+     "kb:line291": 1
+    },
+    "top": [
+     "queue|queue:2026-07-31T09:03:41+05:30|4b5e640b-84c2-45d3-a9af-b32f6bfc3818|w0",
+     "kb|kb:line291|w0",
+     "kb|kb:436|w1",
+     "file:jarvis_data/cognitive_profile.md|s1|w10",
+     "queue|queue:2026-08-11T09:47:17+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0"
+    ]
+   },
+   {
+    "id": "ku-16",
+    "ability": "knowledge_update",
+    "first_hit": 0,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {
+     "kb:364": 0,
+     "kb:312": 4
+    },
+    "top": [
+     "kb|kb:364|w0",
+     "file:jarvis_data/cognitive_profile.md|s1|w9",
+     "kb|kb:372|w0",
+     "queue|queue:2026-06-15T14:49:56+05:30|terminal-20260615T144914-44774|w0",
+     "kb|kb:312|w0"
+    ]
+   },
+   {
+    "id": "ab-01",
+    "ability": "abstention",
+    "first_hit": 4,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {
+     "file:jarvis_data/personal_life.md": 4
+    },
+    "top": [
+     "ep:claude:480533f5-b826-4f30-8987-03758af2f98c|x5082|w0",
+     "ep:claude:480533f5-b826-4f30-8987-03758af2f98c|p6516|w10",
+     "file:knowledge/Finance/strategy.md|s8|w0",
+     "ep:codex:01a0dcdc-8467-7c20-92bf-e2a66b8e8c27|x2815|w0",
+     "file:jarvis_data/personal_life.md|s1|w0"
+    ]
+   },
+   {
+    "id": "ab-02",
+    "ability": "abstention",
+    "first_hit": null,
+    "targets": 1,
+    "reachable": 1,
+    "unreachable": [],
+    "covered_at": {},
+    "top": [
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda.agent-a7322b1c89e12327a|x0|w21",
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda.agent-a7322b1c89e12327a|x0|w29",
+     "ep:antigravity:fb1b349b-6038-4488-88a7-959c82459fac|x299|w37",
+     "ep:codex:01a0dcdc-7e62-7c73-8a09-6aa3aebb67b2|x133|w6",
+     "ep:antigravity:fb1b349b-6038-4488-88a7-959c82459fac|x299|w40"
+    ]
+   },
+   {
+    "id": "ab-03",
+    "ability": "abstention",
+    "first_hit": null,
+    "targets": 1,
+    "reachable": 1,
+    "unreachable": [],
+    "covered_at": {},
+    "top": [
+     "ep:codex:01a0dcdc-7e62-7c73-8a09-6aa3aebb67b2|x551|w2",
+     "ep:codex:01a0dcdc-7e62-7c73-8a09-6aa3aebb67b2|x551|w3",
+     "ep:codex:01a0dcdc-7e62-7c73-8a09-6aa3aebb67b2|x551|w1",
+     "ep:claude:e5b92b99-c971-4c78-a7f9-f06f19d666e8|x1285|w2",
+     "ep:claude:e5b92b99-c971-4c78-a7f9-f06f19d666e8|x1086|w1"
+    ]
+   },
+   {
+    "id": "ab-04",
+    "ability": "abstention",
+    "first_hit": 0,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {
+     "file:jarvis_data/personal_life.md": 0,
+     "queue:2026-08-16T20:10:17+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14": 1
+    },
+    "top": [
+     "file:jarvis_data/personal_life.md|s4|w0",
+     "queue|queue:2026-08-16T20:10:17+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "file:jarvis_data/cognitive_profile.md|s1|w16",
+     "ep:codex:01a0dcdc-7e56-7520-9e71-f08d82dabc1d|x475|w17",
+     "kb|kb:502|w0"
+    ]
+   },
+   {
+    "id": "ab-05",
+    "ability": "abstention",
+    "first_hit": 0,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {
+     "file:jarvis_data/personal_life.md": 0,
+     "queue:2026-08-16T20:10:17+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14": 10
+    },
+    "top": [
+     "file:jarvis_data/personal_life.md|s4|w0",
+     "ep:codex:01a0dcdc-7e56-7520-9e71-f08d82dabc1d|x475|w17",
+     "ep:codex:01a0dcdc-7e56-7520-9e71-f08d82dabc1d|x475|w18",
+     "ep:codex:01a0dcdc-7e56-7520-9e71-f08d82dabc1d|x475|w26",
+     "queue|queue:2026-09-06T00:20:11+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0"
+    ]
+   },
+   {
+    "id": "ab-06",
+    "ability": "abstention",
+    "first_hit": 0,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {
+     "queue:2026-08-16T20:10:17+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14": 0,
+     "file:jarvis_data/personal_life.md": 1
+    },
+    "top": [
+     "queue|queue:2026-08-16T20:10:17+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "file:jarvis_data/personal_life.md|s1|w0",
+     "kb|kb:786|w0",
+     "kb|kb:856|w0"
+    ]
+   },
+   {
+    "id": "ab-07",
+    "ability": "abstention",
+    "first_hit": 0,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {
+     "queue:2026-08-22T22:09:04+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14": 0,
+     "file:jarvis_data/personal_life.md": 3
+    },
+    "top": [
+     "queue|queue:2026-08-22T22:09:04+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "kb|kb:789|w0",
+     "file:jarvis_data/personal_life.md|s3|w0"
+    ]
+   },
+   {
+    "id": "ab-08",
+    "ability": "abstention",
+    "first_hit": null,
+    "targets": 1,
+    "reachable": 1,
+    "unreachable": [],
+    "covered_at": {},
+    "top": [
+     "ep:codex:01a0dcdc-7e62-7c73-8a09-6aa3aebb67b2|x387|w3",
+     "ep:codex:01a0dcdc-7e62-7c73-8a09-6aa3aebb67b2|x387|w1",
+     "ep:codex:01a0dcdc-7e62-7c73-8a09-6aa3aebb67b2|x387|w4",
+     "ep:codex:01a0dcdc-7e62-7c73-8a09-6aa3aebb67b2|x387|w5",
+     "ep:codex:01a0dcdc-7e62-7c73-8a09-6aa3aebb67b2|x356|w3"
+    ]
+   },
+   {
+    "id": "ab-09",
+    "ability": "abstention",
+    "first_hit": 0,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {
+     "file:jarvis_data/personal_life.md": 0,
+     "queue:2026-08-16T20:10:17+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14": 2
+    },
+    "top": [
+     "file:jarvis_data/personal_life.md|s4|w0",
+     "file:jarvis_data/cognitive_profile.md|s1|w16",
+     "queue|queue:2026-08-16T20:10:17+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "kb|kb:502|w0",
+     "ep:codex:01a0dcdc-7e56-7520-9e71-f08d82dabc1d|x475|w17"
+    ]
+   },
+   {
+    "id": "ab-10",
+    "ability": "abstention",
+    "first_hit": 11,
+    "targets": 1,
+    "reachable": 1,
+    "unreachable": [],
+    "covered_at": {
+     "file:jarvis_data/personal_life.md": 11
+    },
+    "top": [
+     "ep:codex:01a0dcdc-7e62-7c73-8a09-6aa3aebb67b2|x195|w23",
+     "ep:codex:01a0dcdc-7e62-7c73-8a09-6aa3aebb67b2|x195|w24",
+     "ep:codex:01a09b84-837c-7b40-a5dd-58324458de21|x150|w0",
+     "queue|queue:2026-08-16T20:10:17+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "ep:codex:01a09b84-837c-7b40-a5dd-58324458de21|x174|w0"
+    ]
+   },
+   {
+    "id": "ab-11",
+    "ability": "abstention",
+    "first_hit": null,
+    "targets": 1,
+    "reachable": 1,
+    "unreachable": [],
+    "covered_at": {},
+    "top": [
+     "kb|kb:848|w0",
+     "queue|queue:2026-08-22T22:09:04+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "file:jarvis_data/cognitive_profile.md|s7|w61"
+    ]
+   },
+   {
+    "id": "ab-12",
+    "ability": "abstention",
+    "first_hit": null,
+    "targets": 1,
+    "reachable": 1,
+    "unreachable": [],
+    "covered_at": {},
+    "top": [
+     "queue|queue:2026-09-18T12:34:43+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w1",
+     "ep:codex:01a0c051-611d-7a50-9f2e-1ec11857825d|x1483|w3",
+     "ep:codex:01a0dcdc-8467-7c20-92bf-e2a66b8e8c27|x94|w44",
+     "ep:jarvis:conv-web-ca175336-ca24-42a5-9492-542b0133a6d6|x15|w0",
+     "kb|kb:516|w0"
+    ]
+   },
+   {
+    "id": "ab-13",
+    "ability": "abstention",
+    "first_hit": null,
+    "targets": 1,
+    "reachable": 1,
+    "unreachable": [],
+    "covered_at": {},
+    "top": [
+     "ep:codex:01a0dcdc-8467-7c20-92bf-e2a66b8e8c27|x7593|w7",
+     "ep:codex:01a0dcdc-8467-7c20-92bf-e2a66b8e8c27|x5075|w138",
+     "ep:codex:01a0dcdc-8467-7c20-92bf-e2a66b8e8c27|x7301|w138",
+     "ep:codex:01a09e1a-377c-7841-adfb-00aab4171c9a|x3|w48",
+     "ep:codex:01a0dcdc-8467-7c20-92bf-e2a66b8e8c27|x7595|w48"
+    ]
+   }
+  ]
+ },
+ "nomic": {
+  "build_s": 5661,
+  "stats": {
+   "system_events_skipped": 14287,
+   "system_chars_skipped": 42272688,
+   "embedded": 30718,
+   "embedded_chars": 43127609,
+   "sources_synced": 285,
+   "seconds": 5660.8,
+   "overflow_windows": 0
+  },
+  "status": {
+   "units": 30718,
+   "by_source": {
+    "compaction": 3935,
+    "doc": 557,
+    "exchange": 24383,
+    "kb": 914,
+    "queue": 929
+   },
+   "body_chars": 41347092,
+   "sources": 285,
+   "vectors": 30718,
+   "embedder": "nomic-ai/nomic-embed-text-v1.5",
+   "updated": "2026-09-29T03:35:33.564+05:30",
+   "fts_bytes": 183980032
+  },
+  "summary": {
+   "information_extraction": {
+    "n": 21,
+    "unreachable_q": 0,
+    "r@5": 0.857,
+    "cov@5": 0.73,
+    "r@10": 0.905,
+    "cov@10": 0.817,
+    "r@20": 0.905,
+    "cov@20": 0.817
+   },
+   "multi_session": {
+    "n": 14,
+    "unreachable_q": 0,
+    "r@5": 0.5,
+    "cov@5": 0.14,
+    "r@10": 0.571,
+    "cov@10": 0.196,
+    "r@20": 0.643,
+    "cov@20": 0.34
+   },
+   "temporal": {
+    "n": 14,
+    "unreachable_q": 0,
+    "r@5": 0.857,
+    "cov@5": 0.738,
+    "r@10": 0.857,
+    "cov@10": 0.762,
+    "r@20": 0.857,
+    "cov@20": 0.821
+   },
+   "knowledge_update": {
+    "n": 16,
+    "unreachable_q": 0,
+    "r@5": 0.812,
+    "cov@5": 0.729,
+    "r@10": 0.938,
+    "cov@10": 0.844,
+    "r@20": 0.938,
+    "cov@20": 0.896
+   },
+   "abstention": {
+    "n": 13,
+    "unreachable_q": 0,
+    "r@5": 0.462,
+    "cov@5": 0.423,
+    "r@10": 0.462,
+    "cov@10": 0.462,
+    "r@20": 0.692,
+    "cov@20": 0.692
+   },
+   "overall": {
+    "n": 78,
+    "unreachable_q": 0,
+    "r@5": 0.718,
+    "cov@5": 0.574,
+    "r@10": 0.769,
+    "cov@10": 0.642,
+    "r@20": 0.821,
+    "cov@20": 0.728
+   },
+   "answerable": {
+    "n": 65,
+    "unreachable_q": 0,
+    "r@5": 0.769,
+    "cov@5": 0.604,
+    "r@10": 0.831,
+    "cov@10": 0.678,
+    "r@20": 0.846,
+    "cov@20": 0.735
+   }
+  },
+  "latency": {
+   "p50_ms": 498.4,
+   "p95_ms": 825.8,
+   "first_ms": 5203.9
+  },
+  "rows": [
+   {
+    "id": "ie-01",
+    "ability": "information_extraction",
+    "first_hit": 4,
+    "targets": 3,
+    "reachable": 3,
+    "unreachable": [],
+    "covered_at": {
+     "kb:789": 4,
+     "file:jarvis_data/personal_life.md": 5
+    },
+    "top": [
+     "queue|queue:2026-08-22T22:09:04+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda|x3335|w14",
+     "kb|kb:789|w0"
+    ]
+   },
+   {
+    "id": "ie-02",
+    "ability": "information_extraction",
+    "first_hit": 0,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {
+     "file:jarvis_data/personal_life.md": 0,
+     "queue:2026-08-16T20:10:17+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14": 6
+    },
+    "top": [
+     "file:jarvis_data/personal_life.md|s4|w0",
+     "kb|kb:502|w0",
+     "ep:codex:01a0dcdc-7e56-7520-9e71-f08d82dabc1d|x475|w17",
+     "file:jarvis_data/cognitive_profile.md|s1|w16",
+     "queue|queue:2026-08-16T20:26:07+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0"
+    ]
+   },
+   {
+    "id": "ie-03",
+    "ability": "information_extraction",
+    "first_hit": 0,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {
+     "queue:2026-08-16T20:10:17+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14": 0,
+     "file:jarvis_data/personal_life.md": 1
+    },
+    "top": [
+     "queue|queue:2026-08-16T20:10:17+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "file:jarvis_data/personal_life.md|s1|w0",
+     "ep:claude:480533f5-b826-4f30-8987-03758af2f98c|p6516|w10",
+     "ep:codex:01a0dcdc-8467-7c20-92bf-e2a66b8e8c27|x2815|w0",
+     "ep:claude:480533f5-b826-4f30-8987-03758af2f98c|x5082|w0"
+    ]
+   },
+   {
+    "id": "ie-04",
+    "ability": "information_extraction",
+    "first_hit": 0,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {
+     "file:jarvis_data/personal_life.md": 0
+    },
+    "top": [
+     "file:jarvis_data/personal_life.md|s1|w0",
+     "ep:codex:01a0dcdc-8467-7c20-92bf-e2a66b8e8c27|x459|w13",
+     "ep:codex:01a0c926-a0a1-71d3-b72c-3f342baa8273|x14|w4",
+     "kb|kb:845|w0",
+     "ep:codex:01a0904d-bf48-79f1-b997-3cca4d1e33b6|x91|w20"
+    ]
+   },
+   {
+    "id": "ie-05",
+    "ability": "information_extraction",
+    "first_hit": null,
+    "targets": 4,
+    "reachable": 4,
+    "unreachable": [],
+    "covered_at": {},
+    "top": [
+     "ep:antigravity:77cd437e-1b74-4668-8497-0bbe43eaeba3|x16|w0",
+     "ep:antigravity:77cd437e-1b74-4668-8497-0bbe43eaeba3|x16|w1",
+     "kb|kb:831|w0",
+     "ep:antigravity:5a76f739-b07e-447a-bef2-2282a2f4417c|x2451|w26",
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda|x3335|w14"
+    ]
+   },
+   {
+    "id": "ie-06",
+    "ability": "information_extraction",
+    "first_hit": 0,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {
+     "file:jarvis_data/personal_life.md": 0,
+     "queue:2026-08-16T20:10:17+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14": 1
+    },
+    "top": [
+     "file:jarvis_data/personal_life.md|s5|w0",
+     "queue|queue:2026-08-16T20:10:17+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "queue|queue:2026-09-01T17:18:29+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "ep:codex:01a0dcdc-8467-7c20-92bf-e2a66b8e8c27|x2830|w71",
+     "ep:claude:480533f5-b826-4f30-8987-03758af2f98c.agent-acd3407ded8233ab4|x0|w22"
+    ]
+   },
+   {
+    "id": "ie-07",
+    "ability": "information_extraction",
+    "first_hit": 0,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {
+     "file:jarvis_data/personal_life.md": 0
+    },
+    "top": [
+     "file:jarvis_data/personal_life.md|s5|w0",
+     "ep:claude:e5b92b99-c971-4c78-a7f9-f06f19d666e8|x372|w9",
+     "ep:codex:01a0dcdc-7e62-7c73-8a09-6aa3aebb67b2|x562|w2",
+     "ep:claude:e5b92b99-c971-4c78-a7f9-f06f19d666e8|x1123|w1",
+     "ep:claude:e5b92b99-c971-4c78-a7f9-f06f19d666e8|x372|w12"
+    ]
+   },
+   {
+    "id": "ie-08",
+    "ability": "information_extraction",
+    "first_hit": 0,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {
+     "turn:jarvis:conv-web-cff653a1-415e-417b-ba68-3ac84f621778:3": 0,
+     "kb:784": 2
+    },
+    "top": [
+     "ep:jarvis:conv-web-cff653a1-415e-417b-ba68-3ac84f621778|x2|w1",
+     "ep:jarvis:conv-web-cff653a1-415e-417b-ba68-3ac84f621778|x2|w0",
+     "kb|kb:784|w0",
+     "file:jarvis_data/cognitive_profile.md|s1|w21",
+     "ep:antigravity:e387d971-c749-4131-b058-fcf2445433ae|x0|w0"
+    ]
+   },
+   {
+    "id": "ie-09",
+    "ability": "information_extraction",
+    "first_hit": 6,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {
+     "turn:jarvis:conv-web-cff653a1-415e-417b-ba68-3ac84f621778:3": 6,
+     "kb:784": 7
+    },
+    "top": [
+     "kb|kb:828|w0",
+     "kb|kb:646|w0",
+     "file:jarvis_data/cognitive_profile.md|s1|w21",
+     "kb|kb:647|w0",
+     "ep:antigravity:fb1b349b-6038-4488-88a7-959c82459fac|x299|w117"
+    ]
+   },
+   {
+    "id": "ie-10",
+    "ability": "information_extraction",
+    "first_hit": 0,
+    "targets": 3,
+    "reachable": 3,
+    "unreachable": [],
+    "covered_at": {
+     "kb:787": 0,
+     "turn:jarvis:conv-web-cff653a1-415e-417b-ba68-3ac84f621778:11": 1,
+     "turn:jarvis:conv-web-cff653a1-415e-417b-ba68-3ac84f621778:9": 2
+    },
+    "top": [
+     "kb|kb:787|w0",
+     "ep:jarvis:conv-web-cff653a1-415e-417b-ba68-3ac84f621778|x10|w0",
+     "ep:jarvis:conv-web-cff653a1-415e-417b-ba68-3ac84f621778|x8|w0",
+     "ep:jarvis:conv-web-cff653a1-415e-417b-ba68-3ac84f621778|x6|w0",
+     "file:jarvis_data/cognitive_profile.md|s1|w23"
+    ]
+   },
+   {
+    "id": "ie-11",
+    "ability": "information_extraction",
+    "first_hit": 0,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {
+     "kb:788": 0,
+     "turn:jarvis:conv-web-cff653a1-415e-417b-ba68-3ac84f621778:13": 3
+    },
+    "top": [
+     "kb|kb:788|w0",
+     "ep:jarvis:conv-web-cff653a1-415e-417b-ba68-3ac84f621778|x10|w0",
+     "kb|kb:651|w0",
+     "ep:jarvis:conv-web-cff653a1-415e-417b-ba68-3ac84f621778|x12|w0",
+     "ep:codex:01a0874a-5494-7121-9874-3f8089067932|x4192|w0"
+    ]
+   },
+   {
+    "id": "ie-12",
+    "ability": "information_extraction",
+    "first_hit": 3,
+    "targets": 1,
+    "reachable": 1,
+    "unreachable": [],
+    "covered_at": {
+     "kb:line266": 3
+    },
+    "top": [
+     "ep:codex:01a09623-f6cb-7743-b552-76a42d14af29|x3|w32",
+     "ep:codex:01a09623-f6cb-7743-b552-76a42d14af29|x14|w17",
+     "ep:codex:01a09623-f6cb-7743-b552-76a42d14af29|x18|w12",
+     "kb|kb:line266|w0",
+     "ep:codex:01a09623-f6cb-7743-b552-76a42d14af29|x18|w18"
+    ]
+   },
+   {
+    "id": "ie-13",
+    "ability": "information_extraction",
+    "first_hit": 0,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {
+     "kb:804": 0,
+     "queue:2026-06-02T16:04:53+05:30|4e986828-f710-435e-8c75-b81b046b5aba": 1
+    },
+    "top": [
+     "kb|kb:804|w0",
+     "queue|queue:2026-06-02T16:04:53+05:30|4e986828-f710-435e-8c75-b81b046b5aba|w0",
+     "kb|kb:372|w0",
+     "queue|queue:2026-06-15T14:49:56+05:30|terminal-20260615T144914-44774|w0",
+     "queue|queue:2026-06-03T09:16:47+05:30|4e986828-f710-435e-8c75-b81b046b5aba|w0"
+    ]
+   },
+   {
+    "id": "ie-14",
+    "ability": "information_extraction",
+    "first_hit": 0,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {
+     "kb:line99": 0
+    },
+    "top": [
+     "kb|kb:line99|w0",
+     "ep:codex:01a0c206-a3c5-7983-9def-bea53a109cc3|x37|w14",
+     "ep:codex:01a0c206-a3c5-7983-9def-bea53a109cc3|x29|w23",
+     "queue|queue:2026-09-05T23:37:55+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "ep:jarvis:conv-20260911T155453-2960|x0|w0"
+    ]
+   },
+   {
+    "id": "ie-15",
+    "ability": "information_extraction",
+    "first_hit": 4,
+    "targets": 1,
+    "reachable": 1,
+    "unreachable": [],
+    "covered_at": {
+     "kb:436": 4
+    },
+    "top": [
+     "queue|queue:2026-07-23T09:33:03+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "kb|kb:516|w0",
+     "file:jarvis_data/cognitive_profile.md|s1|w17",
+     "queue|queue:2026-09-02T08:50:49+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "kb|kb:436|w0"
+    ]
+   },
+   {
+    "id": "ie-16",
+    "ability": "information_extraction",
+    "first_hit": null,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {},
+    "top": [
+     "ep:codex:01a0874a-5494-7121-9874-3f8089067932|x4699|w2",
+     "ep:codex:01a09e1a-377c-7841-adfb-00aab4171c9a|x14|w11",
+     "ep:codex:01a09e0b-2579-7962-ad0b-ac053363daae|x10|w11",
+     "ep:codex:01a09e1a-377c-7841-adfb-00aab4171c9a|x25|w10",
+     "ep:codex:01a09e1a-377c-7841-adfb-00aab4171c9a|x17|w10"
+    ]
+   },
+   {
+    "id": "ie-17",
+    "ability": "information_extraction",
+    "first_hit": 0,
+    "targets": 1,
+    "reachable": 1,
+    "unreachable": [],
+    "covered_at": {
+     "file:jarvis_data/personal_life.md": 0
+    },
+    "top": [
+     "file:jarvis_data/personal_life.md|s6|w0",
+     "file:jarvis_data/cognitive_profile.md|s4|w93",
+     "queue|queue:2026-08-22T12:54:55+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "queue|queue:2026-08-22T12:18:28+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "queue|queue:2026-08-16T20:21:37+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0"
+    ]
+   },
+   {
+    "id": "ie-18",
+    "ability": "information_extraction",
+    "first_hit": 0,
+    "targets": 1,
+    "reachable": 1,
+    "unreachable": [],
+    "covered_at": {
+     "kb:436": 0
+    },
+    "top": [
+     "kb|kb:436|w0",
+     "kb|kb:436|w1",
+     "queue|queue:2026-07-23T09:49:45+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "file:jarvis_data/cognitive_profile.md|s1|w10",
+     "queue|queue:2026-07-23T09:55:52+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0"
+    ]
+   },
+   {
+    "id": "ie-19",
+    "ability": "information_extraction",
+    "first_hit": 0,
+    "targets": 1,
+    "reachable": 1,
+    "unreachable": [],
+    "covered_at": {
+     "kb:416": 0
+    },
+    "top": [
+     "kb|kb:416|w0",
+     "file:jarvis_data/cognitive_profile.md|s4|w225",
+     "kb|kb:408|w0",
+     "kb|kb:line181|w0",
+     "kb|kb:325|w0"
+    ]
+   },
+   {
+    "id": "ie-20",
+    "ability": "information_extraction",
+    "first_hit": 0,
+    "targets": 1,
+    "reachable": 1,
+    "unreachable": [],
+    "covered_at": {
+     "kb:line74": 0
+    },
+    "top": [
+     "kb|kb:line74|w0",
+     "ep:antigravity:1c4a4e49-d66b-4af8-b53f-b9f6aed953df|x92|w4",
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda.agent-a7322b1c89e12327a|x0|w15",
+     "kb|kb:line155|w0",
+     "ep:antigravity:3dbd01c1-9fd3-4c20-b468-91ff5a604765|x11|w110"
+    ]
+   },
+   {
+    "id": "ie-21",
+    "ability": "information_extraction",
+    "first_hit": 0,
+    "targets": 1,
+    "reachable": 1,
+    "unreachable": [],
+    "covered_at": {
+     "file:jarvis_data/personal_life.md": 0
+    },
+    "top": [
+     "file:jarvis_data/personal_life.md|s6|w0",
+     "queue|queue:2026-08-16T20:21:37+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "queue|queue:2026-06-15T14:49:56+05:30|terminal-20260615T144914-44774|w0",
+     "kb|kb:372|w0",
+     "file:jarvis_data/personal_life.md|s2|w0"
+    ]
+   },
+   {
+    "id": "ms-01",
+    "ability": "multi_session",
+    "first_hit": 0,
+    "targets": 8,
+    "reachable": 8,
+    "unreachable": [],
+    "covered_at": {
+     "kb:771": 0,
+     "kb:785": 10
+    },
+    "top": [
+     "kb|kb:771|w0",
+     "queue|queue:2026-08-21T01:53:14+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w1",
+     "kb|kb:470|w0",
+     "queue|queue:2026-08-16T19:52:36+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "ep:antigravity:b2b6ce61-4dc9-41c0-ad70-2dd61a06fd45|x0|w0"
+    ]
+   },
+   {
+    "id": "ms-02",
+    "ability": "multi_session",
+    "first_hit": 3,
+    "targets": 4,
+    "reachable": 4,
+    "unreachable": [],
+    "covered_at": {
+     "kb:531": 3,
+     "file:.agent/rules/JARVIS_ENDGAME.md": 5,
+     "kb:429": 10,
+     "kb:463": 15
+    },
+    "top": [
+     "queue|queue:2026-08-04T10:29:22+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "file:.agent/rules/CLAUDE.md|s11|w0",
+     "kb|kb:313|w1",
+     "kb|kb:531|w1",
+     "kb|kb:line42|w0"
+    ]
+   },
+   {
+    "id": "ms-03",
+    "ability": "multi_session",
+    "first_hit": null,
+    "targets": 4,
+    "reachable": 4,
+    "unreachable": [],
+    "covered_at": {},
+    "top": [
+     "ep:antigravity:986802ce-24ac-404b-9f74-8cd3e18fe2e7|x1234|w9",
+     "ep:jarvis:conv-20260911T155453-2960|x6|w0",
+     "ep:codex:01a0874a-5494-7121-9874-3f8089067932|x4192|w0",
+     "ep:antigravity:986802ce-24ac-404b-9f74-8cd3e18fe2e7|x1234|w17",
+     "ep:antigravity:986802ce-24ac-404b-9f74-8cd3e18fe2e7|x1234|w6"
+    ]
+   },
+   {
+    "id": "ms-04",
+    "ability": "multi_session",
+    "first_hit": 2,
+    "targets": 5,
+    "reachable": 5,
+    "unreachable": [],
+    "covered_at": {
+     "kb:528": 2
+    },
+    "top": [
+     "queue|queue:2026-09-05T23:25:28+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "ep:codex:01a08f22-c9ad-7b20-995b-b603a9166825|x59|w7",
+     "kb|kb:528|w0",
+     "file:.agent/rules/JARVIS_ENDGAME.md|s3|w0",
+     "queue|queue:2026-09-10T07:39:38+05:30|ec1f2c86-5691-4ea5-93f8-a61e82f042ea|w0"
+    ]
+   },
+   {
+    "id": "ms-05",
+    "ability": "multi_session",
+    "first_hit": 0,
+    "targets": 5,
+    "reachable": 5,
+    "unreachable": [],
+    "covered_at": {
+     "turn:claude:21c8c171-fbcb-417d-b486-7be331d5beda:3335": 3,
+     "kb:789": 8
+    },
+    "top": [
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda|x3335|w14",
+     "kb|kb:848|w0"
+    ]
+   },
+   {
+    "id": "ms-06",
+    "ability": "multi_session",
+    "first_hit": 11,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {
+     "kb:757": 11,
+     "kb:760": 18
+    },
+    "top": [
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda|p2505|w1",
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda.agent-a20b26a24c93706a4|x0|w0",
+     "ep:codex:01a0874a-5494-7121-9874-3f8089067932|x4|w8",
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda|x2616|w38",
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda|x962|w18"
+    ]
+   },
+   {
+    "id": "ms-07",
+    "ability": "multi_session",
+    "first_hit": null,
+    "targets": 7,
+    "reachable": 7,
+    "unreachable": [],
+    "covered_at": {},
+    "top": [
+     "ep:antigravity:986802ce-24ac-404b-9f74-8cd3e18fe2e7|x1234|w8",
+     "ep:antigravity:986802ce-24ac-404b-9f74-8cd3e18fe2e7|x1234|w16",
+     "file:jarvis_data/cognitive_profile.md|s4|w182",
+     "ep:antigravity:986802ce-24ac-404b-9f74-8cd3e18fe2e7|x1234|w18",
+     "ep:codex:01a08f68-f872-7963-8cfd-8a4f627af016|x9|w12"
+    ]
+   },
+   {
+    "id": "ms-08",
+    "ability": "multi_session",
+    "first_hit": null,
+    "targets": 3,
+    "reachable": 3,
+    "unreachable": [],
+    "covered_at": {},
+    "top": [
+     "queue|queue:2026-08-16T19:52:36+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "kb|kb:829|w0",
+     "file:jarvis_data/cognitive_profile.md|s7|w60",
+     "ep:jarvis:conv-web-cff653a1-415e-417b-ba68-3ac84f621778|x16|w1",
+     "ep:antigravity:b2b6ce61-4dc9-41c0-ad70-2dd61a06fd45|x0|w0"
+    ]
+   },
+   {
+    "id": "ms-09",
+    "ability": "multi_session",
+    "first_hit": 2,
+    "targets": 5,
+    "reachable": 5,
+    "unreachable": [],
+    "covered_at": {
+     "kb:804": 2,
+     "kb:307": 11
+    },
+    "top": [
+     "queue|queue:2026-08-16T20:21:37+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "file:jarvis_data/personal_life.md|s6|w0",
+     "kb|kb:804|w0",
+     "kb|kb:784|w0",
+     "queue|queue:2026-06-15T14:49:56+05:30|terminal-20260615T144914-44774|w0"
+    ]
+   },
+   {
+    "id": "ms-10",
+    "ability": "multi_session",
+    "first_hit": null,
+    "targets": 4,
+    "reachable": 3,
+    "unreachable": [
+     "conv:conv-web-cff653a1-415e-417b-ba68-3ac84f621778.jsonl#18"
+    ],
+    "covered_at": {},
+    "top": [
+     "ep:codex:01a0dcdc-7e56-7520-9e71-f08d82dabc1d|x457|w3",
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda.agent-a39b0b962dbf6df6d|x0|w26",
+     "ep:jarvis:conv-web-cff653a1-415e-417b-ba68-3ac84f621778|x0|w1",
+     "ep:jarvis:conv-web-cff653a1-415e-417b-ba68-3ac84f621778|x0|w0",
+     "ep:codex:01a0dcdc-7e56-7520-9e71-f08d82dabc1d|x1|w36"
+    ]
+   },
+   {
+    "id": "ms-11",
+    "ability": "multi_session",
+    "first_hit": 6,
+    "targets": 3,
+    "reachable": 3,
+    "unreachable": [],
+    "covered_at": {
+     "queue:2026-09-01T17:06:44+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14": 6
+    },
+    "top": [
+     "kb|kb:786|w0",
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda|x3188|w0",
+     "ep:jarvis:conv-web-cff653a1-415e-417b-ba68-3ac84f621778|x0|w0",
+     "ep:jarvis:conv-20260911T155453-2960|x6|w0",
+     "queue|queue:2026-06-10T12:15:39+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0"
+    ]
+   },
+   {
+    "id": "ms-12",
+    "ability": "multi_session",
+    "first_hit": 0,
+    "targets": 4,
+    "reachable": 4,
+    "unreachable": [],
+    "covered_at": {
+     "kb:789": 0
+    },
+    "top": [
+     "kb|kb:789|w0",
+     "queue|queue:2026-09-18T12:34:43+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w1",
+     "file:jarvis_data/cognitive_profile.md|s4|w87",
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda|x3335|w10",
+     "file:jarvis_data/cognitive_profile.md|s7|w35"
+    ]
+   },
+   {
+    "id": "ms-13",
+    "ability": "multi_session",
+    "first_hit": null,
+    "targets": 3,
+    "reachable": 3,
+    "unreachable": [],
+    "covered_at": {},
+    "top": [
+     "ep:codex:01a0dcdc-8467-7c20-92bf-e2a66b8e8c27|x3163|w53",
+     "ep:codex:01a0dcdc-8467-7c20-92bf-e2a66b8e8c27|x790|w0",
+     "ep:claude:480533f5-b826-4f30-8987-03758af2f98c|x5717|w16",
+     "ep:codex:01a0dcdc-8467-7c20-92bf-e2a66b8e8c27|x3163|w54",
+     "ep:codex:01a0dcdc-8467-7c20-92bf-e2a66b8e8c27|x751|w0"
+    ]
+   },
+   {
+    "id": "ms-14",
+    "ability": "multi_session",
+    "first_hit": 0,
+    "targets": 3,
+    "reachable": 3,
+    "unreachable": [],
+    "covered_at": {
+     "kb:799": 0
+    },
+    "top": [
+     "kb|kb:799|w0",
+     "ep:jarvis:conv-web-ca175336-ca24-42a5-9492-542b0133a6d6|x15|w0",
+     "ep:jarvis:conv-web-ca175336-ca24-42a5-9492-542b0133a6d6|x15|w1",
+     "queue|queue:2026-06-04T11:53:15+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "queue|queue:2026-06-10T12:15:39+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0"
+    ]
+   },
+   {
+    "id": "t-01",
+    "ability": "temporal",
+    "first_hit": null,
+    "targets": 11,
+    "reachable": 11,
+    "unreachable": [],
+    "covered_at": {},
+    "top": [
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda.agent-a7322b1c89e12327a|x0|w1",
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda.agent-a2cf0bfe731b9f600|x0|w2",
+     "queue|queue:2026-06-16T14:45:59+05:30|a375d25c-823d-4a49-87e3-84584d114b35|w0",
+     "file:knowledge/Finance/strategy.md|s44|w0",
+     "ep:antigravity:986802ce-24ac-404b-9f74-8cd3e18fe2e7|x521|w1"
+    ]
+   },
+   {
+    "id": "t-02",
+    "ability": "temporal",
+    "first_hit": 0,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {
+     "turn:claude:21c8c171-fbcb-417d-b486-7be331d5beda:3050": 0,
+     "kb:781": 1
+    },
+    "top": [
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda|x3050|w0",
+     "kb|kb:781|w0",
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda|x3050|w1",
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda.agent-a7322b1c89e12327a|x0|w1",
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda|x3014|w2"
+    ]
+   },
+   {
+    "id": "t-03",
+    "ability": "temporal",
+    "first_hit": 4,
+    "targets": 1,
+    "reachable": 1,
+    "unreachable": [],
+    "covered_at": {
+     "kb:436": 4
+    },
+    "top": [
+     "queue|queue:2026-08-16T20:21:37+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "queue|queue:2026-07-23T09:43:51+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "queue|queue:2026-07-23T09:49:45+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "queue|queue:2026-07-23T09:40:35+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "kb|kb:436|w0"
+    ]
+   },
+   {
+    "id": "t-04",
+    "ability": "temporal",
+    "first_hit": 1,
+    "targets": 1,
+    "reachable": 1,
+    "unreachable": [],
+    "covered_at": {
+     "kb:436": 1
+    },
+    "top": [
+     "queue|queue:2026-07-23T09:43:51+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "kb|kb:436|w0",
+     "kb|kb:516|w0",
+     "file:jarvis_data/cognitive_profile.md|s1|w9",
+     "queue|queue:2026-09-02T08:50:49+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0"
+    ]
+   },
+   {
+    "id": "t-05",
+    "ability": "temporal",
+    "first_hit": 0,
+    "targets": 1,
+    "reachable": 1,
+    "unreachable": [],
+    "covered_at": {
+     "kb:322": 0
+    },
+    "top": [
+     "kb|kb:322|w0",
+     "file:jarvis_data/cognitive_profile.md|s4|w182",
+     "ep:codex:01a08f68-f872-7963-8cfd-8a4f627af016|x21|w11",
+     "ep:codex:01a08f68-f872-7963-8cfd-8a4f627af016|x13|w20",
+     "ep:codex:01a08f68-f872-7963-8cfd-8a4f627af016|x17|w15"
+    ]
+   },
+   {
+    "id": "t-06",
+    "ability": "temporal",
+    "first_hit": 1,
+    "targets": 1,
+    "reachable": 1,
+    "unreachable": [],
+    "covered_at": {
+     "kb:437": 1
+    },
+    "top": [
+     "queue|queue:2026-07-27T09:20:29+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "kb|kb:437|w0",
+     "kb|kb:433|w1",
+     "file:jarvis_data/cognitive_profile.md|s4|w142",
+     "queue|queue:2026-07-18T14:33:34+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0"
+    ]
+   },
+   {
+    "id": "t-07",
+    "ability": "temporal",
+    "first_hit": null,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {},
+    "top": [
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda|x3283|w4",
+     "ep:codex:01a0dcdc-7e56-7520-9e71-f08d82dabc1d|x457|w3",
+     "ep:jarvis:conv-web-cff653a1-415e-417b-ba68-3ac84f621778|x16|w0",
+     "ep:codex:01a0dcdc-7e56-7520-9e71-f08d82dabc1d|x1|w29",
+     "kb|kb:479|w0"
+    ]
+   },
+   {
+    "id": "t-08",
+    "ability": "temporal",
+    "first_hit": 0,
+    "targets": 1,
+    "reachable": 1,
+    "unreachable": [],
+    "covered_at": {
+     "kb:403": 0
+    },
+    "top": [
+     "kb|kb:403|w0",
+     "queue|queue:2026-06-18T16:54:36+05:30|4e986828-f710-435e-8c75-b81b046b5aba|w0",
+     "kb|kb:804|w0",
+     "queue|queue:2026-06-24T12:12:35+05:30|4e986828-f710-435e-8c75-b81b046b5aba|w0",
+     "kb|kb:line99|w0"
+    ]
+   },
+   {
+    "id": "t-09",
+    "ability": "temporal",
+    "first_hit": 2,
+    "targets": 3,
+    "reachable": 3,
+    "unreachable": [],
+    "covered_at": {
+     "turn:jarvis:conv-web-cff653a1-415e-417b-ba68-3ac84f621778:1": 2,
+     "turn:jarvis:conv-20260911T155453-2960:7": 8,
+     "kb:784": 13
+    },
+    "top": [
+     "ep:codex:01a0dcdc-7e56-7520-9e71-f08d82dabc1d|x457|w3",
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda.agent-a39b0b962dbf6df6d|x0|w26",
+     "ep:jarvis:conv-web-cff653a1-415e-417b-ba68-3ac84f621778|x0|w1",
+     "ep:jarvis:conv-web-cff653a1-415e-417b-ba68-3ac84f621778|x0|w0",
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda.agent-a965c518500b6a65a|x0|w2"
+    ]
+   },
+   {
+    "id": "t-10",
+    "ability": "temporal",
+    "first_hit": 1,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {
+     "kb:line237": 1,
+     "kb:line177": 3
+    },
+    "top": [
+     "ep:antigravity:986802ce-24ac-404b-9f74-8cd3e18fe2e7|x0|w3",
+     "kb|kb:line237|w0",
+     "kb|kb:line237|w1",
+     "kb|kb:line177|w0",
+     "queue|queue:2026-09-01T16:14:04+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w1"
+    ]
+   },
+   {
+    "id": "t-11",
+    "ability": "temporal",
+    "first_hit": 2,
+    "targets": 1,
+    "reachable": 1,
+    "unreachable": [],
+    "covered_at": {
+     "kb:563": 2
+    },
+    "top": [
+     "file:jarvis_data/cognitive_profile.md|s4|w60",
+     "kb|kb:615|w0",
+     "kb|kb:563|w0",
+     "ep:jarvis:conv-web-ca175336-ca24-42a5-9492-542b0133a6d6|x6|w0",
+     "ep:codex:01a0dcdc-7e56-7520-9e71-f08d82dabc1d|x1|w47"
+    ]
+   },
+   {
+    "id": "t-12",
+    "ability": "temporal",
+    "first_hit": 4,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {
+     "kb:307": 4
+    },
+    "top": [
+     "kb|kb:371|w0",
+     "queue|queue:2026-06-16T14:35:04+05:30|a375d25c-823d-4a49-87e3-84584d114b35|w0",
+     "ep:antigravity:986802ce-24ac-404b-9f74-8cd3e18fe2e7|x2025|w15",
+     "ep:antigravity:986802ce-24ac-404b-9f74-8cd3e18fe2e7|x2025|w18",
+     "kb|kb:307|w0"
+    ]
+   },
+   {
+    "id": "t-13",
+    "ability": "temporal",
+    "first_hit": 2,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {
+     "queue:2026-08-16T20:10:17+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14": 2,
+     "file:jarvis_data/personal_life.md": 13
+    },
+    "top": [
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda|x3335|w14",
+     "queue|queue:2026-08-16T20:10:17+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "queue|queue:2026-08-22T22:09:04+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0"
+    ]
+   },
+   {
+    "id": "t-14",
+    "ability": "temporal",
+    "first_hit": 0,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {
+     "kb:671": 0,
+     "turn:claude:21c8c171-fbcb-417d-b486-7be331d5beda:402": 2
+    },
+    "top": [
+     "kb|kb:671|w0",
+     "kb|kb:743|w0",
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda|x402|w0",
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda|x402|w3",
+     "ep:codex:01a0dcdc-7e56-7520-9e71-f08d82dabc1d|x242|w16"
+    ]
+   },
+   {
+    "id": "ku-01",
+    "ability": "knowledge_update",
+    "first_hit": null,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {},
+    "top": [
+     "ep:antigravity:986802ce-24ac-404b-9f74-8cd3e18fe2e7|x209|w2",
+     "ep:codex:01a0874a-5494-7121-9874-3f8089067932|x3473|w9",
+     "ep:codex:01a0965d-8161-7f41-a546-743e09e90927|x10|w23",
+     "ep:codex:01a0965d-8161-7f41-a546-743e09e90927|x14|w22",
+     "ep:codex:01a0874a-5494-7121-9874-3f8089067932|x106|w0"
+    ]
+   },
+   {
+    "id": "ku-02",
+    "ability": "knowledge_update",
+    "first_hit": 0,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {
+     "kb:789": 0,
+     "file:jarvis_data/personal_life.md": 1
+    },
+    "top": [
+     "kb|kb:789|w0",
+     "file:jarvis_data/personal_life.md|s0|w0",
+     "file:jarvis_data/cognitive_profile.md|s4|w6",
+     "file:jarvis_data/cognitive_profile.md|s4|w130",
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda|x3335|w1"
+    ]
+   },
+   {
+    "id": "ku-03",
+    "ability": "knowledge_update",
+    "first_hit": 0,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {
+     "turn:claude:21c8c171-fbcb-417d-b486-7be331d5beda:402": 0,
+     "kb:671": 8
+    },
+    "top": [
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda|x402|w0",
+     "ep:codex:01a0dcdc-7e56-7520-9e71-f08d82dabc1d|x242|w0",
+     "file:jarvis_data/cognitive_profile.md|s7|w36",
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda|x1238|w23",
+     "kb|kb:743|w0"
+    ]
+   },
+   {
+    "id": "ku-04",
+    "ability": "knowledge_update",
+    "first_hit": 5,
+    "targets": 3,
+    "reachable": 3,
+    "unreachable": [],
+    "covered_at": {
+     "kb:781": 5,
+     "kb:760": 15
+    },
+    "top": [
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda|x1238|w71",
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda|x3050|w0",
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda|x1238|w70",
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda|x3008|w0",
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda.agent-a8e7e12718ef2fb11|x0|w0"
+    ]
+   },
+   {
+    "id": "ku-05",
+    "ability": "knowledge_update",
+    "first_hit": 0,
+    "targets": 3,
+    "reachable": 3,
+    "unreachable": [],
+    "covered_at": {
+     "kb:line177": 0,
+     "file:.agent/rules/CLAUDE.md": 2,
+     "kb:line237": 3
+    },
+    "top": [
+     "kb|kb:line177|w0",
+     "ep:antigravity:986802ce-24ac-404b-9f74-8cd3e18fe2e7|x0|w3",
+     "file:.agent/rules/CLAUDE.md|s2|w0",
+     "kb|kb:line237|w0",
+     "ep:antigravity:986802ce-24ac-404b-9f74-8cd3e18fe2e7|x1234|w15"
+    ]
+   },
+   {
+    "id": "ku-06",
+    "ability": "knowledge_update",
+    "first_hit": 3,
+    "targets": 3,
+    "reachable": 3,
+    "unreachable": [],
+    "covered_at": {
+     "kb:line178": 3,
+     "file:.agent/rules/JARVIS_ENDGAME.md": 4
+    },
+    "top": [
+     "ep:antigravity:45b4b335-aaf2-499b-b2dd-1a36dbded492|x512|w0",
+     "kb|kb:797|w0",
+     "queue|queue:2026-06-04T10:38:02+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "kb|kb:line178|w0",
+     "file:.agent/rules/JARVIS_ENDGAME.md|s4|w0"
+    ]
+   },
+   {
+    "id": "ku-07",
+    "ability": "knowledge_update",
+    "first_hit": 0,
+    "targets": 3,
+    "reachable": 3,
+    "unreachable": [],
+    "covered_at": {
+     "kb:429": 0,
+     "file:.agent/rules/JARVIS_ENDGAME.md": 1,
+     "kb:463": 3
+    },
+    "top": [
+     "kb|kb:429|w0",
+     "file:.agent/rules/JARVIS_ENDGAME.md|s10|w1",
+     "file:jarvis_data/cognitive_profile.md|s4|w133",
+     "kb|kb:463|w0",
+     "file:jarvis_data/cognitive_profile.md|s4|w147"
+    ]
+   },
+   {
+    "id": "ku-08",
+    "ability": "knowledge_update",
+    "first_hit": 0,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {
+     "kb:538": 0,
+     "queue:2026-09-07T10:01:31+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14": 1
+    },
+    "top": [
+     "kb|kb:538|w0",
+     "queue|queue:2026-09-07T10:01:31+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "file:jarvis_data/cognitive_profile.md|s4|w80",
+     "queue|queue:2026-09-07T10:08:55+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "file:jarvis_data/cognitive_profile.md|s4|w157"
+    ]
+   },
+   {
+    "id": "ku-09",
+    "ability": "knowledge_update",
+    "first_hit": 0,
+    "targets": 1,
+    "reachable": 1,
+    "unreachable": [],
+    "covered_at": {
+     "kb:668": 0
+    },
+    "top": [
+     "kb|kb:668|w0",
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda|x0|w29",
+     "ep:codex:01a0dcdc-7e56-7520-9e71-f08d82dabc1d|x1|w71",
+     "queue|queue:2026-09-18T12:47:19+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "kb|kb:547|w1"
+    ]
+   },
+   {
+    "id": "ku-10",
+    "ability": "knowledge_update",
+    "first_hit": 0,
+    "targets": 3,
+    "reachable": 2,
+    "unreachable": [
+     "file:.gitignore"
+    ],
+    "covered_at": {
+     "kb:518": 0,
+     "file:.agent/rules/CLAUDE.md": 4
+    },
+    "top": [
+     "kb|kb:518|w0",
+     "kb|kb:509|w1",
+     "file:jarvis_data/cognitive_profile.md|s4|w96",
+     "file:jarvis_data/cognitive_profile.md|s4|w105",
+     "file:.agent/rules/CLAUDE.md|s13|w0"
+    ]
+   },
+   {
+    "id": "ku-11",
+    "ability": "knowledge_update",
+    "first_hit": 0,
+    "targets": 1,
+    "reachable": 1,
+    "unreachable": [],
+    "covered_at": {
+     "kb:436": 0
+    },
+    "top": [
+     "kb|kb:436|w1",
+     "kb|kb:436|w0",
+     "kb|kb:line291|w0",
+     "queue|queue:2026-07-31T09:03:41+05:30|4b5e640b-84c2-45d3-a9af-b32f6bfc3818|w0",
+     "file:jarvis_data/cognitive_profile.md|s1|w10"
+    ]
+   },
+   {
+    "id": "ku-12",
+    "ability": "knowledge_update",
+    "first_hit": 0,
+    "targets": 1,
+    "reachable": 1,
+    "unreachable": [],
+    "covered_at": {
+     "file:knowledge/Finance/strategy.md": 0
+    },
+    "top": [
+     "file:knowledge/Finance/strategy.md|s10|w1",
+     "file:knowledge/Finance/strategy.md|s11|w0",
+     "file:knowledge/Finance/strategy.md|s39|w3",
+     "file:knowledge/Finance/strategy.md|s39|w2",
+     "file:knowledge/Finance/strategy.md|s5|w0"
+    ]
+   },
+   {
+    "id": "ku-13",
+    "ability": "knowledge_update",
+    "first_hit": 7,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {
+     "kb:760": 7,
+     "kb:757": 10
+    },
+    "top": [
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda.agent-a8e7e12718ef2fb11|x0|w22",
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda.agent-a8e7e12718ef2fb11|x0|w21",
+     "ep:codex:01a0874a-5494-7121-9874-3f8089067932|x5129|w9",
+     "ep:codex:01a0874a-5494-7121-9874-3f8089067932|x5129|w6",
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda|x1238|w63"
+    ]
+   },
+   {
+    "id": "ku-14",
+    "ability": "knowledge_update",
+    "first_hit": 0,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {
+     "file:.agent/rules/JARVIS_ENDGAME.md": 0,
+     "kb:531": 5
+    },
+    "top": [
+     "file:.agent/rules/JARVIS_ENDGAME.md|s3|w1",
+     "ep:codex:01a0874a-5494-7121-9874-3f8089067932|x44|w2",
+     "ep:antigravity:986802ce-24ac-404b-9f74-8cd3e18fe2e7|x1238|w2",
+     "file:jarvis_data/cognitive_profile.md|s4|w85",
+     "ep:codex:01a0c926-a0a1-71d3-b72c-3f342baa8273|x3|w27"
+    ]
+   },
+   {
+    "id": "ku-15",
+    "ability": "knowledge_update",
+    "first_hit": 1,
+    "targets": 1,
+    "reachable": 1,
+    "unreachable": [],
+    "covered_at": {
+     "kb:line291": 1
+    },
+    "top": [
+     "queue|queue:2026-07-31T09:03:41+05:30|4b5e640b-84c2-45d3-a9af-b32f6bfc3818|w0",
+     "kb|kb:line291|w0",
+     "queue|queue:2026-06-18T16:54:36+05:30|4e986828-f710-435e-8c75-b81b046b5aba|w0",
+     "kb|kb:436|w1",
+     "queue|queue:2026-08-11T09:47:17+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0"
+    ]
+   },
+   {
+    "id": "ku-16",
+    "ability": "knowledge_update",
+    "first_hit": 0,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {
+     "kb:364": 0,
+     "kb:312": 4
+    },
+    "top": [
+     "kb|kb:364|w0",
+     "file:jarvis_data/cognitive_profile.md|s1|w9",
+     "kb|kb:372|w0",
+     "queue|queue:2026-06-15T14:49:56+05:30|terminal-20260615T144914-44774|w0",
+     "kb|kb:312|w0"
+    ]
+   },
+   {
+    "id": "ab-01",
+    "ability": "abstention",
+    "first_hit": 0,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {
+     "queue:2026-08-16T20:10:17+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14": 0,
+     "file:jarvis_data/personal_life.md": 4
+    },
+    "top": [
+     "queue|queue:2026-08-16T20:10:17+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "ep:claude:480533f5-b826-4f30-8987-03758af2f98c|x5082|w0",
+     "file:knowledge/Finance/strategy.md|s8|w0",
+     "ep:codex:01a0dcdc-8467-7c20-92bf-e2a66b8e8c27|x2815|w0",
+     "file:jarvis_data/personal_life.md|s1|w0"
+    ]
+   },
+   {
+    "id": "ab-02",
+    "ability": "abstention",
+    "first_hit": null,
+    "targets": 1,
+    "reachable": 1,
+    "unreachable": [],
+    "covered_at": {},
+    "top": [
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda.agent-a7322b1c89e12327a|x0|w30",
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda.agent-a7322b1c89e12327a|x0|w21",
+     "ep:codex:01a0dcdc-7e62-7c73-8a09-6aa3aebb67b2|x133|w6",
+     "ep:antigravity:fb1b349b-6038-4488-88a7-959c82459fac|x299|w39",
+     "ep:antigravity:fb1b349b-6038-4488-88a7-959c82459fac|x299|w38"
+    ]
+   },
+   {
+    "id": "ab-03",
+    "ability": "abstention",
+    "first_hit": null,
+    "targets": 1,
+    "reachable": 1,
+    "unreachable": [],
+    "covered_at": {},
+    "top": [
+     "ep:codex:01a0dcdc-7e62-7c73-8a09-6aa3aebb67b2|x551|w2",
+     "ep:codex:01a0dcdc-7e62-7c73-8a09-6aa3aebb67b2|x551|w3",
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda.agent-a7322b1c89e12327a|x0|w30",
+     "ep:codex:01a0dcdc-7e62-7c73-8a09-6aa3aebb67b2|x551|w1",
+     "ep:claude:e5b92b99-c971-4c78-a7f9-f06f19d666e8|x1285|w2"
+    ]
+   },
+   {
+    "id": "ab-04",
+    "ability": "abstention",
+    "first_hit": 0,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {
+     "file:jarvis_data/personal_life.md": 0,
+     "queue:2026-08-16T20:10:17+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14": 1
+    },
+    "top": [
+     "file:jarvis_data/personal_life.md|s4|w0",
+     "queue|queue:2026-08-16T20:10:17+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "kb|kb:502|w0",
+     "ep:codex:01a0dcdc-7e56-7520-9e71-f08d82dabc1d|x475|w17",
+     "file:jarvis_data/cognitive_profile.md|s1|w16"
+    ]
+   },
+   {
+    "id": "ab-05",
+    "ability": "abstention",
+    "first_hit": 0,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {
+     "file:jarvis_data/personal_life.md": 0,
+     "queue:2026-08-16T20:10:17+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14": 8
+    },
+    "top": [
+     "file:jarvis_data/personal_life.md|s4|w0",
+     "ep:codex:01a0dcdc-7e56-7520-9e71-f08d82dabc1d|x475|w17",
+     "queue|queue:2026-09-06T00:20:11+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "ep:codex:01a0dcdc-7e56-7520-9e71-f08d82dabc1d|x475|w26",
+     "ep:codex:01a0dcdc-7e56-7520-9e71-f08d82dabc1d|x475|w18"
+    ]
+   },
+   {
+    "id": "ab-06",
+    "ability": "abstention",
+    "first_hit": 0,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {
+     "queue:2026-08-16T20:10:17+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14": 0,
+     "file:jarvis_data/personal_life.md": 3
+    },
+    "top": [
+     "queue|queue:2026-08-16T20:10:17+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "file:.agent/rules/JARVIS_ENDGAME.md|s1|w0",
+     "ep:antigravity:923deb14-ff10-4c2e-96d6-1dc0e2d743a9|x0|w4",
+     "file:jarvis_data/personal_life.md|s1|w0",
+     "kb|kb:785|w0"
+    ]
+   },
+   {
+    "id": "ab-07",
+    "ability": "abstention",
+    "first_hit": 0,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {
+     "queue:2026-08-22T22:09:04+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14": 0,
+     "file:jarvis_data/personal_life.md": 4
+    },
+    "top": [
+     "queue|queue:2026-08-22T22:09:04+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda|x3335|w14",
+     "kb|kb:789|w0",
+     "file:jarvis_data/personal_life.md|s3|w0"
+    ]
+   },
+   {
+    "id": "ab-08",
+    "ability": "abstention",
+    "first_hit": null,
+    "targets": 1,
+    "reachable": 1,
+    "unreachable": [],
+    "covered_at": {},
+    "top": [
+     "ep:codex:01a0dcdc-7e62-7c73-8a09-6aa3aebb67b2|x387|w1",
+     "ep:codex:01a0dcdc-7e62-7c73-8a09-6aa3aebb67b2|x387|w3",
+     "ep:codex:01a0dcdc-7e62-7c73-8a09-6aa3aebb67b2|x387|w4",
+     "ep:codex:01a0dcdc-7e62-7c73-8a09-6aa3aebb67b2|x387|w5",
+     "ep:claude:e5b92b99-c971-4c78-a7f9-f06f19d666e8|x794|w1"
+    ]
+   },
+   {
+    "id": "ab-09",
+    "ability": "abstention",
+    "first_hit": 0,
+    "targets": 2,
+    "reachable": 2,
+    "unreachable": [],
+    "covered_at": {
+     "file:jarvis_data/personal_life.md": 0,
+     "queue:2026-08-16T20:10:17+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14": 1
+    },
+    "top": [
+     "file:jarvis_data/personal_life.md|s4|w0",
+     "queue|queue:2026-08-16T20:10:17+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "kb|kb:502|w0",
+     "ep:codex:01a0dcdc-7e56-7520-9e71-f08d82dabc1d|x475|w17",
+     "file:jarvis_data/cognitive_profile.md|s1|w16"
+    ]
+   },
+   {
+    "id": "ab-10",
+    "ability": "abstention",
+    "first_hit": 11,
+    "targets": 1,
+    "reachable": 1,
+    "unreachable": [],
+    "covered_at": {
+     "file:jarvis_data/personal_life.md": 11
+    },
+    "top": [
+     "ep:codex:01a09b84-837c-7b40-a5dd-58324458de21|x150|w0",
+     "queue|queue:2026-08-16T20:10:17+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+     "ep:codex:01a0dcdc-7e62-7c73-8a09-6aa3aebb67b2|x195|w24",
+     "ep:codex:01a09b84-837c-7b40-a5dd-58324458de21|x174|w0",
+     "ep:codex:01a0dcdc-7e62-7c73-8a09-6aa3aebb67b2|x195|w23"
+    ]
+   },
+   {
+    "id": "ab-11",
+    "ability": "abstention",
+    "first_hit": 17,
+    "targets": 1,
+    "reachable": 1,
+    "unreachable": [],
+    "covered_at": {
+     "queue:2026-06-19T14:05:59+05:30|a375d25c-823d-4a49-87e3-84584d114b35": 17
+    },
+    "top": [
+     "kb|kb:848|w0",
+     "ep:claude:21c8c171-fbcb-417d-b486-7be331d5beda|x3335|w14",
+     "queue|queue:2026-08-22T22:09:04+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0"
+    ]
+   },
+   {
+    "id": "ab-12",
+    "ability": "abstention",
+    "first_hit": null,
+    "targets": 1,
+    "reachable": 1,
+    "unreachable": [],
+    "covered_at": {},
+    "top": [
+     "ep:claude:480533f5-b826-4f30-8987-03758af2f98c|x194|w17",
+     "ep:codex:01a0dcdc-8467-7c20-92bf-e2a66b8e8c27|x94|w37",
+     "queue|queue:2026-09-18T12:34:43+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w1",
+     "file:jarvis_data/cognitive_profile.md|s1|w17",
+     "ep:codex:01a0ca62-0fe1-7462-9286-e44c96216744|x10|w18"
+    ]
+   },
+   {
+    "id": "ab-13",
+    "ability": "abstention",
+    "first_hit": 18,
+    "targets": 1,
+    "reachable": 1,
+    "unreachable": [],
+    "covered_at": {
+     "file:jarvis_data/personal_life.md": 18
+    },
+    "top": [
+     "ep:codex:01a0dcdc-8467-7c20-92bf-e2a66b8e8c27|x5738|w346",
+     "ep:codex:01a0dcdc-8467-7c20-92bf-e2a66b8e8c27|x5075|w139",
+     "ep:codex:01a0dcdc-8467-7c20-92bf-e2a66b8e8c27|x7301|w139",
+     "ep:claude:480533f5-b826-4f30-8987-03758af2f98c|x7579|w2",
+     "ep:codex:01a0dcdc-8467-7c20-92bf-e2a66b8e8c27|x1036|w4"
+    ]
+   }
+  ]
+ }
+}

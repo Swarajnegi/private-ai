@@ -68,7 +68,7 @@ import sys
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Dict, Iterator, List, Optional, Tuple
+from typing import Any, Dict, Iterable, Iterator, List, Optional, Set, Tuple
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(_REPO_ROOT / "js-development"))
@@ -159,10 +159,10 @@ class AntigravityExchange:
     thread_name: str
 
 
-def iter_session_exchanges(
-    path: Path, session_id: str, thread_name: str, cwd: str
+def _exchanges_from_records(
+    records: Iterable[Dict[str, Any]], session_id: str, thread_name: str, cwd: str
 ) -> Iterator[AntigravityExchange]:
-    """Stream one transcript file; yield one AntigravityExchange per user->assistant pair."""
+    """One AntigravityExchange per user->assistant pair from step records in order."""
     pending_user: Optional[Tuple[str, str]] = None
     assistant_parts: List[str] = []
 
@@ -185,40 +185,90 @@ def iter_session_exchanges(
             thread_name=thread_name
         )
 
+    for rec in records:
+        rec_type = rec.get("type")
+        if rec_type == "USER_INPUT":
+            content = str(rec.get("content", ""))
+            user_text = strip_antigravity_wrapper(content)
+            if len(user_text.strip()) < _MIN_USER_CHARS:
+                continue
+            out = flush()
+            if out is not None:
+                yield out
+            raw_ts = str(rec.get("created_at") or rec.get("timestamp") or rec.get("ts") or "")
+            pending_user = (user_text, _to_ist(raw_ts))
+        elif rec_type == "PLANNER_RESPONSE" and pending_user is not None:
+            content = str(rec.get("content", "")).strip()
+            if content:
+                assistant_parts.append(content)
+
+    out = flush()
+    if out is not None:
+        yield out
+
+
+def _file_records(path: Path) -> Iterator[Dict[str, Any]]:
     try:
         handle = path.open("r", encoding="utf-8")
     except OSError:
         return
-
     with handle:
         for line in handle:
             line = line.strip()
             if not line:
                 continue
             try:
-                rec = json.loads(line)
+                yield json.loads(line)
             except json.JSONDecodeError:
                 continue
 
-            rec_type = rec.get("type")
-            if rec_type == "USER_INPUT":
-                content = str(rec.get("content", ""))
-                user_text = strip_antigravity_wrapper(content)
-                if len(user_text.strip()) < _MIN_USER_CHARS:
-                    continue
-                out = flush()
-                if out is not None:
-                    yield out
-                raw_ts = str(rec.get("created_at") or rec.get("timestamp") or rec.get("ts") or "")
-                pending_user = (user_text, _to_ist(raw_ts))
-            elif rec_type == "PLANNER_RESPONSE" and pending_user is not None:
-                content = str(rec.get("content", "")).strip()
-                if content:
-                    assistant_parts.append(content)
 
-    out = flush()
-    if out is not None:
-        yield out
+def iter_session_exchanges(
+    path: Path, session_id: str, thread_name: str, cwd: str
+) -> Iterator[AntigravityExchange]:
+    """Stream ONE transcript file; yield one AntigravityExchange per user->assistant pair."""
+    yield from _exchanges_from_records(_file_records(path), session_id, thread_name, cwd)
+
+
+def iter_merged_session_exchanges(
+    session_dir: Path, session_id: str, thread_name: str, cwd: str
+) -> Iterator[AntigravityExchange]:
+    """Exchanges over ALL of a session's transcript files, unioned step by step.
+
+    Until 2026-09-28 run() read only the first file find_sessions() chose, and
+    transcript_full.jsonl is NOT a superset: on 5a76f739 it holds 55 of 2,376
+    steps, on 986802ce steps 736-2142 only. The step-wise union (per step the
+    highest-fidelity file wins) lives in the episode store's parser and is
+    reused here, so the two views of a session can never disagree.
+    """
+    from jarvis_core.memory.episode_sources import antigravity_step_lines
+    records = (rec for _, _, rec, _ in antigravity_step_lines(session_dir))
+    yield from _exchanges_from_records(records, session_id, thread_name, cwd)
+
+
+def captured_keys(queue_path: Optional[Path] = None) -> Set[Tuple[str, str]]:
+    """(session_id, ts) of every Antigravity exchange already in the queue.
+
+    The idempotency key. A per-file newest-ts watermark cannot express "an
+    exchange OLDER than the watermark was never captured", which is exactly the
+    state the single-file bug left behind.
+    """
+    from jarvis_core.agent.capture import QUEUE_PATH
+    path = Path(queue_path) if queue_path is not None else QUEUE_PATH
+    out: Set[Tuple[str, str]] = set()
+    try:
+        handle = path.open("r", encoding="utf-8")
+    except OSError:
+        return out
+    with handle:
+        for line in handle:
+            try:
+                row = json.loads(line)
+            except ValueError:
+                continue
+            if isinstance(row, dict):
+                out.add((str(row.get("session_id", "")), str(row.get("ts", ""))))
+    return out
 
 
 def find_sessions(root: Optional[Path] = None) -> List[Tuple[str, Path, str]]:
@@ -341,18 +391,20 @@ def run(
         }
 
     marks = read_watermark(watermark_path)
+    seen = captured_keys(queue_path)
     ingested = 0
     per_session: Dict[str, int] = {}
 
     for sid, path, thread_name in sessions:
-        key = f"{sid}/{path.name}"
+        key = f"{sid}/merged"
         watermark = marks.get(key, "")
         newest_seen = watermark
         session_count = 0
 
-        for exch in iter_session_exchanges(path, sid, thread_name, str(_REPO_ROOT)):
-            if watermark and exch.ts <= watermark:
+        for exch in iter_merged_session_exchanges(root / sid, sid, thread_name, str(_REPO_ROOT)):
+            if (exch.session_id, exch.ts) in seen:
                 continue
+            seen.add((exch.session_id, exch.ts))
             if not dry_run:
                 obs = build_observation(
                     {"session_id": exch.session_id},
@@ -552,6 +604,57 @@ def _run_self_test() -> None:
         res2 = run(dry_run=False, root=temp_dir, watermark_path=run_wm, queue_path=queue)
         check("T18 second run ingests 0 (watermark prevents re-ingest)",
               res2["exchanges_ingested"] == 0, str(res2))
+
+        # --- T18b-T18e: multi-file merge (the 5a76f739 / 986802ce shape) ---
+        # transcript_full holds only the LATEST steps; transcript.jsonl holds
+        # the older ones and overview.txt the oldest. The old run() read one
+        # file and lost everything outside it.
+        mdir = temp_dir / "merge-session"
+        mlogs = mdir / ".system_generated" / "logs"
+        mlogs.mkdir(parents=True)
+        (mlogs / "overview.txt").write_text("\n".join([
+            _rec(step_index=0, type="USER_INPUT", created_at="2026-05-01T10:00:00Z",
+                 content="<USER_REQUEST>oldest question</USER_REQUEST>"),
+            _rec(step_index=1, type="PLANNER_RESPONSE", created_at="2026-05-01T10:00:05Z",
+                 content="oldest answer")]) + "\n", encoding="utf-8")
+        (mlogs / "transcript.jsonl").write_text("\n".join([
+            _rec(step_index=2, type="USER_INPUT", created_at="2026-07-01T10:00:00Z",
+                 content="<USER_REQUEST>middle question</USER_REQUEST>"),
+            _rec(step_index=3, type="PLANNER_RESPONSE", created_at="2026-07-01T10:00:05Z",
+                 content="trunc"),
+            _rec(step_index=4, type="USER_INPUT", created_at="2026-09-01T10:00:00Z",
+                 content="<USER_REQUEST>latest question</USER_REQUEST>")]) + "\n", encoding="utf-8")
+        (mlogs / "transcript_full.jsonl").write_text("\n".join([
+            _rec(step_index=3, type="PLANNER_RESPONSE", created_at="2026-07-01T10:00:05Z",
+                 content="the FULL middle answer"),
+            _rec(step_index=4, type="USER_INPUT", created_at="2026-09-01T10:00:00Z",
+                 content="<USER_REQUEST>latest question</USER_REQUEST>"),
+            _rec(step_index=5, type="PLANNER_RESPONSE", created_at="2026-09-01T10:00:05Z",
+                 content="latest answer")]) + "\n", encoding="utf-8")
+        merged = list(iter_merged_session_exchanges(mdir, "merge-session", "M", "/t"))
+        check("T18b merged view yields every exchange across all three files",
+              [e.user_text for e in merged] == ["oldest question", "middle question", "latest question"],
+              str([e.user_text for e in merged]))
+        check("T18c per step, the higher-fidelity file's text wins",
+              merged[1].assistant_summary == "the FULL middle answer", merged[1].assistant_summary)
+        # Simulate the pre-fix state: only the transcript_full exchange was captured.
+        mqueue = temp_dir / "mqueue.jsonl"
+        mqueue.write_text(json.dumps({"session_id": "merge-session", "host": "antigravity",
+                                      "ts": _to_ist("2026-09-01T10:00:00Z"),
+                                      "user_text": "latest question"}) + "\n", encoding="utf-8")
+        mroot = temp_dir / "mroot"
+        mroot.mkdir()
+        import shutil
+        shutil.copytree(mdir, mroot / "merge-session")
+        mres = run(root=mroot, watermark_path=temp_dir / "mwm.jsonl", queue_path=mqueue)
+        rows = [json.loads(l) for l in mqueue.read_text(encoding="utf-8").splitlines()]
+        check("T18d a re-run adds ONLY the previously-missing older exchanges",
+              mres["exchanges_ingested"] == 2
+              and sorted(r["user_text"] for r in rows)
+              == ["latest question", "middle question", "oldest question"], str(mres))
+        check("T18e and is then idempotent",
+              run(root=mroot, watermark_path=temp_dir / "mwm.jsonl",
+                  queue_path=mqueue)["exchanges_ingested"] == 0)
 
         # --- T19: missing directory returns clean reason without crashing ---
         empty_res = run(root=temp_dir / "nonexistent", watermark_path=run_wm, queue_path=queue)

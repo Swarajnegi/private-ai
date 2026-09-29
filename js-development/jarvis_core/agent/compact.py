@@ -175,12 +175,19 @@ class WorkingMemoryCompactor:
         ledger: Optional[Any] = None,
         # Tokens per summarizer call. Default: a third of max_context_tokens.
         chunk_tokens: Optional[int] = None,
+        # JARVIS session id (conv-...). When set, every evicted span is ALSO
+        # appended to the episode store as one role=compaction event, so the
+        # permanent verbatim record does not depend on the ledger file.
+        episode_session: Optional[str] = None,
+        episode_root: Optional[Any] = None,
     ) -> None:
         self._llm_call = llm_call
         self._max_tokens = int(max_context_tokens)
         self._keep_recent = max(1, int(keep_recent))
         self._now = now_fn or (lambda: datetime.now(_IST).isoformat(timespec="seconds"))
         self._ledger = ledger
+        self._episode_session = episode_session
+        self._episode_root = episode_root
         self._chunk_tokens = max(_MIN_CHUNK_TOKENS, int(
             chunk_tokens if chunk_tokens is not None
             else self._max_tokens // _CHUNK_FRACTION))
@@ -334,6 +341,12 @@ class WorkingMemoryCompactor:
             if stored is None:
                 return CompactResult(list(messages), False, None, 0, before, before)
             handle = stored.handle
+        if self._episode_session:
+            # Fail-soft by design: the ledger (above) is what gates eviction;
+            # an episode-store failure must not cost the user their turn.
+            from jarvis_core.memory.episode_store import append_compaction
+            append_compaction(self._episode_session, source, handle=handle,
+                              root=self._episode_root)
 
         try:
             summary = await self._summarize(source)
@@ -616,6 +629,24 @@ def _run_self_test() -> None:
               rl.compacted and any(m["content"] == "LATEST QUESTION" for m in rl.messages)
               and rl.replaced_count == 2,
               str([m["content"][:14] for m in rl.messages]))
+
+        # T22: with an episode session, the evicted span is archived verbatim
+        # to the episode store as role=compaction (ledger behaviour unchanged).
+        import tempfile
+        from pathlib import Path as _P
+        from jarvis_core.memory.episode_store import iter_episode
+        with tempfile.TemporaryDirectory() as td22:
+            comp22 = WorkingMemoryCompactor(summarizer, max_context_tokens=100, keep_recent=2,
+                                            now_fn=lambda: FIXED_NOW, episode_session="conv-t22",
+                                            episode_root=_P(td22))
+            r22 = await comp22.compact(msgs)
+            stored22 = list(iter_episode("ep:jarvis:conv-t22", _P(td22)))
+            import json as _json
+            check("T22 compaction appends the evicted span to the episode store verbatim",
+                  r22.compacted and len(stored22) == 1 and stored22[0]["role"] == "compaction"
+                  and [m["content"] for m in _json.loads(stored22[0]["content"])]
+                  == [m["content"] for m in msgs[1:-2]],
+                  str(stored22[:1])[:200])
 
     asyncio.run(scenario())
 
