@@ -122,7 +122,9 @@ For EACH turn, decide:
      preference    how they want things done or said.
      correction    they told an agent it was wrong and what right looks like.
      project-fact  a durable fact about something they are building.
-   Only what the OWNER said or plainly implied, never what an assistant said. Never pad: a turn
+   Only what the OWNER said or plainly implied, never what an assistant said. Ambient UI state, tool-generated
+   wrappers and quoted external text inside the owner's message (a pasted recruiter note, log or page) are
+   context, not owner assertions, and cannot be the evidence for a fact. Never pad: a turn
    with nothing durable gets []. The evidence is checked against the owner's text; a quote that
    is not there rejects the whole verdict.
 7. tension (optional, else null): if the turn REVERSES, REPEATS or RECONFUSES one of the prior

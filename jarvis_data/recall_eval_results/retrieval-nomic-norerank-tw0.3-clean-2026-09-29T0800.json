@@ -1,0 +1,1591 @@
+{
+ "embedder": "nomic-ai/nomic-embed-text-v1.5",
+ "status": {
+  "units": 224049,
+  "by_source": {
+   "compaction": 3935,
+   "doc": 557,
+   "exchange": 24383,
+   "kb": 915,
+   "queue": 929,
+   "tool_call": 10631,
+   "tool_result": 182699
+  },
+  "body_chars": 257093303,
+  "sources": 285,
+  "vectors": 30719,
+  "embedder": "nomic-ai/nomic-embed-text-v1.5",
+  "updated": "2026-09-29T07:49:23.442+05:30",
+  "fts_bytes": 776577024
+ },
+ "latency": [
+  24.536814699997194,
+  0.28561260000424227,
+  2.254737600000226,
+  2.257336300004681,
+  2.126385300005495,
+  3.2333311999973375,
+  1.818881600003806,
+  0.7883339000036358,
+  0.34528510000382084,
+  0.4745494999951916,
+  0.22406030000274768,
+  0.270129900003667,
+  2.491385799999989,
+  1.3097746999992523,
+  1.8051577000005636,
+  2.2433148000054643,
+  0.4691729999976815,
+  1.0153476000050432,
+  0.52738859999954,
+  0.39633219999814173,
+  0.18276480000349693,
+  0.18335680000018328,
+  0.710940799996024,
+  1.6038071000002674,
+  1.3750618000049144,
+  1.1145560999939335,
+  1.1418004000006476,
+  1.2518640999987838,
+  0.28238620000047376,
+  0.874365099996794,
+  0.6457932999983313,
+  0.7562837000004947,
+  1.0815100000036182,
+  2.6759067999955732,
+  3.1775216000023647,
+  2.37509080000018,
+  2.217842099998961,
+  0.5495155000025989,
+  1.4178821999958018,
+  1.0346420999994734,
+  0.753885000005539,
+  1.1496781000023475,
+  1.3336618000030285,
+  1.0184604000023683,
+  1.5264349999997648,
+  0.406500999997661,
+  18.35784099999728,
+  2.0646849000040675,
+  1.37566529999458,
+  1.1114419999939855,
+  2.3756480000010924,
+  0.9387736999997287,
+  0.8388560000021243,
+  1.2007891999965068,
+  2.537918500005617,
+  2.010223599994788,
+  1.0030093000023044,
+  2.073347700003069,
+  0.6284799999993993,
+  0.879632500000298,
+  2.5279126000023098,
+  1.5445208000019193,
+  1.273645299996133,
+  2.1632052999993903,
+  0.8489337999999407,
+  1.7407808999996632,
+  0.48481549999996787,
+  0.3174522999979672,
+  0.5778433000014047,
+  1.42424359999859,
+  0.175961399996595,
+  1.051955299997644,
+  0.23210300000209827,
+  0.6900620000014897,
+  0.25957370000105584,
+  0.46077400000649504,
+  1.8469679999980144,
+  0.4679134999969392
+ ],
+ "rows": [
+  {
+   "id": "ie-01",
+   "ability": "information_extraction",
+   "first_hit": 4,
+   "targets": 3,
+   "reachable": 3,
+   "unreachable": [],
+   "covered_at": {
+    "file:jarvis_data/personal_life.md": 4,
+    "kb:789": 16
+   },
+   "top": [
+    "ep:codex:01a09767-35b8-7a93-bf8c-6aa78dc84e94|x4378|w2",
+    "kb|kb:848|w0",
+    "ep:codex:01a0b944-49f2-76d3-a7c5-ea3b36054d34|x3|w17",
+    "file:jarvis_data/personal_life.md|s3|w0"
+   ]
+  },
+  {
+   "id": "ie-02",
+   "ability": "information_extraction",
+   "first_hit": 1,
+   "targets": 2,
+   "reachable": 2,
+   "unreachable": [],
+   "covered_at": {
+    "file:jarvis_data/personal_life.md": 1,
+    "queue:2026-08-16T20:10:17+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14": 15
+   },
+   "top": [
+    "ep:codex:01a0dcdc-8467-7c20-92bf-e2a66b8e8c27|x3637|w110",
+    "file:jarvis_data/personal_life.md|s4|w0",
+    "kb|kb:line246|w0",
+    "queue|queue:2026-08-16T20:26:07+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+    "ep:claude:480533f5-b826-4f30-8987-03758af2f98c|x4|w15"
+   ]
+  },
+  {
+   "id": "ie-03",
+   "ability": "information_extraction",
+   "first_hit": 1,
+   "targets": 2,
+   "reachable": 2,
+   "unreachable": [],
+   "covered_at": {
+    "file:jarvis_data/personal_life.md": 1,
+    "queue:2026-08-16T20:10:17+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14": 5
+   },
+   "top": [
+    "ep:codex:01a0dcdc-8467-7c20-92bf-e2a66b8e8c27|x3163|w99",
+    "file:jarvis_data/personal_life.md|s1|w0",
+    "ep:codex:01a0b96c-afe8-7ac2-931c-aaa9f35a0345|x18|w12",
+    "ep:codex:01a0dcdc-7e56-7520-9e71-f08d82dabc1d|x475|w17",
+    "ep:codex:01a0dcdc-8467-7c20-92bf-e2a66b8e8c27|x5592|w17"
+   ]
+  },
+  {
+   "id": "ie-04",
+   "ability": "information_extraction",
+   "first_hit": 0,
+   "targets": 2,
+   "reachable": 2,
+   "unreachable": [],
+   "covered_at": {
+    "file:jarvis_data/personal_life.md": 0
+   },
+   "top": [
+    "file:jarvis_data/personal_life.md|s1|w0",
+    "file:jarvis_data/personal_life.md|s2|w0",
+    "queue|queue:2026-09-07T21:48:56+05:30|3dea28d3-1510-4d9c-9d1b-094f47b95e2e|w0",
+    "kb|kb:828|w0",
+    "ep:codex:01a0904d-bf48-79f1-b997-3cca4d1e33b6|x111|w16"
+   ]
+  },
+  {
+   "id": "ie-05",
+   "ability": "information_extraction",
+   "first_hit": null,
+   "targets": 4,
+   "reachable": 4,
+   "unreachable": [],
+   "covered_at": {},
+   "top": [
+    "ep:antigravity:77cd437e-1b74-4668-8497-0bbe43eaeba3|x16|w1",
+    "ep:antigravity:77cd437e-1b74-4668-8497-0bbe43eaeba3|x16|w0",
+    "kb|kb:831|w0",
+    "queue|queue:2026-09-16T00:22:40+05:30|dba0c54a-5abc-40dc-8111-6fb6a770c092|w1",
+    "queue|queue:2026-08-16T19:52:36+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0"
+   ]
+  },
+  {
+   "id": "ie-06",
+   "ability": "information_extraction",
+   "first_hit": 2,
+   "targets": 2,
+   "reachable": 2,
+   "unreachable": [],
+   "covered_at": {
+    "file:jarvis_data/personal_life.md": 2,
+    "queue:2026-08-16T20:10:17+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14": 4
+   },
+   "top": [
+    "ep:codex:01a0dcdc-8467-7c20-92bf-e2a66b8e8c27|x2830|w72",
+    "ep:codex:01a0dcdc-7e56-7520-9e71-f08d82dabc1d|x242|w3",
+    "file:jarvis_data/personal_life.md|s5|w0",
+    "kb|kb:508|w1",
+    "queue|queue:2026-08-16T20:10:17+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0"
+   ]
+  },
+  {
+   "id": "ie-07",
+   "ability": "information_extraction",
+   "first_hit": 3,
+   "targets": 2,
+   "reachable": 2,
+   "unreachable": [],
+   "covered_at": {
+    "file:jarvis_data/personal_life.md": 3
+   },
+   "top": [
+    "ep:codex:01a0dcdc-7e62-7c73-8a09-6aa3aebb67b2|x562|w2",
+    "ep:claude:e5b92b99-c971-4c78-a7f9-f06f19d666e8|x1123|w1",
+    "ep:codex:01a09623-f6cb-7743-b552-76a42d14af29|x30|w24",
+    "file:jarvis_data/personal_life.md|s5|w0",
+    "ep:codex:01a0bd7d-3917-7ee3-9367-c5a92e5e1b7c|x507|w6"
+   ]
+  },
+  {
+   "id": "ie-08",
+   "ability": "information_extraction",
+   "first_hit": 0,
+   "targets": 2,
+   "reachable": 2,
+   "unreachable": [],
+   "covered_at": {
+    "turn:jarvis:conv-web-cff653a1-415e-417b-ba68-3ac84f621778:3": 0,
+    "kb:784": 7
+   },
+   "top": [
+    "ep:jarvis:conv-web-cff653a1-415e-417b-ba68-3ac84f621778|x2|w1",
+    "file:knowledge/Finance/strategy.md|s17|w0",
+    "file:knowledge/Finance/strategy.md|s26|w0",
+    "queue|queue:2026-06-19T14:30:00+05:30|a375d25c-823d-4a49-87e3-84584d114b35|w0",
+    "file:knowledge/Finance/strategy.md|s50|w0"
+   ]
+  },
+  {
+   "id": "ie-09",
+   "ability": "information_extraction",
+   "first_hit": 8,
+   "targets": 2,
+   "reachable": 2,
+   "unreachable": [],
+   "covered_at": {
+    "turn:jarvis:conv-web-cff653a1-415e-417b-ba68-3ac84f621778:3": 8,
+    "kb:784": 13
+   },
+   "top": [
+    "kb|kb:828|w0",
+    "kb|kb:646|w0",
+    "kb|kb:646|w1",
+    "kb|kb:785|w0",
+    "kb|kb:647|w0"
+   ]
+  },
+  {
+   "id": "ie-10",
+   "ability": "information_extraction",
+   "first_hit": 0,
+   "targets": 3,
+   "reachable": 3,
+   "unreachable": [],
+   "covered_at": {
+    "kb:787": 0,
+    "turn:jarvis:conv-web-cff653a1-415e-417b-ba68-3ac84f621778:11": 3,
+    "turn:jarvis:conv-web-cff653a1-415e-417b-ba68-3ac84f621778:9": 9
+   },
+   "top": [
+    "kb|kb:787|w0",
+    "queue|queue:2026-08-16T19:28:16+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+    "ep:jarvis:conv-web-cff653a1-415e-417b-ba68-3ac84f621778|x6|w0",
+    "ep:jarvis:conv-web-cff653a1-415e-417b-ba68-3ac84f621778|x10|w0",
+    "file:jarvis_data/cognitive_profile.md|s1|w23"
+   ]
+  },
+  {
+   "id": "ie-11",
+   "ability": "information_extraction",
+   "first_hit": 0,
+   "targets": 2,
+   "reachable": 2,
+   "unreachable": [],
+   "covered_at": {
+    "kb:788": 0,
+    "turn:jarvis:conv-web-cff653a1-415e-417b-ba68-3ac84f621778:13": 4
+   },
+   "top": [
+    "kb|kb:788|w0",
+    "ep:jarvis:conv-web-cff653a1-415e-417b-ba68-3ac84f621778|x10|w0",
+    "kb|kb:651|w0",
+    "file:jarvis_data/cognitive_profile.md|s1|w24",
+    "ep:jarvis:conv-web-cff653a1-415e-417b-ba68-3ac84f621778|x12|w0"
+   ]
+  },
+  {
+   "id": "ie-12",
+   "ability": "information_extraction",
+   "first_hit": 7,
+   "targets": 1,
+   "reachable": 1,
+   "unreachable": [],
+   "covered_at": {
+    "kb:line266": 7
+   },
+   "top": [
+    "ep:codex:01a09623-f6cb-7743-b552-76a42d14af29|p1|w73",
+    "ep:codex:01a09623-f6cb-7743-b552-76a42d14af29|x10|w20",
+    "ep:codex:01a09623-f6cb-7743-b552-76a42d14af29|p1|w105",
+    "ep:codex:01a09623-f6cb-7743-b552-76a42d14af29|x14|w17",
+    "ep:codex:01a09623-f6cb-7743-b552-76a42d14af29|x14|w23"
+   ]
+  },
+  {
+   "id": "ie-13",
+   "ability": "information_extraction",
+   "first_hit": 1,
+   "targets": 2,
+   "reachable": 2,
+   "unreachable": [],
+   "covered_at": {
+    "queue:2026-06-02T16:04:53+05:30|4e986828-f710-435e-8c75-b81b046b5aba": 1,
+    "kb:804": 14
+   },
+   "top": [
+    "queue|queue:2026-06-03T09:16:47+05:30|4e986828-f710-435e-8c75-b81b046b5aba|w0",
+    "queue|queue:2026-06-02T16:04:53+05:30|4e986828-f710-435e-8c75-b81b046b5aba|w0",
+    "kb|kb:307|w0",
+    "queue|queue:2026-06-15T14:49:56+05:30|terminal-20260615T144914-44774|w0",
+    "kb|kb:312|w0"
+   ]
+  },
+  {
+   "id": "ie-14",
+   "ability": "information_extraction",
+   "first_hit": 11,
+   "targets": 2,
+   "reachable": 2,
+   "unreachable": [],
+   "covered_at": {
+    "kb:line99": 11
+   },
+   "top": [
+    "queue|queue:2026-08-23T19:13:03+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w1",
+    "ep:codex:01a0ca3c-0dd2-7cd1-9795-32baba0452da|x3|w21",
+    "kb|kb:line291|w0",
+    "ep:codex:01a09767-35b8-7a93-bf8c-6aa78dc84e94|x1253|w3",
+    "ep:claude:e5b92b99-c971-4c78-a7f9-f06f19d666e8.agent-ab5da4442f6f1a4f6|x0|w1"
+   ]
+  },
+  {
+   "id": "ie-15",
+   "ability": "information_extraction",
+   "first_hit": 6,
+   "targets": 1,
+   "reachable": 1,
+   "unreachable": [],
+   "covered_at": {
+    "kb:436": 6
+   },
+   "top": [
+    "queue|queue:2026-07-23T09:33:03+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+    "queue|queue:2026-07-23T09:49:45+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+    "queue|queue:2026-07-23T09:43:51+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+    "kb|kb:516|w0",
+    "file:jarvis_data/cognitive_profile.md|s1|w9"
+   ]
+  },
+  {
+   "id": "ie-16",
+   "ability": "information_extraction",
+   "first_hit": null,
+   "targets": 2,
+   "reachable": 2,
+   "unreachable": [],
+   "covered_at": {},
+   "top": [
+    "ep:codex:01a09e1a-377c-7841-adfb-00aab4171c9a|x17|w10",
+    "ep:codex:01a0874a-5494-7121-9874-3f8089067932|x4008|w0",
+    "ep:codex:01a0874a-5494-7121-9874-3f8089067932|p5255|w26",
+    "ep:antigravity:986802ce-24ac-404b-9f74-8cd3e18fe2e7|p1892|w1",
+    "ep:codex:01a09e1a-377c-7841-adfb-00aab4171c9a|x14|w11"
+   ]
+  },
+  {
+   "id": "ie-17",
+   "ability": "information_extraction",
+   "first_hit": 0,
+   "targets": 1,
+   "reachable": 1,
+   "unreachable": [],
+   "covered_at": {
+    "file:jarvis_data/personal_life.md": 0
+   },
+   "top": [
+    "file:jarvis_data/personal_life.md|s6|w0",
+    "ep:codex:01a0996b-67b8-7c02-95fd-c30f0f64d458|x3|w8",
+    "kb|kb:523|w0",
+    "ep:codex:01a08f22-c9ad-7b20-995b-b603a9166825|x2|w31",
+    "queue|queue:2026-08-22T12:54:55+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0"
+   ]
+  },
+  {
+   "id": "ie-18",
+   "ability": "information_extraction",
+   "first_hit": 0,
+   "targets": 1,
+   "reachable": 1,
+   "unreachable": [],
+   "covered_at": {
+    "kb:436": 0
+   },
+   "top": [
+    "kb|kb:436|w0",
+    "queue|queue:2026-07-23T09:49:45+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+    "kb|kb:436|w1",
+    "file:jarvis_data/cognitive_profile.md|s1|w10",
+    "ep:antigravity:986802ce-24ac-404b-9f74-8cd3e18fe2e7|x166|w3"
+   ]
+  },
+  {
+   "id": "ie-19",
+   "ability": "information_extraction",
+   "first_hit": 0,
+   "targets": 1,
+   "reachable": 1,
+   "unreachable": [],
+   "covered_at": {
+    "kb:416": 0
+   },
+   "top": [
+    "kb|kb:416|w0",
+    "kb|kb:line181|w0",
+    "kb|kb:408|w0",
+    "queue|queue:2026-06-25T11:45:02+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+    "kb|kb:416|w1"
+   ]
+  },
+  {
+   "id": "ie-20",
+   "ability": "information_extraction",
+   "first_hit": 0,
+   "targets": 1,
+   "reachable": 1,
+   "unreachable": [],
+   "covered_at": {
+    "kb:line74": 0
+   },
+   "top": [
+    "kb|kb:line74|w0",
+    "kb|kb:line155|w0",
+    "kb|kb:line169|w0",
+    "ep:codex:01a0c26f-3a30-7d73-afdc-40cd9975f984|x3|w8",
+    "ep:antigravity:3dbd01c1-9fd3-4c20-b468-91ff5a604765|x11|w108"
+   ]
+  },
+  {
+   "id": "ie-21",
+   "ability": "information_extraction",
+   "first_hit": 1,
+   "targets": 1,
+   "reachable": 1,
+   "unreachable": [],
+   "covered_at": {
+    "file:jarvis_data/personal_life.md": 1
+   },
+   "top": [
+    "queue|queue:2026-08-16T20:21:37+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+    "file:jarvis_data/personal_life.md|s6|w0",
+    "queue|queue:2026-06-15T14:49:56+05:30|terminal-20260615T144914-44774|w0",
+    "kb|kb:line296|w0",
+    "kb|kb:372|w0"
+   ]
+  },
+  {
+   "id": "ms-01",
+   "ability": "multi_session",
+   "first_hit": 7,
+   "targets": 8,
+   "reachable": 8,
+   "unreachable": [],
+   "covered_at": {
+    "kb:771": 7,
+    "kb:785": 19
+   },
+   "top": [
+    "kb|kb:788|w0",
+    "queue|queue:2026-09-02T14:47:38+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w1",
+    "file:jarvis_data/cognitive_profile.md|s3|w25",
+    "kb|kb:816|w0",
+    "ep:codex:01a0dcdc-8467-7c20-92bf-e2a66b8e8c27|x5592|w130"
+   ]
+  },
+  {
+   "id": "ms-02",
+   "ability": "multi_session",
+   "first_hit": 1,
+   "targets": 4,
+   "reachable": 4,
+   "unreachable": [],
+   "covered_at": {
+    "file:.agent/rules/JARVIS_ENDGAME.md": 1,
+    "kb:429": 3,
+    "kb:463": 4,
+    "kb:531": 6
+   },
+   "top": [
+    "kb|kb:line42|w0",
+    "file:.agent/rules/JARVIS_ENDGAME.md|s10|w0",
+    "queue|queue:2026-08-04T10:29:22+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+    "kb|kb:429|w0",
+    "kb|kb:463|w0"
+   ]
+  },
+  {
+   "id": "ms-03",
+   "ability": "multi_session",
+   "first_hit": null,
+   "targets": 4,
+   "reachable": 4,
+   "unreachable": [],
+   "covered_at": {},
+   "top": [
+    "queue|queue:2026-09-05T23:39:10+05:30|01a072c2-85f4-77b1-a6a5-27228eb7673b|w8",
+    "ep:antigravity:986802ce-24ac-404b-9f74-8cd3e18fe2e7|x1234|w9",
+    "ep:antigravity:986802ce-24ac-404b-9f74-8cd3e18fe2e7|x1234|w17",
+    "ep:codex:01a0874a-5494-7121-9874-3f8089067932|x4192|w0",
+    "ep:antigravity:986802ce-24ac-404b-9f74-8cd3e18fe2e7|x1234|w6"
+   ]
+  },
+  {
+   "id": "ms-04",
+   "ability": "multi_session",
+   "first_hit": 14,
+   "targets": 5,
+   "reachable": 5,
+   "unreachable": [],
+   "covered_at": {
+    "kb:528": 14
+   },
+   "top": [
+    "queue|queue:2026-09-05T23:25:28+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+    "queue|queue:2026-09-10T07:39:38+05:30|ec1f2c86-5691-4ea5-93f8-a61e82f042ea|w0",
+    "ep:codex:01a08f22-c9ad-7b20-995b-b603a9166825|x59|w6",
+    "ep:antigravity:986802ce-24ac-404b-9f74-8cd3e18fe2e7|p1892|w1",
+    "ep:codex:01a09bda-5e6b-7f42-b71a-af458b882729|x10|w24"
+   ]
+  },
+  {
+   "id": "ms-05",
+   "ability": "multi_session",
+   "first_hit": 2,
+   "targets": 5,
+   "reachable": 5,
+   "unreachable": [],
+   "covered_at": {
+    "kb:789": 12
+   },
+   "top": [
+    "kb|kb:848|w0",
+    "file:jarvis_data/personal_life.md|s3|w0"
+   ]
+  },
+  {
+   "id": "ms-06",
+   "ability": "multi_session",
+   "first_hit": 1,
+   "targets": 2,
+   "reachable": 2,
+   "unreachable": [],
+   "covered_at": {
+    "kb:760": 1,
+    "kb:757": 8
+   },
+   "top": [
+    "ep:codex:01a0874a-5494-7121-9874-3f8089067932|x4|w8",
+    "kb|kb:760|w0",
+    "ep:antigravity:986802ce-24ac-404b-9f74-8cd3e18fe2e7|x653|w2",
+    "ep:jarvis:conv-web-ca175336-ca24-42a5-9492-542b0133a6d6|x19|w1",
+    "kb|kb:623|w1"
+   ]
+  },
+  {
+   "id": "ms-07",
+   "ability": "multi_session",
+   "first_hit": null,
+   "targets": 7,
+   "reachable": 7,
+   "unreachable": [],
+   "covered_at": {},
+   "top": [
+    "ep:antigravity:986802ce-24ac-404b-9f74-8cd3e18fe2e7|x1234|w8",
+    "ep:antigravity:986802ce-24ac-404b-9f74-8cd3e18fe2e7|x1234|w16",
+    "ep:antigravity:986802ce-24ac-404b-9f74-8cd3e18fe2e7|x1234|w18",
+    "kb|kb:607|w1",
+    "file:jarvis_data/cognitive_profile.md|s4|w150"
+   ]
+  },
+  {
+   "id": "ms-08",
+   "ability": "multi_session",
+   "first_hit": 11,
+   "targets": 3,
+   "reachable": 3,
+   "unreachable": [],
+   "covered_at": {
+    "file:jarvis_data/personal_life.md": 11
+   },
+   "top": [
+    "queue|queue:2026-08-16T19:52:36+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+    "kb|kb:666|w0",
+    "file:jarvis_data/cognitive_profile.md|s7|w60",
+    "ep:antigravity:b2b6ce61-4dc9-41c0-ad70-2dd61a06fd45|x0|w0",
+    "kb|kb:829|w0"
+   ]
+  },
+  {
+   "id": "ms-09",
+   "ability": "multi_session",
+   "first_hit": 5,
+   "targets": 5,
+   "reachable": 5,
+   "unreachable": [],
+   "covered_at": {
+    "kb:307": 5,
+    "kb:804": 17
+   },
+   "top": [
+    "queue|queue:2026-08-16T20:21:37+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+    "kb|kb:459|w1",
+    "kb|kb:624|w0",
+    "kb|kb:459|w0",
+    "file:jarvis_data/personal_life.md|s6|w0"
+   ]
+  },
+  {
+   "id": "ms-10",
+   "ability": "multi_session",
+   "first_hit": null,
+   "targets": 4,
+   "reachable": 3,
+   "unreachable": [
+    "conv:conv-web-cff653a1-415e-417b-ba68-3ac84f621778.jsonl#18"
+   ],
+   "covered_at": {},
+   "top": [
+    "ep:codex:01a09623-f6cb-7743-b552-76a42d14af29|x10|w20",
+    "ep:jarvis:conv-web-cff653a1-415e-417b-ba68-3ac84f621778|x0|w1",
+    "queue|queue:2026-08-24T09:30:19+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+    "ep:jarvis:conv-web-cff653a1-415e-417b-ba68-3ac84f621778|x0|w0",
+    "ep:codex:01a0dcdc-7e56-7520-9e71-f08d82dabc1d|x1|w36"
+   ]
+  },
+  {
+   "id": "ms-11",
+   "ability": "multi_session",
+   "first_hit": 4,
+   "targets": 3,
+   "reachable": 3,
+   "unreachable": [],
+   "covered_at": {
+    "queue:2026-09-01T17:06:44+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14": 4
+   },
+   "top": [
+    "ep:codex:01a0874a-5494-7121-9874-3f8089067932|x5129|w4",
+    "kb|kb:786|w0",
+    "queue|queue:2026-09-01T16:50:51+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w1",
+    "kb|kb:829|w0",
+    "queue|queue:2026-09-01T17:06:44+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0"
+   ]
+  },
+  {
+   "id": "ms-12",
+   "ability": "multi_session",
+   "first_hit": 8,
+   "targets": 4,
+   "reachable": 4,
+   "unreachable": [],
+   "covered_at": {
+    "kb:789": 8
+   },
+   "top": [
+    "file:jarvis_data/cognitive_profile.md|s7|w35",
+    "queue|queue:2026-09-18T12:34:43+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w1",
+    "queue|queue:2026-09-05T23:50:42+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w4",
+    "ep:codex:01a0dcdc-8467-7c20-92bf-e2a66b8e8c27|x6101|w131",
+    "file:jarvis_data/personal_life.md|s0|w0"
+   ]
+  },
+  {
+   "id": "ms-13",
+   "ability": "multi_session",
+   "first_hit": null,
+   "targets": 3,
+   "reachable": 3,
+   "unreachable": [],
+   "covered_at": {},
+   "top": [
+    "ep:codex:01a0dcdc-8467-7c20-92bf-e2a66b8e8c27|x3163|w54",
+    "ep:codex:01a0dcdc-8467-7c20-92bf-e2a66b8e8c27|x7866|w0",
+    "ep:claude:480533f5-b826-4f30-8987-03758af2f98c.agent-a8dd7bb4bb0023baf|x0|w10",
+    "ep:claude:480533f5-b826-4f30-8987-03758af2f98c|x13730|w4",
+    "ep:codex:01a0dcdc-8467-7c20-92bf-e2a66b8e8c27|x3163|w53"
+   ]
+  },
+  {
+   "id": "ms-14",
+   "ability": "multi_session",
+   "first_hit": 0,
+   "targets": 3,
+   "reachable": 3,
+   "unreachable": [],
+   "covered_at": {
+    "kb:799": 0
+   },
+   "top": [
+    "kb|kb:799|w0",
+    "ep:jarvis:conv-web-ca175336-ca24-42a5-9492-542b0133a6d6|x15|w1",
+    "queue|queue:2026-09-01T16:50:51+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+    "queue|queue:2026-06-10T12:15:39+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+    "kb|kb:619|w1"
+   ]
+  },
+  {
+   "id": "t-01",
+   "ability": "temporal",
+   "first_hit": 8,
+   "targets": 11,
+   "reachable": 11,
+   "unreachable": [],
+   "covered_at": {
+    "queue:2026-09-03T09:40:10+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14": 8
+   },
+   "top": [
+    "ep:antigravity:986802ce-24ac-404b-9f74-8cd3e18fe2e7|x521|w1",
+    "kb|kb:523|w0",
+    "ep:antigravity:986802ce-24ac-404b-9f74-8cd3e18fe2e7|x625|w0",
+    "kb|kb:523|w1",
+    "ep:antigravity:986802ce-24ac-404b-9f74-8cd3e18fe2e7|x625|w3"
+   ]
+  },
+  {
+   "id": "t-02",
+   "ability": "temporal",
+   "first_hit": 0,
+   "targets": 2,
+   "reachable": 2,
+   "unreachable": [],
+   "covered_at": {
+    "kb:781": 0
+   },
+   "top": [
+    "kb|kb:781|w0",
+    "queue|queue:2026-06-11T11:56:30+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+    "kb|kb:760|w0",
+    "ep:antigravity:45b4b335-aaf2-499b-b2dd-1a36dbded492|x552|w0",
+    "ep:antigravity:986802ce-24ac-404b-9f74-8cd3e18fe2e7|x1970|w0"
+   ]
+  },
+  {
+   "id": "t-03",
+   "ability": "temporal",
+   "first_hit": 1,
+   "targets": 1,
+   "reachable": 1,
+   "unreachable": [],
+   "covered_at": {
+    "kb:436": 1
+   },
+   "top": [
+    "queue|queue:2026-07-23T09:49:45+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+    "kb|kb:436|w0",
+    "kb|kb:436|w1",
+    "file:jarvis_data/cognitive_profile.md|s1|w10",
+    "queue|queue:2026-08-16T20:21:37+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0"
+   ]
+  },
+  {
+   "id": "t-04",
+   "ability": "temporal",
+   "first_hit": 1,
+   "targets": 1,
+   "reachable": 1,
+   "unreachable": [],
+   "covered_at": {
+    "kb:436": 1
+   },
+   "top": [
+    "queue|queue:2026-07-23T09:43:51+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+    "kb|kb:436|w0",
+    "file:jarvis_data/cognitive_profile.md|s1|w9",
+    "kb|kb:516|w0",
+    "queue|queue:2026-09-02T08:50:49+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0"
+   ]
+  },
+  {
+   "id": "t-05",
+   "ability": "temporal",
+   "first_hit": 8,
+   "targets": 1,
+   "reachable": 1,
+   "unreachable": [],
+   "covered_at": {
+    "kb:322": 8
+   },
+   "top": [
+    "file:jarvis_data/cognitive_profile.md|s4|w182",
+    "queue|queue:2026-07-15T11:37:22+05:30|019f6433-da9c-7691-b1fd-e0fc193c3e7b|w1",
+    "queue|queue:2026-07-15T11:22:03+05:30|019f6433-da9c-7691-b1fd-e0fc193c3e7b|w1",
+    "queue|queue:2026-09-08T10:30:33+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w1",
+    "ep:codex:01a08f68-f872-7963-8cfd-8a4f627af016|x13|w19"
+   ]
+  },
+  {
+   "id": "t-06",
+   "ability": "temporal",
+   "first_hit": 0,
+   "targets": 1,
+   "reachable": 1,
+   "unreachable": [],
+   "covered_at": {
+    "kb:437": 0
+   },
+   "top": [
+    "kb|kb:437|w0",
+    "kb|kb:line295|w1",
+    "queue|queue:2026-07-27T09:20:29+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+    "kb|kb:433|w1",
+    "kb|kb:line295|w0"
+   ]
+  },
+  {
+   "id": "t-07",
+   "ability": "temporal",
+   "first_hit": null,
+   "targets": 2,
+   "reachable": 2,
+   "unreachable": [],
+   "covered_at": {},
+   "top": [
+    "file:jarvis_data/cognitive_profile.md|s1|w8",
+    "ep:codex:01a0dcdc-7e56-7520-9e71-f08d82dabc1d|x457|w3",
+    "ep:codex:01a0dcdc-7e56-7520-9e71-f08d82dabc1d|x457|w7",
+    "ep:jarvis:conv-web-cff653a1-415e-417b-ba68-3ac84f621778|x16|w0",
+    "ep:jarvis:conv-web-cff653a1-415e-417b-ba68-3ac84f621778|x16|w2"
+   ]
+  },
+  {
+   "id": "t-08",
+   "ability": "temporal",
+   "first_hit": 0,
+   "targets": 1,
+   "reachable": 1,
+   "unreachable": [],
+   "covered_at": {
+    "kb:403": 0
+   },
+   "top": [
+    "kb|kb:403|w0",
+    "queue|queue:2026-06-18T16:54:36+05:30|4e986828-f710-435e-8c75-b81b046b5aba|w0",
+    "kb|kb:line99|w0",
+    "queue|queue:2026-06-24T12:12:35+05:30|4e986828-f710-435e-8c75-b81b046b5aba|w0",
+    "queue|queue:2026-06-23T12:12:37+05:30|4e986828-f710-435e-8c75-b81b046b5aba|w0"
+   ]
+  },
+  {
+   "id": "t-09",
+   "ability": "temporal",
+   "first_hit": 3,
+   "targets": 3,
+   "reachable": 3,
+   "unreachable": [],
+   "covered_at": {
+    "turn:jarvis:conv-web-cff653a1-415e-417b-ba68-3ac84f621778:1": 3,
+    "kb:784": 8,
+    "turn:jarvis:conv-20260911T155453-2960:7": 13
+   },
+   "top": [
+    "file:jarvis_data/cognitive_profile.md|s4|w196",
+    "kb|kb:307|w0",
+    "file:jarvis_data/cognitive_profile.md|s1|w8",
+    "ep:jarvis:conv-web-cff653a1-415e-417b-ba68-3ac84f621778|x0|w1",
+    "ep:jarvis:conv-web-cff653a1-415e-417b-ba68-3ac84f621778|x0|w0"
+   ]
+  },
+  {
+   "id": "t-10",
+   "ability": "temporal",
+   "first_hit": 0,
+   "targets": 2,
+   "reachable": 2,
+   "unreachable": [],
+   "covered_at": {
+    "kb:line237": 0,
+    "kb:line177": 2
+   },
+   "top": [
+    "kb|kb:line237|w0",
+    "ep:antigravity:986802ce-24ac-404b-9f74-8cd3e18fe2e7|x0|w3",
+    "kb|kb:line177|w0",
+    "file:jarvis_data/cognitive_profile.md|s4|w223",
+    "kb|kb:line237|w1"
+   ]
+  },
+  {
+   "id": "t-11",
+   "ability": "temporal",
+   "first_hit": 2,
+   "targets": 1,
+   "reachable": 1,
+   "unreachable": [],
+   "covered_at": {
+    "kb:563": 2
+   },
+   "top": [
+    "ep:jarvis:conv-web-ca175336-ca24-42a5-9492-542b0133a6d6|x6|w0",
+    "kb|kb:615|w0",
+    "kb|kb:563|w0",
+    "ep:codex:01a09042-1900-7ac0-a790-7e3aa3ad9f0a|x17|w38",
+    "ep:codex:01a08f22-c9ad-7b20-995b-b603a9166825|x63|w12"
+   ]
+  },
+  {
+   "id": "t-12",
+   "ability": "temporal",
+   "first_hit": 0,
+   "targets": 2,
+   "reachable": 2,
+   "unreachable": [],
+   "covered_at": {
+    "kb:307": 0
+   },
+   "top": [
+    "kb|kb:307|w0",
+    "kb|kb:371|w0",
+    "ep:antigravity:986802ce-24ac-404b-9f74-8cd3e18fe2e7|x2025|w0",
+    "ep:antigravity:986802ce-24ac-404b-9f74-8cd3e18fe2e7|x2025|w18",
+    "ep:antigravity:986802ce-24ac-404b-9f74-8cd3e18fe2e7|x2025|w15"
+   ]
+  },
+  {
+   "id": "t-13",
+   "ability": "temporal",
+   "first_hit": 1,
+   "targets": 2,
+   "reachable": 2,
+   "unreachable": [],
+   "covered_at": {
+    "queue:2026-08-16T20:10:17+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14": 1,
+    "file:jarvis_data/personal_life.md": 3
+   },
+   "top": [
+    "ep:codex:01a0dcdc-7e56-7520-9e71-f08d82dabc1d|x475|w17",
+    "queue|queue:2026-08-16T20:10:17+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+    "file:jarvis_data/personal_life.md|s2|w0",
+    "file:jarvis_data/personal_life.md|s3|w0"
+   ]
+  },
+  {
+   "id": "t-14",
+   "ability": "temporal",
+   "first_hit": 3,
+   "targets": 2,
+   "reachable": 2,
+   "unreachable": [],
+   "covered_at": {
+    "kb:671": 3
+   },
+   "top": [
+    "ep:codex:01a0dcdc-7e56-7520-9e71-f08d82dabc1d|x242|w10",
+    "ep:codex:01a0dcdc-7e56-7520-9e71-f08d82dabc1d|x242|w13",
+    "kb|kb:743|w0",
+    "kb|kb:671|w0",
+    "ep:codex:01a0dcdc-7e56-7520-9e71-f08d82dabc1d|x242|w16"
+   ]
+  },
+  {
+   "id": "ku-01",
+   "ability": "knowledge_update",
+   "first_hit": null,
+   "targets": 2,
+   "reachable": 2,
+   "unreachable": [],
+   "covered_at": {},
+   "top": [
+    "ep:codex:01a0965d-8161-7f41-a546-743e09e90927|x10|w23",
+    "file:jarvis_data/cognitive_profile.md|s4|w201",
+    "file:jarvis_data/cognitive_profile.md|s7|w16",
+    "file:jarvis_data/cognitive_profile.md|s4|w202",
+    "ep:codex:01a0874a-5494-7121-9874-3f8089067932|x914|w0"
+   ]
+  },
+  {
+   "id": "ku-02",
+   "ability": "knowledge_update",
+   "first_hit": 0,
+   "targets": 2,
+   "reachable": 2,
+   "unreachable": [],
+   "covered_at": {
+    "kb:789": 0,
+    "file:jarvis_data/personal_life.md": 2
+   },
+   "top": [
+    "kb|kb:789|w0",
+    "ep:codex:01a0dcdc-7e56-7520-9e71-f08d82dabc1d|x475|w0",
+    "file:jarvis_data/personal_life.md|s0|w0",
+    "file:.agent/rules/JARVIS_ENDGAME.md|s6|w1",
+    "file:jarvis_data/cognitive_profile.md|s4|w130"
+   ]
+  },
+  {
+   "id": "ku-03",
+   "ability": "knowledge_update",
+   "first_hit": 0,
+   "targets": 2,
+   "reachable": 2,
+   "unreachable": [],
+   "covered_at": {
+    "kb:671": 0
+   },
+   "top": [
+    "kb|kb:671|w0",
+    "ep:codex:01a0dcdc-7e56-7520-9e71-f08d82dabc1d|x242|w19",
+    "queue|queue:2026-09-18T13:10:24+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+    "ep:codex:01a0dcdc-7e56-7520-9e71-f08d82dabc1d|x242|w0",
+    "kb|kb:743|w0"
+   ]
+  },
+  {
+   "id": "ku-04",
+   "ability": "knowledge_update",
+   "first_hit": 0,
+   "targets": 3,
+   "reachable": 3,
+   "unreachable": [],
+   "covered_at": {
+    "kb:760": 0,
+    "kb:781": 4,
+    "kb:757": 16
+   },
+   "top": [
+    "kb|kb:760|w0",
+    "ep:codex:01a09e1a-377c-7841-adfb-00aab4171c9a|x10|w49",
+    "ep:codex:01a0874a-5494-7121-9874-3f8089067932|x5129|w4",
+    "ep:codex:01a0874a-5494-7121-9874-3f8089067932|x5129|w6",
+    "kb|kb:781|w0"
+   ]
+  },
+  {
+   "id": "ku-05",
+   "ability": "knowledge_update",
+   "first_hit": 0,
+   "targets": 3,
+   "reachable": 3,
+   "unreachable": [],
+   "covered_at": {
+    "kb:line237": 0,
+    "file:.agent/rules/CLAUDE.md": 2,
+    "kb:line177": 3
+   },
+   "top": [
+    "kb|kb:line237|w0",
+    "file:jarvis_data/cognitive_profile.md|s4|w223",
+    "file:.agent/rules/CLAUDE.md|s2|w0",
+    "kb|kb:line177|w0",
+    "ep:antigravity:77cd437e-1b74-4668-8497-0bbe43eaeba3|x142|w322"
+   ]
+  },
+  {
+   "id": "ku-06",
+   "ability": "knowledge_update",
+   "first_hit": 1,
+   "targets": 3,
+   "reachable": 3,
+   "unreachable": [],
+   "covered_at": {
+    "kb:line178": 1,
+    "file:.agent/rules/JARVIS_ENDGAME.md": 3
+   },
+   "top": [
+    "queue|queue:2026-06-04T10:38:02+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+    "kb|kb:line178|w0",
+    "ep:antigravity:45b4b335-aaf2-499b-b2dd-1a36dbded492|x512|w0",
+    "file:.agent/rules/JARVIS_ENDGAME.md|s4|w0",
+    "kb|kb:797|w0"
+   ]
+  },
+  {
+   "id": "ku-07",
+   "ability": "knowledge_update",
+   "first_hit": 0,
+   "targets": 3,
+   "reachable": 3,
+   "unreachable": [],
+   "covered_at": {
+    "kb:429": 0,
+    "file:.agent/rules/JARVIS_ENDGAME.md": 3,
+    "kb:463": 5
+   },
+   "top": [
+    "kb|kb:429|w0",
+    "file:jarvis_data/cognitive_profile.md|s4|w146",
+    "ep:codex:01a0dcdc-7e56-7520-9e71-f08d82dabc1d|x295|w4",
+    "file:.agent/rules/JARVIS_ENDGAME.md|s10|w1",
+    "file:jarvis_data/cognitive_profile.md|s4|w147"
+   ]
+  },
+  {
+   "id": "ku-08",
+   "ability": "knowledge_update",
+   "first_hit": 0,
+   "targets": 2,
+   "reachable": 2,
+   "unreachable": [],
+   "covered_at": {
+    "kb:538": 0,
+    "queue:2026-09-07T10:01:31+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14": 2
+   },
+   "top": [
+    "kb|kb:538|w0",
+    "file:jarvis_data/cognitive_profile.md|s4|w80",
+    "queue|queue:2026-09-07T10:01:31+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+    "file:jarvis_data/cognitive_profile.md|s4|w81",
+    "ep:codex:01a09bf6-4bb2-7a03-b747-bdb19102fff7|x3|w38"
+   ]
+  },
+  {
+   "id": "ku-09",
+   "ability": "knowledge_update",
+   "first_hit": 12,
+   "targets": 1,
+   "reachable": 1,
+   "unreachable": [],
+   "covered_at": {
+    "kb:668": 12
+   },
+   "top": [
+    "ep:codex:01a0dcdc-7e56-7520-9e71-f08d82dabc1d|x1|w71",
+    "queue|queue:2026-09-18T12:47:19+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+    "file:jarvis_data/cognitive_profile.md|s4|w77",
+    "ep:codex:01a0dcdc-7e56-7520-9e71-f08d82dabc1d|x186|w6",
+    "queue|queue:2026-09-11T09:03:12+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w6"
+   ]
+  },
+  {
+   "id": "ku-10",
+   "ability": "knowledge_update",
+   "first_hit": 0,
+   "targets": 3,
+   "reachable": 2,
+   "unreachable": [
+    "file:.gitignore"
+   ],
+   "covered_at": {
+    "kb:518": 0,
+    "file:.agent/rules/CLAUDE.md": 1
+   },
+   "top": [
+    "kb|kb:518|w0",
+    "file:.agent/rules/CLAUDE.md|s13|w0",
+    "queue|queue:2026-09-02T10:01:01+05:30|ec1f2c86-5691-4ea5-93f8-a61e82f042ea|w0",
+    "ep:codex:01a0dcdc-7e56-7520-9e71-f08d82dabc1d|x295|w3",
+    "file:jarvis_data/cognitive_profile.md|s4|w96"
+   ]
+  },
+  {
+   "id": "ku-11",
+   "ability": "knowledge_update",
+   "first_hit": 0,
+   "targets": 1,
+   "reachable": 1,
+   "unreachable": [],
+   "covered_at": {
+    "kb:436": 0
+   },
+   "top": [
+    "kb|kb:436|w1",
+    "queue|queue:2026-07-23T09:51:01+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+    "file:jarvis_data/cognitive_profile.md|s1|w10",
+    "ep:antigravity:986802ce-24ac-404b-9f74-8cd3e18fe2e7|x111|w0",
+    "kb|kb:436|w0"
+   ]
+  },
+  {
+   "id": "ku-12",
+   "ability": "knowledge_update",
+   "first_hit": 0,
+   "targets": 1,
+   "reachable": 1,
+   "unreachable": [],
+   "covered_at": {
+    "file:knowledge/Finance/strategy.md": 0
+   },
+   "top": [
+    "file:knowledge/Finance/strategy.md|s10|w1",
+    "file:knowledge/Finance/strategy.md|s39|w3",
+    "file:knowledge/Finance/strategy.md|s39|w0",
+    "file:knowledge/Finance/strategy.md|s10|w0",
+    "ep:antigravity:986802ce-24ac-404b-9f74-8cd3e18fe2e7|x111|w3"
+   ]
+  },
+  {
+   "id": "ku-13",
+   "ability": "knowledge_update",
+   "first_hit": 2,
+   "targets": 2,
+   "reachable": 2,
+   "unreachable": [],
+   "covered_at": {
+    "kb:760": 2,
+    "kb:757": 8
+   },
+   "top": [
+    "ep:codex:01a0874a-5494-7121-9874-3f8089067932|x5129|w9",
+    "ep:codex:01a0874a-5494-7121-9874-3f8089067932|x5129|w6",
+    "kb|kb:760|w0",
+    "kb|kb:781|w0",
+    "ep:codex:01a0874a-5494-7121-9874-3f8089067932|x5129|w8"
+   ]
+  },
+  {
+   "id": "ku-14",
+   "ability": "knowledge_update",
+   "first_hit": 1,
+   "targets": 2,
+   "reachable": 2,
+   "unreachable": [],
+   "covered_at": {
+    "file:.agent/rules/JARVIS_ENDGAME.md": 1,
+    "kb:531": 5
+   },
+   "top": [
+    "ep:codex:01a0c926-a0a1-71d3-b72c-3f342baa8273|x3|w27",
+    "file:.agent/rules/JARVIS_ENDGAME.md|s3|w1",
+    "file:jarvis_data/cognitive_profile.md|s4|w85",
+    "ep:codex:01a0874a-5494-7121-9874-3f8089067932|x44|w2",
+    "file:jarvis_data/cognitive_profile.md|s5|w5"
+   ]
+  },
+  {
+   "id": "ku-15",
+   "ability": "knowledge_update",
+   "first_hit": 1,
+   "targets": 1,
+   "reachable": 1,
+   "unreachable": [],
+   "covered_at": {
+    "kb:line291": 1
+   },
+   "top": [
+    "queue|queue:2026-07-23T09:49:45+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+    "kb|kb:line291|w0",
+    "queue|queue:2026-07-31T09:03:41+05:30|4b5e640b-84c2-45d3-a9af-b32f6bfc3818|w0",
+    "kb|kb:436|w1",
+    "queue|queue:2026-06-15T14:49:56+05:30|terminal-20260615T144914-44774|w0"
+   ]
+  },
+  {
+   "id": "ku-16",
+   "ability": "knowledge_update",
+   "first_hit": 0,
+   "targets": 2,
+   "reachable": 2,
+   "unreachable": [],
+   "covered_at": {
+    "kb:364": 0,
+    "kb:312": 1
+   },
+   "top": [
+    "kb|kb:364|w0",
+    "kb|kb:312|w0",
+    "file:jarvis_data/cognitive_profile.md|s1|w9",
+    "queue|queue:2026-06-15T14:49:56+05:30|terminal-20260615T144914-44774|w0",
+    "file:knowledge/Finance/strategy.md|s39|w2"
+   ]
+  },
+  {
+   "id": "ab-01",
+   "ability": "abstention",
+   "first_hit": 0,
+   "targets": 2,
+   "reachable": 2,
+   "unreachable": [],
+   "covered_at": {
+    "file:jarvis_data/personal_life.md": 0,
+    "queue:2026-08-16T20:10:17+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14": 3
+   },
+   "top": [
+    "file:jarvis_data/personal_life.md|s1|w0",
+    "ep:codex:01a0dcdc-7e56-7520-9e71-f08d82dabc1d|x475|w17",
+    "queue|queue:2026-06-19T14:05:59+05:30|a375d25c-823d-4a49-87e3-84584d114b35|w0",
+    "queue|queue:2026-08-16T20:10:17+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+    "file:knowledge/Finance/strategy.md|s8|w0"
+   ]
+  },
+  {
+   "id": "ab-02",
+   "ability": "abstention",
+   "first_hit": null,
+   "targets": 1,
+   "reachable": 1,
+   "unreachable": [],
+   "covered_at": {},
+   "top": [
+    "ep:codex:01a0dcdc-8467-7c20-92bf-e2a66b8e8c27|x5075|w62",
+    "ep:codex:01a0dcdc-8467-7c20-92bf-e2a66b8e8c27|x7301|w62",
+    "kb|kb:831|w0",
+    "queue|queue:2026-09-02T14:47:38+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w1",
+    "kb|kb:771|w0"
+   ]
+  },
+  {
+   "id": "ab-03",
+   "ability": "abstention",
+   "first_hit": null,
+   "targets": 1,
+   "reachable": 1,
+   "unreachable": [],
+   "covered_at": {},
+   "top": [
+    "kb|kb:830|w0",
+    "ep:codex:01a0dcdc-7e62-7c73-8a09-6aa3aebb67b2|x551|w1",
+    "kb|kb:840|w0",
+    "ep:codex:01a0dcdc-7e62-7c73-8a09-6aa3aebb67b2|x551|w2",
+    "kb|kb:589|w1"
+   ]
+  },
+  {
+   "id": "ab-04",
+   "ability": "abstention",
+   "first_hit": 0,
+   "targets": 2,
+   "reachable": 2,
+   "unreachable": [],
+   "covered_at": {
+    "file:jarvis_data/personal_life.md": 0,
+    "queue:2026-08-16T20:10:17+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14": 1
+   },
+   "top": [
+    "file:jarvis_data/personal_life.md|s4|w0",
+    "queue|queue:2026-08-16T20:10:17+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+    "ep:codex:01a0dcdc-7e56-7520-9e71-f08d82dabc1d|x475|w17",
+    "kb|kb:618|w0",
+    "kb|kb:846|w0"
+   ]
+  },
+  {
+   "id": "ab-05",
+   "ability": "abstention",
+   "first_hit": 0,
+   "targets": 2,
+   "reachable": 2,
+   "unreachable": [],
+   "covered_at": {
+    "file:jarvis_data/personal_life.md": 0,
+    "queue:2026-08-16T20:10:17+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14": 1
+   },
+   "top": [
+    "file:jarvis_data/personal_life.md|s4|w0",
+    "queue|queue:2026-08-16T20:10:17+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+    "ep:codex:01a0dcdc-7e56-7520-9e71-f08d82dabc1d|x475|w17",
+    "ep:claude:480533f5-b826-4f30-8987-03758af2f98c|x4|w15",
+    "ep:codex:01a0dcdc-7e56-7520-9e71-f08d82dabc1d|x475|w18"
+   ]
+  },
+  {
+   "id": "ab-06",
+   "ability": "abstention",
+   "first_hit": 1,
+   "targets": 2,
+   "reachable": 2,
+   "unreachable": [],
+   "covered_at": {
+    "queue:2026-08-16T20:10:17+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14": 1,
+    "file:jarvis_data/personal_life.md": 4
+   },
+   "top": [
+    "kb|kb:590|w1",
+    "queue|queue:2026-08-16T20:10:17+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+    "kb|kb:854|w0",
+    "kb|kb:799|w0",
+    "file:jarvis_data/personal_life.md|s1|w0"
+   ]
+  },
+  {
+   "id": "ab-07",
+   "ability": "abstention",
+   "first_hit": 0,
+   "targets": 2,
+   "reachable": 2,
+   "unreachable": [],
+   "covered_at": {
+    "queue:2026-08-22T22:09:04+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14": 0,
+    "file:jarvis_data/personal_life.md": 2
+   },
+   "top": [
+    "queue|queue:2026-08-22T22:09:04+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+    "file:jarvis_data/personal_life.md|s3|w0",
+    "kb|kb:848|w0"
+   ]
+  },
+  {
+   "id": "ab-08",
+   "ability": "abstention",
+   "first_hit": 10,
+   "targets": 1,
+   "reachable": 1,
+   "unreachable": [],
+   "covered_at": {
+    "file:jarvis_data/personal_life.md": 10
+   },
+   "top": [
+    "ep:codex:01a0dcdc-7e62-7c73-8a09-6aa3aebb67b2|x387|w3",
+    "ep:codex:01a0dcdc-7e62-7c73-8a09-6aa3aebb67b2|x387|w1",
+    "ep:claude:e5b92b99-c971-4c78-a7f9-f06f19d666e8|x696|w1",
+    "ep:claude:e5b92b99-c971-4c78-a7f9-f06f19d666e8|x794|w1",
+    "ep:codex:01a0dcdc-7e62-7c73-8a09-6aa3aebb67b2|x387|w4"
+   ]
+  },
+  {
+   "id": "ab-09",
+   "ability": "abstention",
+   "first_hit": 0,
+   "targets": 2,
+   "reachable": 2,
+   "unreachable": [],
+   "covered_at": {
+    "file:jarvis_data/personal_life.md": 0,
+    "queue:2026-08-16T20:10:17+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14": 1
+   },
+   "top": [
+    "file:jarvis_data/personal_life.md|s4|w0",
+    "queue|queue:2026-08-16T20:10:17+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+    "ep:codex:01a0dcdc-7e56-7520-9e71-f08d82dabc1d|x475|w17",
+    "kb|kb:831|w0",
+    "kb|kb:828|w0"
+   ]
+  },
+  {
+   "id": "ab-10",
+   "ability": "abstention",
+   "first_hit": 2,
+   "targets": 1,
+   "reachable": 1,
+   "unreachable": [],
+   "covered_at": {
+    "file:jarvis_data/personal_life.md": 2
+   },
+   "top": [
+    "ep:codex:01a0dcdc-7e56-7520-9e71-f08d82dabc1d|x475|w17",
+    "ep:codex:01a0dcdc-7e62-7c73-8a09-6aa3aebb67b2|x195|w23",
+    "file:jarvis_data/personal_life.md|s6|w0",
+    "file:jarvis_data/personal_life.md|s2|w0",
+    "kb|kb:line185|w0"
+   ]
+  },
+  {
+   "id": "ab-11",
+   "ability": "abstention",
+   "first_hit": 8,
+   "targets": 1,
+   "reachable": 1,
+   "unreachable": [],
+   "covered_at": {
+    "queue:2026-06-19T14:05:59+05:30|a375d25c-823d-4a49-87e3-84584d114b35": 8
+   },
+   "top": [
+    "kb|kb:848|w0",
+    "queue|queue:2026-08-22T22:09:04+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w0",
+    "file:jarvis_data/personal_life.md|s3|w0"
+   ]
+  },
+  {
+   "id": "ab-12",
+   "ability": "abstention",
+   "first_hit": null,
+   "targets": 1,
+   "reachable": 1,
+   "unreachable": [],
+   "covered_at": {},
+   "top": [
+    "ep:codex:01a0dcdc-8467-7c20-92bf-e2a66b8e8c27|x2830|w36",
+    "queue|queue:2026-09-18T12:34:43+05:30|f44ca14d-4868-4dc7-9e83-a1f716a0dd14|w1",
+    "ep:codex:01a0dcdc-8467-7c20-92bf-e2a66b8e8c27|x2830|w37",
+    "ep:claude:480533f5-b826-4f30-8987-03758af2f98c|x194|w17",
+    "kb|kb:line105|w0"
+   ]
+  },
+  {
+   "id": "ab-13",
+   "ability": "abstention",
+   "first_hit": null,
+   "targets": 1,
+   "reachable": 1,
+   "unreachable": [],
+   "covered_at": {},
+   "top": [
+    "ep:claude:480533f5-b826-4f30-8987-03758af2f98c|x7579|w2",
+    "ep:antigravity:3dbd01c1-9fd3-4c20-b468-91ff5a604765|x11|w2",
+    "ep:codex:01a0dcdc-8467-7c20-92bf-e2a66b8e8c27|x5075|w139",
+    "ep:antigravity:fb1b349b-6038-4488-88a7-959c82459fac|x299|w4",
+    "ep:codex:01a0dcdc-8467-7c20-92bf-e2a66b8e8c27|x7301|w139"
+   ]
+  }
+ ],
+ "summary": {
+  "information_extraction": {
+   "n": 21,
+   "unreachable_q": 0,
+   "r@5": 0.714,
+   "cov@5": 0.524,
+   "r@10": 0.857,
+   "cov@10": 0.706,
+   "r@20": 0.905,
+   "cov@20": 0.817
+  },
+  "multi_session": {
+   "n": 14,
+   "unreachable_q": 0,
+   "r@5": 0.357,
+   "cov@5": 0.151,
+   "r@10": 0.571,
+   "cov@10": 0.274,
+   "r@20": 0.714,
+   "cov@20": 0.35
+  },
+  "temporal": {
+   "n": 14,
+   "unreachable_q": 0,
+   "r@5": 0.786,
+   "cov@5": 0.631,
+   "r@10": 0.929,
+   "cov@10": 0.733,
+   "r@20": 0.929,
+   "cov@20": 0.756
+  },
+  "knowledge_update": {
+   "n": 16,
+   "unreachable_q": 0,
+   "r@5": 0.875,
+   "cov@5": 0.719,
+   "r@10": 0.875,
+   "cov@10": 0.802,
+   "r@20": 0.938,
+   "cov@20": 0.885
+  },
+  "abstention": {
+   "n": 13,
+   "unreachable_q": 0,
+   "r@5": 0.538,
+   "cov@5": 0.538,
+   "r@10": 0.615,
+   "cov@10": 0.615,
+   "r@20": 0.692,
+   "cov@20": 0.692
+  },
+  "overall": {
+   "n": 78,
+   "unreachable_q": 0,
+   "r@5": 0.667,
+   "cov@5": 0.519,
+   "r@10": 0.782,
+   "cov@10": 0.638,
+   "r@20": 0.846,
+   "cov@20": 0.716
+  },
+  "answerable": {
+   "n": 65,
+   "unreachable_q": 0,
+   "r@5": 0.692,
+   "cov@5": 0.515,
+   "r@10": 0.815,
+   "cov@10": 0.643,
+   "r@20": 0.877,
+   "cov@20": 0.72
+  }
+ },
+ "rerank": false,
+ "sources": "all"
+}

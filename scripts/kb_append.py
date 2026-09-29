@@ -224,8 +224,14 @@ def append_entry(
     heartbeat: bool = False,
     semantic_dedup: bool = True,
     kb_path: Path = KB_PATH,
+    extra: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """Safely append one entry to the KB. Returns a status dict.
+
+    `extra` adds structured fields (e.g. a fact's source_turn / valid_from /
+    valid_to / recorded_at). It can never override a core field, and it does
+    not take part in dedup: the same fact with different provenance is still
+    the same fact.
 
     status is one of:
         "appended"  -> {status, id, content_key}
@@ -263,6 +269,8 @@ def append_entry(
                 "content": content,
                 "source_machine": _machine_tag(),
             }
+            for key, val in (extra or {}).items():
+                new_entry.setdefault(key, val)
 
             # Content-hash dedup (ignoring timestamp — same insight re-appended).
             new_key = _content_key_ignoring_ts(new_entry)
@@ -434,6 +442,21 @@ def _run_self_test() -> None:
         else:
             check("T11 semantic dedup skipped (no model) — degrades gracefully",
                   r11["status"] in ("appended", "deduped"), str(r11))
+
+        # T12: extra structured fields are stored, cannot override core fields,
+        # and do not defeat content-hash dedup
+        kb5 = Path(td) / "kb5.jsonl"
+        r12 = append_entry("Semantic", ["distilled", "person"], "The owner's girlfriend is Shubha.",
+                           semantic_dedup=False, kb_path=kb5,
+                           extra={"source_turn": "turn:claude:s:4", "valid_from": "2026-09-01T10:00:00+05:30",
+                                  "valid_to": None, "type": "Hijack"})
+        e12 = _read_entries(kb5)[0]
+        check("T12 extra fields stored; core fields win",
+              r12["status"] == "appended" and e12["source_turn"] == "turn:claude:s:4"
+              and e12["valid_to"] is None and e12["type"] == "Semantic", str(e12))
+        r12b = append_entry("Semantic", ["distilled", "person"], "The owner's girlfriend is Shubha.",
+                            semantic_dedup=False, kb_path=kb5, extra={"source_turn": "turn:other:x:1"})
+        check("T12b same fact, other provenance -> deduped", r12b["status"] == "deduped", str(r12b))
 
     total = passed + len(failed)
     print(f"\n  Passed: {passed}/{total}")

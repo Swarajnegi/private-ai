@@ -83,6 +83,7 @@ from jarvis_core.agent.parse_ledger import (  # noqa: E402
     CURATION_PATH, HOSTS, QUEUE_PATH, _TEST_SESSION, backlog, host_of, pending)
 from jarvis_core.agent.parse_rule import PARSE_RULE, PARSE_RULE_VERSION, Verdict, validate_verdict  # noqa: E402
 from jarvis_core.config import DATA_ROOT, KB_PATH  # noqa: E402
+from jarvis_core.memory.episode_store import STORE_ROOT  # noqa: E402
 
 _IST = timezone(timedelta(hours=5, minutes=30))
 FEED_PATH = Path(DATA_ROOT) / "life_state_feed.jsonl"
@@ -108,6 +109,7 @@ class Paths:
     kb: Path = Path(KB_PATH)
     feed: Path = FEED_PATH
     labels: Path = LABELS_PATH
+    store: Path = STORE_ROOT
 
 
 PriorsFn = Callable[[str, str], List[Dict[str, Any]]]     # (ts, owner text) -> priors
@@ -155,9 +157,11 @@ def _context_of(session_rows: Sequence[Dict[str, Any]], ts: str) -> List[Dict[st
             if str(r.get("ts")) < ts and str(r.get("user_text") or "").strip()]
 
 
-def _select(host: str, limit: int, paths: Paths) -> List[Tuple[str, str]]:
-    """The oldest pending keys for `host`, whole sessions at a time, up to `limit`."""
-    keys = sorted((t.ts, t.session_id) for t in pending(host, paths.queue, paths.curation))
+def _select(host: str, limit: int, paths: Paths, session: str = "") -> List[Tuple[str, str]]:
+    """The oldest pending keys for `host`, whole sessions at a time, up to `limit`.
+    `session` (an id prefix) restricts the packet to that session's turns."""
+    keys = sorted((t.ts, t.session_id) for t in pending(host, paths.queue, paths.curation)
+                  if not session or t.session_id.startswith(session))
     by_session: Dict[str, List[Tuple[str, str]]] = defaultdict(list)
     order: List[str] = []
     for key in keys:
@@ -222,8 +226,9 @@ def _priors_for(priors_fn: Optional[PriorsFn], ts: str, text: str) -> List[Dict[
 # =============================================================================
 
 def build_packet(host: str, limit: int = 10, paths: Paths = Paths(),
-                 priors_fn: Optional[PriorsFn] = None, priors_note: str = "") -> Dict[str, Any]:
-    keys = _select(host, limit, paths)
+                 priors_fn: Optional[PriorsFn] = None, priors_note: str = "",
+                 session: str = "") -> Dict[str, Any]:
+    keys = _select(host, limit, paths, session)
     sessions = _sessions(paths.queue, {sid for _, sid in keys})
     turns = []
     for ts, sid in keys:
@@ -309,6 +314,32 @@ def _default_append(kb_path: Path, semantic: bool) -> Callable[..., Dict[str, An
     return append
 
 
+# 2026-09-29: an agent pasted a Python loop that "submitted" 1,994 verdicts for
+# other agents' turns in seconds: empty rationales, blanket labels, no facts,
+# one stamped with a model name that had never run here. A verdict is a
+# judgment made by reading the turn; these limits make the mechanical version
+# impossible to submit by accident or by shortcut.
+MAX_BATCH = 25
+MIN_MECHANICAL_BATCH = 5
+MAX_SHARED_RATIONALE = 0.6
+
+
+def _mechanical(items: List[Any]) -> str:
+    """Why this batch looks like a script rather than a reading, or ''."""
+    dicts = [v for v in items if isinstance(v, dict)]
+    if len(dicts) < MIN_MECHANICAL_BATCH:
+        return ""
+    counts: Dict[str, int] = {}
+    for v in dicts:
+        key = " ".join(str(v.get("rationale") or "").lower().split())
+        counts[key] = counts.get(key, 0) + 1
+    text, top = max(counts.items(), key=lambda kv: kv[1])
+    if top / len(dicts) > MAX_SHARED_RATIONALE:
+        return (f"{top} of {len(dicts)} verdicts share the rationale {text[:40]!r}: "
+                "judge each turn on its own")
+    return ""
+
+
 def submit(verdicts: Any, agent: str, paths: Paths = Paths(),
            priors_fn: Optional[PriorsFn] = None, priors_ready: bool = False,
            append_fn: Optional[Callable[..., Dict[str, Any]]] = None,
@@ -322,6 +353,13 @@ def submit(verdicts: Any, agent: str, paths: Paths = Paths(),
     if not isinstance(verdicts, dict) or not isinstance(verdicts.get("verdicts"), list):
         return [TurnReport("", "", False, ['input must be {"verdicts": [...]}'])]
     items = verdicts["verdicts"]
+    if len(items) > MAX_BATCH:
+        return [TurnReport("", "", False,
+                           [f"{len(items)} verdicts in one submission (limit {MAX_BATCH}): parse a batch, "
+                            "read each turn, submit, then fetch the next batch"])]
+    why = _mechanical(items)
+    if why:
+        return [TurnReport("", "", False, [why])]
     wanted = {(str(v.get("ts")), str(v.get("session_id"))) for v in items if isinstance(v, dict)}
     sessions = _sessions(paths.queue, {sid for _, sid in wanted})
     kb = _kb_index(paths.kb)
@@ -345,6 +383,9 @@ def submit(verdicts: Any, agent: str, paths: Paths = Paths(),
             rep.reasons.append("duplicate verdict for this turn in the same submission")
             continue
         seen_keys.add((ts, sid))
+        if not str(raw.get("rationale") or "").strip() or not str(raw.get("responds_to") or "").strip():
+            rep.reasons.append("rationale and responds_to are required: a verdict is a judgment, not a label")
+            continue
         rows = sessions.get(sid, [])
         row = next((r for r in rows if str(r.get("ts")) == ts), None)
         if row is None:
@@ -369,15 +410,22 @@ def submit(verdicts: Any, agent: str, paths: Paths = Paths(),
         if not isinstance(verdict, Verdict):
             rep.reasons.extend(verdict)
             continue
+        if agent_host in HOSTS and host in HOSTS and agent_host != host:
+            rep.reasons.append(f"a {host} turn cannot be parsed by {agent}: the agent the owner chatted "
+                               "with parses it, each by reading its own turns")
+            continue
         rep.accepted = True
-        if agent_host in HOSTS and agent_host != host:
-            rep.reasons.append(f"note: a {host} turn parsed by {agent} (the owner's rule is "
-                               "that the agent in the chat parses it)")
 
         new_facts = 0
+        provenance: Dict[str, Any] = {}
+        if verdict.knowledge:
+            # Each fact points back to the verbatim turn it came from and
+            # carries both timelines (valid_from/valid_to, recorded_at).
+            from jarvis_core.memory.episode_index import fact_source_fields
+            provenance = fact_source_fields(ts, sid, user_text, root=paths.store, recorded_at=now)
         for fact in verdict.knowledge:
             res = append(entry_type=fact.kb_type, tags=fact.kb_tags(host),
-                         content=fact.kb_content(ts, host))
+                         content=fact.kb_content(ts, host), extra=provenance)
             status = res.get("status", "?")
             new_facts += status == "appended"
             where = res.get("id") if status == "appended" else res.get("similar_to")
@@ -651,7 +699,11 @@ def _self_test() -> int:
     with tempfile.TemporaryDirectory() as td:
         d = Path(td)
         paths = Paths(queue=d / "q.jsonl", curation=d / "c.jsonl", kb=d / "kb.jsonl",
-                      feed=d / "feed.jsonl", labels=d / "labels.jsonl")
+                      feed=d / "feed.jsonl", labels=d / "labels.jsonl", store=d / "cs")
+        from jarvis_core.memory.episode_store import EpisodeStore
+        EpisodeStore(root=paths.store, machine="t", write_shards=False).append("jarvis", "conv-a", [
+            {"key": "L0", "ts": "2026-09-28T10:00:30+05:30", "role": "user", "content": rows[1]["user_text"]},
+            {"key": "L1", "ts": "2026-09-28T10:00:50+05:30", "role": "assistant", "content": "Noted."}])
         paths.queue.write_text("".join(json.dumps(r) + "\n" for r in rows), encoding="utf-8")
         paths.kb.write_text("".join(json.dumps(r) + "\n" for r in kb_rows), encoding="utf-8")
         kb_before = paths.kb.read_text(encoding="utf-8")
@@ -713,6 +765,10 @@ def _self_test() -> int:
               len(kb_now) == 3 and person and person[0]["type"] == "Semantic"
               and "My girlfriend Shubha" in person[0]["content"]
               and "source-jarvis" in person[0]["tags"], str(kb_now[1:]))
+        check("T9b each fact carries its source turn key and both timelines",
+              person and person[0]["source_queue"] == f"queue:{rows[1]['ts']}|conv-a"
+              and person[0]["valid_from"] == rows[1]["ts"] and person[0]["valid_to"] is None
+              and person[0]["recorded_at"] and person[0]["source_turn"] == "turn:jarvis:conv-a:0", str(person))
         check("T10 the turns are no longer pending",
               [t["ts"] for t in build_packet("jarvis", 10, paths)["turns"]] == [rows[0]["ts"]])
 
@@ -746,7 +802,7 @@ def _self_test() -> int:
         # second answers correctly: the chain moves on and the verdict carries
         # the model that produced it.
         paths2 = Paths(queue=paths.queue, curation=d / "c2.jsonl", kb=d / "kb2.jsonl",
-                       feed=d / "feed2.jsonl", labels=paths.labels)
+                       feed=d / "feed2.jsonl", labels=paths.labels, store=paths.store)
         paths2.kb.write_text(kb_before, encoding="utf-8")
         prompts_seen: List[Tuple[str, str]] = []
 
@@ -770,7 +826,7 @@ def _self_test() -> int:
         check("T15 the --auto prompt is the rule plus whole turns",
               prompts_seen[-1][1].startswith(PARSE_RULE) and long_answer in prompts_seen[-1][1])
         paths3 = Paths(queue=paths.queue, curation=d / "c3.jsonl", kb=d / "kb3.jsonl",
-                       feed=d / "feed3.jsonl", labels=paths.labels)
+                       feed=d / "feed3.jsonl", labels=paths.labels, store=paths.store)
         rc = auto("jarvis", 10, paths3, models=["broken:free"], call_fn=fake_model, semantic=False)
         check("T16 when every model fails: non-zero, nothing written",
               rc == 1 and not paths3.curation.exists() and not paths3.kb.exists())
@@ -791,6 +847,26 @@ def _self_test() -> int:
               and one["user_text"] in fitted[0][0] and "note" in fitted[0][0]
               and "h" * 2500 not in fitted[0][0], str([len(q) for q, _ in fitted]))
 
+        # --- the 2026-09-29 bulk-submission incident ---------------------
+        blank = dict(trivial, rationale="", responds_to="")
+        r1 = submit({"verdicts": [blank]}, "jarvis/test-model", paths, semantic=False)
+        check("T19 a verdict without a rationale or responds_to is rejected",
+              not r1[0].accepted and "judgment" in r1[0].reasons[0], str(r1[0].reasons))
+        many = [dict(trivial, ts=f"2027-01-01T00:00:{i:02d}+05:30", rationale="ack") for i in range(30)]
+        r2 = submit({"verdicts": many}, "jarvis/test-model", paths, semantic=False)
+        check("T20 a submission over the batch limit is rejected whole",
+              len(r2) == 1 and not r2[0].accepted and "limit" in r2[0].reasons[0], str(r2[0].reasons))
+        same = [dict(trivial, ts=rows[2]["ts"], rationale="Bare continue.") for _ in range(6)]
+        r3 = submit({"verdicts": same}, "jarvis/test-model", paths, semantic=False)
+        check("T21 a batch where most verdicts share one rationale is rejected as mechanical",
+              len(r3) == 1 and not r3[0].accepted and "share the rationale" in r3[0].reasons[0], str(r3[0].reasons))
+        wrong = dict(trivial, ts=rows[0]["ts"], rationale="a judgment made by reading the turn")
+        r4 = submit({"verdicts": [wrong]}, "codex/gpt-test", paths, semantic=False)
+        check("T22 a verdict from another host's agent is rejected, and writes nothing",
+              not r4[0].accepted and "cannot be parsed by" in r4[0].reasons[0]
+              and not any("gpt-test" in l for l in paths.curation.read_text(encoding="utf-8").splitlines()),
+              str(r4[0].reasons))
+
     print(f"  {len(passed)}/{len(passed) + len(failed)} passed")
     return 1 if failed else 0
 
@@ -807,6 +883,7 @@ def main() -> int:
     p.add_argument("--auto", action="store_true", help="JARVIS parses with its own free chain")
     p.add_argument("--host", choices=HOSTS)
     p.add_argument("--limit", type=int, default=10)
+    p.add_argument("--session", default="", help="only this session id (prefix) in --pending")
     p.add_argument("--status", action="store_true", help="backlog per host")
     p.add_argument("--routing", action="store_true", help="what the verdicts route")
     p.add_argument("--review", action="store_true", help="verdicts worth a second look")
@@ -851,7 +928,8 @@ def main() -> int:
                 p.error("--auto parses JARVIS's own turns; other hosts parse theirs themselves")
             return auto(args.host, args.limit, priors_fn=priors_fn, priors_note=note,
                         priors_ready=priors_fn is not None, semantic=not args.no_semantic)
-        packet = build_packet(args.host, args.limit, priors_fn=priors_fn, priors_note=note)
+        packet = build_packet(args.host, args.limit, priors_fn=priors_fn, priors_note=note,
+                              session=args.session)
         print(json.dumps(packet, ensure_ascii=False, indent=1))
         return 0
     return run_status()

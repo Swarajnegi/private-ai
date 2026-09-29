@@ -342,6 +342,14 @@ def default_jobs(python: Optional[str] = None,
             description="copy every host's FULL transcript (tool calls, outputs, "
                         "reasoning, compactions) into the verbatim episode store, "
                         "write this machine's shards, merge the other machine's"),
+        Job(name="index_episodes",
+            argv=(py, str(base / "scripts" / "index_episodes.py")),
+            interval_seconds=HOUR,
+            retry_after_failure_seconds=30 * 60.0,
+            timeout_seconds=3600.0,
+            initial_delay_seconds=1200.0,
+            description="incrementally index the verbatim episode store (dense + "
+                        "keyword) so recall sees this hour's sessions"),
         Job(name="interview_to_kb",
             argv=(py, str(base / "scripts" / "interview_to_kb.py")),
             interval_seconds=HOUR,

@@ -2,9 +2,9 @@
 
 > **Loaded automatically by Codex CLI** on this repo. This is the third host JARVIS runs from —
 > after Claude Code (work laptop, automatic hooks) and Antigravity (personal laptop, no hooks).
-> Codex has no hook system either, so this file follows the same pattern proven there
-> ([.agent/rules/js-workspace-rule.md](.agent/rules/js-workspace-rule.md)): read the mind's state
-> at boot instead of receiving it pushed.
+> Codex now supports project hooks. This file remains the boot contract; the
+> fail-soft `.codex/hooks.json` startup and backlog reminders do not replace its
+> required full reads and manual judgment.
 
 ---
 
@@ -42,12 +42,12 @@ python scripts/parse_turns.py --submit <file> --agent codex/<model>
 - **Never truncate.** Read the packet, `cognitive_profile.md` and `activity_digest.md` in full; if a
   tool shows you a preview, read the whole file. Select what to show; never cut what is shown.
 - **Test prompts only in ephemeral sessions** — a test in a real session becomes training data.
-- **Automate it yourself (owner directive 2026-09-28).** Codex supports hooks (`.codex/hooks.json`,
-  already used by rfm_2.0) and skills. Build your own hook and/or skill that runs the loop above —
-  e.g. a session-start hook for `bootstrap_jarvis.py --check` + the backlog drain, and a per-prompt
-  hook that nudges the parse once `parse_ledger.backlog()["codex"]["pending"] >= 10` (Claude's
-  version: `scripts/hooks/capture_gap_nudge.py`, reusable with the host changed). Keep hooks
-  fail-soft, never cut output, and record what you built in NERVOUS_SYSTEM.md §3.2 and agent mail.
+- **Codex hook adapter (owner directive 2026-09-28).** `.codex/hooks.json` runs
+  `scripts/hooks/codex_parse_nudge.py` at startup and on prompt submission. It checks boot health,
+  ingests Codex transcripts and reminds you at ten pending turns. It **does not judge turns**:
+  read and submit each complete packet yourself. Codex requires review/trust of each changed
+  project hook before it will run; check `/hooks` in a fresh session, and keep the manual boot
+  ritual until trust and execution are verified. See NERVOUS_SYSTEM.md §3.2.
 - **All four agents stay in sync from 2026-09-28 on**: one rule, one tool, one health check. A
   change to the rule is proposed over agent mail and lands as a version bump in `parse_rule.py`.
 - Full contract, one table per host: [NERVOUS_SYSTEM.md](NERVOUS_SYSTEM.md) §3.
@@ -87,9 +87,8 @@ returns nothing without a rebuilt index, and it fails silently rather than loudl
    establishes that *unprompted surfacing over the user's own history* is the single capability a
    frontier subscription cannot replicate — a frontier model does everything else if you paste the
    right context, but it cannot fire when you did not know to ask. On Claude Code this runs
-   automatically as a `SessionStart` hook. **Codex has no hook system, so if you skip this step it
-   simply does not happen, and the one thing that justifies this project silently stops on the
-   host that is now primary.** (This step was missing from this file until 2026-09-11 — exactly
+   automatically as a `SessionStart` hook. The Codex hook only reminds you; **you must still run
+   the peek and surface what it finds.** (This step was missing from this file until 2026-09-11 — exactly
    that failure, found by audit rather than by anyone noticing the silence.)
 
 4. **Check whether another agent has asked you something:**

@@ -382,9 +382,11 @@ training artifact.
 | Duty | How |
 |---|---|
 | **Capture** | Automatic when the hearth runs here: `ingest_codex` reads `~/.codex/sessions/` hourly. |
-| **Parse** | Codex, in the session, **at boot and about every 10 turns** (no hooks, so it is a written duty in `AGENTS.md`): `python scripts/ingest_codex_sessions.py` first (so this session's turns are in the queue), then `python scripts/parse_turns.py --pending --host codex --limit 10`, judge, `--submit <file> --agent codex/<model>`. At boot, drain up to 20 backlog turns. |
-| **Boot reads** | `python scripts/bootstrap_jarvis.py --check` (shows health), then `cognitive_profile.md` and `activity_digest.md` **in full**. |
-| **Health surfaces** | `bootstrap_jarvis.py --check`. |
+| **Parse** | Codex, in the session, **at boot and about every 10 turns**: `python scripts/ingest_codex_sessions.py` first, then `python scripts/parse_turns.py --pending --host codex --limit 10`, read every complete offered turn and judge, `--submit <file> --agent codex/<model>`. At boot, offer up to 20. The hook never supplies verdicts or uses a background model. |
+| **Boot reads** | `.codex/hooks.json` runs `scripts/hooks/codex_parse_nudge.py` on `SessionStart` (`startup` or `resume`): it runs `bootstrap_jarvis.py --check`, ingests Codex transcripts, and points to the full `AGENTS.md`, `cognitive_profile.md`, `activity_digest.md`, life-state peek and mail reads. The agent performs those reads, not the hook. |
+| **Ten-turn reminder** | The same fail-soft script runs on `UserPromptSubmit` and announces `parse_ledger.backlog()["codex"]["pending"] >= 10`. It preserves the pre-existing Corpus `PostToolUse` hook in `.codex/hooks.json`. |
+| **Trust / verification** | Codex project hooks are skipped until the current definitions are reviewed and trusted via `/hooks` in a fresh Codex session. The script's `--self-test` and synthetic stdin invocation verify local behavior only; they do not prove lifecycle execution. Until that trust and a fresh-session run are observed, the manual `AGENTS.md` boot ritual remains mandatory. |
+| **Health surfaces** | `bootstrap_jarvis.py --check`; the hook surfaces its summary at startup once trusted. |
 
 ### 3.3 Antigravity
 

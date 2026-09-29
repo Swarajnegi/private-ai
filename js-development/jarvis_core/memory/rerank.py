@@ -91,19 +91,21 @@ class CrossEncoderReranker:
         - Predicts a logit score representing relevance.
     """
     
-    def __init__(self, model_name: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"):
+    def __init__(self, model_name: str = "cross-encoder/ms-marco-MiniLM-L-6-v2",
+                 device: Optional[str] = None):
         """
         Initialize the reranker.
         
         Args:
             model_name: HuggingFace hub name of the cross-encoder model.
+            device: "cpu" or "cuda"; None lets sentence-transformers choose (cuda when present).
         """
         if CrossEncoder is None:
             raise ImportError("sentence-transformers is not installed. Run `pip install sentence-transformers`")
             
         logger.info(f"Initializing CrossEncoderReranker with model: {model_name}")
         self.model_name = model_name
-        self.model = CrossEncoder(self.model_name)
+        self.model = CrossEncoder(self.model_name, device=device)
         
     def rerank_hybrid_hits(self, query: str, hits: List[Any], k: int = 5, batch_size: int = 32) -> List[RerankHit]:
         """
