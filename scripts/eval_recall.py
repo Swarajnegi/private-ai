@@ -10,6 +10,7 @@ Run with:
     python scripts/eval_recall.py --system baseline           # today's voice prompt on the free chain
     python scripts/eval_recall.py --system baseline --judge   # plus a free-model judge for borderline rows
     python scripts/eval_recall.py --system baseline --only ie-01,ab-02
+    python scripts/eval_recall.py --eval jarvis_data/recall_eval_heldout.jsonl --system recall_router  # frozen held-out set
     python scripts/eval_recall.py --system mypkg.recall:answer   # any importable callable
     python scripts/eval_recall.py --report jarvis_data/recall_eval_results/baseline-2026-09-28.json
 
@@ -127,6 +128,13 @@ sys.path.insert(0, str(_REPO_ROOT / "js-development"))
 from jarvis_core.config import DATA_ROOT  # noqa: E402
 
 EVAL_PATH = Path(DATA_ROOT) / "recall_eval.jsonl"
+# Sessions whose transcripts hold a set's gold answers (the agents that wrote or
+# studied it). They are indexed like any session, so recall must never see them
+# while that set is scored; excluded by session-id prefix.
+AUTHOR_SESSIONS: Dict[str, Tuple[str, ...]] = {
+    "recall_eval_heldout": ("21c8c171-fbcb-417d-b486-7be331d5beda.agent-a08205cf6e69ca840",
+                            "21c8c171-fbcb-417d-b486-7be331d5beda.agent-a76a29e6858a74406"),
+}
 RESULTS_DIR = Path(DATA_ROOT) / "recall_eval_results"
 ABILITIES = ("information_extraction", "multi_session", "temporal", "knowledge_update", "abstention")
 EPHEMERAL_SESSION = "recall-eval-ephemeral"
@@ -426,7 +434,8 @@ def make_recall_system(args: argparse.Namespace, recall: bool = True,
     cfg_name = getattr(args, "recall_config", "voice")
     cfg = rr.VOICE if cfg_name == "voice" else rr.DEEP
     budget = int(getattr(args, "recall_budget", voice_path.VOICE_RECALL_BUDGET_TOKENS))
-    rt = router or rr.RecallRouter(config=cfg)
+    rt = router or rr.RecallRouter(config=cfg, exclude_sessions=AUTHOR_SESSIONS.get(
+        Path(getattr(args, "eval", EVAL_PATH)).stem, ()))
     if recall:
         t_warm = time.perf_counter()
         rt.warm()
@@ -584,6 +593,12 @@ def results_path(system: str, day: str, directory: Path = RESULTS_DIR, fresh: bo
         n += 1
 
 
+def results_name(system: str, eval_path: Path = EVAL_PATH) -> str:
+    """Results stem: the system, plus the set's name when it is not the default set."""
+    name = system.replace(":", ".")
+    return name if Path(eval_path).resolve() == EVAL_PATH.resolve() else f"{name}.{Path(eval_path).stem}"
+
+
 def save_atomic(path: Path, doc: Dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, tmp = tempfile.mkstemp(dir=str(path.parent), prefix=path.name + ".", suffix=".tmp")
@@ -644,17 +659,17 @@ async def run(args: argparse.Namespace, eval_rows: List[Dict[str, Any]], fn: Sys
               meta: Dict[str, Any], path: Path, judge_stream: Optional[Callable[..., Any]] = None,
               sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
               log: Callable[[str], None] = print) -> Dict[str, Any]:
+    eval_path = Path(getattr(args, "eval", None) or EVAL_PATH)
+    eval_sha = hashlib.sha256(eval_path.read_bytes()).hexdigest() if eval_path.exists() else None
     if path.exists():
         doc = json.loads(path.read_text(encoding="utf-8"))
         log(f"resuming {path} ({len(doc.get('rows', []))} rows already recorded)")
         doc["meta"].setdefault("resumes", []).append(
-            {"at": _dt.datetime.now(IST).isoformat(timespec="seconds"),
-             "eval_sha256": hashlib.sha256(EVAL_PATH.read_bytes()).hexdigest() if EVAL_PATH.exists() else None,
-             **meta})
+            {"at": _dt.datetime.now(IST).isoformat(timespec="seconds"), "eval_sha256": eval_sha, **meta})
     else:
         doc = {"meta": {"system": args.system, "started": _dt.datetime.now(IST).isoformat(timespec="seconds"),
-                        "complete": False, "eval_path": str(EVAL_PATH),
-                        "eval_sha256": hashlib.sha256(EVAL_PATH.read_bytes()).hexdigest() if EVAL_PATH.exists() else None,
+                        "complete": False, "eval_path": str(eval_path), "eval_set": eval_path.stem,
+                        "eval_sha256": eval_sha,
                         "n_questions": len(eval_rows), **meta},
                "rows": []}
     by_id = {r["id"]: r for r in doc["rows"]}
@@ -837,6 +852,22 @@ def _run_self_test() -> int:
                doc5["summary"]["overall"]["accuracy"], doc5["summary"]["overall"]["accuracy_with_judge"]),
               ("borderline", "correct", 0.0, 1.0))
 
+        alt = d / "recall_eval_heldout.jsonl"
+        alt.write_text(json.dumps(dict(row_ie, id="ho-x")) + "\n", encoding="utf-8")
+        alt_args = argparse.Namespace(system="t", backoff="", retry_failed=False, judge=False, pause=0.0, eval=alt)
+        doc6 = asyncio.run(run(alt_args, load_eval(alt), lambda q: {"answer": "Shubha, your girlfriend."}, {},
+                               d / "alt.json", sleep=no_sleep, log=lambda s: None))
+        check("S34 --eval: the chosen set is loaded, hashed and named in the results",
+              ([r["id"] for r in doc6["rows"]], doc6["meta"]["eval_path"], doc6["meta"]["eval_set"],
+               doc6["meta"]["eval_sha256"], results_name("recall_router", alt), results_name("a:b")),
+              (["ho-x"], str(alt), "recall_eval_heldout", hashlib.sha256(alt.read_bytes()).hexdigest(),
+               "recall_router.recall_eval_heldout", "a.b"))
+
+    heldout = EVAL_PATH.with_name("recall_eval_heldout.jsonl")
+    if heldout.exists():
+        check("S35 the held-out set validates and shares no id with the main set",
+              not ({r["id"] for r in load_eval(heldout)} & {r["id"] for r in load_eval()}), True)
+
     print("-" * 70)
     print(f"  {passed} passed, {failed} failed")
     print("=" * 70)
@@ -852,6 +883,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     ap.add_argument("--self-test", action="store_true")
     ap.add_argument("--show", action="store_true", help="print question counts per ability and exit")
     ap.add_argument("--report", type=Path, help="print the table for an existing results file and exit")
+    ap.add_argument("--eval", type=Path, default=EVAL_PATH,
+                    help="question set (e.g. jarvis_data/recall_eval_heldout.jsonl); a non-default set is named in the results file")
     ap.add_argument("--system", default="baseline", help=f"registered: {sorted(SYSTEMS)}, or module:callable")
     ap.add_argument("--only", default="", help="comma-separated question ids")
     ap.add_argument("--ability", default="", help="restrict to one ability")
@@ -878,7 +911,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         doc = json.loads(args.report.read_text(encoding="utf-8"))
         print(format_table(doc.get("summary") or summarize(doc["rows"])))
         return 0
-    rows = load_eval()
+    rows = load_eval(args.eval)
     if args.only:
         wanted = {x.strip() for x in args.only.split(",") if x.strip()}
         rows = [r for r in rows if r["id"] in wanted]
@@ -891,7 +924,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         return 0
     fn, meta = resolve_system(args.system, args)
     day = _dt.datetime.now(IST).date().isoformat()
-    path = results_path(args.system.replace(":", "."), day, args.out_dir, fresh=args.fresh, latest=args.retry_failed)
+    path = results_path(results_name(args.system, args.eval), day, args.out_dir, fresh=args.fresh, latest=args.retry_failed)
     print(f"system={args.system} questions={len(rows)} -> {path}")
     if meta:
         print("meta: " + json.dumps(meta, ensure_ascii=False))
