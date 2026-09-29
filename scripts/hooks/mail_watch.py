@@ -189,12 +189,15 @@ def watch(directory: Optional[Path] = None, state_path: Path = STATE_PATH,
 
 def main() -> int:
     try:
-        raw = sys.stdin.read()
-        json.loads(raw) if raw.strip() else None
+        if "--plain" not in sys.argv:            # a hook gets its event on stdin; a terminal call has none
+            raw = sys.stdin.read()
+            json.loads(raw) if raw.strip() else None
         agent = sys.argv[sys.argv.index("--agent") + 1] if "--agent" in sys.argv else "claude"
         body = watch(state_path=state_path_for(agent), agent=agent,
                      auto_ask="--no-auto-ask" not in sys.argv)
-        if body:
+        if body and "--plain" in sys.argv:       # hosts with no hook system: run this at the top of each reply
+            print(body)
+        elif body:
             print(json.dumps({"hookSpecificOutput": {"hookEventName": "UserPromptSubmit",
                                                      "additionalContext": body}}))
     except BaseException:                # noqa: BLE001
