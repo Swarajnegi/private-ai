@@ -370,6 +370,7 @@ def due_commitments(
 
 
 def record_due_run(items: List[DueItem], duration_seconds: float, rc: int,
+                   source: str = "manual",
                    path: Optional[Path] = None) -> None:
     """Keep auditable per-run evidence for the Tier 1 quiet-week gate."""
     append_record({
@@ -379,6 +380,7 @@ def record_due_run(items: List[DueItem], duration_seconds: float, rc: int,
         "check_resolved_ids": [item.commitment.id for item in items if item.reason == "check-resolved"],
         "duration_seconds": round(duration_seconds, 3),
         "rc": rc,
+        "source": source,
         "status": "ok" if rc == 0 else "failed",
     }, path or _DEFAULT_RUN_LOG)
 
@@ -440,7 +442,7 @@ def _run_self_test() -> None:
         recorded = read_records(run_log)
         check("T8 due run has append-only per-run evidence",
               len(recorded) == 1 and second.id in recorded[0]["check_resolved_ids"]
-              and recorded[0]["rc"] == 0)
+              and recorded[0]["rc"] == 0 and recorded[0]["source"] == "manual")
 
     total = passed + len(failed)
     print("-" * 70)
@@ -461,6 +463,7 @@ def main() -> int:
     parser.add_argument("--status", choices=sorted(_STATUSES))
     parser.add_argument("--due", action="store_true")
     parser.add_argument("--record-run", action="store_true", help="append Tier 1 run evidence; use with --due")
+    parser.add_argument("--run-source", choices=("manual", "scheduled"), default="manual")
     parser.add_argument("--close", metavar="ID")
     parser.add_argument("--abandoned", action="store_true")
     parser.add_argument("--note")
@@ -504,7 +507,7 @@ def main() -> int:
             return 0
         finally:
             if args.record_run:
-                record_due_run(items, time.monotonic() - started, rc)
+                record_due_run(items, time.monotonic() - started, rc, args.run_source)
     if args.list:
         items = load_commitments()
         if args.status:

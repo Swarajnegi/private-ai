@@ -132,8 +132,9 @@ slowly fills with things nobody will ever do and becomes the noise it was built 
    every six hours. Boot surfacing remains gated until the clock has demonstrated a quiet week
    without producing nonsense.
 
-The scheduled command uses `--due --record-run` to append each successful scan's timestamp,
-duration, and due IDs to `jarvis_data/commitment_runs.jsonl`. `scripts/eval_dormancy.py` compares
+The scheduled command uses `--due --record-run --run-source scheduled` to append each scan's timestamp,
+duration, return code, and due IDs to `jarvis_data/commitment_runs.jsonl`. Manual scans are marked
+separately and cannot satisfy the quiet-week gate. `scripts/eval_dormancy.py` compares
 the labelled Tier 1 snapshot with these run records. Aggregate hearth counters cannot reconstruct
 past due IDs, so the quiet-week measurement starts with this log; earlier runs do not count as
 auditable coverage. One positive case in the current gold set is not sufficient to claim broad

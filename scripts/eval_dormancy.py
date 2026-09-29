@@ -78,7 +78,7 @@ def evaluate(gold_path: Path = GOLD) -> dict:
                     continue
                 event_count += 1
                 event = json.loads(line)
-                if event.get("status") == "ok":
+                if event.get("status") == "ok" and event.get("source") == "scheduled":
                     timestamps.append(datetime.fromisoformat(str(event["ts"])).timestamp())
     timestamps.sort()
     week_start = time.time() - WEEK_SECONDS
