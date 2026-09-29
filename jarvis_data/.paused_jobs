@@ -1,0 +1,6 @@
+# Owner decision 2026-09-29: these three load the GPU and RAM for long stretches and the laptop
+# crashed with STOP_CODE MEMORY_MANAGEMENT (7.9 GB RAM, GTX 1650 4 GB). Run them by hand, one at a
+# time, with nothing else open, e.g. python scripts/index_episodes.py. Delete a line to resume it.
+index_episodes
+reindex_memory
+relabel_domains

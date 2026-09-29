@@ -39,7 +39,7 @@ from pathlib import Path
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(_REPO_ROOT / "js-development"))
 
-from jarvis_core.config import DATA_ROOT                                # noqa: E402
+from jarvis_core.config import DATA_ROOT, DB_ROOT                       # noqa: E402
 from jarvis_core.serve.hearth import (                                  # noqa: E402
     DEFAULT_HOST, DEFAULT_PORT, HearthConfig, ensure_token, serve)
 from jarvis_core.serve.scheduler import Scheduler, default_jobs         # noqa: E402
@@ -106,6 +106,11 @@ def _cmd_status(args: argparse.Namespace, token: str) -> int:
           f"busy {health.get('busy')}")
     if health.get("last_error"):
         print(f"  last error: {health['last_error']}")
+    from jarvis_core.memory.chroma_access import server_state
+    chroma = server_state(DB_ROOT)
+    print(f"  chroma server: {'UP' if chroma.up else 'DOWN'}"
+          + (f"  {chroma.host}:{chroma.port}  pid {chroma.pid}  since {chroma.started}" if chroma.has_descriptor
+             else "  (no descriptor — processes use sole-owner direct mode)"))
     jobs = health.get("jobs") or []
     if not jobs:
         print("  clock: DISABLED (no scheduler) — JARVIS has no pulse in this process")
@@ -119,11 +124,20 @@ def _cmd_status(args: argparse.Namespace, token: str) -> int:
     return 0
 
 
+def _stop_chroma_server() -> None:
+    """A hard-killed hearth cannot run its own shutdown, so --stop does it: the
+    server must not outlive the hearth that supervises it."""
+    from jarvis_core.serve.chroma_server import stop_server
+    print("chroma server stopped" if stop_server(DB_ROOT)
+          else "chroma server: could not confirm it stopped (see jarvis_data/chroma_server.log)")
+
+
 def _cmd_stop(args: argparse.Namespace, token: str) -> int:
     pid = _read_pid()
     if not pid:
         print("no live hearth found (pid file absent or stale)")
         PID_PATH.unlink(missing_ok=True)
+        _stop_chroma_server()
         return 1
     # On Windows PIDs are reusable.  A handle proves that *a* process exists,
     # not that it is our hearth; never taskkill an unrelated process merely
@@ -135,6 +149,7 @@ def _cmd_stop(args: argparse.Namespace, token: str) -> int:
     except (urllib.error.URLError, OSError, ValueError, TypeError):
         print("pid file names no reachable hearth; removing stale pid file")
         PID_PATH.unlink(missing_ok=True)
+        _stop_chroma_server()
         return 1
     if os.name == "nt":
         import subprocess
@@ -142,6 +157,7 @@ def _cmd_stop(args: argparse.Namespace, token: str) -> int:
         if res.returncode == 0:
             print(f"SIGTERM sent to hearth pid {pid}")
             PID_PATH.unlink(missing_ok=True)
+            _stop_chroma_server()
             return 0
     try:
         os.kill(pid, signal.SIGTERM)
@@ -150,6 +166,7 @@ def _cmd_stop(args: argparse.Namespace, token: str) -> int:
         return 1
     print(f"SIGTERM sent to hearth pid {pid}")
     PID_PATH.unlink(missing_ok=True)
+    _stop_chroma_server()
     return 0
 
 
@@ -178,6 +195,8 @@ def main() -> int:
                    help="detach and write a pid file; logs to jarvis_data/hearth.log")
     p.add_argument("--no-warm", action="store_true",
                    help="skip pre-loading speech, encoder and inhale at start")
+    p.add_argument("--no-chroma-server", action="store_true",
+                   help="do not supervise the Chroma server (processes fall back to sole-owner direct mode)")
     p.add_argument("--no-clock", action="store_true",
                    help="serve requests but run no scheduled jobs")
     p.add_argument("--status", action="store_true", help="query a running hearth")
@@ -242,6 +261,22 @@ def main() -> int:
     if remote and not configured_token:
         p.error("remote mode requires JARVIS_HEARTH_TOKEN; never mint a public token into a container")
 
+    chroma = None
+    if not args.no_chroma_server:
+        # One process owns jarvis_data/chromadb; every other process, this one
+        # included, is an HTTP client of it (memory/chroma_access.py). It must be
+        # up BEFORE warm_up and before any scheduled job opens the store.
+        from jarvis_core.serve.chroma_server import ChromaServerSupervisor
+        chroma = ChromaServerSupervisor(db_path=DB_ROOT)
+        # The hearth and every job it spawns inherit this: with the server down
+        # they fail loudly instead of taking direct ownership, which would block
+        # the supervisor from ever restarting the server.
+        os.environ["JARVIS_CHROMA_REQUIRE_SERVER"] = "1"
+        state = chroma.ensure_running()
+        print(f"chroma server {'UP' if state.up else 'DOWN'} on 127.0.0.1:{chroma.port}"
+              + ("" if state.up else f" ({chroma.last_error}) — the monitor keeps retrying"), flush=True)
+        chroma.start_monitor()
+
     scheduler = None if args.no_clock else Scheduler(jobs=default_jobs())
     banner = "clock ON" if scheduler else "clock OFF"
     if not args.no_warm:
@@ -256,6 +291,8 @@ def main() -> int:
                                   allow_remote=remote),
                      scheduler=scheduler)
     finally:
+        if chroma is not None:
+            chroma.stop()
         PID_PATH.unlink(missing_ok=True)
 
 

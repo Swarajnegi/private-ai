@@ -65,8 +65,8 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--collection",
         type=str,
-        default="research_papers",
-        help="ChromaDB collection to query/audit. Default: research_papers.",
+        default="jarvis_memory",
+        help="ChromaDB collection to query/audit. Default: jarvis_memory.",
     )
     parser.add_argument(
         "--specialist",

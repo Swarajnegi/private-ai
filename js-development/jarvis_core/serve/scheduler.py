@@ -133,6 +133,17 @@ Runner = Callable[[Sequence[str], float], Awaitable[Tuple[int, str]]]
 # Part 1: JOB (what to run, and how often)
 # =============================================================================
 
+def paused_jobs(root: Optional[Path] = None) -> frozenset:
+    """Job names the owner paused in jarvis_data/.paused_jobs (one per line, `#` comments).
+    A paused job does not run and is not a health breach; the file is the record of why."""
+    path = Path(root or DATA_ROOT) / ".paused_jobs"
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return frozenset()
+    return frozenset(ln.split("#", 1)[0].strip() for ln in lines if ln.split("#", 1)[0].strip())
+
+
 @dataclass(frozen=True)
 class Job:
     """
@@ -577,8 +588,11 @@ class Scheduler:
         now = self._clock()
         ready_from = 0.0 if ignore_stagger else self._started_at
         ran: List[str] = []
+        paused = paused_jobs()
         for job in self._jobs:
             st = self._state(job.name)
+            if job.name in paused:
+                continue
             if not job.is_due(now, st.last_run, ready_from, st.consecutive_failures > 0):
                 continue
             # A job whose last real run failed is retried WITHOUT its guard:

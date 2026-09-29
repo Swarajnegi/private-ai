@@ -229,6 +229,12 @@ jarvis_data/.hearth.pid
 jarvis_data/.hearth_jobs.json
 jarvis_data/hearth.log
 jarvis_data/hearth_watchdog.log
+# Chroma ownership (2026-09-29): lock + descriptor of the one process that owns chromadb/, and its log.
+jarvis_data/.chroma_direct.lock
+jarvis_data/.chroma_write.lock
+jarvis_data/.chroma_write.lock.lock
+jarvis_data/.chroma_server.json
+jarvis_data/chroma_server.log
 
 # -- chromadb/ — UNTRACKED as of 2026-09-11 (this REVERSES a recorded decision)
 # The prior decision was "chromadb/ stays tracked": a ~22 MB regenerable index

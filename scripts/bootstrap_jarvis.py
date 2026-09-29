@@ -231,6 +231,23 @@ def _machine_readiness(root: Path, report: List[str]) -> None:
                   if _os.name == "nt" else "python3 scripts/hearth.py --background")
     report.append(f"  hearth (clock)  : {'UP' if alive else f'DOWN -> {hearth_fix}'}")
 
+    try:
+        _sys.path.insert(0, str(root / "js-development"))
+        from jarvis_core.memory.chroma_access import lock_holder, lock_path, server_state
+        chroma = server_state(root / "jarvis_data" / "chromadb")
+        if chroma.up:
+            report.append(f"  chroma server   : UP  pid {chroma.pid} on {chroma.host}:{chroma.port} "
+                          f"(the one owner of the vector store)")
+        elif alive:
+            report.append("  chroma server   : BREACH — hearth is UP but the Chroma server is not answering "
+                          "-> see jarvis_data/chroma_server.log; python -m jarvis_core.serve.chroma_server --status")
+        else:
+            owner = lock_holder(lock_path(root / "jarvis_data" / "chromadb"))
+            report.append("  chroma server   : down (hearth down) -> scripts run in sole-owner direct mode"
+                          + (f"; files held by pid {owner.get('pid')} ({owner.get('role')})" if owner else ""))
+    except Exception as e:
+        report.append(f"  chroma server   : check failed ({type(e).__name__}: {e})")
+
     if _os.name == "nt":
         try:
             import winreg

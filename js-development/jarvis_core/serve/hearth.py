@@ -760,6 +760,11 @@ def warm_up() -> Dict[str, Any]:
         BRAIN.warm()
     except Exception as e:                                  # noqa: BLE001
         errors.append(f"brain: {type(e).__name__}: {e}")
+    try:
+        from jarvis_core.brain.recall_router import get_router
+        get_router().warm()
+    except Exception as e:                                  # noqa: BLE001
+        errors.append(f"recall: {type(e).__name__}: {e}")
     WARM.update(state="warm" if not errors else "degraded",
                 seconds=round(time.perf_counter() - t0, 1),
                 error="; ".join(errors) or None)

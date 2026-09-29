@@ -47,6 +47,9 @@ THRESHOLDS (and why each is where it is)
     corpora          a training_corpus/*.jsonl older than 48 h (rebuilt daily).
     projections      whatever brain/projections.run_checks says is stale.
     no truncation    check_pipeline's truncation invariants, any FAIL.
+    chroma server   the hearth is up but the Chroma server it supervises (the ONE owner of
+                     jarvis_data/chromadb, memory/chroma_access.py) is not answering its
+                     heartbeat. Silent when the hearth is down: direct mode is legal then.
     inhale size      the whole voice inhale above 80% of the smallest context
                      window in the voice chain — past that there is no room
                      left for the conversation and the answer.
@@ -131,6 +134,7 @@ class Sources:
     inhales: Optional[Callable[[Path], Dict[str, str]]] = None
     truncation: Optional[Callable[[Path, Dict[str, str]], List[Any]]] = None
     projections: Optional[Callable[[], List[Dict[str, Any]]]] = None
+    chroma: Optional[Callable[[], Dict[str, Any]]] = None
     chain: Optional[Callable[[], List[str]]] = None
     catalog_path: Optional[Path] = None
     count_tokens: Optional[Callable[[str, str], int]] = None
@@ -179,6 +183,24 @@ def _default_projections() -> List[Dict[str, Any]]:
     return out
 
 
+def _default_chroma() -> Dict[str, Any]:
+    """Is the hearth up, and is the Chroma server it supervises answering?"""
+    import socket
+    from jarvis_core.config import DB_ROOT
+    from jarvis_core.memory.chroma_access import lock_holder, lock_path, server_state
+    from jarvis_core.serve.hearth import DEFAULT_HOST, DEFAULT_PORT
+    try:
+        with socket.create_connection((DEFAULT_HOST, DEFAULT_PORT), timeout=1):
+            hearth_up = True
+    except OSError:
+        hearth_up = False
+    st = server_state(Path(DB_ROOT))
+    holder = lock_holder(lock_path(Path(DB_ROOT)))
+    return {"hearth_up": hearth_up, "server_up": st.up, "has_descriptor": st.has_descriptor,
+            "pid": st.pid, "port": st.port, "started": st.started,
+            "owner": f"pid {holder.get('pid')} ({holder.get('role')}, {holder.get('argv0')})" if holder else ""}
+
+
 def _default_chain() -> List[str]:
     from jarvis_core.brain.voice_path import free_chain, load_chain
     chain = load_chain()
@@ -211,8 +233,14 @@ def check_jobs(now: float, jobs: List[Any], state_path: Path) -> Tuple[List[Brea
     breaches: List[Breach] = []
     rows: List[Dict[str, Any]] = []
     newest_run = 0.0
+    from jarvis_core.serve.scheduler import paused_jobs
+    paused = paused_jobs(state_path.parent)
     for job in jobs:
         interval = float(job.interval_seconds)
+        if job.name in paused:
+            rows.append({"name": job.name, "status": "paused by owner (jarvis_data/.paused_jobs)",
+                         "healthy": True})
+            continue
         entry = raw.get(job.name)
         if entry is None:
             breaches.append({"check": f"job:{job.name}",
@@ -317,6 +345,28 @@ def check_projections(rows: List[Dict[str, Any]]) -> Tuple[List[Breach], Any]:
     return breaches, rows
 
 
+def check_chroma(state: Dict[str, Any]) -> Tuple[List[Breach], Any]:
+    """The hearth is what starts and supervises the Chroma server, so a hearth
+    that is up with no answering server means every job is failing (or, worse,
+    was left to open the store itself)."""
+    if not state.get("hearth_up") or state.get("server_up"):
+        return [], state
+    if state.get("has_descriptor"):
+        why = (f"the descriptor names pid {state.get('pid')} on port {state.get('port')} "
+               f"but its heartbeat does not answer")
+    else:
+        why = "there is no descriptor, so the server never started or was stopped"
+    owner = state.get("owner")
+    return ([{"check": "chroma server",
+              "detail": f"the hearth is up but the Chroma server is not answering — {why}"
+                        + (f"; the store's owner lock says {owner}" if owner else "")
+                        + ". Every memory read and write from the hearth and its jobs is failing. "
+                          "Look at jarvis_data/chroma_server.log; the hearth's monitor retries every "
+                          "10 s, a direct-mode script holding the files blocks it. "
+                          "Inspect: python -m jarvis_core.serve.chroma_server --status; or restart "
+                          "the hearth (python scripts/hearth.py --stop, then start it)."}], state)
+
+
 def check_truncation(findings: List[Any]) -> Tuple[List[Breach], Any]:
     rows = [{"name": f.name, "status": f.status, "detail": f.detail} for f in findings]
     breaches = [{"check": "no-truncation", "detail": f"{f.name}: {f.detail}"}
@@ -387,6 +437,7 @@ def health_report(sources: Optional[Sources] = None, now: Optional[float] = None
     guarded("backlog", lambda: check_backlog(moment, (src.backlog or _default_backlog)()))
     guarded("corpora", lambda: check_corpora(moment, src.root))
     guarded("projections", lambda: check_projections((src.projections or _default_projections)()))
+    guarded("chroma", lambda: check_chroma((src.chroma or _default_chroma)()))
 
     inhales: Dict[str, str] = {}
 
@@ -548,6 +599,7 @@ def _self_test() -> int:
                 truncation=lambda r, i: [Finding(name="profile whole", status="OK", detail="fine")],
                 projections=lambda: [{"name": "cognitive_profile.md", "stale": False,
                                       "detail": "5", "fix": "x", "expected": 5}],
+                chroma=lambda: {"hearth_up": True, "server_up": True, "has_descriptor": True},
                 chain=lambda: ["big/model"], catalog_path=catalog,
                 count_tokens=lambda text, model: len(text) // 4, system_prefix=lambda: "SYS ")
             base.update(over)
@@ -632,6 +684,17 @@ def _self_test() -> int:
         check("T12 a stale projection is a breach with its fix",
               bool(breached(r, "projection:chromadb/jarvis_memory"))
               and "index_memory.py" in breached(r, "projection:chromadb/jarvis_memory")[0]["detail"])
+
+        # T12b: the hearth is up but its Chroma server is not.
+        r = health_report(sources(chroma=lambda: {"hearth_up": True, "server_up": False, "has_descriptor": True,
+                                                  "pid": 4242, "port": 8759, "owner": "pid 4242 (server, x)"}), now=now)
+        cb = breached(r, "chroma server")
+        check("T12b hearth up + Chroma server down is a breach naming the pid and the log",
+              len(cb) == 1 and "4242" in cb[0]["detail"] and "chroma_server.log" in cb[0]["detail"], json.dumps(cb)[:300])
+        r = health_report(sources(chroma=lambda: {"hearth_up": False, "server_up": False, "has_descriptor": False}),
+                          now=now)
+        check("T12c hearth down is not a Chroma breach (direct mode is legal without the hearth)",
+              not breached(r, "chroma server"))
 
         # T13: a truncation invariant failing.
         r = health_report(sources(truncation=lambda root_, i: [

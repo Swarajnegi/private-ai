@@ -30,7 +30,8 @@ THE FLOW (Step by Step Execution Order)
 =============================================================================
 
 STEP 1: with JarvisMemoryStore() as store:
-        Connects to PersistentClient at DB_ROOT (absolute path from config.py)
+        Connects via get_chroma_client at DB_ROOT (absolute path from config.py):
+        HttpClient to the hearth-supervised server, else a sole-owner PersistentClient
         Loads all-MiniLM-L6-v2 embedding model into CPU RAM
         ↓
 STEP 2: store.ingest_documents(collection, documents, metadatas, ids)
@@ -68,6 +69,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import numpy as np
 
 from jarvis_core.locking import exclusive_lock
+from jarvis_core.memory.chroma_access import get_chroma_client, chroma_mode, reset_client_cache
 from jarvis_core.config import (
     BACKUP_ROOT,
     DB_ROOT,
@@ -82,8 +84,6 @@ from jarvis_core.config import (
 # ---------------------------------------------------------------------------
 _CACHED_ENCODER: Any = None          # SentenceTransformer instance
 _CACHED_ENCODER_MODEL: str = ""      # which model name is cached
-_CACHED_CHROMA_CLIENT: Any = None    # chromadb.PersistentClient instance
-_CACHED_CHROMA_PATH: str = ""        # which db_path is open
 
 
 def _get_cached_encoder(model_name: str) -> Any:
@@ -100,18 +100,6 @@ def _get_cached_encoder(model_name: str) -> Any:
     _CACHED_ENCODER_MODEL = norm_name
     print("[MemoryStore] Encoder ready.")
     return _CACHED_ENCODER
-
-
-def _get_cached_chroma_client(db_path: str) -> Any:
-    """Return (or build) the shared ChromaDB PersistentClient for this process."""
-    global _CACHED_CHROMA_CLIENT, _CACHED_CHROMA_PATH
-    if _CACHED_CHROMA_CLIENT is not None and _CACHED_CHROMA_PATH == db_path:
-        return _CACHED_CHROMA_CLIENT
-    import chromadb
-    print(f"[MemoryStore] Connecting to ChromaDB at: {db_path} (one-time)")
-    _CACHED_CHROMA_CLIENT = chromadb.PersistentClient(path=db_path)
-    _CACHED_CHROMA_PATH = db_path
-    return _CACHED_CHROMA_CLIENT
 
 
 # =============================================================================
@@ -307,8 +295,9 @@ class JarvisMemoryStore:
         Attach the shared ChromaDB client and encoder (warm from cache).
 
         EXECUTION FLOW:
-        1. _get_cached_chroma_client() — returns the already-open PersistentClient
-           (or opens it once and caches it for all future requests).
+        1. get_chroma_client() — the process-wide client: an HttpClient to the
+           hearth-supervised Chroma server when one runs, else an exclusively
+           owned PersistentClient (memory/chroma_access.py). Cached per process.
         2. _get_cached_encoder() — returns the already-loaded SentenceTransformer
            (or loads it once; subsequent calls are instant).
         3. Mark instance as open.
@@ -316,7 +305,7 @@ class JarvisMemoryStore:
         Returns:
             Self -- the open store object.
         """
-        self._client = _get_cached_chroma_client(str(self._db_path))
+        self._client = get_chroma_client(self._db_path)
         self._encoder = _get_cached_encoder(self._embedding_model_name)
         self._closed = False
         return self
@@ -342,13 +331,12 @@ class JarvisMemoryStore:
     def _close(self) -> None:
         """Detach this instance from the shared client (do not destroy it).
 
-        The module-level singletons (_CACHED_CHROMA_CLIENT, _CACHED_ENCODER)
-        stay alive for the process lifetime so the next request is instant.
+        The process-wide client and _CACHED_ENCODER stay alive for the process lifetime so the next request is instant.
         We only clear this instance's references, not the shared objects.
         """
         if self._closed:
             return
-        # Do NOT del self._client — it is the shared singleton.
+        # Do NOT del self._client — it is the process-wide client.
         # Clearing the reference here is enough to release our borrow.
         self._client = None
         self._encoder = None
@@ -438,11 +426,11 @@ class JarvisMemoryStore:
         # This is the key upgrade from add().
         # Re-running ingest on the same PDF now reflects any updated metadata
         # (e.g., new 'specialist' field) without requiring a collection wipe.
-        # One writer at a time ACROSS PROCESSES. The hearth keeps a client open
-        # for its whole life while its jobs write from subprocesses; two
-        # processes compacting the same log produced "Error in compaction:
-        # Failed to apply logs to the metadata segment" on 16 of 17
-        # reindex_memory runs (2026-09-11 to 09-28).
+        # Belt and braces: the real fix is that one process owns the files
+        # (chroma_access.py), so this only serializes writers client-side. The
+        # collisions it was first added for ("Error in compaction: Failed to
+        # apply logs to the metadata segment", 20 of 21 reindex_memory runs) came
+        # from several processes each compacting the same sqlite.
         try:
             with exclusive_lock(self._db_path.parent / ".chroma_write.lock"):
                 collection.upsert(
@@ -690,7 +678,7 @@ class JarvisMemoryStore:
         2. Close the current ChromaDB client (releases SQLite file handle).
         3. Remove the current (possibly corrupted) database directory.
         4. Extract the tar.gz archive to restore the database.
-        5. Reinitialize the ChromaDB PersistentClient.
+        5. Reopen through get_chroma_client (refused while a server owns the files).
 
         Args:
             backup_path: Absolute path to the .tar.gz backup file.
@@ -702,10 +690,16 @@ class JarvisMemoryStore:
         if not backup_file.exists():
             raise FileNotFoundError(f"[MemoryStore] Backup not found: {backup_path}")
 
+        if chroma_mode(self._db_path) == "server":
+            raise RuntimeError(
+                "[MemoryStore] Cannot restore while the Chroma server owns the files. "
+                "Stop the hearth (python scripts/hearth.py --stop), restore, restart it.")
+
         print(f"[MemoryStore] Restoring from: {backup_file.name}")
 
         # Close existing client to release SQLite file handles (critical on Windows)
         self._close()
+        reset_client_cache(self._db_path)
         time.sleep(0.5)  # Allow Windows to release OS-level file locks
 
         # Remove current (corrupted) database
@@ -718,9 +712,8 @@ class JarvisMemoryStore:
 
         print("[MemoryStore] Database restored from backup.")
 
-        # Reconnect ChromaDB client to the restored database
-        import chromadb
-        self._client = chromadb.PersistentClient(path=str(self._db_path))
+        # Reconnect to the restored database (re-takes sole direct ownership)
+        self._client = get_chroma_client(self._db_path)
         self._closed = False
 
     # -------------------------------------------------------------------------
