@@ -47,6 +47,7 @@ import json
 import os
 import subprocess
 import sys
+import time
 from contextlib import contextmanager
 from dataclasses import dataclass, replace
 from datetime import date, datetime, timedelta, timezone
@@ -69,6 +70,7 @@ except ImportError:  # POSIX uses fcntl above.
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _DEFAULT_REGISTRY = _REPO_ROOT / "jarvis_data" / "commitments.jsonl"
+_DEFAULT_RUN_LOG = _REPO_ROOT / "jarvis_data" / "commitment_runs.jsonl"
 _IST = timezone(timedelta(hours=5, minutes=30))
 _STATUSES = frozenset({"open", "resolved", "abandoned"})
 _CHECK_TIMEOUT_SECONDS = 10
@@ -367,6 +369,20 @@ def due_commitments(
     return due
 
 
+def record_due_run(items: List[DueItem], duration_seconds: float, rc: int,
+                   path: Optional[Path] = None) -> None:
+    """Keep auditable per-run evidence for the Tier 1 quiet-week gate."""
+    append_record({
+        "ts": ist_now(),
+        "due_ids": [item.commitment.id for item in items],
+        "review_due_ids": [item.commitment.id for item in items if item.reason == "review-due"],
+        "check_resolved_ids": [item.commitment.id for item in items if item.reason == "check-resolved"],
+        "duration_seconds": round(duration_seconds, 3),
+        "rc": rc,
+        "status": "ok" if rc == 0 else "failed",
+    }, path or _DEFAULT_RUN_LOG)
+
+
 def _render_commitment(commitment: Commitment) -> str:
     review = commitment.review_after or "none"
     return f"{commitment.id}  {commitment.status:<9} KB {commitment.kb_id:<4} review {review}  {commitment.what}"
@@ -419,6 +435,13 @@ def _run_self_test() -> None:
         except ValueError:
             check("T7 invalid review date is rejected", True)
 
+        run_log = Path(temporary) / "commitment_runs.jsonl"
+        record_due_run(due, 0.125, 0, path=run_log)
+        recorded = read_records(run_log)
+        check("T8 due run has append-only per-run evidence",
+              len(recorded) == 1 and second.id in recorded[0]["check_resolved_ids"]
+              and recorded[0]["rc"] == 0)
+
     total = passed + len(failed)
     print("-" * 70)
     print(f"  {passed}/{total} passed")
@@ -437,11 +460,14 @@ def main() -> int:
     parser.add_argument("--list", action="store_true")
     parser.add_argument("--status", choices=sorted(_STATUSES))
     parser.add_argument("--due", action="store_true")
+    parser.add_argument("--record-run", action="store_true", help="append Tier 1 run evidence; use with --due")
     parser.add_argument("--close", metavar="ID")
     parser.add_argument("--abandoned", action="store_true")
     parser.add_argument("--note")
     parser.add_argument("--self-test", action="store_true")
     args = parser.parse_args()
+    if args.record_run and not args.due:
+        parser.error("--record-run requires --due")
 
     if args.self_test:
         _run_self_test()
@@ -458,20 +484,27 @@ def main() -> int:
         print(_render_commitment(commitment))
         return 0
     if args.due:
-        items = due_commitments()
-        if not items:
-            print("No commitments are due.")
+        started = time.monotonic()
+        items: List[DueItem] = []
+        rc = 1
+        try:
+            items = due_commitments()
+            if not items:
+                print("No commitments are due.")
+            for item in items:
+                if item.reason == "check-resolved":
+                    closed = close_commitment(
+                        item.commitment.id,
+                        note=f"automatic check: {item.detail}",
+                    )
+                    print(f"{_render_commitment(closed)}  [automatically resolved: {item.detail}]")
+                else:
+                    print(f"{_render_commitment(item.commitment)}  [{item.reason}: {item.detail}]")
+            rc = 0
             return 0
-        for item in items:
-            if item.reason == "check-resolved":
-                closed = close_commitment(
-                    item.commitment.id,
-                    note=f"automatic check: {item.detail}",
-                )
-                print(f"{_render_commitment(closed)}  [automatically resolved: {item.detail}]")
-            else:
-                print(f"{_render_commitment(item.commitment)}  [{item.reason}: {item.detail}]")
-        return 0
+        finally:
+            if args.record_run:
+                record_due_run(items, time.monotonic() - started, rc)
     if args.list:
         items = load_commitments()
         if args.status:

@@ -132,6 +132,13 @@ slowly fills with things nobody will ever do and becomes the noise it was built 
    every six hours. Boot surfacing remains gated until the clock has demonstrated a quiet week
    without producing nonsense.
 
+The scheduled command uses `--due --record-run` to append each successful scan's timestamp,
+duration, and due IDs to `jarvis_data/commitment_runs.jsonl`. `scripts/eval_dormancy.py` compares
+the labelled Tier 1 snapshot with these run records. Aggregate hearth counters cannot reconstruct
+past due IDs, so the quiet-week measurement starts with this log; earlier runs do not count as
+auditable coverage. One positive case in the current gold set is not sufficient to claim broad
+recall or unlock Tier 2.
+
 **Definition of done:** `--due` returns **zero or a small number of genuinely stalled items** on a
 registry seeded with real commitments. If it returns a long list, the seed set is wrong, not the
 threshold.

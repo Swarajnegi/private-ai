@@ -423,7 +423,7 @@ def default_jobs(python: Optional[str] = None,
                         "turns on 2026-09-14 — nothing had ever scheduled it, so "
                         "the disagreement signal was silently degrading"),
         Job(name="check_commitments",
-            argv=(py, str(scripts / "commitments.py"), "--due"),
+            argv=(py, str(scripts / "commitments.py"), "--due", "--record-run"),
             interval_seconds=6 * HOUR,
             timeout_seconds=120.0,
             initial_delay_seconds=1140.0,

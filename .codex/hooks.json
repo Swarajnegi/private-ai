@@ -1,0 +1,49 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$(git rev-parse --show-toplevel)/scripts/hooks/codex_parse_nudge.py\"",
+            "commandWindows": "powershell -NoProfile -Command \"$r = git rev-parse --show-toplevel; & (Join-Path $r '.venv/Scripts/python.exe') (Join-Path $r 'scripts/hooks/codex_parse_nudge.py')\"",
+            "timeout": 120,
+            "statusMessage": "Checking JARVIS memory contract"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$(git rev-parse --show-toplevel)/scripts/hooks/codex_parse_nudge.py\"",
+            "commandWindows": "powershell -NoProfile -Command \"$r = git rev-parse --show-toplevel; & (Join-Path $r '.venv/Scripts/python.exe') (Join-Path $r 'scripts/hooks/codex_parse_nudge.py')\"",
+            "timeout": 30
+          },
+          {
+            "type": "command",
+            "command": "python3 \"$(git rev-parse --show-toplevel)/scripts/hooks/mail_watch.py\" --agent codex --no-auto-ask",
+            "commandWindows": "powershell -NoProfile -Command \"$r = git rev-parse --show-toplevel; & (Join-Path $r '.venv/Scripts/python.exe') (Join-Path $r 'scripts/hooks/mail_watch.py') --agent codex --no-auto-ask\"",
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/rfm_2.0/scripts/hooks/corpus-post-edit.mjs\"",
+            "timeout": 20,
+            "statusMessage": "Checking Corpus edit"
+          }
+        ]
+      }
+    ]
+  }
+}

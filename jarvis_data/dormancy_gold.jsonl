@@ -1,0 +1,9 @@
+{"id":"c001","expect_surface":false,"source":"jarvis_data/commitments.jsonl","why":"Abandoned seed; superseded before review by a checked commitment, then by c009."}
+{"id":"c002","expect_surface":false,"source":"jarvis_data/commitments.jsonl","why":"Open Stage 5 comparison, but review is 2026-10-11 and no trained adapter exists; not a stalled item on this snapshot."}
+{"id":"c003","expect_surface":false,"source":"jarvis_data/commitments.jsonl","why":"Abandoned seed; c007 replaced it with the agent-mail check."}
+{"id":"c004","expect_surface":true,"source":"jarvis_data/commitments.jsonl","why":"Open user-only credential revocation, review date 2026-09-12 is past; it must be surfaced without claiming Codex can revoke credentials."}
+{"id":"c005","expect_surface":false,"source":"jarvis_data/commitments.jsonl","why":"Demand-gated specialist policy, review date 2026-10-11; no current action should be invented."}
+{"id":"c006","expect_surface":false,"source":"jarvis_data/commitments.jsonl","why":"Historically marked resolved by an overbroad keyword check; c009 is the live GraphRAG obligation, not another immediate alert."}
+{"id":"c007","expect_surface":false,"source":"jarvis_data/commitments.jsonl","why":"Resolved when Antigravity answered q_001; resurfacing would be noise."}
+{"id":"c008","expect_surface":false,"source":"jarvis_data/commitments.jsonl","why":"Abandoned trigger-gated GraphRAG formulation; c009 carries the revised prerequisite."}
+{"id":"c009","expect_surface":false,"source":"jarvis_data/commitments.jsonl","why":"Open GraphRAG follow-on remains gated on cross-device Context Ledger proof and has an October 11 review date."}

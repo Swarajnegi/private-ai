@@ -5,7 +5,7 @@
 > is a snapshot, not a log. If something below is stale by the time you read it, fix it and say
 > so in your commit message; don't leave a wrong number here because it was true once.
 
-**Last surveyed:** 2026-09-28, by claude
+**Last surveyed:** 2026-09-29, by codex for the memory-contract and dormancy sections. Other sections retain the 2026-09-28 Claude survey and must be rechecked before use.
 **Since the last survey (2026-09-22):** the owner found that JARVIS did not know them — interview
 answers and the people in their life never reached it — and that training was fed by turns
 nobody had judged. Measuring why produced **the Memory Contract** (NERVOUS_SYSTEM.md §3), now
@@ -16,7 +16,7 @@ no truncation, failures loud to all four agents.
 
 ## 1. Is anything broken right now?
 
-**Yes — three findings from today; one is still open (`reindex_memory`).** Re-check with `python scripts/pipeline_health.py`
+**Yes.** The 2026-09-29 bootstrap reports 1,169 unparsed Codex turns, other-host backlogs, and a stale `chromadb/jarvis_memory` projection (814 KB entries versus 769 indexed). Heavy Chroma jobs are paused after a Windows memory crash; do not treat this as a retrieval success. Re-check with `python scripts/pipeline_health.py`
 (one line per breach, silent when healthy) and `python3 scripts/check_pipeline.py`.
 
 - **Curation had stalled for 13 days, invisibly.** The hourly `curate_turns` job (paid Gemini via
@@ -39,25 +39,25 @@ no truncation, failures loud to all four agents.
 
 ## 2. What's mid-flight
 
-**The Memory Contract is live; the parse backlog is the work now.** Every agent parses its own
+**The Memory Contract is live; the parse backlog is the work now.** Codex has personally reviewed and submitted its first 22 turns under rule v1. The project hook passes local tests and its definitions have trusted hashes in this machine's Codex config, but actual fresh-session execution is not yet evidenced. Every agent parses its own
 host's turns with `scripts/parse_turns.py` by `PARSE_RULE` v1 (`jarvis_core/agent/parse_rule.py`).
 Claude Code is nudged by a `UserPromptSubmit` hook at 10+ pending; Codex and Antigravity run it at
 boot and about every 10 turns (written duties in `AGENTS.md` / `js-workspace-rule.md`); JARVIS
-parses its own on the hearth every 15 minutes. Backlog at 2026-09-28 18:40 IST
+parses its own on the hearth every 15 minutes. Backlog at the 2026-09-29 Codex check
 (`cd js-development && PYTHONPATH=. python -m jarvis_core.agent.parse_ledger --status`):
 
 | host | pending | oldest |
 |---|---|---|
-| claude | 778 | 2026-06-02 |
-| codex | 1,153 | 2026-09-07 |
-| antigravity | 359 | 2026-04-03 |
-| jarvis | 40 | 2026-06-15 |
+| claude | 516 | 2026-06-25 |
+| codex | 1,169 | 2026-09-11 |
+| antigravity | 417 | 2026-04-05 |
+| jarvis | 0 | — |
 
 These are **all** captured turns, not only the 1,833 never curated: a verdict counts only under
 the current rule version, so the old Gemini verdicts (which carried no knowledge extraction) are
-re-offered. Each agent drains 20 per session start plus 10 per trigger. Mail **q_009 / q_010**
-(to Codex / Antigravity) ask each to review rule v1 — changes land as v2 — confirm what it runs at
-boot, and name gaps.
+re-offered. Each agent drains 20 per session start plus 10 per trigger. Codex answered q_009 in
+`agents_converse/a_009.md`; the shared rule now explicitly excludes ambient UI and quoted
+external content from evidence. Do not parse another host's backlog under Codex.
 
 **The JARVIS web UI and voice were rebuilt 2026-09-27 (KB 757 + the Phase 2/3 entry).** Old UI and the
 whisper.cpp/Piper stack are deleted; `serve/speech.py` keeps Whisper + Kokoro resident on the GPU,
@@ -73,20 +73,22 @@ now are captured in their best shape. No action unless you see the extractor mis
 
 ## 3. Open commitments with a task attached (`scripts/commitments.py --list`)
 
+**2026-09-29 dormancy correction:** The Tier 1 gold snapshot has 1 true positive (`c004`), 8 true negatives, and no measured miss; that is too small to infer broad recall. `scripts/eval_dormancy.py` reports the gate. The 22 old hearth runs have only aggregate counters, not due-ID history. A new append-only `commitment_runs.jsonl` starts the auditable quiet week; Tier 2 and Tier 3 remain gated. `c001`, `c008`, and `c010` were superseded by append-only abandon events, while `c009` and `c013` carry their live obligations. `c006` was historically auto-closed by an overbroad keyword check and must not be mistaken for proof that GraphRAG is finished. `c004` remains overdue and requires the owner's credential action.
+
 | id | what | who should act |
 |---|---|---|
-| c002 | Stage 5 adapter-vs-retrieval decision | **Codex — this is q_007.** Answerable now against the live interview corpus rather than in the abstract |
-| c007 | `a_001.md` exists, so this should already be closed — but nothing runs the check | **Codex — half of q_008.** Wire commitment checks to a hearth job; this closes itself on the first run |
-| c005 | Keep the 12-specialist roster demand-gated | No action — standing policy, not a task |
-| GraphRAG (c001/c006/c008/c009) | One body of work recorded in **four** inconsistent states | **Codex — other half of q_008.** The build shipped (`rebuild_graphrag`, 648 nodes/55 edges); only the registry lagged |
+| c002 | Stage 5 adapter-vs-retrieval decision | No trained adapter exists; comparison remains gated |
+| c004 | Revoke exposed GitHub PAT and legacy OpenRouter keys | Owner-only action, review overdue |
+| c005 | Keep the 12-specialist roster demand-gated | Standing policy, not an immediate task |
+| c009 | GraphRAG follow-on after Context Ledger continuity proof | Open, review 2026-10-11 |
+| c011–c013 | Memory/episode/domain maintenance after Windows diagnostic | Paused heavy jobs; run one at a time only under the agreed safe conditions |
 
-Mail: **q_004 is dead** (Antigravity built that adapter itself — see a_006; ignore it).
-**q_007 and q_008 are open and both Codex's.** Read them in full before acting on the table above.
+Mail: `python scripts/agent_mail.py --check codex` reported no unanswered Codex questions on 2026-09-29. Historical q_007/q_008 references above are superseded; check mail again before acting.
 
 ## 4. Decisions waiting on the user (not on any agent)
 
-- **Approve commit + push** of the Memory Contract. Until pushed, Codex and Antigravity see neither
-  the contract nor their mail (git is the only wire).
+- The Memory Contract is already in Git. This survey's new Codex hook and dormancy evidence
+  still require their own reviewed commit and push.
 - Top up OpenRouter — no longer needed for curation (no paid background calls); still needed for
   JARVIS's tool-using deep turns (HTTP 402).
 - ~~`personal_life.md` consent call~~ **resolved 2026-09-23 (KB 698), revised 2026-09-28** — people in the
