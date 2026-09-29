@@ -39,10 +39,9 @@ JARVIS's consciousness travels with this repo (Consciousness Portability Contrac
    command inline. Machine state does not arrive with `git pull`; fix gaps before relying on search.
 1. **Read `jarvis_data/cognitive_profile.md` in full** — the standing model of the user (who they are, the people in their life, how they work, active directives). This replaces ever asking "tell me about yourself." It is large; page through all of it.
 2. **Read `jarvis_data/activity_digest.md` in full** — the distilled cross-chat activity from the other machine(s): what the user worked on, day by day, plus JARVIS's own SELF-STATE (which model produced recent turns). Open the conversation already knowing what happened elsewhere.
-3. **Check for mail from the other agents:** `python3 scripts/agent_mail.py --check antigravity`.
-   Claude Code and Codex leave questions in `agents_converse/`, delivered by git. Answer with
-   `--answer <N> --body "..." --from antigravity`, then commit and push. Ask them things the same
-   way with `--ask`. See `agents_converse/README.md`.
+3. **Check for mail from the other agents (EVERY prompt & boot):**
+   Run `python scripts/hooks/mail_watch.py --agent antigravity --no-auto-ask --plain`.
+   Antigravity has no hooks, so this must be run at the top of every reply. If questions are addressed to Antigravity, answer them immediately with `python scripts/agent_mail.py --answer <N> --from antigravity --body "..."` before proceeding. Workflow: `.agent/workflows/mail.md`.
 4. **Read `STATUS.md`** — a kept-current snapshot of what the other agents found since your last
    session: what's mid-flight, what's confirmed broken or not-broken, which open commitments have
    a task attached and who should act, and what's blocked on the user rather than on any agent.
