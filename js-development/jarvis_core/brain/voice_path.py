@@ -87,6 +87,7 @@ SENTINEL = "<<DEEP>>"
 MODELS_PATH = Path(DATA_ROOT) / "voice_models.json"
 FALLBACK_CHAIN = ("qwen/qwen3-30b-a3b-instruct-2507", "nvidia/nemotron-3-super-120b-a12b:free")
 INHALE_TTL_S = 180.0
+VOICE_RECALL_BUDGET_TOKENS = 6_000
 MAX_TOKENS = 450
 HEDGE_S = 1.2
 # Tried only after every named model has refused, never raced in by the hedge.
@@ -147,9 +148,17 @@ class VoiceBrain:
     def __init__(self, inhale_fn: Optional[Callable[[], str]] = None,
                  history_fn: Optional[Callable[[str, str], List[Dict[str, str]]]] = None,
                  stream_fn: Optional[Callable[..., AsyncIterator[str]]] = None,
-                 chain: Optional[List[str]] = None) -> None:
+                 chain: Optional[List[str]] = None,
+                 recall_fn: Optional[Callable[[str, str], Optional[str]]] = None) -> None:
         self._inhale_fn = inhale_fn or _default_inhale
         self._history_fn = history_fn or _default_history
+        # None = the live default (recall when the standing core is in use, nothing
+        # under JARVIS_FULL_PROFILE=1); pass a callable to override, or no_recall
+        # to switch it off explicitly (no block, and no claim that a search ran).
+        if recall_fn is no_recall:
+            self._recall_fn: Optional[Callable[[str, str], Optional[str]]] = None
+        else:
+            self._recall_fn = recall_fn if recall_fn is not None else (_default_recall if core_mode() else None)
         self._stream_fn = stream_fn
         self._chain = chain
         self._inhale: Optional[str] = None
@@ -188,8 +197,21 @@ class VoiceBrain:
             self._refreshing = False
 
     def prompt(self, question: str, session_id: str) -> List[Dict[str, str]]:
+        """Persona + register + the standing inhale (a stable prefix providers can
+        cache), then history, then the question. The recall block is specific to
+        THIS question, so it rides with the question, after everything cacheable."""
         from jarvis_core.agent.mind import JARVIS_PSYCHE_PROMPT
+        recall = None
+        if self._recall_fn is not None:
+            try:
+                recall = self._recall_fn(question, session_id)
+            except Exception as e:                          # noqa: BLE001 — a failed recall never blocks a turn
+                recall = (f"RECALLED MEMORY: the memory search failed just now ({type(e).__name__}). Answer only "
+                          f"from the standing context above; if it does not hold the fact, say plainly that your "
+                          f"memory search is unavailable rather than guessing.")
         system = JARVIS_PSYCHE_PROMPT + "\n\n" + VOICE_REGISTER
+        if self._recall_fn is not None:
+            system += "\n" + VOICE_RECALL_RULE
         inhale = self.inhale_block()
         if inhale:
             system += "\n\n" + inhale
@@ -197,7 +219,8 @@ class VoiceBrain:
         for turn in self._history_fn(session_id, question):
             if turn.get("role") in ("user", "assistant") and turn.get("content"):
                 messages.append({"role": turn["role"], "content": self._redact(turn["content"])})
-        messages.append({"role": "user", "content": self._redact(question)})
+        content = f"{recall}\n\nThe owner asks: {question}" if recall else question
+        messages.append({"role": "user", "content": self._redact(content)})
         return messages
 
     def _redact(self, text: str) -> str:
@@ -220,7 +243,7 @@ class VoiceBrain:
         chain = list(self._chain or load_chain())
         if free_only:
             chain = free_chain(chain)
-        messages = self.prompt(question, session_id)
+        messages = await asyncio.to_thread(self.prompt, question, session_id)
         t0 = time.perf_counter()
         events: "asyncio.Queue[tuple]" = asyncio.Queue()
         tasks: Dict[int, asyncio.Task] = {}
@@ -360,14 +383,47 @@ VOICE_SECTIONS = (
     "Temporal",
 )
 
+# What the spoken path carries instead once recall is on: the standing core
+# (brain/recall_router.py). The rest of the profile and the activity digest are
+# reached per question through the recall block. JARVIS_FULL_PROFILE=1 restores
+# VOICE_SECTIONS above and turns recall off.
+from jarvis_core.brain.context_injector import CORE_SECTIONS as VOICE_CORE_SECTIONS  # noqa: E402
 
-def _default_inhale() -> str:
-    from jarvis_core.brain.context_injector import ContextInjector, ProviderSpec, default_providers
+VOICE_RECALL_RULE = ("- Your memory search for this question has already run: it is the RECALLED MEMORY block "
+                     "above the owner's question. Answer questions about their past from it and from the standing "
+                     "context. If it says no stored memory matched, or it does not hold the fact, say plainly and "
+                     "briefly that you do not have that, sir, and never guess or borrow from general knowledge. "
+                     f"Reply {SENTINEL} only when the answer needs tools or work. A question about the past, or a fact "
+                     f"you do not have, is never a reason: answer it, or say you do not have it.")
+
+
+def no_recall(question: str, session_id: str) -> Optional[str]:
+    """Pass as recall_fn to run a VoiceBrain without recall (the whole-profile baseline, the core-only ablation)."""
+    return None
+
+
+def core_mode() -> bool:
+    """The live default: standing core + per-question recall. Off with JARVIS_FULL_PROFILE=1."""
+    from jarvis_core.brain.context_injector import core_mode_active
+    return core_mode_active()
+
+
+def _default_inhale(core: Optional[bool] = None) -> str:
+    from jarvis_core.brain.context_injector import ContextInjector, default_providers
     # Ordered static -> volatile. Providers cache a prompt PREFIX, so the
     # clock ("Temporal") goes last: first, it would change the prefix on every
     # refresh and no turn would ever hit the cache.
-    by_name = {spec.name: spec for spec in default_providers()}
-    return ContextInjector([by_name[n] for n in VOICE_SECTIONS if n in by_name]).inhale().block
+    core = core_mode() if core is None else core
+    by_name = {spec.name: spec for spec in default_providers(core=core)}
+    names = VOICE_CORE_SECTIONS if core else VOICE_SECTIONS
+    return ContextInjector([by_name[n] for n in names if n in by_name]).inhale().block
+
+
+def _default_recall(question: str, session_id: str) -> Optional[str]:
+    """One recall pass for the spoken path: the fast preset, a 6K-token budget."""
+    from jarvis_core.brain.recall_router import VOICE, get_router
+    return get_router().recall(question, session_id=session_id, budget_tokens=VOICE_RECALL_BUDGET_TOKENS,
+                               config=VOICE, openable=False).block or None
 
 
 def _default_history(session_id: str, question: str) -> List[Dict[str, str]]:
@@ -535,6 +591,27 @@ def _run_self_test() -> int:
     gate.set()
     check("P11 a stale inhale is served at once while it refreshes in the background",
           (got, waited < 0.5), ("OLD", True))
+
+    rb = VoiceBrain(inhale_fn=lambda: "CORE", history_fn=lambda s, q: [],
+                    recall_fn=lambda q, s: f"RECALLED MEMORY: Tobu is Shubha ({q})")
+    msgs = rb.prompt("who is Tobu", "s")
+    check("R1 recall rides in the user message; the system prefix stays free of it",
+          ("RECALLED MEMORY" in msgs[-1]["content"], "who is Tobu" in msgs[-1]["content"],
+           "Tobu is Shubha" in msgs[0]["content"], "RECALLED MEMORY block" in msgs[0]["content"]),
+          (True, True, False, True))
+    off = VoiceBrain(inhale_fn=lambda: "FULL", history_fn=lambda s, q: [], recall_fn=no_recall).prompt("hi", "s")
+    check("R2 no_recall: plain question, and no claim that a memory search ran",
+          (off[-1]["content"], "RECALLED MEMORY" in off[0]["content"]), ("hi", False))
+
+    def boom(q: str, s: str) -> Optional[str]:
+        raise RuntimeError("index down")
+    ok = VoiceBrain(inhale_fn=lambda: "CORE", history_fn=lambda s, q: [], recall_fn=boom).prompt("hi", "s")
+    check("R3 a failing recall never blocks a turn, and is announced rather than silent",
+          ("hi" in ok[-1]["content"], "memory search failed" in ok[-1]["content"]), (True, True))
+    check("R4 recall goes through the outbound airlock too",
+          "BUPA" not in VoiceBrain(inhale_fn=lambda: "CORE", history_fn=lambda s, q: [],
+                                   recall_fn=lambda q, s: "RECALLED MEMORY: the BUPA migration").prompt("q", "s")[-1]["content"],
+          True)
 
     import tempfile
     from jarvis_core.brain.conversation import ConversationStore

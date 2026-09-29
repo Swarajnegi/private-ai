@@ -211,17 +211,23 @@ def _chroma_to_hits(chroma_result: Dict[str, Any]) -> List[Dict[str, Any]]:
     ]
 
 
+_COLLECTION_NOTE = (
+    "ChromaDB collection name. The collection that exists is 'jarvis_memory' (chunks of "
+    "the knowledge base). The research papers are NOT loaded (owner decision 2026-09-29: "
+    "they were a memory-layer test; scripts/ingest.py can load them again). "
+    "The owner's conversations and history are NOT here: use memory_recall for those "
+    "('episodes' has its own embedder and must not be queried through this tool)."
+)
+
+
 # =============================================================================
 # Part 3: TOOL 1 — memory_semantic_search
 # =============================================================================
 
 class MemorySemanticSearchInput(ToolInput):
     collection: str = Field(
-        default="research_papers",
-        description="ChromaDB collection name — ingested source documents/papers "
-                    "(scripts/ingest.py), NOT JARVIS's own knowledge base (use "
-                    "prior_self_consult for that). 'research_papers' is the only "
-                    "collection that exists today.")
+        default="jarvis_memory",
+        description=_COLLECTION_NOTE)
     query: str = Field(description="Natural-language query text.")
     k: int = Field(default=5, ge=1, le=50, description="Number of top results.")
     filter_metadata: Optional[Dict[str, Any]] = Field(
@@ -265,10 +271,8 @@ class MemorySemanticSearchTool(MemoryToolBase):
 
 class MemoryMMRSearchInput(ToolInput):
     collection: str = Field(
-        default="research_papers",
-        description="ChromaDB collection name — ingested source documents/papers, "
-                    "NOT JARVIS's own knowledge base (use prior_self_consult for "
-                    "that). 'research_papers' is the only collection that exists today.")
+        default="jarvis_memory",
+        description=_COLLECTION_NOTE)
     query: str = Field(description="Natural-language query text.")
     k: int = Field(default=5, ge=1, le=50, description="Final number of diverse results.")
     fetch_k: int = Field(default=20, ge=1, le=200, description="Candidate pool size for MMR.")
@@ -315,11 +319,8 @@ class MemoryMMRSearchTool(MemoryToolBase):
 
 class MemoryBM25SearchInput(ToolInput):
     collection: str = Field(
-        default="research_papers",
-        description="ChromaDB collection to build BM25 over — ingested source "
-                    "documents/papers, NOT JARVIS's own knowledge base (use "
-                    "prior_self_consult for that). 'research_papers' is the only "
-                    "collection that exists today.")
+        default="jarvis_memory",
+        description=_COLLECTION_NOTE)
     query: str = Field(description="Keyword/lexical query string.")
     k: int = Field(default=10, ge=1, le=100, description="Number of top results.")
 
@@ -394,10 +395,8 @@ class MemoryBM25SearchTool(MemoryToolBase):
 
 class MemoryHybridSearchInput(ToolInput):
     collection: str = Field(
-        default="research_papers",
-        description="ChromaDB collection name — ingested source documents/papers, "
-                    "NOT JARVIS's own knowledge base (use prior_self_consult for "
-                    "that). 'research_papers' is the only collection that exists today.")
+        default="jarvis_memory",
+        description=_COLLECTION_NOTE)
     query: str = Field(description="Natural-language query text.")
     k: int = Field(default=5, ge=1, le=50, description="Final number of results.")
     fetch_k: int = Field(default=20, ge=1, le=200, description="Per-stream candidate pool size.")
@@ -522,7 +521,7 @@ class MemoryRerankTool(MemoryToolBase):
 # =============================================================================
 
 class MemoryUnifiedRetrieveInput(ToolInput):
-    collection: str = Field(default="default", description="ChromaDB collection name.")
+    collection: str = Field(default="jarvis_memory", description="ChromaDB collection name: 'jarvis_memory' (knowledge-base chunks); the research papers are not loaded.")
     query: str = Field(description="Natural-language query text.")
     k: int = Field(default=5, ge=1, le=50, description="Final number of precision results.")
     use_expansion: bool = Field(

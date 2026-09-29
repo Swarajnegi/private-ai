@@ -67,7 +67,7 @@ from jarvis_core.agent.tools.calc import CalculatorTool
 from jarvis_core.agent.tools.cognitive import CognitiveMirrorTool, PriorSelfConsultTool
 from jarvis_core.agent.tools.memory import MemorySemanticSearchTool
 from jarvis_core.brain.context_injector import (
-    ContextInjector, InhaleResult, default_providers,
+    ContextInjector, InhaleResult, core_mode_active, default_providers,
 )
 from jarvis_core.brain.model_profiles import ModelProfile
 
@@ -113,6 +113,16 @@ def _model_context_length(model: Optional[str]) -> int:
     return 0
 
 
+def _recall_tools() -> Dict[str, Tool]:
+    """memory_recall + episode_read: the model's handle on the whole stored history.
+    Both are lazy (the search index loads on first call) and read-only."""
+    try:
+        from jarvis_core.agent.tools.recall import EpisodeReadTool, MemoryRecallTool
+        return {"memory_recall": MemoryRecallTool(), "episode_read": EpisodeReadTool()}
+    except Exception:
+        return {}
+
+
 def default_toolset(
     store: Optional[Any] = None,
     kb_path: Path = KB_PATH,
@@ -141,6 +151,7 @@ def default_toolset(
     }
     if store is not None:
         tools["memory_semantic_search"] = MemorySemanticSearchTool(store=store)
+    tools.update(_recall_tools())
     if ledger is not None:
         # PAGE-IN. Ships only when a ledger exists, because without one the
         # tool could only ever return "nothing was archived" — offering it
@@ -214,6 +225,8 @@ def full_toolset(
             tools[name] = factory()
         except Exception:
             pass  # skip an unconstructable tool; the harness runs with the rest
+    for name, tool in _recall_tools().items():
+        tools.setdefault(name, tool)
     return tools
 
 
@@ -352,6 +365,7 @@ def assemble_mind(
             profile_path=profile_path,
             queue_path=queue_path,
             collections=collections,
+            core=core_mode_active(),
         ))
         result = active.inhale()
         if result.block:
@@ -504,7 +518,7 @@ def _run_self_test() -> None:
                 "content": "Decision: we chose the RouteTarget contract for Stage 4 routing.",
             }) + "\n", encoding="utf-8")
             profile = tdp / "profile.md"
-            profile.write_text("PROFILE-MARKER-XYZ: depth over brevity.", encoding="utf-8")
+            profile.write_text("## Who you are\nPROFILE-MARKER-XYZ: depth over brevity.\n", encoding="utf-8")
             queue = tdp / "queue.jsonl"
             queue.write_text("", encoding="utf-8")
 

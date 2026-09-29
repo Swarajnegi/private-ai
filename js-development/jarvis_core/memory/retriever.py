@@ -70,7 +70,7 @@ class UnifiedRetriever:
         store: JarvisMemoryStore,
         bm25_index: BM25Index,
         reranker: CrossEncoderReranker,
-        collection_name: str = "jarvis_primary"
+        collection_name: str = "jarvis_memory"
     ):
         """
         Initialize the unified retrieval pipeline.

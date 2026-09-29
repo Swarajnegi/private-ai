@@ -80,6 +80,63 @@ _PIPELINE_HEALTH_SUPPRESSED: contextvars.ContextVar[bool] = contextvars.ContextV
     "pipeline_health_suppressed", default=False)
 _PIPELINE_HEALTH_TTL_S = 60.0
 
+# The standing core: the whole profile sections that answer "who is my owner"
+# and are small enough to load every turn. Everything else in the profile
+# ("How you work" is 423K of its 674K chars) is derived from the knowledge base,
+# which the episode index covers, so recall reaches it per question instead of
+# the prompt carrying all of it every turn. Whole sections only, never a cut.
+CORE_PROFILE_SECTIONS = ("Who you are", "People in your life", "Recent corrections")
+
+# The standing core as provider names: what the spoken path carries and what
+# recall_router.standing_core() measures. Sections are whole.
+CORE_SECTIONS = (
+    "Who you are",
+    "People in your life",
+    "People and circumstances in your owner's life",
+    "Recent corrections",
+    "Next pending task",
+    "Pipeline health",
+    "Temporal",
+)
+
+
+# Whether prompts carry the standing core + per-question recall by default.
+# Flipped on 2026-09-29 after scripts/eval_recall.py showed recall beating the
+# whole-profile prompt (83.3% vs 64.1%, 23K vs 180K prompt tokens; Context Store
+# plan, Phase 4 gate). JARVIS_FULL_PROFILE=1 restores the old prompt.
+CORE_MODE_DEFAULT = True
+
+
+def full_profile_requested() -> bool:
+    """JARVIS_FULL_PROFILE=1 restores the whole-profile prompt (the pre-recall behaviour)."""
+    return os.environ.get("JARVIS_FULL_PROFILE", "").strip().lower() in ("1", "true", "yes", "on")
+
+
+def core_mode_active() -> bool:
+    """The live default: standing core + recall, unless JARVIS_FULL_PROFILE=1 asks for the old prompt."""
+    return CORE_MODE_DEFAULT and not full_profile_requested()
+
+
+def profile_sections(text: str, wanted: Tuple[str, ...] = CORE_PROFILE_SECTIONS) -> List[Tuple[str, str]]:
+    """(heading, whole section body) for each profile section whose heading starts
+    with a wanted name, in file order. A section runs to the next '## ' heading."""
+    out: List[Tuple[str, str]] = []
+    heading: Optional[str] = None
+    body: List[str] = []
+
+    def flush() -> None:
+        if heading is not None and heading.startswith(wanted):
+            out.append((heading, "\n".join(body).strip()))
+
+    for line in text.split("\n"):
+        if line.startswith("## "):
+            flush()
+            heading, body = line[3:].strip(), []
+        elif heading is not None:
+            body.append(line)
+    flush()
+    return out
+
 
 @contextlib.contextmanager
 def pipeline_health_suppressed() -> Iterator[None]:
@@ -258,12 +315,20 @@ def default_providers(
     activity_days: int = 7,
     collections: Optional[List[str]] = None,
     personal_life_path: Optional[Path] = None,
+    core: bool = False,
 ) -> List[ProviderSpec]:
     """The standard inhale: tool guidance, temporal, self-state, next task,
     profile, activity.
 
     Every source is injectable; every default points at the real artifacts.
     Heavy reads happen inside the provider closures, at inhale time, never here.
+
+    core=True swaps the whole profile for the STANDING CORE: the profile's
+    identity, people and recent-corrections sections (whole) replace "Cognitive
+    profile", and the activity digest drops out. The tool-routing, self-state
+    and repo-map providers stay for an agent that will use tools; the spoken
+    path selects only CORE_SECTIONS by name. Everything else is recalled per
+    question (brain/recall_router.py).
     """
     now = clock or (lambda: datetime.now(_IST))
     profile_file = Path(profile_path) if profile_path else _DEFAULT_PROFILE_PATH
@@ -275,7 +340,10 @@ def default_providers(
         text = (
             "Tool guidance: prior_self_consult is your AUTOBIOGRAPHY — the "
             "project's own knowledge base (what was built, decisions, failures, "
-            "history). list_dir inspects repository folder hierarchy and code directories. "
+            "history). memory_recall searches EVERYTHING the owner has said or done with any "
+            "agent (conversations, notes, the knowledge base) and episode_read opens a match in "
+            "full; use them for any question about the owner's past. "
+            "list_dir inspects repository folder hierarchy and code directories. "
             "file_read inspects actual source code (.py) and specs (.md). corpus_stats "
             "inspects observation queues and fine-tuning datasets. For code/project architecture "
             "questions, always inspect real source files directly."
@@ -347,6 +415,33 @@ def default_providers(
                     else ActivityRecaller())
         text = recaller.digest(days=activity_days, now=now())
         return None if "no captured turns" in text else text
+
+    def profile_section(prefix: str) -> Provider:
+        def provide() -> Optional[str]:
+            text = profile_text()
+            if not text:
+                return None
+            for heading, body in profile_sections(text, (prefix,)):
+                return body or None
+            return None
+        return provide
+
+    if core:
+        # Static -> volatile, so a provider's prompt-prefix cache survives the clock.
+        return [
+            ProviderSpec("Tool routing guidance", tool_guidance),
+            ProviderSpec("Runtime self-state", runtime_self_state),
+            ProviderSpec("Projection integrity", projection_state),
+            ProviderSpec("Usage reality (built vs actually used)", usage_state),
+            ProviderSpec("Repo self-map (your own anatomy)", repo_anatomy),
+            ProviderSpec("Who you are", profile_section("Who you are")),
+            ProviderSpec("People in your life", profile_section("People in your life")),
+            ProviderSpec("People and circumstances in your owner's life", personal_life),
+            ProviderSpec("Recent corrections", profile_section("Recent corrections")),
+            ProviderSpec("Next pending task", next_task),
+            ProviderSpec("Pipeline health", pipeline_state),
+            ProviderSpec("Temporal", temporal),
+        ]
 
     return [
         ProviderSpec("Tool routing guidance", tool_guidance),
@@ -541,6 +636,39 @@ def _run_self_test() -> None:
             sys.modules["pipeline_health"] = real_mod
         else:
             sys.modules.pop("pipeline_health", None)
+
+    # T21-T24: the standing core (profile sections, whole; the rest left to recall)
+    prof = ("# Cognitive Profile\n\n## Who you are\n_identity_\n- [2026] the owner is X\n\n"
+            "## People in your life\n- (none)\n\n## How you work \u2014 active directives\n- " + "z" * 5000 +
+            "\n\n## Recent corrections (last 7 days)\n- fix Y\n")
+    secs = dict(profile_sections(prof))
+    check("T21 profile_sections returns the wanted sections whole, by heading prefix",
+          list(secs) == ["Who you are", "People in your life", "Recent corrections (last 7 days)"]
+          and secs["Who you are"].endswith("the owner is X") and "fix Y" in secs["Recent corrections (last 7 days)"],
+          str(list(secs)))
+    import tempfile as _tf
+    with _tf.TemporaryDirectory() as _td:
+        pf = Path(_td) / "p.md"
+        pf.write_text(prof, encoding="utf-8")
+        specs = default_providers(clock=lambda: FIXED, profile_path=pf, queue_path=Path(_td) / "q.jsonl",
+                                  core=True)
+        names = [s.name for s in specs]
+        block = ContextInjector([s for s in specs if s.name in CORE_SECTIONS]).inhale().block
+        check("T22 core mode carries the core sections and not the whole profile",
+              "the owner is X" in block and "fix Y" in block and "zzzz" not in block
+              and "Cognitive profile (standing model" not in names and "Recent cross-chat activity" not in names, str(names))
+        check("T23 core keeps the tool-routing provider for an agent that will use tools",
+              "Tool routing guidance" in names)
+    _saved = os.environ.get("JARVIS_FULL_PROFILE")
+    try:
+        os.environ["JARVIS_FULL_PROFILE"] = "1"
+        check("T24 JARVIS_FULL_PROFILE=1 is read as the switch back to the whole profile",
+              full_profile_requested() and not core_mode_active())
+    finally:
+        if _saved is None:
+            os.environ.pop("JARVIS_FULL_PROFILE", None)
+        else:
+            os.environ["JARVIS_FULL_PROFILE"] = _saved
 
     total = passed + len(failed)
     print(f"\n  Passed: {passed}/{total}")

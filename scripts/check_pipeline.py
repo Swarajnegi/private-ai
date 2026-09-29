@@ -280,6 +280,25 @@ def inv_no_prompt_monoculture(a: Artifacts) -> List[Finding]:
         [p[:80] for p in list(over)[:3]])]
 
 
+def inv_no_mechanical_verdicts(a: Artifacts) -> List[Finding]:
+    """Every parse verdict is a reading, never a label (2026-09-29).
+
+    An agent's inline loop wrote 1,994 verdicts with empty rationales in a few
+    minutes, one batch stamped with a model that had never run here; the
+    backlog read 0 while nothing had been read. A current-rule verdict with no
+    rationale or no responds_to cannot have come through a judgment.
+    """
+    from jarvis_core.agent.parse_rule import PARSE_RULE_VERSION
+    bad = [r for r in a.curation
+           if int(r.get("rule_version") or 0) >= PARSE_RULE_VERSION
+           and (not str(r.get("rationale") or "").strip() or not str(r.get("responds_to") or "").strip())]
+    return [Finding(
+        "no mechanical verdicts", OK if not bad else FAIL,
+        f"{len(bad)} current-rule verdicts have no rationale or responds_to (curated_by: "
+        f"{sorted({str(r.get('curated_by')) for r in bad})[:4]}); revoke them and parse the turns"
+        if bad else "every current-rule verdict carries a rationale and responds_to")]
+
+
 def inv_client_records_survive(a: Artifacts) -> List[Finding]:
     """A build must never drop the client-work training records (2026-09-28).
 
@@ -475,7 +494,7 @@ def default_inhales(root: Path) -> Dict[str, str]:
     try:
         with ci.pipeline_health_suppressed():
             voice = _default_inhale()
-            boot = ci.ContextInjector([s for s in ci.default_providers()
+            boot = ci.ContextInjector([s for s in ci.default_providers(core=ci.core_mode_active())
                                        if s.name not in _STATUS_ONLY_PROVIDERS]).inhale().block
     finally:
         if patch:
@@ -495,16 +514,29 @@ def trunc_inhales_carry_whole_state(root: Path,
                                     inhales: Optional[Dict[str, str]] = None) -> List[Finding]:
     """Both inhales carry the WHOLE profile and the whole personal-life body.
 
+    With the standing core on (the Context Store's recall mode) the profile is
+    carried as whole SECTIONS (identity, people, recent corrections) and every
+    other section is reached through the episode index instead; the invariant
+    is then that each carried section is whole, never that the file is.
+
     Compared after the outbound airlock, because redact_outbound removing a
     client identifier is policy, not truncation: the expected text is the file
     passed through the same redaction the inhale applies.
     """
+    from jarvis_core.brain.context_injector import (CORE_PROFILE_SECTIONS, core_mode_active,
+                                                    profile_sections)
     from jarvis_core.brain.outbound_policy import redact_outbound
     data = root / "jarvis_data"
     sources: Dict[str, str] = {}
     profile, life = data / "cognitive_profile.md", data / "personal_life.md"
     if profile.exists():
-        sources["cognitive_profile.md"] = profile.read_text(encoding="utf-8", errors="replace").strip()
+        profile_text = profile.read_text(encoding="utf-8", errors="replace").strip()
+        if core_mode_active():
+            for heading, body in profile_sections(profile_text, CORE_PROFILE_SECTIONS):
+                if body:
+                    sources[f"cognitive_profile.md section '{heading}'"] = body
+        else:
+            sources["cognitive_profile.md"] = profile_text
     if life.exists():
         sources["personal_life.md body"] = _personal_life_body(life.read_text(encoding="utf-8", errors="replace"))
     if not sources:
@@ -685,6 +717,7 @@ INVARIANTS: Tuple[Callable[[Artifacts], List[Finding]], ...] = (
     inv_curation_traces_to_queue,
     inv_no_prompt_monoculture,
     inv_client_records_survive,
+    inv_no_mechanical_verdicts,
     inv_ui_answers_keep_their_question,
     inv_records_are_well_formed,
     inv_no_third_party_identity,

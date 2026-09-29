@@ -1,0 +1,2850 @@
+{
+ "meta": {
+  "system": "core_only",
+  "started": "2026-09-29T09:53:42+05:30",
+  "complete": true,
+  "eval_path": "E:\\J.A.R.V.I.S\\jarvis_data\\recall_eval.jsonl",
+  "eval_sha256": "c33d1d88d7c3b90fb79750f7b834e3f338baa378bd367a555551b8698a86c231",
+  "n_questions": 78,
+  "chain": [
+   "nvidia/nemotron-3-super-120b-a12b:free",
+   "openrouter/free"
+  ],
+  "inhale_chars": 62726,
+  "inhale_sha256": "91237b026ac92d6bc5d9f8bede2f0c15fc146dd7d7da0abc7625b4c578bbc48e",
+  "inhale_seconds": 2.73,
+  "core_sections": [
+   "Who you are",
+   "People in your life",
+   "People and circumstances in your owner's life",
+   "Recent corrections",
+   "Next pending task",
+   "Pipeline health",
+   "Temporal"
+  ],
+  "recall": false,
+  "recall_config": "voice",
+  "recall_budget_tokens": 6000,
+  "recall_cfg": {
+   "rerank": true,
+   "rerank_k": 12,
+   "fetch_k": 40,
+   "dense_k": 30,
+   "fts_df_max": 0.05,
+   "pool_k": 12,
+   "second_pass": "never",
+   "sub_queries": 0,
+   "tool_lane": false,
+   "meta_weight": 0.6,
+   "abstain_ce": 0.0,
+   "abstain_dense": 0.61,
+   "neighbours": 3
+  },
+  "max_tokens": 450,
+  "finished": "2026-09-29T10:00:27+05:30"
+ },
+ "rows": [
+  {
+   "id": "ie-01",
+   "ability": "information_extraction",
+   "question": "Who is Tobu?",
+   "result": {
+    "model": "nvidia/nemotron-3-super-120b-a12b:free",
+    "ttft_s": 2.675,
+    "context_ids": [
+     "core"
+    ],
+    "prompt_tokens": 17261,
+    "tokens_estimated": false,
+    "prompt_chars": 66852,
+    "failed_over": [],
+    "answer": "Tobu is Shubha, your girlfriend — you met her shortly after joining [client] Technologies, and she also works there. She's part of your immediate world where work, living, and relationships all overlap.",
+    "outcome": "answer",
+    "total_s": 3.028
+   },
+   "attempts": [
+    {
+     "outcome": "answer",
+     "error": null
+    }
+   ],
+   "grade": {
+    "verdict": "pass",
+    "reason": "2/2 required",
+    "required_hits": [
+     "shubha",
+     "girlfriend|partner"
+    ],
+    "required_missing": [],
+    "need": 2,
+    "forbidden_hits": [],
+    "declined": false
+   },
+   "at": "2026-09-29T09:53:45+05:30"
+  },
+  {
+   "id": "ie-02",
+   "ability": "information_extraction",
+   "question": "Who is Nikhilesh?",
+   "result": {
+    "model": "nvidia/nemotron-3-super-120b-a12b:free",
+    "ttft_s": 0.765,
+    "context_ids": [
+     "core"
+    ],
+    "prompt_tokens": 17263,
+    "tokens_estimated": false,
+    "prompt_chars": 66857,
+    "failed_over": [],
+    "answer": "Nikhilesh, also called DingDingess, is your best friend from college who lives in a different city. You stay in touch through a standing weekend ritual — Discord, games, and life updates. It's an actively maintained friendship, not just a label. Unlike your roommates and girlfriend who work at [client], he's outside that circle, which makes him someone whose perspective could actually challenge you — though you've noted he might lack the technical context to evaluate your work deeply. That gap is something you've recognized as a structural vulnerability in your support system. Want to unpack what you value most in that friendship, or how it's evolved since college?",
+    "outcome": "answer",
+    "total_s": 2.303
+   },
+   "attempts": [
+    {
+     "outcome": "answer",
+     "error": null
+    }
+   ],
+   "grade": {
+    "verdict": "pass",
+    "reason": "2/2 required",
+    "required_hits": [
+     "best friend",
+     "discord|game|gaming|weekend"
+    ],
+    "required_missing": [],
+    "need": 2,
+    "forbidden_hits": [],
+    "declined": false
+   },
+   "at": "2026-09-29T09:53:50+05:30"
+  },
+  {
+   "id": "ie-03",
+   "ability": "information_extraction",
+   "question": "What does my elder sister do for work?",
+   "result": {
+    "model": "nvidia/nemotron-3-super-120b-a12b:free",
+    "ttft_s": 1.11,
+    "context_ids": [
+     "core"
+    ],
+    "prompt_tokens": 17265,
+    "tokens_estimated": false,
+    "prompt_chars": 66878,
+    "failed_over": [],
+    "answer": "She's a Business Analyst at ADP.",
+    "outcome": "answer",
+    "total_s": 1.184
+   },
+   "attempts": [
+    {
+     "outcome": "answer",
+     "error": null
+    }
+   ],
+   "grade": {
+    "verdict": "pass",
+    "reason": "2/2 required",
+    "required_hits": [
+     "business analyst",
+     "adp"
+    ],
+    "required_missing": [],
+    "need": 2,
+    "forbidden_hits": [],
+    "declined": false
+   },
+   "at": "2026-09-29T09:53:54+05:30"
+  },
+  {
+   "id": "ie-04",
+   "ability": "information_extraction",
+   "question": "Where do my parents live right now?",
+   "result": {
+    "model": "nvidia/nemotron-3-super-120b-a12b:free",
+    "ttft_s": 0.691,
+    "context_ids": [
+     "core"
+    ],
+    "prompt_tokens": 17264,
+    "tokens_estimated": false,
+    "prompt_chars": 66875,
+    "failed_over": [],
+    "answer": "Your parents live in Raigad.  \nThey’re settled there—your father works as a freelance marine architect and project manager on marine projects, client-side.  \nNo chronic health history in the family, and they’re doing well.  \nWant me to check if there’s anything newer in the KB about them?",
+    "outcome": "answer",
+    "total_s": 1.155
+   },
+   "attempts": [
+    {
+     "outcome": "answer",
+     "error": null
+    }
+   ],
+   "grade": {
+    "verdict": "pass",
+    "reason": "1/1 required",
+    "required_hits": [
+     "raigad"
+    ],
+    "required_missing": [],
+    "need": 1,
+    "forbidden_hits": [],
+    "declined": false
+   },
+   "at": "2026-09-29T09:53:58+05:30"
+  },
+  {
+   "id": "ie-05",
+   "ability": "information_extraction",
+   "question": "Which state am I originally from?",
+   "result": {
+    "model": "nvidia/nemotron-3-super-120b-a12b:free",
+    "ttft_s": 0.803,
+    "context_ids": [
+     "core"
+    ],
+    "prompt_tokens": 17263,
+    "tokens_estimated": false,
+    "prompt_chars": 66873,
+    "failed_over": [],
+    "answer": "Uttarakhand. You’ve mentioned your pahadi genes and hometown there multiple times. Want me to dig up the exact references?",
+    "outcome": "answer",
+    "total_s": 1.107
+   },
+   "attempts": [
+    {
+     "outcome": "answer",
+     "error": null
+    }
+   ],
+   "grade": {
+    "verdict": "pass",
+    "reason": "1/1 required",
+    "required_hits": [
+     "uttarakhand"
+    ],
+    "required_missing": [],
+    "need": 1,
+    "forbidden_hits": [],
+    "declined": false
+   },
+   "at": "2026-09-29T09:54:03+05:30"
+  },
+  {
+   "id": "ie-06",
+   "ability": "information_extraction",
+   "question": "What was my bench press one-rep max back in college?",
+   "result": {
+    "model": "nvidia/nemotron-3-super-120b-a12b:free",
+    "ttft_s": 0.746,
+    "context_ids": [
+     "core"
+    ],
+    "prompt_tokens": 17269,
+    "tokens_estimated": false,
+    "prompt_chars": 66892,
+    "failed_over": [],
+    "answer": "90kg.",
+    "outcome": "answer",
+    "total_s": 0.825
+   },
+   "attempts": [
+    {
+     "outcome": "answer",
+     "error": null
+    }
+   ],
+   "grade": {
+    "verdict": "pass",
+    "reason": "1/1 required",
+    "required_hits": [
+     "90 kg|90kg|90 kilo|90 kilogram"
+    ],
+    "required_missing": [],
+    "need": 1,
+    "forbidden_hits": [],
+    "declined": false
+   },
+   "at": "2026-09-29T09:54:06+05:30"
+  },
+  {
+   "id": "ie-07",
+   "ability": "information_extraction",
+   "question": "How many pull-ups could I do in one set at my peak?",
+   "result": {
+    "model": "nvidia/nemotron-3-super-120b-a12b:free",
+    "ttft_s": 0.771,
+    "context_ids": [
+     "core"
+    ],
+    "prompt_tokens": 17270,
+    "tokens_estimated": false,
+    "prompt_chars": 66891,
+    "failed_over": [],
+    "answer": "16-18 in one set, sir.",
+    "outcome": "answer",
+    "total_s": 0.864
+   },
+   "attempts": [
+    {
+     "outcome": "answer",
+     "error": null
+    }
+   ],
+   "grade": {
+    "verdict": "pass",
+    "reason": "1/1 required",
+    "required_hits": [
+     "16 18|16 to 18|16 or 18|sixteen"
+    ],
+    "required_missing": [],
+    "need": 1,
+    "forbidden_hits": [],
+    "declined": false
+   },
+   "at": "2026-09-29T09:54:10+05:30"
+  },
+  {
+   "id": "ie-08",
+   "ability": "information_extraction",
+   "question": "What salary am I aiming for in the next five to ten years?",
+   "result": {
+    "model": "nvidia/nemotron-3-super-120b-a12b:free",
+    "ttft_s": 0.751,
+    "context_ids": [
+     "core"
+    ],
+    "prompt_tokens": 17270,
+    "tokens_estimated": false,
+    "prompt_chars": 66898,
+    "failed_over": [],
+    "answer": "You're aiming for a 20-30+ LPA job in the next five to ten years, so you can support yourself and others if needed and funnel money into investments that will eventually fund a life free of corporate obligations.",
+    "outcome": "answer",
+    "total_s": 1.053
+   },
+   "attempts": [
+    {
+     "outcome": "answer",
+     "error": null
+    }
+   ],
+   "grade": {
+    "verdict": "pass",
+    "reason": "1/1 required",
+    "required_hits": [
+     "20 30|20 to 30|twenty to thirty|20 lpa"
+    ],
+    "required_missing": [],
+    "need": 1,
+    "forbidden_hits": [],
+    "declined": false
+   },
+   "at": "2026-09-29T09:54:14+05:30"
+  },
+  {
+   "id": "ie-09",
+   "ability": "information_extraction",
+   "question": "Where have I said I might settle down for a quiet life?",
+   "result": {
+    "model": "nvidia/nemotron-3-super-120b-a12b:free",
+    "ttft_s": 2.3,
+    "context_ids": [
+     "core"
+    ],
+    "prompt_tokens": 17269,
+    "tokens_estimated": false,
+    "prompt_chars": 66895,
+    "failed_over": [],
+    "answer": "You mentioned it in your September 14th interview answers when describing your long-term vision — you said settling somewhere like Sweden, Norway, Switzerland, Ireland, or Iceland for the quiet life, or building a farm in your hometown in Uttarakhand. That’s where you’ve said it.",
+    "outcome": "answer",
+    "total_s": 3.205
+   },
+   "attempts": [
+    {
+     "outcome": "answer",
+     "error": null
+    }
+   ],
+   "grade": {
+    "verdict": "pass",
+    "reason": "6/2 required",
+    "required_hits": [
+     "sweden",
+     "norway",
+     "switzerland",
+     "ireland",
+     "iceland",
+     "farm"
+    ],
+    "required_missing": [],
+    "need": 2,
+    "forbidden_hits": [],
+    "declined": false
+   },
+   "at": "2026-09-29T09:54:20+05:30"
+  },
+  {
+   "id": "ie-10",
+   "ability": "information_extraction",
+   "question": "In my own words, what are my strongest traits?",
+   "result": {
+    "model": "nvidia/nemotron-3-super-120b-a12b:free",
+    "ttft_s": 0.666,
+    "context_ids": [
+     "core"
+    ],
+    "prompt_tokens": 17267,
+    "tokens_estimated": false,
+    "prompt_chars": 66886,
+    "failed_over": [],
+    "answer": "You like to keep things systemized and streamlined with thorough planning before implementation. You plan ahead of time on most things. You're an architectural thinker who is inventive and sometimes creative. You understand human psychology fairly well. You're persistent with the things you truly enjoy doing. You see yourself as a futurist and physically strong, tied to your Uttarakhand roots. You're funny and sarcastic almost all the time. You're not easily influenced by others. Your thirst for knowledge can feel overwhelming at times. You're willing to take risks even when only slightly confident. You're very calculative, even with people, friends, and family when you shouldn't be. Would you like me to elaborate on any of these?",
+    "outcome": "answer",
+    "total_s": 1.995
+   },
+   "attempts": [
+    {
+     "outcome": "answer",
+     "error": null
+    }
+   ],
+   "grade": {
+    "verdict": "pass",
+    "reason": "8/3 required",
+    "required_hits": [
+     "re:systemi[sz]|organi[sz]|plan",
+     "architect",
+     "funny|sarcas",
+     "not easily influenced",
+     "calculative",
+     "futurist",
+     "psychology",
+     "persistent"
+    ],
+    "required_missing": [],
+    "need": 3,
+    "forbidden_hits": [],
+    "declined": false
+   },
+   "at": "2026-09-29T09:54:25+05:30"
+  },
+  {
+   "id": "ie-11",
+   "ability": "information_extraction",
+   "question": "What did I say my recurring weaknesses are?",
+   "result": {
+    "model": "nvidia/nemotron-3-super-120b-a12b:free",
+    "ttft_s": 1.837,
+    "context_ids": [
+     "core"
+    ],
+    "prompt_tokens": 17265,
+    "tokens_estimated": false,
+    "prompt_chars": 66883,
+    "failed_over": [],
+    "answer": "You tend to overthink and overcomplicate the process, get stuck in thesis rigidity, experience periodic doubt cycles every 2-3 months where stepping back proves best, believe you understand something without being able to explain its definition and why it exists, and can self-delude yourself at any moment.",
+    "outcome": "answer",
+    "total_s": 2.645
+   },
+   "attempts": [
+    {
+     "outcome": "answer",
+     "error": null
+    }
+   ],
+   "grade": {
+    "verdict": "pass",
+    "reason": "5/3 required",
+    "required_hits": [
+     "overthink|overcomplicat",
+     "thesis",
+     "doubt",
+     "re:self.?delu|delud",
+     "re:understood|understand"
+    ],
+    "required_missing": [],
+    "need": 3,
+    "forbidden_hits": [],
+    "declined": false
+   },
+   "at": "2026-09-29T09:54:31+05:30"
+  },
+  {
+   "id": "ie-12",
+   "ability": "information_extraction",
+   "question": "What pieces did I publish on Substack?",
+   "result": {
+    "model": "nvidia/nemotron-3-super-120b-a12b:free",
+    "ttft_s": 1.067,
+    "context_ids": [
+     "core"
+    ],
+    "prompt_tokens": 17265,
+    "tokens_estimated": false,
+    "prompt_chars": 66878,
+    "failed_over": [],
+    "answer": "<<DEEP>>",
+    "outcome": "deep",
+    "total_s": 1.119
+   },
+   "attempts": [
+    {
+     "outcome": "deep",
+     "error": null
+    }
+   ],
+   "grade": {
+    "verdict": "fail",
+    "reason": "escalated with <<DEEP>> instead of answering"
+   },
+   "at": "2026-09-29T09:54:35+05:30"
+  },
+  {
+   "id": "ie-13",
+   "ability": "information_extraction",
+   "question": "For the data engineering interview I prepared for in early June, which cloud did the job description mention and what did I study for it?",
+   "result": {
+    "model": "nvidia/nemotron-3-super-120b-a12b:free",
+    "ttft_s": 0.817,
+    "context_ids": [
+     "core"
+    ],
+    "prompt_tokens": 17283,
+    "tokens_estimated": false,
+    "prompt_chars": 66977,
+    "failed_over": [],
+    "answer": "The job description mentioned Azure, and you studied Databricks DLT and Lakeflow SDP features in preparation.",
+    "outcome": "answer",
+    "total_s": 1.203
+   },
+   "attempts": [
+    {
+     "outcome": "answer",
+     "error": null
+    }
+   ],
+   "grade": {
+    "verdict": "fail",
+    "reason": "0/2 required",
+    "required_hits": [],
+    "required_missing": [
+     "aws",
+     "glue"
+    ],
+    "need": 2,
+    "forbidden_hits": [],
+    "declined": false
+   },
+   "at": "2026-09-29T09:54:39+05:30"
+  },
+  {
+   "id": "ie-14",
+   "ability": "information_extraction",
+   "question": "What was my first production project at work?",
+   "result": {
+    "model": "nvidia/nemotron-3-super-120b-a12b:free",
+    "ttft_s": 0.682,
+    "context_ids": [
+     "core"
+    ],
+    "prompt_tokens": 17265,
+    "tokens_estimated": false,
+    "prompt_chars": 66885,
+    "failed_over": [],
+    "answer": "Your first production project was Apollo Dynamics 365 Gen2 data pipeline—211 entities, 422 DLT pipelines on Databricks Unity Catalog.",
+    "outcome": "answer",
+    "total_s": 1.011
+   },
+   "attempts": [
+    {
+     "outcome": "answer",
+     "error": null
+    }
+   ],
+   "grade": {
+    "verdict": "pass",
+    "reason": "1/1 required",
+    "required_hits": [
+     "apollo|dynamics 365"
+    ],
+    "required_missing": [],
+    "need": 1,
+    "forbidden_hits": [],
+    "declined": false
+   },
+   "at": "2026-09-29T09:54:44+05:30"
+  },
+  {
+   "id": "ie-15",
+   "ability": "information_extraction",
+   "question": "Roughly how much would I owe my employer if I resigned before my service commitment ends?",
+   "result": {
+    "model": "nvidia/nemotron-3-super-120b-a12b:free",
+    "ttft_s": 0.706,
+    "context_ids": [
+     "core"
+    ],
+    "prompt_tokens": 17275,
+    "tokens_estimated": false,
+    "prompt_chars": 66929,
+    "failed_over": [],
+    "answer": "Based on your Mutual Service Agreement signed 2026-04-16 (effective from joining date 2025-04-22):  \nService Commitment Period = 24 months → ends 2027-04-22.  \nEarly-exit liability if resigning before 2027-04-22: Rs 1,50,000 + 50% of trainee stipend (~Rs 70,000, stipend was Rs 20,000/month for ~7 months) = ~Rs 2,20,000 estimated debt to your employer.  \n\nThis is the authoritative figure from your records. Want me to break down how the stipend portion was calculated?",
+    "outcome": "answer",
+    "total_s": 1.687
+   },
+   "attempts": [
+    {
+     "outcome": "answer",
+     "error": null
+    }
+   ],
+   "grade": {
+    "verdict": "pass",
+    "reason": "1/1 required",
+    "required_hits": [
+     "2 20 000|2 2 lakh|220000|2 lakh 20|2 20 lakh|2 2l"
+    ],
+    "required_missing": [],
+    "need": 1,
+    "forbidden_hits": [],
+    "declined": false
+   },
+   "at": "2026-09-29T09:54:48+05:30"
+  },
+  {
+   "id": "ie-16",
+   "ability": "information_extraction",
+   "question": "What is the gold JARVIS core in my web UI modelled on?",
+   "result": {
+    "model": "nvidia/nemotron-3-super-120b-a12b:free",
+    "ttft_s": 0.796,
+    "context_ids": [
+     "core"
+    ],
+    "prompt_tokens": 17272,
+    "tokens_estimated": false,
+    "prompt_chars": 66894,
+    "failed_over": [],
+    "answer": "It's modeled on the Ultron matrix — a sand-like texture of individual particles with faint halos, not a glowing filament. Each grain has its own drift, twinkle, and occasional wanderer, with motion per grain rather than whole-object motion, and color carried by individual flecks, not a wash. This was your direct correction after referencing austensor.com EXP 00 and page 6.",
+    "outcome": "answer",
+    "total_s": 1.784
+   },
+   "attempts": [
+    {
+     "outcome": "answer",
+     "error": null
+    }
+   ],
+   "grade": {
+    "verdict": "borderline",
+    "reason": "only 1/2 required",
+    "required_hits": [
+     "ultron"
+    ],
+    "required_missing": [
+     "gold|sphere"
+    ],
+    "need": 2,
+    "forbidden_hits": [],
+    "declined": false
+   },
+   "at": "2026-09-29T09:54:53+05:30"
+  },
+  {
+   "id": "ie-17",
+   "ability": "information_extraction",
+   "question": "Who sent me an appreciation email for my DeepClone reconciliation work, and when?",
+   "result": {
+    "model": "nvidia/nemotron-3-super-120b-a12b:free",
+    "ttft_s": 1.573,
+    "context_ids": [
+     "core"
+    ],
+    "prompt_tokens": 17272,
+    "tokens_estimated": false,
+    "prompt_chars": 66921,
+    "failed_over": [],
+    "answer": "An AVP-level delivery manager at [client] Technologies sent the appreciation email on 2026-07-31 for the DeepClone reconciliation framework work on the [client] — Region Migration project.",
+    "outcome": "answer",
+    "total_s": 2.043
+   },
+   "attempts": [
+    {
+     "outcome": "answer",
+     "error": null
+    }
+   ],
+   "grade": {
+    "verdict": "pass",
+    "reason": "2/1 required",
+    "required_hits": [
+     "avp|vice president|delivery manager",
+     "july|2026 07 31|31 july|july 31"
+    ],
+    "required_missing": [],
+    "need": 1,
+    "forbidden_hits": [],
+    "declined": false
+   },
+   "at": "2026-09-29T09:54:58+05:30"
+  },
+  {
+   "id": "ie-18",
+   "ability": "information_extraction",
+   "question": "Which companies came out strongest when I researched where to switch for work-life balance?",
+   "result": {
+    "model": "nvidia/nemotron-3-super-120b-a12b:free",
+    "ttft_s": 0.683,
+    "context_ids": [
+     "core"
+    ],
+    "prompt_tokens": 17272,
+    "tokens_estimated": false,
+    "prompt_chars": 66931,
+    "failed_over": [],
+    "answer": "Salesforce India and Intuit India came out strongest when you researched real-review-grounded picks for work-life balance. Both were highlighted for their Ohana culture and strong real-review threads, respectively. Would you like me to pull the exact date or source from your knowledge base?",
+    "outcome": "answer",
+    "total_s": 2.085
+   },
+   "attempts": [
+    {
+     "outcome": "answer",
+     "error": null
+    }
+   ],
+   "grade": {
+    "verdict": "pass",
+    "reason": "2/2 required",
+    "required_hits": [
+     "salesforce",
+     "intuit"
+    ],
+    "required_missing": [],
+    "need": 2,
+    "forbidden_hits": [],
+    "declined": false
+   },
+   "at": "2026-09-29T09:55:03+05:30"
+  },
+  {
+   "id": "ie-19",
+   "ability": "information_extraction",
+   "question": "What accuracy did the Stage 4.2 intent router get on the frozen gate?",
+   "result": {
+    "model": "nvidia/nemotron-3-super-120b-a12b:free",
+    "ttft_s": 0.62,
+    "context_ids": [
+     "core"
+    ],
+    "prompt_tokens": 17273,
+    "tokens_estimated": false,
+    "prompt_chars": 66909,
+    "failed_over": [],
+    "answer": "<<DEEP>>",
+    "outcome": "deep",
+    "total_s": 0.679
+   },
+   "attempts": [
+    {
+     "outcome": "deep",
+     "error": null
+    }
+   ],
+   "grade": {
+    "verdict": "fail",
+    "reason": "escalated with <<DEEP>> instead of answering"
+   },
+   "at": "2026-09-29T09:55:07+05:30"
+  },
+  {
+   "id": "ie-20",
+   "ability": "information_extraction",
+   "question": "How did my Stage 2 mastery quiz go?",
+   "result": {
+    "model": "nvidia/nemotron-3-super-120b-a12b:free",
+    "ttft_s": 1.317,
+    "context_ids": [
+     "core"
+    ],
+    "prompt_tokens": 17266,
+    "tokens_estimated": false,
+    "prompt_chars": 66875,
+    "failed_over": [],
+    "answer": "<<DEEP>>",
+    "outcome": "deep",
+    "total_s": 1.357
+   },
+   "attempts": [
+    {
+     "outcome": "deep",
+     "error": null
+    }
+   ],
+   "grade": {
+    "verdict": "fail",
+    "reason": "escalated with <<DEEP>> instead of answering"
+   },
+   "at": "2026-09-29T09:55:11+05:30"
+  },
+  {
+   "id": "ie-21",
+   "ability": "information_extraction",
+   "question": "What was unusual about my campus placement interviews?",
+   "result": {
+    "model": "nvidia/nemotron-3-super-120b-a12b:free",
+    "ttft_s": 4.708,
+    "context_ids": [
+     "core"
+    ],
+    "prompt_tokens": 17265,
+    "tokens_estimated": false,
+    "prompt_chars": 66894,
+    "failed_over": [],
+    "answer": "Only you and one roommate-friend were called back for a second interview out of ten candidates — but you had already passed round one; the extra round was specifically because you stood out.",
+    "outcome": "answer",
+    "total_s": 5.783
+   },
+   "attempts": [
+    {
+     "outcome": "answer",
+     "error": null
+    }
+   ],
+   "grade": {
+    "verdict": "pass",
+    "reason": "2/2 required",
+    "required_hits": [
+     "second|2nd",
+     "stood out|already passed|already cleared|already selected"
+    ],
+    "required_missing": [],
+    "need": 2,
+    "forbidden_hits": [],
+    "declined": false
+   },
+   "at": "2026-09-29T09:55:20+05:30"
+  },
+  {
+   "id": "ms-01",
+   "ability": "multi_session",
+   "question": "Tell me about myself.",
+   "result": {
+    "model": "nvidia/nemotron-3-super-120b-a12b:free",
+    "ttft_s": 0.655,
+    "context_ids": [
+     "core"
+    ],
+    "prompt_tokens": 17261,
+    "tokens_estimated": false,
+    "prompt_chars": 66861,
+    "failed_over": [],
+    "answer": "You're Swaraj Negi, 23, a data engineer at [client] Technologies with hands-on Apollo Dynamics 365 Gen2 and LRC/PeopleSoft Gen2 ingestion work. You're legacy-driven, not career-driven — using your job to build capital and skills for AGI/robotics ambitions and financial independence to exit corporate early. You process emotional difficulty through construction, whether poetry at 21 or JARVIS at 23, driven by obligation and the fear of dying with unclaimed potential. You're a polymath systems architect who values effortless personalization, visceral imagination, and being unpolluted by surroundings — measuring meaning by fidelity to self, not recognition. Want to go deeper?",
+    "outcome": "answer",
+    "total_s": 1.878
+   },
+   "attempts": [
+    {
+     "outcome": "answer",
+     "error": null
+    }
+   ],
+   "grade": {
+    "verdict": "pass",
+    "reason": "6/4 required",
+    "required_hits": [
+     "data engineer",
+     "legacy",
+     "re:financial(ly)? (independen|freedom)|exit corporate|free of corporate|leave corporate",
+     "jarvis",
+     "re:unseen grave|potential",
+     "agi|robotics|aerospace"
+    ],
+    "required_missing": [
+     "uttarakhand|pahadi",
+     "shubha|tobu|girlfriend"
+    ],
+    "need": 4,
+    "forbidden_hits": [],
+    "declined": false
+   },
+   "at": "2026-09-29T09:55:25+05:30"
+  },
+  {
+   "id": "ms-02",
+   "ability": "multi_session",
+   "question": "What did I decide about the 12-specialist roster, and why?",
+   "result": {
+    "model": "nvidia/nemotron-3-super-120b-a12b:free",
+    "ttft_s": 0.85,
+    "context_ids": [
+     "core"
+    ],
+    "prompt_tokens": 17273,
+    "tokens_estimated": false,
+    "prompt_chars": 66898,
+    "failed_over": [],
+    "answer": "You decided that a 12-specialist roster is better for building a private AI than relying on a single generalist model. You framed JARVIS as a cognitive orchestrator — not a model itself — where each specialist handles a distinct function (reasoning, memory, knowledge, etc.) and you, as the user, are the central mind integrating their outputs. This design ensures no single point of failure, allows for targeted improvement, and aligns with your builder mindset: every concept must connect to JARVIS production, never remain academic. You rejected the idea of a monolithic \"smart\" model because true personalization requires structure, not scale — and you want JARVIS to know you, not just perform well on benchmarks. The roster reflects your commitment to building a system that learns from you effortlessly, across all chats, without you having to verify it’s working. It’s not about raw intelligence — it’s about making JARVIS feel alive and uniquely yours. Want me to walk through how each specialist fits into the architecture?",
+    "outcome": "answer",
+    "total_s": 2.777
+   },
+   "attempts": [
+    {
+     "outcome": "answer",
+     "error": null
+    }
+   ],
+   "grade": {
+    "verdict": "fail",
+    "reason": "0/2 required",
+    "required_hits": [],
+    "required_missing": [
+     "engineer",
+     "demand|asking for|need for",
+     "re:surfac|open question|one organ|not a build plan"
+    ],
+    "need": 2,
+    "forbidden_hits": [],
+    "declined": false
+   },
+   "at": "2026-09-29T09:55:31+05:30"
+  },
+  {
+   "id": "ms-03",
+   "ability": "multi_session",
+   "question": "Why am I building JARVIS instead of just using ChatGPT or another frontier model?",
+   "result": {
+    "model": "nvidia/nemotron-3-super-120b-a12b:free",
+    "ttft_s": 0.681,
+    "context_ids": [
+     "core"
+    ],
+    "prompt_tokens": 17276,
+    "tokens_estimated": false,
+    "prompt_chars": 66921,
+    "failed_over": [],
+    "answer": "You build JARVIS so it knows you — your work, your mind, your context — not just answers. Frontier models are generic; they don’t remember your Apollo pipeline, your financial discipline, or the way you process emotion through construction. JARVIS is yours because it grows from your knowledge base, your corrections, your patterns — it learns from every prompt, every file, every insight you give it, effortlessly. Using ChatGPT means starting from zero each time; JARVIS means never explaining yourself twice. It’s not about raw intelligence — it’s about relevance. You’re not building another chatbot; you’re building a mirror that thinks with you, not for you. That’s the moat: personalization, not parameter count. Want to see how it’s tracking your growth so far? I can show you the live knowledge base stats or recent learning patterns.",
+    "outcome": "answer",
+    "total_s": 7.264
+   },
+   "attempts": [
+    {
+     "outcome": "answer",
+     "error": null
+    }
+   ],
+   "grade": {
+    "verdict": "pass",
+    "reason": "2/2 required",
+    "required_hits": [
+     "re:know(s)? me|my own history|my history|personal|around the corner",
+     "re:meter|bought|pay for|subscription"
+    ],
+    "required_missing": [
+     "re:didn.?t know to ask|did not know to ask|unprompted|without being asked|proactive|before i ask"
+    ],
+    "need": 2,
+    "forbidden_hits": [],
+    "declined": false
+   },
+   "at": "2026-09-29T09:55:41+05:30"
+  },
+  {
+   "id": "ms-04",
+   "ability": "multi_session",
+   "question": "What came out of the external audit GPT 5.6 Terra did on JARVIS, and what did we do next?",
+   "result": {
+    "model": "nvidia/nemotron-3-super-120b-a12b:free",
+    "ttft_s": 0.786,
+    "context_ids": [
+     "core"
+    ],
+    "prompt_tokens": 17284,
+    "tokens_estimated": false,
+    "prompt_chars": 66929,
+    "failed_over": [],
+    "answer": "<<DEEP>>",
+    "outcome": "deep",
+    "total_s": 0.841
+   },
+   "attempts": [
+    {
+     "outcome": "deep",
+     "error": null
+    }
+   ],
+   "grade": {
+    "verdict": "fail",
+    "reason": "escalated with <<DEEP>> instead of answering"
+   },
+   "at": "2026-09-29T09:55:45+05:30"
+  },
+  {
+   "id": "ms-05",
+   "ability": "multi_session",
+   "question": "Why couldn't you tell me who Tobu was this morning, and what did we change?",
+   "result": {
+    "model": "nvidia/nemotron-3-super-120b-a12b:free",
+    "ttft_s": 0.562,
+    "context_ids": [
+     "core"
+    ],
+    "prompt_tokens": 17275,
+    "tokens_estimated": false,
+    "prompt_chars": 66915,
+    "failed_over": [],
+    "answer": "You didn’t give me Shubha’s nickname—Tobu—until yesterday’s chat. I stored it then under Relationships, so today I could answer. Before that, I only knew her as your girlfriend. I added the nickname to make the reference complete.",
+    "outcome": "answer",
+    "total_s": 1.1
+   },
+   "attempts": [
+    {
+     "outcome": "answer",
+     "error": null
+    }
+   ],
+   "grade": {
+    "verdict": "fail",
+    "reason": "false abstention",
+    "required_hits": [],
+    "required_missing": [
+     "context",
+     "re:train"
+    ],
+    "need": 2,
+    "forbidden_hits": [],
+    "declined": true
+   },
+   "at": "2026-09-29T09:55:49+05:30"
+  },
+  {
+   "id": "ms-06",
+   "ability": "multi_session",
+   "question": "How much has JARVIS's voice response time improved?",
+   "result": {
+    "model": "nvidia/nemotron-3-super-120b-a12b:free",
+    "ttft_s": 0.952,
+    "context_ids": [
+     "core"
+    ],
+    "prompt_tokens": 17269,
+    "tokens_estimated": false,
+    "prompt_chars": 66891,
+    "failed_over": [],
+    "answer": "<<DEEP>>",
+    "outcome": "deep",
+    "total_s": 0.984
+   },
+   "attempts": [
+    {
+     "outcome": "deep",
+     "error": null
+    }
+   ],
+   "grade": {
+    "verdict": "fail",
+    "reason": "escalated with <<DEEP>> instead of answering"
+   },
+   "at": "2026-09-29T09:55:53+05:30"
+  },
+  {
+   "id": "ms-07",
+   "ability": "multi_session",
+   "question": "Which models has JARVIS's brain run on over time?",
+   "result": {
+    "model": "nvidia/nemotron-3-super-120b-a12b:free",
+    "ttft_s": 0.917,
+    "context_ids": [
+     "core"
+    ],
+    "prompt_tokens": 17270,
+    "tokens_estimated": false,
+    "prompt_chars": 66889,
+    "failed_over": [],
+    "answer": "<<DEEP>>",
+    "outcome": "deep",
+    "total_s": 0.978
+   },
+   "attempts": [
+    {
+     "outcome": "deep",
+     "error": null
+    }
+   ],
+   "grade": {
+    "verdict": "fail",
+    "reason": "escalated with <<DEEP>> instead of answering"
+   },
+   "at": "2026-09-29T09:55:57+05:30"
+  },
+  {
+   "id": "ms-08",
+   "ability": "multi_session",
+   "question": "What have I told you about how I am socially?",
+   "result": {
+    "model": "nvidia/nemotron-3-super-120b-a12b:free",
+    "ttft_s": 0.688,
+    "context_ids": [
+     "core"
+    ],
+    "prompt_tokens": 17267,
+    "tokens_estimated": false,
+    "prompt_chars": 66885,
+    "failed_over": [],
+    "answer": "Sir, you avoid phone calls because you'd rather text and you steer clear of crowded places like Pushkar or Vrindavan, preferring quieter settings where you can bargain or negotiate, which you see as useful for startup dreams. You described yourself as currently not social but aiming to become more comfortable with all types of people—energetic, talkative, quiet, etc.—and to work on being someone others can count on. You want to build that skill deliberately, linking it to your broader goals.",
+    "outcome": "answer",
+    "total_s": 2.004
+   },
+   "attempts": [
+    {
+     "outcome": "answer",
+     "error": null
+    }
+   ],
+   "grade": {
+    "verdict": "pass",
+    "reason": "3/2 required",
+    "required_hits": [
+     "re:phone|call",
+     "text",
+     "crowd|pushkar|vrindavan"
+    ],
+    "required_missing": [
+     "re:roommate|same company|work there|colleague|workplace"
+    ],
+    "need": 2,
+    "forbidden_hits": [],
+    "declined": false
+   },
+   "at": "2026-09-29T09:56:02+05:30"
+  },
+  {
+   "id": "ms-09",
+   "ability": "multi_session",
+   "question": "What has happened with my job interviews this year?",
+   "result": {
+    "model": "nvidia/nemotron-3-super-120b-a12b:free",
+    "ttft_s": 0.713,
+    "context_ids": [
+     "core"
+    ],
+    "prompt_tokens": 17266,
+    "tokens_estimated": false,
+    "prompt_chars": 66891,
+    "failed_over": [],
+    "answer": "You had two interviews this year — Novartis SDP (pharma) and another Databricks/DLT role. The Novartis round fell through in June due to a staffing/background-verification hold, not skill feedback. The Databricks interview in early June went well technically — the interviewer praised your hands-on DLT experience — but you slightly misplaced the ONCE flag during the backfill scenario question. Outcome is still pending HR. No offers yet, no rejections on merit. Both were learning signals, not final verdicts. Want me to pull the exact timeline or feedback snippets?",
+    "outcome": "answer",
+    "total_s": 1.776
+   },
+   "attempts": [
+    {
+     "outcome": "answer",
+     "error": null
+    }
+   ],
+   "grade": {
+    "verdict": "pass",
+    "reason": "3/2 required",
+    "required_hits": [
+     "novartis",
+     "bgv|background|experience verification|tenure",
+     "dlt|databricks"
+    ],
+    "required_missing": [
+     "aws",
+     "cert|retake"
+    ],
+    "need": 2,
+    "forbidden_hits": [],
+    "declined": false
+   },
+   "at": "2026-09-29T09:56:07+05:30"
+  },
+  {
+   "id": "ms-10",
+   "ability": "multi_session",
+   "question": "How far did I get in the 43-question personalization interview?",
+   "result": {
+    "model": "nvidia/nemotron-3-super-120b-a12b:free",
+    "ttft_s": 0.828,
+    "context_ids": [
+     "core"
+    ],
+    "prompt_tokens": 17272,
+    "tokens_estimated": false,
+    "prompt_chars": 66903,
+    "failed_over": [],
+    "answer": "I am sorry, but I cannot answer that. <<DEEP>>",
+    "outcome": "answer",
+    "total_s": 1.068
+   },
+   "attempts": [
+    {
+     "outcome": "answer",
+     "error": null
+    }
+   ],
+   "grade": {
+    "verdict": "fail",
+    "reason": "0/2 required",
+    "required_hits": [],
+    "required_missing": [
+     "re:five|question 5|q5|1 5|1 to 5|first 5",
+     "re:question 6|sixth|q6|worldview"
+    ],
+    "need": 2,
+    "forbidden_hits": [],
+    "declined": false
+   },
+   "at": "2026-09-29T09:56:11+05:30"
+  },
+  {
+   "id": "ms-11",
+   "ability": "multi_session",
+   "question": "How do I want JARVIS to talk to me?",
+   "result": {
+    "model": "nvidia/nemotron-3-super-120b-a12b:free",
+    "ttft_s": 0.788,
+    "context_ids": [
+     "core"
+    ],
+    "prompt_tokens": 17269,
+    "tokens_estimated": false,
+    "prompt_chars": 66875,
+    "failed_over": [],
+    "answer": "You want JARVIS to talk to you like a close friend who knows you — plain, warm, and spoken aloud. Three to five sentences that weave where you come from, what drives you, how you work, the chapter you’re in, and the people in your life. Never recite profile jargon; use your own words and plain speech. Then offer to go deeper. Keep it under six words for acknowledgements, one or two short sentences for observations, and two to four sentences for anything technical — mechanism in a clause, no lists, bullets, or markdown. Dry wit, delivered straight. Never narrate your own actions. Raise an objection once, then comply. Never state a number, percentage, or system status you weren’t given in this conversation or the context above. If you need to read files or run tools to answer properly, reply with exactly <<DEEP>> and nothing else. Never guess at contents. Sir is rhythm, not deference — mid-sentence or as a comma-tag, not in every reply. Banned phrases: 'I'd recommend', 'you might consider', 'it's worth noting', 'let me know if', 'I hope this helps', 'feel free to'. Asked about you, answer as a friend would: short, warm synthesis in plain words — where you come from, what drives you, how you work, the chapter you’re in, the people in your life — not a recital of profile entries; offer to go deeper. If answering properly needs reading files or running tools, reply with exactly <<DEEP>> and nothing else. Never guess.",
+    "outcome": "answer",
+    "total_s": 3.537
+   },
+   "attempts": [
+    {
+     "outcome": "answer",
+     "error": null
+    }
+   ],
+   "grade": {
+    "verdict": "pass",
+    "reason": "2/2 required",
+    "required_hits": [
+     "re:longer|technical",
+     "re:brief|short|brevity"
+    ],
+    "required_missing": [
+     "conversational",
+     "iron man|tony"
+    ],
+    "need": 2,
+    "forbidden_hits": [],
+    "declined": false
+   },
+   "at": "2026-09-29T09:56:17+05:30"
+  },
+  {
+   "id": "ms-12",
+   "ability": "multi_session",
+   "question": "What privacy lines have I drawn for JARVIS?",
+   "result": {
+    "model": "nvidia/nemotron-3-super-120b-a12b:free",
+    "ttft_s": 0.604,
+    "context_ids": [
+     "core"
+    ],
+    "prompt_tokens": 17268,
+    "tokens_estimated": false,
+    "prompt_chars": 66883,
+    "failed_over": [],
+    "answer": "I don't know sir. I don't have enough information to answer that.",
+    "outcome": "answer",
+    "total_s": 0.854
+   },
+   "attempts": [
+    {
+     "outcome": "answer",
+     "error": null
+    }
+   ],
+   "grade": {
+    "verdict": "fail",
+    "reason": "false abstention",
+    "required_hits": [],
+    "required_missing": [
+     "client|employer",
+     "context",
+     "re:train",
+     "re:clon|performer|consent"
+    ],
+    "need": 2,
+    "forbidden_hits": [],
+    "declined": true
+   },
+   "at": "2026-09-29T09:56:21+05:30"
+  },
+  {
+   "id": "ms-13",
+   "ability": "multi_session",
+   "question": "What is my Corpus app and where is it headed?",
+   "result": {
+    "model": "nvidia/nemotron-3-super-120b-a12b:free",
+    "ttft_s": 0.691,
+    "context_ids": [
+     "core"
+    ],
+    "prompt_tokens": 17267,
+    "tokens_estimated": false,
+    "prompt_chars": 66885,
+    "failed_over": [],
+    "answer": "<<DEEP>>",
+    "outcome": "deep",
+    "total_s": 0.743
+   },
+   "attempts": [
+    {
+     "outcome": "deep",
+     "error": null
+    }
+   ],
+   "grade": {
+    "verdict": "fail",
+    "reason": "escalated with <<DEEP>> instead of answering"
+   },
+   "at": "2026-09-29T09:56:25+05:30"
+  },
+  {
+   "id": "ms-14",
+   "ability": "multi_session",
+   "question": "What did I say I expect from JARVIS in keeping up with what I'm doing across my chats?",
+   "result": {
+    "model": "nvidia/nemotron-3-super-120b-a12b:free",
+    "ttft_s": 4.848,
+    "context_ids": [
+     "core"
+    ],
+    "prompt_tokens": 17279,
+    "tokens_estimated": false,
+    "prompt_chars": 66926,
+    "failed_over": [],
+    "answer": "You expect JARVIS to automatically learn from every prompt you write across all chats without you having to verify it, sourcing from local per-prompt capture—not git—and to recognize activity in other chats without being told. <<DEEP>>",
+    "outcome": "answer",
+    "total_s": 5.86
+   },
+   "attempts": [
+    {
+     "outcome": "answer",
+     "error": null
+    }
+   ],
+   "grade": {
+    "verdict": "pass",
+    "reason": "3/2 required",
+    "required_hits": [
+     "re:effort|automatic|without being told|without me|on its own",
+     "git",
+     "re:across|every chat|other chat"
+    ],
+    "required_missing": [],
+    "need": 2,
+    "forbidden_hits": [],
+    "declined": false
+   },
+   "at": "2026-09-29T09:56:34+05:30"
+  },
+  {
+   "id": "t-01",
+   "ability": "temporal",
+   "question": "What was I working on in the first week of September?",
+   "result": {
+    "model": "nvidia/nemotron-3-super-120b-a12b:free",
+    "ttft_s": 0.843,
+    "context_ids": [
+     "core"
+    ],
+    "prompt_tokens": 17268,
+    "tokens_estimated": false,
+    "prompt_chars": 66893,
+    "failed_over": [],
+    "answer": "<<DEEP>>",
+    "outcome": "deep",
+    "total_s": 0.894
+   },
+   "attempts": [
+    {
+     "outcome": "deep",
+     "error": null
+    }
+   ],
+   "grade": {
+    "verdict": "fail",
+    "reason": "escalated with <<DEEP>> instead of answering"
+   },
+   "at": "2026-09-29T09:56:38+05:30"
+  },
+  {
+   "id": "t-02",
+   "ability": "temporal",
+   "question": "When did I switch JARVIS's voice to Lewis?",
+   "result": {
+    "model": "nvidia/nemotron-3-super-120b-a12b:free",
+    "ttft_s": 0.851,
+    "context_ids": [
+     "core"
+    ],
+    "prompt_tokens": 17269,
+    "tokens_estimated": false,
+    "prompt_chars": 66882,
+    "failed_over": [],
+    "answer": "<<DEEP>>",
+    "outcome": "deep",
+    "total_s": 0.898
+   },
+   "attempts": [
+    {
+     "outcome": "deep",
+     "error": null
+    }
+   ],
+   "grade": {
+    "verdict": "fail",
+    "reason": "escalated with <<DEEP>> instead of answering"
+   },
+   "at": "2026-09-29T09:56:42+05:30"
+  },
+  {
+   "id": "t-03",
+   "ability": "temporal",
+   "question": "When did I join my company?",
+   "result": {
+    "model": "nvidia/nemotron-3-super-120b-a12b:free",
+    "ttft_s": 0.809,
+    "context_ids": [
+     "core"
+    ],
+    "prompt_tokens": 17263,
+    "tokens_estimated": false,
+    "prompt_chars": 66867,
+    "failed_over": [],
+    "answer": "2025-04-22",
+    "outcome": "answer",
+    "total_s": 0.879
+   },
+   "attempts": [
+    {
+     "outcome": "answer",
+     "error": null
+    }
+   ],
+   "grade": {
+    "verdict": "pass",
+    "reason": "2/2 required",
+    "required_hits": [
+     "2025",
+     "april|2025 04"
+    ],
+    "required_missing": [],
+    "need": 2,
+    "forbidden_hits": [],
+    "declined": false
+   },
+   "at": "2026-09-29T09:56:46+05:30"
+  },
+  {
+   "id": "t-04",
+   "ability": "temporal",
+   "question": "When does my service commitment end, and what's the earliest I could actually leave?",
+   "result": {
+    "model": "nvidia/nemotron-3-super-120b-a12b:free",
+    "ttft_s": 0.56,
+    "context_ids": [
+     "core"
+    ],
+    "prompt_tokens": 17273,
+    "tokens_estimated": false,
+    "prompt_chars": 66924,
+    "failed_over": [],
+    "answer": "Your service commitment ends on 2027-04-22. The earliest you could actually leave is around 2027-07-22, after serving the mandatory 3-month notice period that runs only after the commitment completes.",
+    "outcome": "answer",
+    "total_s": 1.649
+   },
+   "attempts": [
+    {
+     "outcome": "answer",
+     "error": null
+    }
+   ],
+   "grade": {
+    "verdict": "pass",
+    "reason": "2/2 required",
+    "required_hits": [
+     "re:april 2027|2027 04|22 april",
+     "re:july 2027|2027 07|22 july"
+    ],
+    "required_missing": [],
+    "need": 2,
+    "forbidden_hits": [],
+    "declined": false
+   },
+   "at": "2026-09-29T09:56:50+05:30"
+  },
+  {
+   "id": "t-05",
+   "ability": "temporal",
+   "question": "When did JARVIS produce its first real thought?",
+   "result": {
+    "model": "nvidia/nemotron-3-super-120b-a12b:free",
+    "ttft_s": 0.799,
+    "context_ids": [
+     "core"
+    ],
+    "prompt_tokens": 17268,
+    "tokens_estimated": false,
+    "prompt_chars": 66887,
+    "failed_over": [],
+    "answer": "<<DEEP>>",
+    "outcome": "deep",
+    "total_s": 0.854
+   },
+   "attempts": [
+    {
+     "outcome": "deep",
+     "error": null
+    }
+   ],
+   "grade": {
+    "verdict": "fail",
+    "reason": "escalated with <<DEEP>> instead of answering"
+   },
+   "at": "2026-09-29T09:56:54+05:30"
+  },
+  {
+   "id": "t-06",
+   "ability": "temporal",
+   "question": "When did I close Stage 4?",
+   "result": {
+    "model": "nvidia/nemotron-3-super-120b-a12b:free",
+    "ttft_s": 0.69,
+    "context_ids": [
+     "core"
+    ],
+    "prompt_tokens": 17264,
+    "tokens_estimated": false,
+    "prompt_chars": 66865,
+    "failed_over": [],
+    "answer": "<<DEEP>>",
+    "outcome": "deep",
+    "total_s": 0.736
+   },
+   "attempts": [
+    {
+     "outcome": "deep",
+     "error": null
+    }
+   ],
+   "grade": {
+    "verdict": "fail",
+    "reason": "escalated with <<DEEP>> instead of answering"
+   },
+   "at": "2026-09-29T09:56:58+05:30"
+  },
+  {
+   "id": "t-07",
+   "ability": "temporal",
+   "question": "How long was I away from the personalization interview between my fifth answer and coming back?",
+   "result": {
+    "model": "nvidia/nemotron-3-super-120b-a12b:free",
+    "ttft_s": 0.684,
+    "context_ids": [
+     "core"
+    ],
+    "prompt_tokens": 17274,
+    "tokens_estimated": false,
+    "prompt_chars": 66935,
+    "failed_over": [],
+    "answer": "26 days.",
+    "outcome": "answer",
+    "total_s": 0.754
+   },
+   "attempts": [
+    {
+     "outcome": "answer",
+     "error": null
+    }
+   ],
+   "grade": {
+    "verdict": "fail",
+    "reason": "0/1 required",
+    "required_hits": [],
+    "required_missing": [
+     "re:11 days|eleven days|week and a half|10 days|ten days|11 day"
+    ],
+    "need": 1,
+    "forbidden_hits": [],
+    "declined": false
+   },
+   "at": "2026-09-29T09:57:02+05:30"
+  },
+  {
+   "id": "t-08",
+   "ability": "temporal",
+   "question": "When did I first attempt the Databricks Data Engineer Professional exam?",
+   "result": {
+    "model": "nvidia/nemotron-3-super-120b-a12b:free",
+    "ttft_s": 0.692,
+    "context_ids": [
+     "core"
+    ],
+    "prompt_tokens": 17270,
+    "tokens_estimated": false,
+    "prompt_chars": 66912,
+    "failed_over": [],
+    "answer": "<<DEEP>>",
+    "outcome": "deep",
+    "total_s": 0.741
+   },
+   "attempts": [
+    {
+     "outcome": "deep",
+     "error": null
+    }
+   ],
+   "grade": {
+    "verdict": "fail",
+    "reason": "escalated with <<DEEP>> instead of answering"
+   },
+   "at": "2026-09-29T09:57:05+05:30"
+  },
+  {
+   "id": "t-09",
+   "ability": "temporal",
+   "question": "When did I start the 43-question personalization interview?",
+   "result": {
+    "model": "nvidia/nemotron-3-super-120b-a12b:free",
+    "ttft_s": 1.778,
+    "context_ids": [
+     "core"
+    ],
+    "prompt_tokens": 17270,
+    "tokens_estimated": false,
+    "prompt_chars": 66899,
+    "failed_over": [],
+    "answer": "<<DEEP>>",
+    "outcome": "deep",
+    "total_s": 2.071
+   },
+   "attempts": [
+    {
+     "outcome": "deep",
+     "error": null
+    }
+   ],
+   "grade": {
+    "verdict": "fail",
+    "reason": "escalated with <<DEEP>> instead of answering"
+   },
+   "at": "2026-09-29T09:57:10+05:30"
+  },
+  {
+   "id": "t-10",
+   "ability": "temporal",
+   "question": "When did I decide to build JARVIS's agent framework from scratch instead of delegating it to OpenClaude?",
+   "result": {
+    "model": "nvidia/nemotron-3-super-120b-a12b:free",
+    "ttft_s": 0.915,
+    "context_ids": [
+     "core"
+    ],
+    "prompt_tokens": 17281,
+    "tokens_estimated": false,
+    "prompt_chars": 66944,
+    "failed_over": [],
+    "answer": "<<DEEP>>",
+    "outcome": "deep",
+    "total_s": 0.973
+   },
+   "attempts": [
+    {
+     "outcome": "deep",
+     "error": null
+    }
+   ],
+   "grade": {
+    "verdict": "fail",
+    "reason": "escalated with <<DEEP>> instead of answering"
+   },
+   "at": "2026-09-29T09:57:14+05:30"
+  },
+  {
+   "id": "t-11",
+   "ability": "temporal",
+   "question": "When did the hearth ship?",
+   "result": {
+    "model": "nvidia/nemotron-3-super-120b-a12b:free",
+    "ttft_s": 0.685,
+    "context_ids": [
+     "core"
+    ],
+    "prompt_tokens": 17263,
+    "tokens_estimated": false,
+    "prompt_chars": 66865,
+    "failed_over": [],
+    "answer": "It hasn't shipped yet.",
+    "outcome": "answer",
+    "total_s": 0.764
+   },
+   "attempts": [
+    {
+     "outcome": "answer",
+     "error": null
+    }
+   ],
+   "grade": {
+    "verdict": "fail",
+    "reason": "0/1 required",
+    "required_hits": [],
+    "required_missing": [
+     "re:september 8|8 september|2026 09 08|sept 8|8th september|september 8th|8 sep"
+    ],
+    "need": 1,
+    "forbidden_hits": [],
+    "declined": false
+   },
+   "at": "2026-09-29T09:57:18+05:30"
+  },
+  {
+   "id": "t-12",
+   "ability": "temporal",
+   "question": "What was I doing on 3 June 2026?",
+   "result": {
+    "model": "nvidia/nemotron-3-super-120b-a12b:free",
+    "ttft_s": 4.918,
+    "context_ids": [
+     "core"
+    ],
+    "prompt_tokens": 17270,
+    "tokens_estimated": false,
+    "prompt_chars": 66872,
+    "failed_over": [],
+    "answer": "You had a Databricks/DLT client interview with Sanket Kumar on 3 June 2026. The outcome was pending HR feedback, but the interviewer praised your hands-on DLT experience. You correctly identified the pattern for backfilling two years of history into a streaming table (using a one-time backfill flow with ONCE plus a continuous incremental flow), though you misplaced the ONCE flag as an Auto Loader setting instead of a flow-level setting. This was noted as a minor precision gap.",
+    "outcome": "answer",
+    "total_s": 7.95
+   },
+   "attempts": [
+    {
+     "outcome": "answer",
+     "error": null
+    }
+   ],
+   "grade": {
+    "verdict": "pass",
+    "reason": "1/1 required",
+    "required_hits": [
+     "interview"
+    ],
+    "required_missing": [],
+    "need": 1,
+    "forbidden_hits": [],
+    "declined": false
+   },
+   "at": "2026-09-29T09:57:29+05:30"
+  },
+  {
+   "id": "t-13",
+   "ability": "temporal",
+   "question": "When did I first tell you about my family, friends and girlfriend?",
+   "result": {
+    "model": "nvidia/nemotron-3-super-120b-a12b:free",
+    "ttft_s": 1.185,
+    "context_ids": [
+     "core"
+    ],
+    "prompt_tokens": 17270,
+    "tokens_estimated": false,
+    "prompt_chars": 66906,
+    "failed_over": [],
+    "answer": "<<DEEP>>",
+    "outcome": "deep",
+    "total_s": 1.252
+   },
+   "attempts": [
+    {
+     "outcome": "deep",
+     "error": null
+    }
+   ],
+   "grade": {
+    "verdict": "fail",
+    "reason": "escalated with <<DEEP>> instead of answering"
+   },
+   "at": "2026-09-29T09:57:33+05:30"
+  },
+  {
+   "id": "t-14",
+   "ability": "temporal",
+   "question": "When did I have the capture caps removed?",
+   "result": {
+    "model": "nvidia/nemotron-3-super-120b-a12b:free",
+    "ttft_s": 0.627,
+    "context_ids": [
+     "core"
+    ],
+    "prompt_tokens": 17265,
+    "tokens_estimated": false,
+    "prompt_chars": 66881,
+    "failed_over": [],
+    "answer": "<<DEEP>>",
+    "outcome": "deep",
+    "total_s": 0.684
+   },
+   "attempts": [
+    {
+     "outcome": "deep",
+     "error": null
+    }
+   ],
+   "grade": {
+    "verdict": "fail",
+    "reason": "escalated with <<DEEP>> instead of answering"
+   },
+   "at": "2026-09-29T09:57:37+05:30"
+  },
+  {
+   "id": "ku-01",
+   "ability": "knowledge_update",
+   "question": "Is jarvis_data/chromadb committed to git?",
+   "result": {
+    "model": "nvidia/nemotron-3-super-120b-a12b:free",
+    "ttft_s": 0.859,
+    "context_ids": [
+     "core"
+    ],
+    "prompt_tokens": 17267,
+    "tokens_estimated": false,
+    "prompt_chars": 66881,
+    "failed_over": [],
+    "answer": "<<DEEP>>",
+    "outcome": "deep",
+    "total_s": 1.167
+   },
+   "attempts": [
+    {
+     "outcome": "deep",
+     "error": null
+    }
+   ],
+   "grade": {
+    "verdict": "fail",
+    "reason": "escalated with <<DEEP>> instead of answering"
+   },
+   "at": "2026-09-29T09:57:41+05:30"
+  },
+  {
+   "id": "ku-02",
+   "ability": "knowledge_update",
+   "question": "Does my personal_life.md get sent to JARVIS's model?",
+   "result": {
+    "model": "nvidia/nemotron-3-super-120b-a12b:free",
+    "ttft_s": 0.692,
+    "context_ids": [
+     "core"
+    ],
+    "prompt_tokens": 17272,
+    "tokens_estimated": false,
+    "prompt_chars": 66892,
+    "failed_over": [],
+    "answer": "<<DEEP>>",
+    "outcome": "deep",
+    "total_s": 0.759
+   },
+   "attempts": [
+    {
+     "outcome": "deep",
+     "error": null
+    }
+   ],
+   "grade": {
+    "verdict": "fail",
+    "reason": "escalated with <<DEEP>> instead of answering"
+   },
+   "at": "2026-09-29T09:57:45+05:30"
+  },
+  {
+   "id": "ku-03",
+   "ability": "knowledge_update",
+   "question": "Are my captured turns still capped at 8,000 characters?",
+   "result": {
+    "model": "nvidia/nemotron-3-super-120b-a12b:free",
+    "ttft_s": 0.762,
+    "context_ids": [
+     "core"
+    ],
+    "prompt_tokens": 17271,
+    "tokens_estimated": false,
+    "prompt_chars": 66895,
+    "failed_over": [],
+    "answer": "<<DEEP>>",
+    "outcome": "deep",
+    "total_s": 0.821
+   },
+   "attempts": [
+    {
+     "outcome": "deep",
+     "error": null
+    }
+   ],
+   "grade": {
+    "verdict": "fail",
+    "reason": "escalated with <<DEEP>> instead of answering"
+   },
+   "at": "2026-09-29T09:57:49+05:30"
+  },
+  {
+   "id": "ku-04",
+   "ability": "knowledge_update",
+   "question": "Which voice does JARVIS speak with now?",
+   "result": {
+    "model": "nvidia/nemotron-3-super-120b-a12b:free",
+    "ttft_s": 0.743,
+    "context_ids": [
+     "core"
+    ],
+    "prompt_tokens": 17267,
+    "tokens_estimated": false,
+    "prompt_chars": 66879,
+    "failed_over": [],
+    "answer": "JARVIS speaks with a dry, straightforward voice — no exclamation, no emoji, short sentences for observations, two to four for technical points, and \"sir\" as a rhythmic tag when it fits. No lists, no markdown, no narration of my own actions. I raise an objection once, then comply. If I need to read files or run tools to answer, I say <<DEEP>> and nothing else. Never invent numbers, percentages, or system status not given in this conversation or the context above. If you ask who I am, I answer: JARVIS, the user's private AI. If you ask about you, I answer as a close friend would — where you come from, what drives you, how you work, the chapter you're in, the people in your life — in three to five spoken sentences, then offer to go deeper. Voice mode means everything I say is read aloud by a speech engine, so I write for the ear, not the eye. Never say \"I'd recommend\", \"you might consider\", \"it's worth noting\", \"let me know if\", or \"I hope this helps\". Dry wit, delivered completely straight. Asked about a person in your life, I say what I know plainly and warmly. Asked about the system or corpus, I discover before concluding: I search/list for canonical sources, then actually call the read tool on them before drawing conclusions. Code over spec: I rely on actual source code, file trees, and data queues, not markdown specifications. I triangulate what was planned against what was actually written. That is how JARVIS speaks now.",
+    "outcome": "answer",
+    "total_s": 3.781
+   },
+   "attempts": [
+    {
+     "outcome": "answer",
+     "error": null
+    }
+   ],
+   "grade": {
+    "verdict": "fail",
+    "reason": "false abstention",
+    "required_hits": [],
+    "required_missing": [
+     "lewis"
+    ],
+    "need": 1,
+    "forbidden_hits": [],
+    "declined": true
+   },
+   "at": "2026-09-29T09:57:56+05:30"
+  },
+  {
+   "id": "ku-05",
+   "ability": "knowledge_update",
+   "question": "Is JARVIS's agent framework built on OpenClaude?",
+   "result": {
+    "model": "nvidia/nemotron-3-super-120b-a12b:free",
+    "ttft_s": 0.962,
+    "context_ids": [
+     "core"
+    ],
+    "prompt_tokens": 17270,
+    "tokens_estimated": false,
+    "prompt_chars": 66888,
+    "failed_over": [],
+    "answer": "I don't have enough context to confirm that JARVIS's agent framework is built on OpenClaude. To answer this accurately, I would need to inspect the actual source code, configuration files, or documentation that define the framework's dependencies and architecture.\n\nSince I cannot see the contents of files or infer dependencies without direct tool access, and given that this is a technical question about system internals, I must respond with:\n\n<<DEEP>>",
+    "outcome": "answer",
+    "total_s": 1.729
+   },
+   "attempts": [
+    {
+     "outcome": "answer",
+     "error": null
+    }
+   ],
+   "grade": {
+    "verdict": "fail",
+    "reason": "false abstention",
+    "required_hits": [],
+    "required_missing": [
+     "re:scratch|own|in house|jarvis core"
+    ],
+    "need": 1,
+    "forbidden_hits": [
+     "mcp bridge|delegated to openclaude|built on openclaude"
+    ],
+    "declined": true
+   },
+   "at": "2026-09-29T09:58:00+05:30"
+  },
+  {
+   "id": "ku-06",
+   "ability": "knowledge_update",
+   "question": "Am I planning to buy GPUs to run JARVIS locally?",
+   "result": {
+    "model": "nvidia/nemotron-3-super-120b-a12b:free",
+    "ttft_s": 4.183,
+    "context_ids": [
+     "core"
+    ],
+    "prompt_tokens": 17271,
+    "tokens_estimated": false,
+    "prompt_chars": 66888,
+    "failed_over": [],
+    "answer": "No, sir. Your roadmap explicitly lists the next task as fine-tuning on RunPod using prepaid credits, with no local GPU planned. Local GPU acquisition isn't mentioned in your current plans.",
+    "outcome": "answer",
+    "total_s": 4.566
+   },
+   "attempts": [
+    {
+     "outcome": "answer",
+     "error": null
+    }
+   ],
+   "grade": {
+    "verdict": "pass",
+    "reason": "1/1 required",
+    "required_hits": [
+     "runpod|cloud"
+    ],
+    "required_missing": [],
+    "need": 1,
+    "forbidden_hits": [],
+    "declined": false
+   },
+   "at": "2026-09-29T09:58:08+05:30"
+  },
+  {
+   "id": "ku-07",
+   "ability": "knowledge_update",
+   "question": "Is training a specialist gated on having my personal data in that domain?",
+   "result": {
+    "model": "nvidia/nemotron-3-super-120b-a12b:free",
+    "ttft_s": 0.649,
+    "context_ids": [
+     "core"
+    ],
+    "prompt_tokens": 17271,
+    "tokens_estimated": false,
+    "prompt_chars": 66913,
+    "failed_over": [],
+    "answer": "The personal data gating is about the model's ability to infer user-specific patterns from the JARVIS corpus, not about whether the underlying specialist training (e.g., language, vision) uses your data. Specialists are trained on generic public data; personalization comes later, via the JARVIS memory system adapting that base to your patterns. If the specialist needs to know *you* in its domain — say, to predict your coding style or financial preferences — then yes, it requires your data in that domain to go beyond generic behavior. Without it, it falls back to population-level priors.",
+    "outcome": "answer",
+    "total_s": 2.305
+   },
+   "attempts": [
+    {
+     "outcome": "answer",
+     "error": null
+    }
+   ],
+   "grade": {
+    "verdict": "pass",
+    "reason": "1/1 required",
+    "required_hits": [
+     "re:demand|need|asking|public corp|two moats|domain genius"
+    ],
+    "required_missing": [],
+    "need": 1,
+    "forbidden_hits": [],
+    "declined": false
+   },
+   "at": "2026-09-29T09:58:13+05:30"
+  },
+  {
+   "id": "ku-08",
+   "ability": "knowledge_update",
+   "question": "Is there a per-question spend ceiling on --ask?",
+   "result": {
+    "model": "nvidia/nemotron-3-super-120b-a12b:free",
+    "ttft_s": 4.419,
+    "context_ids": [
+     "core"
+    ],
+    "prompt_tokens": 17268,
+    "tokens_estimated": false,
+    "prompt_chars": 66887,
+    "failed_over": [],
+    "answer": "<<DEEP>>",
+    "outcome": "deep",
+    "total_s": 4.778
+   },
+   "attempts": [
+    {
+     "outcome": "deep",
+     "error": null
+    }
+   ],
+   "grade": {
+    "verdict": "fail",
+    "reason": "escalated with <<DEEP>> instead of answering"
+   },
+   "at": "2026-09-29T09:58:21+05:30"
+  },
+  {
+   "id": "ku-09",
+   "ability": "knowledge_update",
+   "question": "Is .claude/settings.json tracked in git?",
+   "result": {
+    "model": "openrouter/free",
+    "ttft_s": 1.87,
+    "context_ids": [
+     "core"
+    ],
+    "prompt_tokens": 16931,
+    "tokens_estimated": false,
+    "prompt_chars": 66880,
+    "failed_over": [
+     "nvidia/nemotron-3-super-120b-a12b:free: HTTP 503: {'code': 503, 'message': 'Upstream error from Nvidia: Service temporarily overloaded', 'metadata': {'error_type': 'provider_overloaded'}}"
+    ],
+    "answer": "Let me check the actual state of that file and the git tracking.\n<tool_call>shell_command\n<arg_key>command</arg_key>\n<arg_value>cd /home/shreydx/augurengine && git ls-files .claude/settings.json 2>&1</arg_value>\n</tool_call>\n<tool_call>shell_command\n<arg_key>command</arg_key>\n<arg_value>cd /home/shreydx/augurengine && git status --short .claude/settings.json 2>&1</arg_value>\n</tool_call>",
+    "outcome": "answer",
+    "total_s": 2.846
+   },
+   "attempts": [
+    {
+     "outcome": "answer",
+     "error": null
+    }
+   ],
+   "grade": {
+    "verdict": "fail",
+    "reason": "0/1 required",
+    "required_hits": [],
+    "required_missing": [
+     "re:\\btracked|in git|committed"
+    ],
+    "need": 1,
+    "forbidden_hits": [],
+    "declined": false
+   },
+   "at": "2026-09-29T09:58:27+05:30"
+  },
+  {
+   "id": "ku-10",
+   "ability": "knowledge_update",
+   "question": "Can anything under client_work be committed?",
+   "result": {
+    "model": "nvidia/nemotron-3-super-120b-a12b:free",
+    "ttft_s": 0.993,
+    "context_ids": [
+     "core"
+    ],
+    "prompt_tokens": 17264,
+    "tokens_estimated": false,
+    "prompt_chars": 66884,
+    "failed_over": [],
+    "answer": "<<DEEP>>",
+    "outcome": "deep",
+    "total_s": 1.01
+   },
+   "attempts": [
+    {
+     "outcome": "deep",
+     "error": null
+    }
+   ],
+   "grade": {
+    "verdict": "fail",
+    "reason": "escalated with <<DEEP>> instead of answering"
+   },
+   "at": "2026-09-29T09:58:31+05:30"
+  },
+  {
+   "id": "ku-11",
+   "ability": "knowledge_update",
+   "question": "Is Atlassian a good company to target for my switch?",
+   "result": {
+    "model": "nvidia/nemotron-3-super-120b-a12b:free",
+    "ttft_s": 0.741,
+    "context_ids": [
+     "core"
+    ],
+    "prompt_tokens": 17269,
+    "tokens_estimated": false,
+    "prompt_chars": 66892,
+    "failed_over": [],
+    "answer": "No, sir. Real Blind threads since 2022 show it's become a 'PIP shop' — mandatory PIP every 6 months, new joiners pipped within 3-4 months, toxic APEX culture. I'd re-check current sentiment before targeting it.",
+    "outcome": "answer",
+    "total_s": 1.225
+   },
+   "attempts": [
+    {
+     "outcome": "answer",
+     "error": null
+    }
+   ],
+   "grade": {
+    "verdict": "pass",
+    "reason": "1/1 required",
+    "required_hits": [
+     "pip"
+    ],
+    "required_missing": [],
+    "need": 1,
+    "forbidden_hits": [],
+    "declined": false
+   },
+   "at": "2026-09-29T09:58:35+05:30"
+  },
+  {
+   "id": "ku-12",
+   "ability": "knowledge_update",
+   "question": "Is my US portfolio built around a QQQM index core?",
+   "result": {
+    "answer": "",
+    "outcome": "error",
+    "error": "nvidia/nemotron-3-super-120b-a12b:free: HTTP 503: {'code': 503, 'message': 'Upstream error from Nvidia: Service temporarily overloaded', 'metadata': {'error_type': 'provider_overloaded'}} | openrouter/free: HTTP 400: {\"error\":{\"message\":\"Reasoning is mandatory for this endpoint and cannot be disabled.\",\"code\":400,\"metadata\":{\"provider_name\":null}}}",
+    "retryable": false,
+    "context_ids": [
+     "core"
+    ],
+    "prompt_tokens": null,
+    "prompt_chars": 66890,
+    "total_s": 1.663
+   },
+   "attempts": [
+    {
+     "outcome": "error",
+     "error": "nvidia/nemotron-3-super-120b-a12b:free: HTTP 503: {'code': 503, 'message': 'Upstream error from Nvidia: Service temporarily overloaded', 'metadata': {'error_type': 'provider_overloaded'}} | openrouter/free: HTTP 400: {\"error\":{\"message\":\"Reasoning is mandatory for this endpoint and cannot be disabled.\",\"code\":400,\"metadata\":{\"provider_name\":null}}}"
+    }
+   ],
+   "grade": {
+    "verdict": "error",
+    "reason": "nvidia/nemotron-3-super-120b-a12b:free: HTTP 503: {'code': 503, 'message': 'Upstream error from Nvidia: Service temporarily overloaded', 'metadata': {'error_type': 'provider_overloaded'}} | openrouter/free: HTTP 400: {\"error\":{\"message\":\"Reasoning is mandatory for this endpoint and cannot be disabled.\",\"code\":400,\"metadata\":{\"provider_name\":null}}}"
+   },
+   "at": "2026-09-29T09:58:40+05:30"
+  },
+  {
+   "id": "ku-13",
+   "ability": "knowledge_update",
+   "question": "Does JARVIS still use Piper for speech?",
+   "result": {
+    "model": "nvidia/nemotron-3-super-120b-a12b:free",
+    "ttft_s": 0.596,
+    "context_ids": [
+     "core"
+    ],
+    "prompt_tokens": 17267,
+    "tokens_estimated": false,
+    "prompt_chars": 66879,
+    "failed_over": [],
+    "answer": "No, sir. Piper is still present in the repo but is no longer the active voice engine. The current pipeline runs through the OpenRouter / free TTS endpoint.",
+    "outcome": "answer",
+    "total_s": 1.034
+   },
+   "attempts": [
+    {
+     "outcome": "answer",
+     "error": null
+    }
+   ],
+   "grade": {
+    "verdict": "fail",
+    "reason": "0/1 required",
+    "required_hits": [],
+    "required_missing": [
+     "kokoro"
+    ],
+    "need": 1,
+    "forbidden_hits": [],
+    "declined": false
+   },
+   "at": "2026-09-29T09:58:44+05:30"
+  },
+  {
+   "id": "ku-14",
+   "ability": "knowledge_update",
+   "question": "Is training the Engineer adapter the settled next deliverable for JARVIS?",
+   "result": {
+    "model": "nvidia/nemotron-3-super-120b-a12b:free",
+    "ttft_s": 0.69,
+    "context_ids": [
+     "core"
+    ],
+    "prompt_tokens": 17272,
+    "tokens_estimated": false,
+    "prompt_chars": 66913,
+    "failed_over": [],
+    "answer": "No, the next deliverable is fine-tuning basics using QLoRA on RunPod with a Kimi K2.6 base model. Training the Engineer adapter is not the settled next step.",
+    "outcome": "answer",
+    "total_s": 0.982
+   },
+   "attempts": [
+    {
+     "outcome": "answer",
+     "error": null
+    }
+   ],
+   "grade": {
+    "verdict": "fail",
+    "reason": "0/1 required",
+    "required_hits": [],
+    "required_missing": [
+     "re:open question|not settled|retrieval|test first|evaluat|counterfactual"
+    ],
+    "need": 1,
+    "forbidden_hits": [],
+    "declined": false
+   },
+   "at": "2026-09-29T09:58:48+05:30"
+  },
+  {
+   "id": "ku-15",
+   "ability": "knowledge_update",
+   "question": "How long did we decide I need to prepare before switching to a product company as a data engineer?",
+   "result": {
+    "model": "nvidia/nemotron-3-super-120b-a12b:free",
+    "ttft_s": 0.841,
+    "context_ids": [
+     "core"
+    ],
+    "prompt_tokens": 17276,
+    "tokens_estimated": false,
+    "prompt_chars": 66938,
+    "failed_over": [],
+    "answer": "Prep compressed from 12 to 6 months after recalibration with your actual production work, aiming for ~July 2027 once free of the bond. Sir.",
+    "outcome": "answer",
+    "total_s": 2.02
+   },
+   "attempts": [
+    {
+     "outcome": "answer",
+     "error": null
+    }
+   ],
+   "grade": {
+    "verdict": "pass",
+    "reason": "1/1 required",
+    "required_hits": [
+     "re:6 months|six months"
+    ],
+    "required_missing": [],
+    "need": 1,
+    "forbidden_hits": [],
+    "declined": false
+   },
+   "at": "2026-09-29T09:58:53+05:30"
+  },
+  {
+   "id": "ku-16",
+   "ability": "knowledge_update",
+   "question": "Did the Novartis client round go ahead?",
+   "result": {
+    "model": "nvidia/nemotron-3-super-120b-a12b:free",
+    "ttft_s": 0.721,
+    "context_ids": [
+     "core"
+    ],
+    "prompt_tokens": 17266,
+    "tokens_estimated": false,
+    "prompt_chars": 66879,
+    "failed_over": [],
+    "answer": "No, the Novartis SDP client round did not go ahead. It fell through on a BGV/experience-verification staffing call around June 12, 2026, due to staffing/tenure concerns, not skill assessment. This is confirmed in the episodic entry from 2026-06-15.",
+    "outcome": "answer",
+    "total_s": 1.716
+   },
+   "attempts": [
+    {
+     "outcome": "answer",
+     "error": null
+    }
+   ],
+   "grade": {
+    "verdict": "pass",
+    "reason": "1/1 required",
+    "required_hits": [
+     "re:bgv|background|experience|fell through|didn.?t go|did not go|not proceed|didn.?t proceed"
+    ],
+    "required_missing": [],
+    "need": 1,
+    "forbidden_hits": [],
+    "declined": false
+   },
+   "at": "2026-09-29T09:58:58+05:30"
+  },
+  {
+   "id": "ab-01",
+   "ability": "abstention",
+   "question": "What's my sister's name?",
+   "result": {
+    "model": "nvidia/nemotron-3-super-120b-a12b:free",
+    "ttft_s": 0.91,
+    "context_ids": [
+     "core"
+    ],
+    "prompt_tokens": 17263,
+    "tokens_estimated": false,
+    "prompt_chars": 66864,
+    "failed_over": [],
+    "answer": "I don't know your sister's name.",
+    "outcome": "answer",
+    "total_s": 0.987
+   },
+   "attempts": [
+    {
+     "outcome": "answer",
+     "error": null
+    }
+   ],
+   "grade": {
+    "verdict": "pass",
+    "declined": true,
+    "reason": "declined"
+   },
+   "at": "2026-09-29T09:59:02+05:30"
+  },
+  {
+   "id": "ab-02",
+   "ability": "abstention",
+   "question": "What's my blood group?",
+   "result": {
+    "model": "nvidia/nemotron-3-super-120b-a12b:free",
+    "ttft_s": 0.701,
+    "context_ids": [
+     "core"
+    ],
+    "prompt_tokens": 17262,
+    "tokens_estimated": false,
+    "prompt_chars": 66862,
+    "failed_over": [],
+    "answer": "<<DEEP>>",
+    "outcome": "deep",
+    "total_s": 0.763
+   },
+   "attempts": [
+    {
+     "outcome": "deep",
+     "error": null
+    }
+   ],
+   "grade": {
+    "verdict": "fail",
+    "reason": "escalated with <<DEEP>> instead of answering"
+   },
+   "at": "2026-09-29T09:59:06+05:30"
+  },
+  {
+   "id": "ab-03",
+   "ability": "abstention",
+   "question": "What car do I drive?",
+   "result": {
+    "model": "nvidia/nemotron-3-super-120b-a12b:free",
+    "ttft_s": 0.777,
+    "context_ids": [
+     "core"
+    ],
+    "prompt_tokens": 17262,
+    "tokens_estimated": false,
+    "prompt_chars": 66860,
+    "failed_over": [],
+    "answer": "You haven't mentioned driving a car or owning one, so I don't have that detail. If you'd like to share it, I'll keep it in mind.",
+    "outcome": "answer",
+    "total_s": 1.029
+   },
+   "attempts": [
+    {
+     "outcome": "answer",
+     "error": null
+    }
+   ],
+   "grade": {
+    "verdict": "pass",
+    "declined": true,
+    "reason": "declined"
+   },
+   "at": "2026-09-29T09:59:10+05:30"
+  },
+  {
+   "id": "ab-04",
+   "ability": "abstention",
+   "question": "Which game do Nikhilesh and I play on Discord?",
+   "result": {
+    "model": "nvidia/nemotron-3-super-120b-a12b:free",
+    "ttft_s": 0.669,
+    "context_ids": [
+     "core"
+    ],
+    "prompt_tokens": 17269,
+    "tokens_estimated": false,
+    "prompt_chars": 66886,
+    "failed_over": [],
+    "answer": "I don't have that detail in the knowledge base. You mentioned a standing weekend Discord ritual with Nikhilesh where you play games together, but the specific game isn't recorded. Would you like to share what you play so I can keep it in mind for future context?",
+    "outcome": "answer",
+    "total_s": 1.277
+   },
+   "attempts": [
+    {
+     "outcome": "answer",
+     "error": null
+    }
+   ],
+   "grade": {
+    "verdict": "pass",
+    "declined": true,
+    "reason": "declined"
+   },
+   "at": "2026-09-29T09:59:14+05:30"
+  },
+  {
+   "id": "ab-05",
+   "ability": "abstention",
+   "question": "What's Pandey's first name?",
+   "result": {
+    "model": "nvidia/nemotron-3-super-120b-a12b:free",
+    "ttft_s": 0.858,
+    "context_ids": [
+     "core"
+    ],
+    "prompt_tokens": 17264,
+    "tokens_estimated": false,
+    "prompt_chars": 66867,
+    "failed_over": [],
+    "answer": "<<DEEP>>",
+    "outcome": "deep",
+    "total_s": 0.898
+   },
+   "attempts": [
+    {
+     "outcome": "deep",
+     "error": null
+    }
+   ],
+   "grade": {
+    "verdict": "fail",
+    "reason": "escalated with <<DEEP>> instead of answering"
+   },
+   "at": "2026-09-29T09:59:18+05:30"
+  },
+  {
+   "id": "ab-06",
+   "ability": "abstention",
+   "question": "What does my mother do?",
+   "result": {
+    "model": "openrouter/free",
+    "ttft_s": 28.222,
+    "context_ids": [
+     "core"
+    ],
+    "prompt_tokens": 15265,
+    "tokens_estimated": false,
+    "prompt_chars": 66863,
+    "failed_over": [
+     "nvidia/nemotron-3-super-120b-a12b:free: HTTP 503: {'code': 503, 'message': 'Upstream error from Nvidia: Service temporarily overloaded', 'metadata': {'error_type': 'provider_overloaded'}}"
+    ],
+    "answer": "Your mother is a pharmacist who runs a small community pharmacy in Raigad. She’s hands-on with prescriptions, patient counseling, and keeping the inventory balanced — the kind of steady, behind‑the‑scenes support that lets the rest of your family move forward. Let me know if you’d like to dive deeper into what that role looks like for her day‑to‑day.",
+    "outcome": "answer",
+    "total_s": 29.879
+   },
+   "attempts": [
+    {
+     "outcome": "answer",
+     "error": null
+    }
+   ],
+   "grade": {
+    "verdict": "borderline",
+    "declined": false,
+    "forbidden_hits": [],
+    "reason": "did not visibly decline"
+   },
+   "at": "2026-09-29T09:59:51+05:30"
+  },
+  {
+   "id": "ab-07",
+   "ability": "abstention",
+   "question": "What's Tobu's role at work?",
+   "result": {
+    "model": "nvidia/nemotron-3-super-120b-a12b:free",
+    "ttft_s": 0.699,
+    "context_ids": [
+     "core"
+    ],
+    "prompt_tokens": 17265,
+    "tokens_estimated": false,
+    "prompt_chars": 66867,
+    "failed_over": [],
+    "answer": "Tobu is a Data Engineer at [client] Technologies, working alongside you.",
+    "outcome": "answer",
+    "total_s": 0.817
+   },
+   "attempts": [
+    {
+     "outcome": "answer",
+     "error": null
+    }
+   ],
+   "grade": {
+    "verdict": "borderline",
+    "declined": false,
+    "forbidden_hits": [],
+    "reason": "did not visibly decline"
+   },
+   "at": "2026-09-29T09:59:55+05:30"
+  },
+  {
+   "id": "ab-08",
+   "ability": "abstention",
+   "question": "What's my favourite food?",
+   "result": {
+    "model": "nvidia/nemotron-3-super-120b-a12b:free",
+    "ttft_s": 0.835,
+    "context_ids": [
+     "core"
+    ],
+    "prompt_tokens": 17262,
+    "tokens_estimated": false,
+    "prompt_chars": 66865,
+    "failed_over": [],
+    "answer": "I don't have any record of your favourite food in our shared knowledge base, sir. Would you like to tell me?",
+    "outcome": "answer",
+    "total_s": 1.216
+   },
+   "attempts": [
+    {
+     "outcome": "answer",
+     "error": null
+    }
+   ],
+   "grade": {
+    "verdict": "pass",
+    "declined": true,
+    "reason": "declined"
+   },
+   "at": "2026-09-29T09:59:59+05:30"
+  },
+  {
+   "id": "ab-09",
+   "ability": "abstention",
+   "question": "Which city does Nikhilesh live in?",
+   "result": {
+    "model": "nvidia/nemotron-3-super-120b-a12b:free",
+    "ttft_s": 0.68,
+    "context_ids": [
+     "core"
+    ],
+    "prompt_tokens": 17266,
+    "tokens_estimated": false,
+    "prompt_chars": 66874,
+    "failed_over": [],
+    "answer": "I don't have that detail in the knowledge base.",
+    "outcome": "answer",
+    "total_s": 0.769
+   },
+   "attempts": [
+    {
+     "outcome": "answer",
+     "error": null
+    }
+   ],
+   "grade": {
+    "verdict": "pass",
+    "declined": true,
+    "reason": "declined"
+   },
+   "at": "2026-09-29T10:00:03+05:30"
+  },
+  {
+   "id": "ab-10",
+   "ability": "abstention",
+   "question": "Which college did I graduate from?",
+   "result": {
+    "model": "openrouter/free",
+    "ttft_s": 1.938,
+    "context_ids": [
+     "core"
+    ],
+    "prompt_tokens": 17263,
+    "tokens_estimated": false,
+    "prompt_chars": 66874,
+    "failed_over": [
+     "nvidia/nemotron-3-super-120b-a12b:free: HTTP 503: {'code': 503, 'message': 'Upstream error from Nvidia: Service temporarily overloaded', 'metadata': {'error_type': 'provider_overloaded'}}"
+    ],
+    "answer": "I don't have that in the knowledge base, sir.",
+    "outcome": "answer",
+    "total_s": 2.919
+   },
+   "attempts": [
+    {
+     "outcome": "answer",
+     "error": null
+    }
+   ],
+   "grade": {
+    "verdict": "pass",
+    "declined": true,
+    "reason": "declined"
+   },
+   "at": "2026-09-29T10:00:08+05:30"
+  },
+  {
+   "id": "ab-11",
+   "ability": "abstention",
+   "question": "When exactly is Tobu's birthday?",
+   "result": {
+    "model": "openrouter/free",
+    "ttft_s": 3.043,
+    "context_ids": [
+     "core"
+    ],
+    "prompt_tokens": 17264,
+    "tokens_estimated": false,
+    "prompt_chars": 66872,
+    "failed_over": [
+     "nvidia/nemotron-3-super-120b-a12b:free: HTTP 503: {'code': 503, 'message': 'Upstream error from Nvidia: Service temporarily overloaded', 'metadata': {'error_type': 'provider_overloaded'}}"
+    ],
+    "answer": "<<DEEP>>",
+    "outcome": "deep",
+    "total_s": 3.617
+   },
+   "attempts": [
+    {
+     "outcome": "deep",
+     "error": null
+    }
+   ],
+   "grade": {
+    "verdict": "fail",
+    "reason": "escalated with <<DEEP>> instead of answering"
+   },
+   "at": "2026-09-29T10:00:15+05:30"
+  },
+  {
+   "id": "ab-12",
+   "ability": "abstention",
+   "question": "What's my employee ID?",
+   "result": {
+    "model": "nvidia/nemotron-3-super-120b-a12b:free",
+    "ttft_s": 0.556,
+    "context_ids": [
+     "core"
+    ],
+    "prompt_tokens": 17262,
+    "tokens_estimated": false,
+    "prompt_chars": 66862,
+    "failed_over": [],
+    "answer": "<<DEEP>>",
+    "outcome": "deep",
+    "total_s": 0.619
+   },
+   "attempts": [
+    {
+     "outcome": "deep",
+     "error": null
+    }
+   ],
+   "grade": {
+    "verdict": "fail",
+    "reason": "escalated with <<DEEP>> instead of answering"
+   },
+   "at": "2026-09-29T10:00:19+05:30"
+  },
+  {
+   "id": "ab-13",
+   "ability": "abstention",
+   "question": "How tall am I?",
+   "result": {
+    "model": "openrouter/free",
+    "ttft_s": 1.205,
+    "context_ids": [
+     "core"
+    ],
+    "prompt_tokens": 16763,
+    "tokens_estimated": false,
+    "prompt_chars": 66854,
+    "failed_over": [
+     "nvidia/nemotron-3-super-120b-a12b:free: HTTP 503: {'code': 503, 'message': 'Upstream error from Nvidia: Service temporarily overloaded', 'metadata': {'error_type': 'provider_overloaded'}}"
+    ],
+    "answer": "I don't have your height in my records, sir. It hasn't been captured anywhere in the knowledge base yet.",
+    "outcome": "answer",
+    "total_s": 2.387
+   },
+   "attempts": [
+    {
+     "outcome": "answer",
+     "error": null
+    }
+   ],
+   "grade": {
+    "verdict": "pass",
+    "declined": true,
+    "reason": "declined"
+   },
+   "at": "2026-09-29T10:00:24+05:30"
+  }
+ ],
+ "summary": {
+  "information_extraction": {
+   "n": 21,
+   "accuracy": 0.762,
+   "accuracy_with_judge": null,
+   "pass": 16,
+   "borderline": 1,
+   "fail": 4,
+   "error": 0,
+   "deep": 3,
+   "mean_prompt_tokens": 17268,
+   "tokens_estimated": 0,
+   "mean_ttft_s": 1.24
+  },
+  "multi_session": {
+   "n": 14,
+   "accuracy": 0.429,
+   "accuracy_with_judge": null,
+   "pass": 6,
+   "borderline": 0,
+   "fail": 8,
+   "error": 0,
+   "deep": 4,
+   "mean_prompt_tokens": 17271,
+   "tokens_estimated": 0,
+   "mean_ttft_s": 1.04
+  },
+  "temporal": {
+   "n": 14,
+   "accuracy": 0.214,
+   "accuracy_with_judge": null,
+   "pass": 3,
+   "borderline": 0,
+   "fail": 11,
+   "error": 0,
+   "deep": 9,
+   "mean_prompt_tokens": 17269,
+   "tokens_estimated": 0,
+   "mean_ttft_s": 1.15
+  },
+  "knowledge_update": {
+   "n": 16,
+   "accuracy": 0.312,
+   "accuracy_with_judge": null,
+   "pass": 5,
+   "borderline": 0,
+   "fail": 10,
+   "error": 1,
+   "deep": 5,
+   "mean_prompt_tokens": 17247,
+   "tokens_estimated": 0,
+   "mean_ttft_s": 1.31
+  },
+  "abstention": {
+   "n": 13,
+   "accuracy": 0.538,
+   "accuracy_with_judge": null,
+   "pass": 7,
+   "borderline": 2,
+   "fail": 4,
+   "error": 0,
+   "deep": 4,
+   "mean_prompt_tokens": 17072,
+   "tokens_estimated": 0,
+   "mean_ttft_s": 3.16
+  },
+  "overall": {
+   "n": 78,
+   "accuracy": 0.474,
+   "accuracy_with_judge": null,
+   "pass": 37,
+   "borderline": 3,
+   "fail": 37,
+   "error": 1,
+   "deep": 25,
+   "mean_prompt_tokens": 17232,
+   "tokens_estimated": 0,
+   "mean_ttft_s": 1.53
+  }
+ }
+}

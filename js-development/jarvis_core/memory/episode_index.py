@@ -1038,13 +1038,13 @@ class EmbedderMismatch(RuntimeError):
 
 
 class ChromaBackend:
-    """The `episodes` collection in the shared chromadb/. Every write takes the
-    cross-process .chroma_write.lock that memory/store.py takes: the hearth
-    holds a client open while its jobs write from subprocesses."""
+    """The `episodes` collection in the shared chromadb/, reached through
+    get_chroma_client (HttpClient to the supervised server, else sole-owner
+    direct). Writes also take memory/store.py's .chroma_write.lock as belt and braces."""
 
     def __init__(self, db_path: Path = DB_ROOT, name: str = COLLECTION) -> None:
-        from jarvis_core.memory.store import _get_cached_chroma_client
-        self.client = _get_cached_chroma_client(str(Path(db_path).resolve()))
+        from jarvis_core.memory.chroma_access import get_chroma_client
+        self.client = get_chroma_client(Path(db_path))
         self.name = name
         self.lock = Path(db_path).parent / ".chroma_write.lock"
         self._col: Any = None

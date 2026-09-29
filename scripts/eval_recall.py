@@ -334,23 +334,38 @@ def make_baseline(args: argparse.Namespace, stream_fn: Optional[Callable[..., An
                   inhale_fn: Optional[Callable[[], str]] = None) -> SystemFn:
     """Today's voice prompt, frozen once per run, answered on the free chain."""
     from jarvis_core.brain import voice_path
-    from jarvis_core.brain.llm_client import StreamRefused
 
     t = time.perf_counter()
-    inhale = (inhale_fn or voice_path._default_inhale)()
-    brain = voice_path.VoiceBrain(inhale_fn=lambda: inhale, history_fn=lambda s, q: [])
-    chain = list(getattr(args, "chain", None) or voice_path.free_chain())
+    inhale = (inhale_fn or (lambda: voice_path._default_inhale(core=False)))()
+    brain = voice_path.VoiceBrain(inhale_fn=lambda: inhale, history_fn=lambda s, q: [],
+                                  recall_fn=voice_path.no_recall)
     make_baseline.meta = {
-        "chain": chain, "inhale_chars": len(inhale),
+        "chain": list(getattr(args, "chain", None) or voice_path.free_chain()), "inhale_chars": len(inhale),
         "inhale_sha256": hashlib.sha256(inhale.encode("utf-8")).hexdigest(),
         "inhale_seconds": round(time.perf_counter() - t, 2),
         "voice_sections": list(voice_path.VOICE_SECTIONS), "max_tokens": voice_path.MAX_TOKENS,
     }
     context_ids = ["inhale:" + s for s in voice_path.VOICE_SECTIONS]
+    return _chain_answerer(args, brain, lambda: {"context_ids": context_ids}, stream_fn)
+
+
+def _chain_answerer(args: argparse.Namespace, brain: Any, extras_fn: Callable[[], Dict[str, Any]],
+                    stream_fn: Optional[Callable[..., Any]] = None) -> SystemFn:
+    """Sequential failover over the free chain for one prompt-building brain.
+    extras_fn() is read AFTER brain.prompt() and merged into the answer, so a
+    system can report what its prompt held (recall ids, recall latency)."""
+    from jarvis_core.brain import voice_path
+    from jarvis_core.brain.llm_client import StreamRefused
+
+    chain = list(getattr(args, "chain", None) or voice_path.free_chain())
     timeout_s = float(getattr(args, "timeout", 300.0))
 
     async def answer(question: str) -> Answer:
-        messages = brain.prompt(question, EPHEMERAL_SESSION)
+        t_prompt = time.perf_counter()
+        messages = await asyncio.to_thread(brain.prompt, question, EPHEMERAL_SESSION)
+        prompt_s = round(time.perf_counter() - t_prompt, 3)
+        extras = extras_fn()
+        context_ids = extras.pop("context_ids", [])
         prompt_chars = sum(len(m["content"]) for m in messages)
         errors: List[str] = []
         statuses: List[Optional[int]] = []
@@ -379,7 +394,10 @@ def make_baseline(args: argparse.Namespace, stream_fn: Optional[Callable[..., An
             base = {"model": model, "ttft_s": ttft, "context_ids": context_ids,
                     "prompt_tokens": pt if pt is not None else prompt_chars // 4,
                     "tokens_estimated": pt is None, "prompt_chars": prompt_chars,
-                    "failed_over": errors}
+                    "failed_over": errors, **extras}
+            if "recall_s" in extras and ttft is not None:
+                base["model_ttft_s"] = ttft
+                base["ttft_s"] = round(ttft + extras["recall_s"], 3)
             if probe.startswith(voice_path.SENTINEL):
                 return {**base, "answer": probe, "outcome": "deep"}
             return {**base, "answer": text.strip(), "outcome": "answer"}
@@ -390,7 +408,73 @@ def make_baseline(args: argparse.Namespace, stream_fn: Optional[Callable[..., An
     return answer
 
 
-SYSTEMS: Dict[str, Callable[..., SystemFn]] = {"baseline": make_baseline}
+def make_recall_system(args: argparse.Namespace, recall: bool = True,
+                       stream_fn: Optional[Callable[..., Any]] = None,
+                       router: Optional[Any] = None) -> SystemFn:
+    """The standing core (frozen once per run) + one recall pass per question, or
+    the core alone (recall=False: the ablation that shows what recall adds).
+
+    The recall block rides in the user message exactly as the live voice path
+    sends it. Nothing is persisted: history is empty and no capture row is written.
+    """
+    from jarvis_core.brain import recall_router as rr
+    from jarvis_core.brain import voice_path
+
+    t = time.perf_counter()
+    inhale = voice_path._default_inhale(core=True)
+    state: Dict[str, Any] = {}
+    cfg_name = getattr(args, "recall_config", "voice")
+    cfg = rr.VOICE if cfg_name == "voice" else rr.DEEP
+    budget = int(getattr(args, "recall_budget", voice_path.VOICE_RECALL_BUDGET_TOKENS))
+    rt = router or rr.RecallRouter(config=cfg)
+    if recall:
+        t_warm = time.perf_counter()
+        rt.warm()
+        state["warm_s"] = round(time.perf_counter() - t_warm, 1)
+
+    def recall_fn(question: str, session_id: str) -> Optional[str]:
+        res = rt.recall(question, session_id=session_id, budget_tokens=budget, config=cfg, openable=False)
+        state["res"] = res
+        return res.block or None
+
+    brain = voice_path.VoiceBrain(inhale_fn=lambda: inhale, history_fn=lambda s, q: [],
+                                  recall_fn=recall_fn if recall else voice_path.no_recall)
+
+    def extras() -> Dict[str, Any]:
+        res = state.pop("res", None)
+        if res is None:
+            return {"context_ids": ["core"]}
+        return {"context_ids": res.context_ids, "recall_s": res.timings["total"],
+                "recall_timings": res.timings, "recall_abstained": res.abstained,
+                "recall_confidence": res.confidence, "recall_queries": list(res.queries),
+                "recall_tokens_est": rr.est_tokens(res.shown_chars),
+                "recall_handles": [i.ref for i in res.items if i.shown == "handle"],
+                "recall_windows": sum(1 for i in res.items if i.shown == "window")}
+
+    make_recall_system.meta = {
+        "chain": list(getattr(args, "chain", None) or voice_path.free_chain()), "inhale_chars": len(inhale),
+        "inhale_sha256": hashlib.sha256(inhale.encode("utf-8")).hexdigest(),
+        "inhale_seconds": round(time.perf_counter() - t, 2), "core_sections": list(voice_path.VOICE_CORE_SECTIONS),
+        "recall": recall, "recall_config": cfg_name, "recall_budget_tokens": budget,
+        "recall_cfg": __import__("dataclasses").asdict(cfg), "max_tokens": voice_path.MAX_TOKENS, **({"warm_s": state["warm_s"]} if recall else {}),
+    }
+    return _chain_answerer(args, brain, extras, stream_fn)
+
+
+def make_core_only(args: argparse.Namespace, stream_fn: Optional[Callable[..., Any]] = None) -> SystemFn:
+    fn = make_recall_system(args, recall=False, stream_fn=stream_fn)
+    make_core_only.meta = dict(make_recall_system.meta)
+    return fn
+
+
+def _make_recall_router(args: argparse.Namespace) -> SystemFn:
+    fn = make_recall_system(args, recall=True)
+    _make_recall_router.meta = dict(make_recall_system.meta)
+    return fn
+
+
+SYSTEMS: Dict[str, Callable[..., SystemFn]] = {"baseline": make_baseline, "recall_router": _make_recall_router,
+                                                "core_only": make_core_only}
 
 
 def resolve_system(name: str, args: argparse.Namespace) -> Tuple[SystemFn, Dict[str, Any]]:
@@ -778,6 +862,9 @@ def main(argv: Optional[List[str]] = None) -> int:
     ap.add_argument("--backoff", default="30,90,180", help="seconds between retries of a rate-limited question")
     ap.add_argument("--pause", type=float, default=3.0, help="seconds between questions (rate-limit friendly)")
     ap.add_argument("--out-dir", type=Path, default=RESULTS_DIR, help="results directory (smoke runs: a scratch dir)")
+    ap.add_argument("--recall-config", default="voice", choices=("voice", "deep"),
+                    help="recall preset for --system recall_router (voice = the live fast path)")
+    ap.add_argument("--recall-budget", type=int, default=6000, help="recall block budget in tokens")
     args = ap.parse_args(argv)
     for stream in (sys.stdout, sys.stderr):
         try:
