@@ -391,7 +391,7 @@ training artifact.
 | Duty | How |
 |---|---|
 | **Capture** | Automatic when the hearth runs here: `ingest_antigravity` reads `~/.gemini/antigravity-ide/brain/` hourly. |
-| **Parse** | Antigravity, in the session, **at boot and about every 10 turns** (a written duty in `js-workspace-rule.md`): `python scripts/ingest_antigravity_sessions.py`, then `python scripts/parse_turns.py --pending --host antigravity --limit 10`, judge, `--submit <file> --agent antigravity/<model>`. At boot, drain up to 20 backlog turns. |
+| **Parse** | Antigravity, in the session, **at boot and about every 10 turns** (a written duty in `js-workspace-rule.md`): Execute `.agent/workflows/parse.md` to automate the manual loop (`ingest_antigravity_sessions.py`, `parse_turns.py --pending --limit 10`, judge, `--submit <file> --agent antigravity/<model>`). At boot, drain up to 20 backlog turns. |
 | **Boot reads** | `python scripts/bootstrap_jarvis.py --check`, then `cognitive_profile.md` and `activity_digest.md` **in full**. |
 | **Health surfaces** | `bootstrap_jarvis.py --check`. |
 
