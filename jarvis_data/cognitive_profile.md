@@ -1,6 +1,6 @@
 # Cognitive Profile — Model of the User
 
-> Auto-synthesized by `scripts/profile_synth.py` from `knowledge_base.jsonl` (811 entries). Injected into every chat via the SessionStart hook. Regenerate after KB updates. Every entry is shown in full, dated, and appears in one section only.
+> Auto-synthesized by `scripts/profile_synth.py` from `knowledge_base.jsonl` (816 entries). Injected into every chat via the SessionStart hook. Regenerate after KB updates. Every entry is shown in full, dated, and appears in one section only.
 
 ## Who you are
 _Durable identity — career, ambitions, philosophy, how you see yourself. Oldest first; later entries update earlier ones._
@@ -568,6 +568,7 @@ _Who the people around you are, and what they are to you. Oldest first; later en
 - [2026-09-29 · Cognitive_Pattern] The owner wants net-worth projections to include EPF alongside their other investments. Evidence, in the owner's words (2026-06-19, claude): "Take into consideration the epf too."
 - [2026-09-29 · Cognitive_Pattern] The owner wants to isolate whether a failure comes from the model or from the agent scaffold before deciding what to fix. Evidence, in the owner's words (2026-06-25, claude): "see if it's really the brain's limitation or our agent's"
 - [2026-09-29 · Cognitive_Pattern] The owner expects JARVIS to already know their recent data-engineering learning and interview activity without being told. Evidence, in the owner's words (2026-06-23, claude): "what I've done recently in terms of learning and interviews"
+- [2026-09-29 · Cognitive_Pattern] The owner wants explanations of mock-exam mistakes to be brief per question because they got many wrong. Evidence, in the owner's words (2026-06-25, claude): "for each incorrect question everything should be brief because there are a lot of questions i got wrong"
 
 ## Recent corrections (last 7 days)
 _Project-specific corrections from the past week. These are NOT identity — never answer "who am I?" from this section._
