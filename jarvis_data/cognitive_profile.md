@@ -1,6 +1,6 @@
 # Cognitive Profile — Model of the User
 
-> Auto-synthesized by `scripts/profile_synth.py` from `knowledge_base.jsonl` (816 entries). Injected into every chat via the SessionStart hook. Regenerate after KB updates. Every entry is shown in full, dated, and appears in one section only.
+> Auto-synthesized by `scripts/profile_synth.py` from `knowledge_base.jsonl` (819 entries). Injected into every chat via the SessionStart hook. Regenerate after KB updates. Every entry is shown in full, dated, and appears in one section only.
 
 ## Who you are
 _Durable identity — career, ambitions, philosophy, how you see yourself. Oldest first; later entries update earlier ones._
@@ -59,6 +59,7 @@ _Durable identity — career, ambitions, philosophy, how you see yourself. Oldes
 - [2026-09-29 · Cognitive_Pattern] The owner's intellect is AI/ML and computer science, and their interests are robotics, AI infrastructure and energy; they look for ideas that combine them and that India's conditions support. Evidence, in the owner's words (2026-06-17, claude): "combine my intellect (AI/ML, CS) and interests (Robotics, AI Infra, Energy)"
 - [2026-09-29 · Cognitive_Pattern] The owner wants to help bring India into the AI race, believing robotics, physical AI and AI applications will be the biggest money-making layer, and says this is why they are building JARVIS. Evidence, in the owner's words (2026-06-17, claude): "That is wy i am building jarvis"
 - [2026-09-29 · Cognitive_Pattern] The owner is preparing for systems-design interview rounds at companies like Atlassian, where warehousing scenarios are asked. Evidence, in the owner's words (2026-06-17, claude): "If I head into an interview with comanies like atlassion etc"
+- [2026-09-29 · Cognitive_Pattern] The owner is 23 years old and works as a data engineer at Celebal Technologies. Evidence, in the owner's words (2026-04-17, antigravity): "As i am 23 years old and work as a data engineer at celebal technologies"
 
 ## People in your life
 _Who the people around you are, and what they are to you. Oldest first; later entries update earlier ones._
@@ -569,6 +570,7 @@ _Who the people around you are, and what they are to you. Oldest first; later en
 - [2026-09-29 · Cognitive_Pattern] The owner wants to isolate whether a failure comes from the model or from the agent scaffold before deciding what to fix. Evidence, in the owner's words (2026-06-25, claude): "see if it's really the brain's limitation or our agent's"
 - [2026-09-29 · Cognitive_Pattern] The owner expects JARVIS to already know their recent data-engineering learning and interview activity without being told. Evidence, in the owner's words (2026-06-23, claude): "what I've done recently in terms of learning and interviews"
 - [2026-09-29 · Cognitive_Pattern] The owner wants explanations of mock-exam mistakes to be brief per question because they got many wrong. Evidence, in the owner's words (2026-06-25, claude): "for each incorrect question everything should be brief because there are a lot of questions i got wrong"
+- [2026-09-29 · Cognitive_Pattern] The owner wants JARVIS to possess a distinct personality and behavioral voice. Evidence, in the owner's words (2026-04-18, antigravity): "I wanna give jarvis persnality too."
 
 ## Recent corrections (last 7 days)
 _Project-specific corrections from the past week. These are NOT identity — never answer "who am I?" from this section._
