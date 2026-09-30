@@ -1,6 +1,6 @@
 # Cognitive Profile — Model of the User
 
-> Auto-synthesized by `scripts/profile_synth.py` from `knowledge_base.jsonl` (839 entries). Injected into every chat via the SessionStart hook. Regenerate after KB updates. Every entry is shown in full, dated, and appears in one section only.
+> Auto-synthesized by `scripts/profile_synth.py` from `knowledge_base.jsonl` (842 entries). Injected into every chat via the SessionStart hook. Regenerate after KB updates. Every entry is shown in full, dated, and appears in one section only.
 
 ## Who you are
 _Durable identity — career, ambitions, philosophy, how you see yourself. Oldest first; later entries update earlier ones._
@@ -63,6 +63,7 @@ _Durable identity — career, ambitions, philosophy, how you see yourself. Oldes
 - [2026-09-30 · Cognitive_Pattern] The owner has a local NVIDIA GeForce GTX 1650 GPU on their development machine. Evidence, in the owner's words (2026-04-25, antigravity): "I have nvidia gtx 1650"
 - [2026-09-30 · Decision] The owner (2026-09-30) confirmed their current role: data engineer at Celebal in Jaipur, package Rs 8.92 LPA. They are looking to switch to a city like Bangalore for higher pay, a better company, better work-life balance, and better, smarter people around them. Evidence, in the owner's words: "my package is 8.92 lpa right now. in jaipur a data engineer at celebal, looking to switch to city like bangalore for high pay, better company, better WLB and better/smarter people around."
 - [2026-09-30 · Cognitive_Pattern] The owner has a Google AI Pro subscription. Evidence, in the owner's words (2026-04-26, antigravity): "i ahve google ai pro plan"
+- [2026-09-30 · Cognitive_Pattern] The owner has a work laptop equipped with a Claude Opus team plan used alongside the personal laptop for JARVIS development. Evidence, in the owner's words (2026-04-29, antigravity): "I cloned the current jarvis on github and pulled it in my work laptop since it has claude opus team plan so i can work more over there with claude."
 
 ## People in your life
 _Who the people around you are, and what they are to you. Oldest first; later entries update earlier ones._
