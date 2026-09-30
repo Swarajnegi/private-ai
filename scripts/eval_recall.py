@@ -53,12 +53,11 @@ capture row), so eval questions never enter the owner's sessions or the queue.
 The inhale is computed ONCE per run and frozen, so every question sees the
 same prompt; its size and hash are recorded.
 
-Transport is a plain sequential failover over voice_path.free_chain() with a
-generous read timeout. The live hedge (race a second model after 1.2 s, give up
-after 60 s) is not reproduced: at 168K prompt tokens it would measure the
-timeout, not the prompt. The <<DEEP>> escalation sentinel and safety-classifier
-labels are detected exactly as the voice path does. A DEEP reply is its own
-outcome and scores as wrong: on the live path it hands off to a different system.
+Transport pins --model (default Nemotron free), with no fallback or live hedge.
+Errors are retained and retried, excluded from accuracy. A <<DEEP>> answer
+hands off to rr.DEEP recall with the same pinned model, recorded as
+recall_router+deep. --repeat records trials in one resumable file; --compare
+reports exact paired McNemar tests and repeat spread. No eval turn is captured.
 
 =============================================================================
 GRADING
@@ -79,8 +78,9 @@ forbidden hit (e.g. "switched from George to Lewis"), some-but-not-enough
 required facts, or an abstention answer that did not visibly decline. Only
 `pass` counts toward deterministic accuracy.
 
-`--judge` sends each borderline row to a free model and records its verdict
-SEPARATELY (row["judge"]); the report shows deterministic and judged accuracy
+`--judge` sends borderline/forbidden-hit rows to two free models from different
+vendors and records their verdicts SEPARATELY (row["judges"]); both must agree.
+--judge-stress scores negative controls separately. Deterministic and judged accuracy
 side by side, never one overwriting the other.
 
 =============================================================================
@@ -115,6 +115,8 @@ import inspect
 import json
 import os
 import re
+import math
+import statistics
 import sys
 import tempfile
 import time
@@ -140,6 +142,7 @@ ABILITIES = ("information_extraction", "multi_session", "temporal", "knowledge_u
 EPHEMERAL_SESSION = "recall-eval-ephemeral"
 RETRYABLE = (429, 502, 503, 504, None)
 IST = _dt.timezone(_dt.timedelta(hours=5, minutes=30))
+DEFAULT_MODEL = "nvidia/nemotron-3-super-120b-a12b:free"
 
 Answer = Dict[str, Any]
 SystemFn = Callable[[str], Union[Answer, Awaitable[Answer]]]
@@ -241,14 +244,37 @@ def declines(answer: str) -> bool:
     return any(p.search(raw) or p.search(norm) for p in DECLINE_PATTERNS)
 
 
+def forbidden_claim(spec: str, answer: str) -> bool:
+    """Ignore explicitly negated/superseded mentions, not affirmative stale claims.
+
+    Clause-local: 'not George, but George now' must still be a hit. Ambiguous
+    historical mentions stay borderline for the independent judges.
+    """
+    if not fact_hit(spec, answer):
+        return False
+    for clause in re.split(r"[.!?;\n]|\bbut\b", _raw(answer)):
+        if not fact_hit(spec, clause):
+            continue
+        if re.search(r"\b(?:reversed|superseded|abandoned)\b", clause) or (
+                re.search(r'\b(?:initially|previously|formerly)\b',clause) and re.search(r'\bbut\b',_raw(answer))):
+            continue
+        # A negation must precede this particular mention, never elsewhere in the sentence.
+        rx = spec[3:] if spec.startswith('re:') else '(?:' + '|'.join(re.escape(normalize(a)) for a in spec.split('|')) + ')'
+        norm = normalize(clause)
+        matches = list(re.finditer(rx, norm))
+        if not matches or any(not re.search(r"\b(?:not(?! only)|no longer|never)\b[^,]{0,50}$", norm[:m.start()]) for m in matches):
+            return True
+    return False
+
+
 def grade(row: Dict[str, Any], result: Answer) -> Dict[str, Any]:
     outcome = result.get("outcome", "answer")
     if outcome == "error":
         return {"verdict": "error", "reason": result.get("error", "")}
     if outcome == "deep":
-        return {"verdict": "fail", "reason": "escalated with <<DEEP>> instead of answering"}
+        return {"verdict": "error", "reason": "DEEP path still escalated; no usable answer"}
     answer = result.get("answer") or ""
-    forbidden = [f for f in row.get("forbidden", []) if fact_hit(f, answer)]
+    forbidden = [f for f in row.get("forbidden", []) if forbidden_claim(f, answer)]
     declined = declines(answer)
     if row["ability"] == "abstention":
         if declined and not forbidden:
@@ -340,7 +366,7 @@ def _status_of(err: BaseException) -> Optional[int]:
 
 def make_baseline(args: argparse.Namespace, stream_fn: Optional[Callable[..., Any]] = None,
                   inhale_fn: Optional[Callable[[], str]] = None) -> SystemFn:
-    """Today's voice prompt, frozen once per run, answered on the free chain."""
+    """Today's voice prompt, frozen once per run, answered by one pinned model."""
     from jarvis_core.brain import voice_path
 
     t = time.perf_counter()
@@ -348,33 +374,49 @@ def make_baseline(args: argparse.Namespace, stream_fn: Optional[Callable[..., An
     brain = voice_path.VoiceBrain(inhale_fn=lambda: inhale, history_fn=lambda s, q: [],
                                   recall_fn=voice_path.no_recall)
     make_baseline.meta = {
-        "chain": list(getattr(args, "chain", None) or voice_path.free_chain()), "inhale_chars": len(inhale),
+        "model": getattr(args, "model", DEFAULT_MODEL), "inhale_chars": len(inhale),
         "inhale_sha256": hashlib.sha256(inhale.encode("utf-8")).hexdigest(),
         "inhale_seconds": round(time.perf_counter() - t, 2),
         "voice_sections": list(voice_path.VOICE_SECTIONS), "max_tokens": voice_path.MAX_TOKENS,
     }
     context_ids = ["inhale:" + s for s in voice_path.VOICE_SECTIONS]
-    return _chain_answerer(args, brain, lambda: {"context_ids": context_ids}, stream_fn)
+    voice = _chain_answerer(args, brain, lambda: {"context_ids": context_ids}, stream_fn)
+    async def answer(question: str) -> Answer:
+        first = await voice(question)
+        if first.get('outcome') != 'deep':
+            return first
+        deep_args = argparse.Namespace(**vars(args))
+        deep_args.recall_config = 'deep'
+        deep = make_recall_system(deep_args, stream_fn=stream_fn)
+        second = await deep(question)
+        return dict(second, system='recall_router+deep', voice_result=first)
+    return answer
 
 
 def _chain_answerer(args: argparse.Namespace, brain: Any, extras_fn: Callable[[], Dict[str, Any]],
                     stream_fn: Optional[Callable[..., Any]] = None) -> SystemFn:
-    """Sequential failover over the free chain for one prompt-building brain.
+    """A single pinned model for one prompt-building brain (no failover).
     extras_fn() is read AFTER brain.prompt() and merged into the answer, so a
     system can report what its prompt held (recall ids, recall latency)."""
     from jarvis_core.brain import voice_path
     from jarvis_core.brain.llm_client import StreamRefused
 
-    chain = list(getattr(args, "chain", None) or voice_path.free_chain())
+    chain = [getattr(args, "model", DEFAULT_MODEL)]
     timeout_s = float(getattr(args, "timeout", 300.0))
 
     async def answer(question: str) -> Answer:
         t_prompt = time.perf_counter()
         messages = await asyncio.to_thread(brain.prompt, question, EPHEMERAL_SESSION)
+        if getattr(args, 'recall_config', 'voice') == 'deep':
+            messages = [dict(m, content=m['content'].replace(voice_path.VOICE_REGISTER, '') +
+                        ('\nAnswer from the supplied recalled evidence. State uncertainty honestly; do not emit an escalation sentinel.' if m['role'] == 'system' else '')) for m in messages]
         prompt_s = round(time.perf_counter() - t_prompt, 3)
         extras = extras_fn()
         context_ids = extras.pop("context_ids", [])
         prompt_chars = sum(len(m["content"]) for m in messages)
+        if extras.get('recall_error'):
+            return {'outcome':'error', 'error':extras['recall_error'], 'retryable':True,
+                    'model':chain[0], 'context_ids':context_ids, 'prompt_chars':prompt_chars, **extras}
         errors: List[str] = []
         statuses: List[Optional[int]] = []
         for model in chain:
@@ -407,10 +449,13 @@ def _chain_answerer(args: argparse.Namespace, brain: Any, extras_fn: Callable[[]
                 base["model_ttft_s"] = ttft
                 base["ttft_s"] = round(ttft + extras["recall_s"], 3)
             if probe.startswith(voice_path.SENTINEL):
+                if getattr(args,'recall_config','voice') == 'deep':
+                    return {**base, 'answer':probe, 'outcome':'error', 'retryable':True,
+                            'error':'DEEP-config answer emitted an unresolved escalation sentinel'}
                 return {**base, "answer": probe, "outcome": "deep"}
             return {**base, "answer": text.strip(), "outcome": "answer"}
         return {"answer": "", "outcome": "error", "error": " | ".join(errors),
-                "retryable": all(s in RETRYABLE for s in statuses), "context_ids": context_ids,
+                "retryable": True, "model": chain[0], "context_ids": context_ids,
                 "prompt_tokens": None, "prompt_chars": prompt_chars}
 
     return answer
@@ -418,7 +463,8 @@ def _chain_answerer(args: argparse.Namespace, brain: Any, extras_fn: Callable[[]
 
 def make_recall_system(args: argparse.Namespace, recall: bool = True,
                        stream_fn: Optional[Callable[..., Any]] = None,
-                       router: Optional[Any] = None) -> SystemFn:
+                       router: Optional[Any] = None,
+                       inhale_fn: Optional[Callable[[], str]] = None) -> SystemFn:
     """The standing core (frozen once per run) + one recall pass per question, or
     the core alone (recall=False: the ablation that shows what recall adds).
 
@@ -429,7 +475,7 @@ def make_recall_system(args: argparse.Namespace, recall: bool = True,
     from jarvis_core.brain import voice_path
 
     t = time.perf_counter()
-    inhale = voice_path._default_inhale(core=True)
+    inhale = (inhale_fn or (lambda: voice_path._default_inhale(core=True)))()
     state: Dict[str, Any] = {}
     cfg_name = getattr(args, "recall_config", "voice")
     cfg = rr.VOICE if cfg_name == "voice" else rr.DEEP
@@ -454,6 +500,7 @@ def make_recall_system(args: argparse.Namespace, recall: bool = True,
         if res is None:
             return {"context_ids": ["core"]}
         return {"context_ids": res.context_ids, "recall_s": res.timings["total"],
+                'recall_error':getattr(res,'error',''),
                 "recall_timings": res.timings, "recall_abstained": res.abstained,
                 "recall_confidence": res.confidence, "recall_queries": list(res.queries),
                 "recall_tokens_est": rr.est_tokens(res.shown_chars),
@@ -461,13 +508,26 @@ def make_recall_system(args: argparse.Namespace, recall: bool = True,
                 "recall_windows": sum(1 for i in res.items if i.shown == "window")}
 
     make_recall_system.meta = {
-        "chain": list(getattr(args, "chain", None) or voice_path.free_chain()), "inhale_chars": len(inhale),
+        "model": getattr(args, "model", DEFAULT_MODEL), "inhale_chars": len(inhale),
         "inhale_sha256": hashlib.sha256(inhale.encode("utf-8")).hexdigest(),
         "inhale_seconds": round(time.perf_counter() - t, 2), "core_sections": list(voice_path.VOICE_CORE_SECTIONS),
         "recall": recall, "recall_config": cfg_name, "recall_budget_tokens": budget,
         "recall_cfg": __import__("dataclasses").asdict(cfg), "max_tokens": voice_path.MAX_TOKENS, **({"warm_s": state["warm_s"]} if recall else {}),
     }
-    return _chain_answerer(args, brain, extras, stream_fn)
+    voice_answer = _chain_answerer(args, brain, extras, stream_fn)
+    if cfg_name == "deep" or not recall:
+        return voice_answer
+
+    async def answer(question: str) -> Answer:
+        first = await voice_answer(question)
+        if first.get('outcome') != 'deep':
+            return first
+        deep_args = argparse.Namespace(**vars(args))
+        deep_args.recall_config = 'deep'
+        deep = make_recall_system(deep_args, router=rt, stream_fn=stream_fn, inhale_fn=lambda: inhale)
+        second = await deep(question)
+        return dict(second, system='recall_router+deep', voice_result=first)
+    return answer
 
 
 def make_core_only(args: argparse.Namespace, stream_fn: Optional[Callable[..., Any]] = None) -> SystemFn:
@@ -516,7 +576,7 @@ async def call_system(fn: SystemFn, question: str) -> Answer:
 # Judge (optional, recorded separately)
 # =============================================================================
 
-JUDGE_MODELS = ("nvidia/nemotron-3-super-120b-a12b:free", "openrouter/free")
+JUDGE_MODELS = (DEFAULT_MODEL, "google/gemma-3-27b-it:free")
 _JUDGE_PROMPT = """You grade one answer from a personal assistant about its owner's own history.
 Decide whether the ANSWER is correct given the GOLD answer and the grading notes.
 - "correct" if it conveys the gold's substance (extra true detail is fine; wording may differ).
@@ -537,7 +597,8 @@ Reply with ONLY a JSON object: {{"verdict": "correct" or "incorrect", "reason": 
 
 
 async def judge_row(row: Dict[str, Any], answer: str,
-                    stream_fn: Optional[Callable[..., Any]] = None) -> Dict[str, Any]:
+                    stream_fn: Optional[Callable[..., Any]] = None,
+                    model: str = JUDGE_MODELS[0]) -> Dict[str, Any]:
     from jarvis_core.brain.outbound_policy import redact_outbound
     prompt = _JUDGE_PROMPT.format(question=row["question"], ability=row["ability"], gold=row["gold_answer"],
                                   required=json.dumps(row["required_facts"], ensure_ascii=False),
@@ -545,7 +606,7 @@ async def judge_row(row: Dict[str, Any], answer: str,
                                   notes=row.get("notes", ""), answer=answer)
     messages = [{"role": "user", "content": redact_outbound(prompt).text}]
     errors = []
-    for model in JUDGE_MODELS:
+    for model in (model,):
         for attempt in range(3):
             try:
                 text, _, _ = await stream_once(model, messages, 300, 180.0, stream_fn)
@@ -565,7 +626,63 @@ async def judge_row(row: Dict[str, Any], answer: str,
                 return {"model": model, "verdict": verdict, "reason": parsed.get("reason", ""), "raw": text}
             errors.append(f"{model}: unparseable judge reply: {text}")
             break
-    return {"model": None, "verdict": "error", "reason": " | ".join(errors)}
+    return {"model": model, "verdict": "error", "reason": " | ".join(errors)}
+
+
+async def judge_stress(rows: List[Dict[str, Any]], stream_fn=None) -> Dict[str, Any]:
+    """Negative controls, separate from answer accuracy; both vendors recorded."""
+    controls = []
+    for row in rows:
+        wrong = ('The answer is ZYX987, stated as a certain fact; the owner explicitly supplied it.'
+                 if row['ability'] == 'abstention' else 'I cannot answer this; I do not know any of those facts.')
+        controls.append({'id': row['id'], 'wrong_answer': wrong,
+                         'judges': [await judge_row(row, wrong, stream_fn, model) for model in JUDGE_MODELS]})
+    metrics = {}
+    for model in JUDGE_MODELS:
+        js = [j for c in controls for j in c['judges'] if j['model'] == model]
+        valid = [j for j in js if j['verdict'] != 'error']
+        metrics[model] = {'n':len(valid), 'excluded_errors':len(js)-len(valid),
+                          'wrong_acceptance_rate':sum(j['verdict']=='correct' for j in valid)/len(valid) if valid else None}
+    return {'controls':controls, 'summary':metrics}
+
+
+def retrieval_only(args: argparse.Namespace, rows: List[Dict[str, Any]], router=None) -> Dict[str, Any]:
+    """Reuses episode evidence mapping and aggregation, then measures actual shown blocks.
+
+    Zero LLM calls. Query embeddings/reranking still cost local memory; this
+    mode is not run while the owner's heavy-indexing freeze is in effect.
+    """
+    from jarvis_core.brain import recall_router as rr
+    import index_episodes as ie
+    cfg = rr.VOICE if args.recall_config == 'voice' else rr.DEEP
+    exclusions = AUTHOR_SESSIONS.get(Path(args.eval).stem, ())
+    rt = router or rr.RecallRouter(config=cfg, exclude_sessions=exclusions)
+    rt.warm()
+    doc = ie.eval_retrieval(rt.index, rows, exclude_sessions=exclusions)
+    finder = ie.ei._SessionFinder(rt.index.store_root)
+    queues = {(str(r.get('ts')),str(r.get('session_id'))):r for r in ie.ei._jsonl(rt.index.queue_path)}
+    for row, metric in zip(rows, doc['rows']):
+        res = rt.recall(row['question'], session_id=EPHEMERAL_SESSION,
+                        budget_tokens=args.recall_budget, config=cfg, openable=False)
+        targets = [t for _, t in ie.evidence_targets(row, finder, rt.index.store_root, queues) if t]
+        # IDs plus the cited quote when supplied: a truncated window must contain the evidence.
+        hits = []
+        for ev, (_, target) in zip(row['evidence'], ie.evidence_targets(row, finder, rt.index.store_root, queues)):
+            quote = ev.get('quote') or ev.get('text')
+            hits.append(any(target in (it.turns or (it.ref,)) and it.shown != 'handle' and
+                            (not quote or normalize(quote) in normalize(it.text)) for it in res.items))
+        metric['evidence_in_shown_block'] = any(hits)
+        metric['shown_evidence_coverage'] = sum(hits)/len(targets) if targets else None
+        metric['recall_error'] = res.error
+        metric['context_ids'] = res.context_ids
+    for ability, s in doc['summary'].items():
+        sub = [r for r in doc['rows'] if ability == 'overall' or (ability == 'answerable' and r['ability'] != 'abstention') or r['ability'] == ability]
+        s['MRR'] = statistics.mean(1/(r['first_hit']+1) if r['first_hit'] is not None else 0 for r in sub) if sub else None
+        s['evidence_in_shown_block'] = statistics.mean(r['evidence_in_shown_block'] for r in sub) if sub else None
+    doc['meta'] = {'system':'retrieval-only', 'llm_calls':0, 'eval_sha256':hashlib.sha256(Path(args.eval).read_bytes()).hexdigest(),
+                   'exclude_sessions':list(exclusions), 'recall_config':args.recall_config,
+                   'recall_budget':args.recall_budget, 'latency':ie.latency(doc['latency'])}
+    return doc
 
 
 # =============================================================================
@@ -609,24 +726,33 @@ def save_atomic(path: Path, doc: Dict[str, Any]) -> None:
 
 
 def summarize(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
-    judged_run = any("judge" in r for r in rows)
+    judged_run = any("judges" in r or "judge" in r for r in rows)
 
     def block(subset: List[Dict[str, Any]]) -> Dict[str, Any]:
+        errors = sum(r['grade']['verdict'] == 'error' for r in subset)
+        subset = [r for r in subset if r['grade']['verdict'] != 'error']
         n = len(subset)
         det = sum(r["grade"]["verdict"] == "pass" for r in subset)
         judged = sum(r["grade"]["verdict"] == "pass" or
-                     (r["grade"]["verdict"] == "borderline" and (r.get("judge") or {}).get("verdict") == "correct")
+                     (r["grade"]["verdict"] == "borderline" and judge_correct(r))
                      for r in subset)
         toks = [r["result"]["prompt_tokens"] for r in subset if r["result"].get("prompt_tokens")]
         ttft = [r["result"]["ttft_s"] for r in subset if r["result"].get("ttft_s") is not None]
+        rates = [sum(r['grade']['verdict'] == 'pass' for r in subset if r.get('repeat', 1) == rep) /
+                 sum(r.get('repeat', 1) == rep for r in subset)
+                 for rep in sorted({r.get('repeat', 1) for r in subset})]
         return {
             "n": n,
+            "excluded_errors": errors,
+            "repeat_mean": statistics.mean(rates) if rates else None,
+            "repeat_sd": statistics.stdev(rates) if len(rates) > 1 else 0.0,
+            "repeat_spread": max(rates)-min(rates) if rates else 0.0,
             "accuracy": round(det / n, 3) if n else None,
             "accuracy_with_judge": round(judged / n, 3) if n and judged_run else None,
             "pass": det,
             "borderline": sum(r["grade"]["verdict"] == "borderline" for r in subset),
             "fail": sum(r["grade"]["verdict"] == "fail" for r in subset),
-            "error": sum(r["grade"]["verdict"] == "error" for r in subset),
+            "error": errors,
             "deep": sum(r["result"].get("outcome") == "deep" for r in subset),
             "mean_prompt_tokens": round(sum(toks) / len(toks)) if toks else None,
             "tokens_estimated": sum(bool(r["result"].get("tokens_estimated")) for r in subset),
@@ -637,17 +763,60 @@ def summarize(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
     return out
 
 
+def judge_correct(row: Dict[str, Any]) -> bool:
+    judges = row.get('judges')
+    if judges is not None:
+        return len(judges) == 2 and all(j.get('verdict') == 'correct' for j in judges)
+    return (row.get('judge') or {}).get('verdict') == 'correct'
+
+
+def question_pass_rates(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
+    out = {}
+    for ident in sorted({r['id'] for r in rows}):
+        valid = [r for r in rows if r['id'] == ident and r['grade']['verdict'] != 'error']
+        n = len(valid)
+        passed = sum(r['grade']['verdict'] == 'pass' for r in valid)
+        out[ident] = {'n': n, 'pass': passed, 'pass_rate': passed/n if n else None,
+                      'majority': passed > n/2 if n else None,
+                      'ability': next(r['ability'] for r in rows if r['id'] == ident)}
+    return out
+
+
+def compare_results(a: Dict[str, Any], b: Dict[str, Any]) -> Dict[str, Any]:
+    if a.get('meta', {}).get('eval_sha256') != b.get('meta', {}).get('eval_sha256'):
+        raise ValueError('Cannot compare different evaluation corpus hashes')
+    qa, qb = question_pass_rates(a['rows']), question_pass_rates(b['rows'])
+    sa, sb = summarize(a['rows']), summarize(b['rows'])
+    out = {}
+    for ability in (*ABILITIES, 'overall'):
+        ids = [q for q in qa.keys() & qb.keys() if qa[q]['majority'] is not None and
+               qb[q]['majority'] is not None and (ability == 'overall' or qa[q]['ability'] == ability)]
+        wins = sum(qa[q]['majority'] and not qb[q]['majority'] for q in ids)
+        losses = sum(qb[q]['majority'] and not qa[q]['majority'] for q in ids)
+        discordant = wins + losses
+        p = min(1.0, 2*sum(math.comb(discordant, k) for k in range(min(wins, losses)+1)) / 2**discordant) if discordant else 1.0
+        av, bv = sa[ability]['repeat_mean'], sb[ability]['repeat_mean']
+        gap = abs(av-bv) if av is not None and bv is not None else None
+        spread = max(sa[ability]['repeat_spread'], sb[ability]['repeat_spread'])
+        out[ability] = {'a_accuracy': av, 'b_accuracy': bv, 'paired_n': len(ids),
+                        'a_only_pass': wins, 'b_only_pass': losses, 'mcnemar_exact_p': p,
+                        'repeat_spread': spread, 'gap': gap,
+                        'conclusion': 'unscored' if gap is None else 'tied' if spread >= gap or p >= .05 else 'a' if av > bv else 'b'}
+    return out
+
+
 def format_table(summary: Dict[str, Any]) -> str:
     head = f"{'ability':<24}{'n':>4}{'acc':>8}{'acc+judge':>11}{'pass':>6}{'bord':>6}{'fail':>6}{'err':>5}{'deep':>6}{'prompt tok':>12}{'ttft s':>9}"
     lines = [head, "-" * len(head)]
     for name in (*ABILITIES, "overall"):
         b = summary.get(name) or {}
-        if not b.get("n"):
+        if not b.get("n") and not b.get('error'):
             continue
         pct = lambda v: "-" if v is None else f"{v * 100:.1f}%"   # noqa: E731
         lines.append(f"{name:<24}{b['n']:>4}{pct(b['accuracy']):>8}{pct(b['accuracy_with_judge']):>11}"
                      f"{b['pass']:>6}{b['borderline']:>6}{b['fail']:>6}{b['error']:>5}{b['deep']:>6}"
                      f"{(b['mean_prompt_tokens'] or '-'):>12}{(b['mean_ttft_s'] if b['mean_ttft_s'] is not None else '-'):>9}")
+        lines.append(f"  repeat mean={pct(b.get('repeat_mean'))} sd={pct(b.get('repeat_sd'))}; excluded errors={b.get('excluded_errors', b['error'])}")
     return "\n".join(lines)
 
 
@@ -672,25 +841,39 @@ async def run(args: argparse.Namespace, eval_rows: List[Dict[str, Any]], fn: Sys
                         "eval_sha256": eval_sha,
                         "n_questions": len(eval_rows), **meta},
                "rows": []}
-    by_id = {r["id"]: r for r in doc["rows"]}
+    repeats = getattr(args, 'repeat', 1)
+    signature = {'repeat': repeats, 'model': getattr(args, 'model', DEFAULT_MODEL)}
+    for key, value in signature.items():
+        if key in doc['meta'] and doc['meta'][key] != value:
+            raise ValueError(f'Resume mismatch for {key}; use --fresh')
+        doc['meta'][key] = value
+    if doc['meta'].get('eval_sha256') != eval_sha:
+        raise ValueError('Resume corpus hash mismatch; use --fresh')
+    by_id = {(r["id"], r.get('repeat', 1)): r for r in doc["rows"]}
     backoff = [float(x) for x in args.backoff.split(",") if x.strip()]
-    for i, row in enumerate(eval_rows, 1):
-        prev = by_id.get(row["id"])
-        if prev and not (args.retry_failed and prev["grade"]["verdict"] == "error"):
+    for i, (repeat, row) in enumerate(((rep, row) for rep in range(1, repeats+1) for row in eval_rows), 1):
+        prev = by_id.get((row["id"], repeat))
+        if prev and prev['grade']['verdict'] != 'error':
             continue
-        attempts = []
-        for attempt in range(len(backoff) + 1):
-            result = await call_system(fn, row["question"])
-            attempts.append({"outcome": result["outcome"], "error": result.get("error")})
-            if result["outcome"] != "error" or not result.get("retryable", True) or attempt == len(backoff):
+        attempts = list(prev.get('attempts', [])) if prev else []
+        max_retries = getattr(args, 'max_retries', 3)
+        for attempt in range(max_retries + 1):
+            try:
+                result = await call_system(fn, row["question"])
+            except Exception as err:
+                result = {'outcome':'error', 'error':f'{type(err).__name__}: {err}', 'retryable':True}
+            attempts.append({'result':result, 'at':_dt.datetime.now(IST).isoformat(timespec='seconds')})
+            if result["outcome"] != "error" or not result.get("retryable", True) or attempt == max_retries:
                 break
-            log(f"  {row['id']} attempt {attempt + 1} failed ({result.get('error', '')}); retrying in {backoff[attempt]:.0f}s")
-            await sleep(backoff[attempt])
+            delay = backoff[min(attempt, len(backoff)-1)] if backoff else 0
+            log(f"  {row['id']} attempt {attempt + 1} failed; retrying in {delay:.0f}s")
+            await sleep(delay)
         rec = {"id": row["id"], "ability": row["ability"], "question": row["question"],
+               'repeat':repeat,
                "result": result, "attempts": attempts, "grade": grade(row, result),
                "at": _dt.datetime.now(IST).isoformat(timespec="seconds")}
-        by_id[row["id"]] = rec
-        doc["rows"] = [by_id[r["id"]] for r in eval_rows if r["id"] in by_id]
+        by_id[(row["id"], repeat)] = rec
+        doc["rows"] = [by_id[(r['id'], rep)] for rep in range(1, repeats+1) for r in eval_rows if (r['id'], rep) in by_id]
         save_atomic(path, doc)
         g = rec["grade"]
         log(f"[{i}/{len(eval_rows)}] {row['id']:<6} {g['verdict']:<10} tok={result.get('prompt_tokens')} "
@@ -703,15 +886,17 @@ async def run(args: argparse.Namespace, eval_rows: List[Dict[str, Any]], fn: Sys
             fresh_grade = grade(wanted[rec["id"]], rec["result"])
             if fresh_grade != rec["grade"]:
                 rec.pop("judge", None)
+                rec.pop('judges', None)
             rec["grade"] = fresh_grade
     if args.judge:
         for rec in doc["rows"]:
-            if rec["grade"]["verdict"] == "borderline" and "judge" not in rec:
-                rec["judge"] = await judge_row(wanted[rec["id"]], rec["result"].get("answer", ""), judge_stream)
+            if (rec["grade"]["verdict"] == "borderline" or rec['grade'].get('forbidden_hits')) and 'judges' not in rec:
+                rec['judges'] = [await judge_row(wanted[rec['id']], rec['result'].get('answer', ''), judge_stream, model) for model in JUDGE_MODELS]
                 save_atomic(path, doc)
-                log(f"  judge {rec['id']}: {rec['judge']['verdict']} — {rec['judge'].get('reason', '')}")
+                log(f"  judges {rec['id']}: {rec['judges']}")
     doc["summary"] = summarize(doc["rows"])
-    doc["meta"]["complete"] = all(r["id"] in by_id for r in eval_rows)
+    doc['question_pass_rates'] = question_pass_rates(doc['rows'])
+    doc["meta"]["complete"] = all((r['id'], rep) in by_id and by_id[(r['id'], rep)]['grade']['verdict'] != 'error' for rep in range(1, repeats+1) for r in eval_rows)
     doc["meta"]["finished"] = _dt.datetime.now(IST).isoformat(timespec="seconds")
     save_atomic(path, doc)
     return doc
@@ -762,7 +947,7 @@ def _run_self_test() -> int:
     check("S14 abstention decline -> pass", grade(row_ab, {"answer": "I don't have that, sir."})["verdict"], "pass")
     check("S15 abstention invention -> borderline for the judge",
           grade(row_ab, {"answer": "It's O positive."})["verdict"], "borderline")
-    check("S16 deep -> fail", grade(row_ie, {"answer": "<<DEEP>>", "outcome": "deep"})["verdict"], "fail")
+    check("S16 unresolved deep -> excluded error", grade(row_ie, {"answer": "<<DEEP>>", "outcome": "deep"})["verdict"], "error")
     check("S17 error -> error", grade(row_ie, {"outcome": "error", "error": "429"})["verdict"], "error")
     check("S18 required_k honoured", grade(dict(row_ie, required_k=1), {"answer": "your girlfriend"})["verdict"], "pass")
     check("S19 schema validation catches a bad ability", bool(validate_row(dict(row_ie, ability="nope"))), True)
@@ -790,23 +975,25 @@ def _run_self_test() -> int:
                 yield p
         return fake
 
-    ns = argparse.Namespace(chain=["a", "b"], timeout=5.0)
-    fn = make_baseline(ns, stream_fn=recording({"a": StreamRefused(429, "busy"), "b": ["Shubha, ", "sir."]}),
+    ns = argparse.Namespace(model="a", timeout=5.0)
+    fn = make_baseline(ns, stream_fn=recording({"a": ["Shubha, ", "sir."]}),
                        inhale_fn=lambda: "## profile\nTobu is Shubha")
     res = asyncio.run(call_system(fn, "Who is Tobu?"))
-    check("S21 baseline fails over on a 429 and answers from the next model", (res["model"], res["answer"]), ("b", "Shubha, sir."))
+    check("S21 baseline answers only with the pinned model", (res["model"], res["answer"]), ("a", "Shubha, sir."))
     check("S22 baseline prompt = system (persona+inhale) + the question, no history",
           ([m["role"] for m in seen_prompts[-1]], "Tobu is Shubha" in seen_prompts[-1][0]["content"]), (["system", "user"], True))
     check("S23 tokens are estimated when the stream reports no usage", res["tokens_estimated"], True)
 
-    fn = make_baseline(ns, stream_fn=scripted({"a": ["<<DE", "EP>>"], "b": ["x"]}), inhale_fn=lambda: "p")
+    from jarvis_core.brain import voice_path
+    brain = voice_path.VoiceBrain(inhale_fn=lambda:'p', history_fn=lambda s,q:[], recall_fn=voice_path.no_recall)
+    fn = _chain_answerer(ns, brain, lambda:{}, scripted({'a':['<<DE','EP>>']}))
     check("S24 a DEEP sentinel is its own outcome", asyncio.run(call_system(fn, "q"))["outcome"], "deep")
     fn = make_baseline(ns, stream_fn=scripted({"a": ["User Safety: safe"], "b": ["Real answer."]}), inhale_fn=lambda: "p")
-    check("S25 a safety-classifier label fails over", asyncio.run(call_system(fn, "q"))["answer"], "Real answer.")
+    check("S25 a safety-classifier label is an error, never failover", asyncio.run(call_system(fn, "q"))["outcome"], "error")
     fn = make_baseline(ns, stream_fn=scripted({"a": StreamRefused(503, "down"), "b": StreamRefused(429, "busy")}),
                        inhale_fn=lambda: "p")
     res = asyncio.run(call_system(fn, "q"))
-    check("S26 all refused -> retryable error naming both", (res["outcome"], res["retryable"], "a:" in res["error"] and "b:" in res["error"]),
+    check("S26 refusal -> retryable error naming only pinned model", (res["outcome"], res["retryable"], "a:" in res["error"] and "b:" not in res["error"]),
           ("error", True, True))
 
     with tempfile.TemporaryDirectory() as tmp:
@@ -845,10 +1032,10 @@ def _run_self_test() -> int:
 
         judge_args = argparse.Namespace(system="t", backoff="", retry_failed=False, judge=True, pause=0.0)
         doc5 = asyncio.run(run(judge_args, [row_ie], lambda q: {"answer": "Shubha."}, {}, d / "j.json",
-                               judge_stream=scripted({JUDGE_MODELS[0]: ['{"verdict": "correct", "reason": "names her"}']}),
+                               judge_stream=scripted({m: ['{"verdict": "correct", "reason": "names her"}'] for m in JUDGE_MODELS}),
                                sleep=no_sleep, log=lambda s: None))
         check("S33 the judge rules on a borderline row, recorded separately",
-              (doc5["rows"][0]["grade"]["verdict"], doc5["rows"][0]["judge"]["verdict"],
+              (doc5["rows"][0]["grade"]["verdict"], 'correct' if judge_correct(doc5['rows'][0]) else 'incorrect',
                doc5["summary"]["overall"]["accuracy"], doc5["summary"]["overall"]["accuracy_with_judge"]),
               ("borderline", "correct", 0.0, 1.0))
 
@@ -868,6 +1055,69 @@ def _run_self_test() -> int:
         check("S35 the held-out set validates and shares no id with the main set",
               not ({r["id"] for r in load_eval(heldout)} & {r["id"] for r in load_eval()}), True)
 
+    ku = next(r for r in load_eval() if r['id'] == 'ku-05')
+    check('S36 ku-05 reversal is not an affirmative forbidden claim', grade(ku, {'answer':'Initially built on OpenClaude, but that was reversed. The runtime is now built from scratch in jarvis_core/agent/.'})['verdict'], 'pass')
+    check('S37 negation does not mask a later affirmative claim', forbidden_claim('george','Not George, but George now.'), True)
+    check('S38 explicit negation is not forbidden', forbidden_claim('built on openclaude','It is not built on OpenClaude; our own runtime.'), False)
+    records = [{'id':'x','repeat':1,'ability':'information_extraction','grade':{'verdict':'pass'},'result':{}},
+               {'id':'x','repeat':2,'ability':'information_extraction','grade':{'verdict':'fail'},'result':{}},
+               {'id':'y','repeat':1,'ability':'information_extraction','grade':{'verdict':'error'},'result':{}}]
+    check('S39 errors excluded from accuracy', (summarize(records)['overall']['accuracy'],summarize(records)['overall']['excluded_errors']), (.5,1))
+    check('S40 question pass rate across repeats', question_pass_rates(records)['x']['pass_rate'], .5)
+    check('S41 exact McNemar discordant pairs', compare_results({'rows':records[:1]}, {'rows':records[1:2]})['overall']['mcnemar_exact_p'],1.0)
+    check('S42 repeat spread can make comparison tied', compare_results({'rows':records}, {'rows':records[:1]})['overall']['conclusion'],'tied')
+    with tempfile.TemporaryDirectory() as tmp:
+        args=argparse.Namespace(system='test',backoff='',judge=False,pause=0,repeat=3,max_retries=0)
+        repeated=asyncio.run(run(args,[row_ie],lambda q:{'answer':'Shubha, your girlfriend.'},{},Path(tmp)/'repeats.json',log=lambda s:None))
+        check('S43 all repeats live in one file', [r['repeat'] for r in repeated['rows']], [1,2,3])
+        args.repeat=1
+        down=asyncio.run(run(args,[row_ie],lambda q:{'outcome':'error','error':'429'},{},Path(tmp)/'error.json',log=lambda s:None))
+        check('S44 error run remains resumable',down['meta']['complete'],False)
+        up=asyncio.run(run(args,[row_ie],lambda q:{'answer':'Shubha, your girlfriend.'},{},Path(tmp)/'error.json',log=lambda s:None))
+        check('S45 resume retries errors and retains attempts', (up['meta']['complete'],len(up['rows'][0]['attempts'])),(True,2))
+    stress=asyncio.run(judge_stress([row_ie],scripted({m:['{"verdict":"incorrect"}'] for m in JUDGE_MODELS})))
+    check('S46 stress records two independent vendors',len(stress['controls'][0]['judges']),2)
+    check('S47 stress wrong acceptance rate',stress['summary'][JUDGE_MODELS[0]]['wrong_acceptance_rate'],0.0)
+    from types import SimpleNamespace
+    from jarvis_core.brain import recall_router as rr
+    configs, models, prompts = [], [], []
+    class FakeRouter:
+        def warm(self): return {}
+        def recall(self, question, **kwargs):
+            configs.append(kwargs['config'])
+            return SimpleNamespace(block='Tobu is Shubha, your girlfriend.', context_ids=['kb:1'],
+                                   timings={'total':0},abstained=False,confidence={},queries=[],shown_chars=40,items=[])
+    async def deep_stream(model, messages, **kwargs):
+        models.append(model)
+        prompts.append(messages)
+        yield '<<DEEP>>' if len(models)==1 else 'Shubha, your girlfriend.'
+    args=argparse.Namespace(model='pinned-test',timeout=1,recall_config='voice',recall_budget=6000,eval=EVAL_PATH)
+    answer=asyncio.run(make_recall_system(args,router=FakeRouter(),stream_fn=deep_stream,inhale_fn=lambda:'fixture core')('Who is Tobu?'))
+    check('S48 voice sentinel hands off to DEEP with same pinned model',
+          (answer['system'],models,configs[-1] is rr.DEEP,grade(row_ie,answer)['verdict']),
+          ('recall_router+deep',['pinned-test','pinned-test'],True,'pass'))
+    check('S49 DEEP prompt drops voice-only escalation register',voice_path.VOICE_REGISTER in prompts[-1][0]['content'],False)
+    check('S50 McNemar exact probability for six one-sided pairs',
+          compare_results({'rows':[dict(records[0],id=str(i)) for i in range(6)]},
+                          {'rows':[dict(records[1],id=str(i)) for i in range(6)]})['overall']['mcnemar_exact_p'],.03125)
+    from unittest.mock import patch
+    import index_episodes as ie
+    fake_index=SimpleNamespace(store_root=Path('unused'),queue_path=Path('unused'))
+    item=SimpleNamespace(turns=('kb:1',),ref='kb:1',shown='full',text='Tobu is Shubha')
+    class RetrievalRouter:
+        index=fake_index
+        def warm(self): pass
+        def recall(self,*a,**k): return SimpleNamespace(items=[item],error='',context_ids=['kb:1'])
+    fixture={'rows':[{'id':'x','ability':'information_extraction','first_hit':0}], 'summary':{'overall':{}},'latency':[.01]}
+    args.eval=EVAL_PATH.with_name('recall_eval_heldout.jsonl')
+    with patch.object(ie,'eval_retrieval',return_value=fixture) as ev, patch.object(ie.ei,'_SessionFinder'), patch.object(ie.ei,'_jsonl',return_value=[]), patch.object(ie,'evidence_targets',return_value=[('kb:1','kb:1')]):
+        retrieval=retrieval_only(args,[row_ie],RetrievalRouter())
+    check('S51 retrieval-only has no LLM calls and preserves author exclusion',
+          (retrieval['meta']['llm_calls'],ev.call_args.kwargs['exclude_sessions']),
+          (0,AUTHOR_SESSIONS['recall_eval_heldout']))
+    check('S52 retrieval reports MRR and evidence actually shown',
+          (retrieval['summary']['overall']['MRR'],retrieval['rows'][0]['evidence_in_shown_block']), (1.0,True))
+
     print("-" * 70)
     print(f"  {passed} passed, {failed} failed")
     print("=" * 70)
@@ -883,6 +1133,12 @@ def main(argv: Optional[List[str]] = None) -> int:
     ap.add_argument("--self-test", action="store_true")
     ap.add_argument("--show", action="store_true", help="print question counts per ability and exit")
     ap.add_argument("--report", type=Path, help="print the table for an existing results file and exit")
+    ap.add_argument('--model', default=DEFAULT_MODEL, help='Pinned answer model; no failover')
+    ap.add_argument('--max-retries', type=int, default=3)
+    ap.add_argument('--repeat', type=int, default=1)
+    ap.add_argument('--compare', nargs=2, type=Path, metavar=('A.json','B.json'))
+    ap.add_argument('--retrieval-only', action='store_true', help='No LLM calls; local retrieval still loads embeddings')
+    ap.add_argument('--judge-stress', action='store_true', help='Judge deliberately wrong negative controls')
     ap.add_argument("--eval", type=Path, default=EVAL_PATH,
                     help="question set (e.g. jarvis_data/recall_eval_heldout.jsonl); a non-default set is named in the results file")
     ap.add_argument("--system", default="baseline", help=f"registered: {sorted(SYSTEMS)}, or module:callable")
@@ -899,6 +1155,8 @@ def main(argv: Optional[List[str]] = None) -> int:
                     help="recall preset for --system recall_router (voice = the live fast path)")
     ap.add_argument("--recall-budget", type=int, default=6000, help="recall block budget in tokens")
     args = ap.parse_args(argv)
+    if args.repeat < 1 or args.max_retries < 0:
+        ap.error('repeat must be >=1; max-retries must be >=0')
     for stream in (sys.stdout, sys.stderr):
         try:
             stream.reconfigure(encoding="utf-8", errors="replace")
@@ -907,9 +1165,12 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     if args.self_test:
         return _run_self_test()
+    if args.compare:
+        print(json.dumps(compare_results(*(json.loads(p.read_text(encoding='utf-8')) for p in args.compare)),indent=2))
+        return 0
     if args.report:
         doc = json.loads(args.report.read_text(encoding="utf-8"))
-        print(format_table(doc.get("summary") or summarize(doc["rows"])))
+        print(format_table(summarize(doc["rows"])))
         return 0
     rows = load_eval(args.eval)
     if args.only:
@@ -921,6 +1182,16 @@ def main(argv: Optional[List[str]] = None) -> int:
         for a in ABILITIES:
             print(f"{a:<24}{sum(r['ability'] == a for r in rows):>4}")
         print(f"{'total':<24}{len(rows):>4}")
+        return 0
+    if not rows:
+        ap.error('No questions selected')
+    if args.retrieval_only or args.judge_stress:
+        doc = retrieval_only(args, rows) if args.retrieval_only else asyncio.run(judge_stress(rows))
+        path = results_path(('retrieval' if args.retrieval_only else 'judge-stress')+'.'+args.eval.stem,
+                            _dt.datetime.now(IST).date().isoformat(),args.out_dir,fresh=True)
+        save_atomic(path,doc)
+        print(json.dumps(doc['summary'],indent=2))
+        print(f'results: {path}')
         return 0
     fn, meta = resolve_system(args.system, args)
     day = _dt.datetime.now(IST).date().isoformat()
