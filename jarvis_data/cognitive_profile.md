@@ -1,6 +1,6 @@
 # Cognitive Profile — Model of the User
 
-> Auto-synthesized by `scripts/profile_synth.py` from `knowledge_base.jsonl` (822 entries). Injected into every chat via the SessionStart hook. Regenerate after KB updates. Every entry is shown in full, dated, and appears in one section only.
+> Auto-synthesized by `scripts/profile_synth.py` from `knowledge_base.jsonl` (824 entries). Injected into every chat via the SessionStart hook. Regenerate after KB updates. Every entry is shown in full, dated, and appears in one section only.
 
 ## Who you are
 _Durable identity — career, ambitions, philosophy, how you see yourself. Oldest first; later entries update earlier ones._
@@ -60,6 +60,7 @@ _Durable identity — career, ambitions, philosophy, how you see yourself. Oldes
 - [2026-09-29 · Cognitive_Pattern] The owner wants to help bring India into the AI race, believing robotics, physical AI and AI applications will be the biggest money-making layer, and says this is why they are building JARVIS. Evidence, in the owner's words (2026-06-17, claude): "That is wy i am building jarvis"
 - [2026-09-29 · Cognitive_Pattern] The owner is preparing for systems-design interview rounds at companies like Atlassian, where warehousing scenarios are asked. Evidence, in the owner's words (2026-06-17, claude): "If I head into an interview with comanies like atlassion etc"
 - [2026-09-29 · Cognitive_Pattern] The owner is 23 years old and works as a data engineer at Celebal Technologies. Evidence, in the owner's words (2026-04-17, antigravity): "As i am 23 years old and work as a data engineer at celebal technologies"
+- [2026-09-30 · Cognitive_Pattern] The owner has a local NVIDIA GeForce GTX 1650 GPU on their development machine. Evidence, in the owner's words (2026-04-25, antigravity): "I have nvidia gtx 1650"
 
 ## People in your life
 _Who the people around you are, and what they are to you. Oldest first; later entries update earlier ones._
@@ -574,6 +575,7 @@ _Who the people around you are, and what they are to you. Oldest first; later en
 - [2026-09-29 · Cognitive_Pattern] The owner wants JARVIS to possess a distinct personality and behavioral voice. Evidence, in the owner's words (2026-04-18, antigravity): "I wanna give jarvis persnality too."
 - [2026-09-29 · Cognitive_Pattern] The owner specifically prefers DeepSeek V4 Pro as an affordable equivalent to Claude Opus 4.7. Evidence, in the owner's words (2026-04-26, antigravity): "I WANT V4 PRO only as it is literally a cheap opus 4.7"
 - [2026-09-29 · Cognitive_Pattern] The owner prefers hands-on implementation with assistant guidance over having the assistant write code for them directly. Evidence, in the owner's words (2026-04-25, antigravity): "guide me on how to implement, don't do it yourself"
+- [2026-09-30 · Cognitive_Pattern] The owner requires all production scripts to be segregated immediately into js-development as they are built to avoid repository clutter. Evidence, in the owner's words (2026-04-25, antigravity): "all the production scripts must be segregated as we go on or it will get messy at the end"
 
 ## Recent corrections (last 7 days)
 _Project-specific corrections from the past week. These are NOT identity — never answer "who am I?" from this section._
