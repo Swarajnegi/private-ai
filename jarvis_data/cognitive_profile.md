@@ -1,6 +1,6 @@
 # Cognitive Profile — Model of the User
 
-> Auto-synthesized by `scripts/profile_synth.py` from `knowledge_base.jsonl` (825 entries). Injected into every chat via the SessionStart hook. Regenerate after KB updates. Every entry is shown in full, dated, and appears in one section only.
+> Auto-synthesized by `scripts/profile_synth.py` from `knowledge_base.jsonl` (829 entries). Injected into every chat via the SessionStart hook. Regenerate after KB updates. Every entry is shown in full, dated, and appears in one section only.
 
 ## Who you are
 _Durable identity — career, ambitions, philosophy, how you see yourself. Oldest first; later entries update earlier ones._
@@ -576,6 +576,7 @@ _Who the people around you are, and what they are to you. Oldest first; later en
 - [2026-09-29 · Cognitive_Pattern] The owner specifically prefers DeepSeek V4 Pro as an affordable equivalent to Claude Opus 4.7. Evidence, in the owner's words (2026-04-26, antigravity): "I WANT V4 PRO only as it is literally a cheap opus 4.7"
 - [2026-09-29 · Cognitive_Pattern] The owner prefers hands-on implementation with assistant guidance over having the assistant write code for them directly. Evidence, in the owner's words (2026-04-25, antigravity): "guide me on how to implement, don't do it yourself"
 - [2026-09-30 · Cognitive_Pattern] The owner requires all production scripts to be segregated immediately into js-development as they are built to avoid repository clutter. Evidence, in the owner's words (2026-04-25, antigravity): "all the production scripts must be segregated as we go on or it will get messy at the end"
+- [2026-09-30 · Cognitive_Pattern] The owner wants the scripts/ directory kept clean, retaining only reusable scripts integrated into workflows rather than creating disposable scripts. Evidence, in the owner's words (2026-04-26, antigravity): "keep only the scripts we need and will be reuisng and add these to the workflows so they are re-used instead of creating a new one each time with upgrades added to them as we go on."
 
 ## Recent corrections (last 7 days)
 _Project-specific corrections from the past week. These are NOT identity — never answer "who am I?" from this section._
