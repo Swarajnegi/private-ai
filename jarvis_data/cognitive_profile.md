@@ -1,6 +1,6 @@
 # Cognitive Profile — Model of the User
 
-> Auto-synthesized by `scripts/profile_synth.py` from `knowledge_base.jsonl` (829 entries). Injected into every chat via the SessionStart hook. Regenerate after KB updates. Every entry is shown in full, dated, and appears in one section only.
+> Auto-synthesized by `scripts/profile_synth.py` from `knowledge_base.jsonl` (834 entries). Injected into every chat via the SessionStart hook. Regenerate after KB updates. Every entry is shown in full, dated, and appears in one section only.
 
 ## Who you are
 _Durable identity — career, ambitions, philosophy, how you see yourself. Oldest first; later entries update earlier ones._
@@ -61,12 +61,14 @@ _Durable identity — career, ambitions, philosophy, how you see yourself. Oldes
 - [2026-09-29 · Cognitive_Pattern] The owner is preparing for systems-design interview rounds at companies like Atlassian, where warehousing scenarios are asked. Evidence, in the owner's words (2026-06-17, claude): "If I head into an interview with comanies like atlassion etc"
 - [2026-09-29 · Cognitive_Pattern] The owner is 23 years old and works as a data engineer at Celebal Technologies. Evidence, in the owner's words (2026-04-17, antigravity): "As i am 23 years old and work as a data engineer at celebal technologies"
 - [2026-09-30 · Cognitive_Pattern] The owner has a local NVIDIA GeForce GTX 1650 GPU on their development machine. Evidence, in the owner's words (2026-04-25, antigravity): "I have nvidia gtx 1650"
+- [2026-09-30 · Decision] The owner (2026-09-30) confirmed their current role: data engineer at Celebal in Jaipur, package Rs 8.92 LPA. They are looking to switch to a city like Bangalore for higher pay, a better company, better work-life balance, and better, smarter people around them. Evidence, in the owner's words: "my package is 8.92 lpa right now. in jaipur a data engineer at celebal, looking to switch to city like bangalore for high pay, better company, better WLB and better/smarter people around."
 
 ## People in your life
 _Who the people around you are, and what they are to you. Oldest first; later entries update earlier ones._
 - [2026-09-29 · Semantic] The owner's girlfriend is Shubha, nicknamed Tobu. (Shubha) Evidence, in the owner's words (2026-09-28, claude): "my girlfried (Shubha, nicknamed Tobu)"
 - [2026-09-29 · Semantic] The owner has a sister and is giving her Rs 10k for her birthday. (sister) Evidence, in the owner's words (2026-06-19, claude): "e10k to sister for birthday"
 - [2026-09-29 · Semantic] The owner has a girlfriend and is giving her Rs 7k for her birthday. (gf) Evidence, in the owner's words (2026-06-19, claude): "7k to my gf for her bday"
+- [2026-09-30 · Semantic] Correction of KB 660 (owner, 2026-09-30): the owner's father is 53, retired from the Navy and works as a freelance marine architect; he has been offered a full-time job in Goa starting November 2026. KB 660's '60+ retired govt servant' is wrong. Evidence, in the owner's words: "Dad is retired, he is 53 right now and is a freelance marine architect, recently got offered full time job at goa ffrom november."
 
 ## How you think and learn
 - [2026-03-07 · Cognitive_Pattern] Gap: jargon_gap + abstraction_gap + missing_prerequisite. User has strong ML/DL math foundation (backprop, gradient descent, loss functions, linear algebra) but ZERO LLM-specific knowledge (tokenization, positional encoding, attention, transformer input pipeline). Key confusion pattern: invisible operations -- user struggles when system performs actions silently (truncation with no error, implicit subword splitting, hidden padding). Does NOT struggle with math itself, struggles with unexplained mechanics. DIRECTIVE: When explaining LLM/transformer internals, (1) never use NLP jargon without immediate definition, (2) use step-by-step mechanical walkthroughs showing exactly what happens at each stage with real numbers/IDs, (3) anchor new concepts to comparison tables against known references (BERT->MiniLM pattern worked), (4) always include verify-it-yourself code blocks.
@@ -577,6 +579,7 @@ _Who the people around you are, and what they are to you. Oldest first; later en
 - [2026-09-29 · Cognitive_Pattern] The owner prefers hands-on implementation with assistant guidance over having the assistant write code for them directly. Evidence, in the owner's words (2026-04-25, antigravity): "guide me on how to implement, don't do it yourself"
 - [2026-09-30 · Cognitive_Pattern] The owner requires all production scripts to be segregated immediately into js-development as they are built to avoid repository clutter. Evidence, in the owner's words (2026-04-25, antigravity): "all the production scripts must be segregated as we go on or it will get messy at the end"
 - [2026-09-30 · Cognitive_Pattern] The owner wants the scripts/ directory kept clean, retaining only reusable scripts integrated into workflows rather than creating disposable scripts. Evidence, in the owner's words (2026-04-26, antigravity): "keep only the scripts we need and will be reuisng and add these to the workflows so they are re-used instead of creating a new one each time with upgrades added to them as we go on."
+- [2026-09-30 · Cognitive_Pattern] The owner expects the assistant to continuously observe, discover, and record the owner's cognitive patterns in long-term memory. Evidence, in the owner's words (2026-04-26, antigravity): "I've noticed that you haven't been storing my cognitive patterns at all, not even discovering new ones."
 
 ## Recent corrections (last 7 days)
 _Project-specific corrections from the past week. These are NOT identity — never answer "who am I?" from this section._

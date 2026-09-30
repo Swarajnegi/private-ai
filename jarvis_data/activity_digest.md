@@ -6,12 +6,16 @@
 > the DISTILLED, 7-day, human-readable form (observation_queue.jsonl
 > itself is also tracked; corrected 2026-09-10, this line used to
 > falsely claim otherwise).
-> Generated 2026-09-29T18:37:14+05:30 on unknown.
+> Generated 2026-09-30T07:33:19+05:30 on unknown.
 
-RECENT ACTIVITY — your own captured turns across ALL chats, last 7 days (668 turns, 14 chats). Source: local observation_queue.jsonl — this is your actual per-prompt activity log, NOT git. Use it to stay aware of what you have been working on across chats.
-SELF-STATE: latest captured turn was produced by claude-sonnet-5-5 on unknown — brain swaps this window: claude-opus-5 -> claude-opus-5-5 (2026-09-23); claude-opus-5-5 -> nvidia/nemotron-3-super-120b-a12b:free (2026-09-26); nvidia/nemotron-3-super-120b-a12b:free -> claude-opus-5-5 (2026-09-26); claude-opus-5-5 -> claude-sonnet-5-5 (2026-09-29); claude-sonnet-5-5 -> claude-opus-5-5 (2026-09-29); claude-opus-5-5 -> claude-sonnet-5-5 (2026-09-29); claude-sonnet-5-5 -> claude-opus-5-5 (2026-09-29); claude-opus-5-5 -> claude-sonnet-5-5 (2026-09-29).
+RECENT ACTIVITY — your own captured turns across ALL chats, last 7 days (627 turns, 14 chats). Source: local observation_queue.jsonl — this is your actual per-prompt activity log, NOT git. Use it to stay aware of what you have been working on across chats.
+SELF-STATE: latest captured turn was produced by claude-opus-5-5 on unknown — brain swaps this window: claude-opus-5-5 -> nvidia/nemotron-3-super-120b-a12b:free (2026-09-26); nvidia/nemotron-3-super-120b-a12b:free -> claude-opus-5-5 (2026-09-26); claude-opus-5-5 -> claude-sonnet-5-5 (2026-09-29); claude-sonnet-5-5 -> claude-opus-5-5 (2026-09-29); claude-opus-5-5 -> claude-sonnet-5-5 (2026-09-29); claude-sonnet-5-5 -> claude-opus-5-5 (2026-09-29); claude-opus-5-5 -> claude-sonnet-5-5 (2026-09-29); claude-sonnet-5-5 -> claude-opus-5-5 (2026-09-29).
 
-- 2026-09-29 (Tue): 41 turns [5 chat(s)] — unknown×27, ai-ml×8, finance×3, data-engineering×2, jarvis-build×1
+- 2026-09-30 (Wed): 14 turns [3 chat(s)] — unknown×14
+    • what is the ending of loki season 2? in regards to the temporal loom and why loki has to hold some strings and sit ona  throne?
+    • i didnt ask you to start implementing anything, i only asked info and the actual action item list, so aswer all the questions i asked precious turn and then give the actual action item list.
+      We will implement tomorrow, I'm done for the day.
+- 2026-09-29 (Tue): 74 turns [5 chat(s)] — unknown×54, ai-ml×9, data-engineering×5, finance×4, jarvis-build×2
     • Fine, put all the info we've gathered about these 2 features in memory, we'll come back to it later.
       For now give me the updated android apk and ios web app link
     • 1. Redacting client identifiers from the capture queue and shards before any push. The queue is tracked in git, so client names already sit in it. Nothing is pushed until you decide.
@@ -178,21 +182,10 @@ SELF-STATE: latest captured turn was produced by claude-sonnet-5-5 on unknown �
       GIve a final pdf format resume for him
     • Hi,
       If i give you 50$, can you trade stocks for me on US stocks to triple my money in a few days?
-- 2026-09-23 (Wed): 43 turns [4 chat(s)] — finance×24, unknown×18, jarvis-build×1
+- 2026-09-23 (Wed): 28 turns [4 chat(s)] — unknown×14, finance×13, jarvis-build×1
     • what's next in JARVIS build aside from me answering the 45 questions to JARVIS?
     • get up to speed with the current state of the app, i had codex work on it a little and i made some changes
     • As you can see the MFs are not being synced, last sync was on 18 sept. I keep syncing but rhey dont sync stocks do
     • [https://github.com/calesthio/OpenMontage.git](https://github.com/calesthio/OpenMontage.git)
       check this repo and tell me what it can do for us in terms of clipping videos that go viral exactly like the shorts links i shared with you earlier.
       And tell me if at any point i will need money if i use this.
-- 2026-09-22 (Tue): 73 turns [4 chat(s)] — unknown×42, finance×29, ai-ml×2
-    • alright man, just do a proper research on what is the cheapest way that i can make realistic AI GUC content it must be Maya only.&#x20;
-      I have signed into this: "[https://app.heygen.com/home](https://app.heygen.com/home)" check if this would work
-    • pressing on key settings still give sthe legacy android UI type list, make it into the same platte as the AI card, and clearly seperate the free and paid models.
-      Also see if there's room to optimize the syncing of app and answering of AI.
-    • try and see if you can use the capcut app on my pc to edit the valorant clips exactly likt in the yt shorts links i gave you
-    • fine, remove the returns one and keep only corpus one as the only graph.
-      also, the AI part, the AI's answer must not be very long, it must analyse everything from analyst prediction to revenue to teh company's outlook and innovation and news etc to suggest a hold, trim or buy and breifly why.
-      The answers currently no matter what model i use are very very elaborated and long.
-      Also becausae of this they take aroun 5 minutes to answer, our users dont have that time, also if i minimise the app then the AI analysis stops instantly.
-      Fix these first.
