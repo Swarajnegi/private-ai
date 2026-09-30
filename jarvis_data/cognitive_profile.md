@@ -1,6 +1,6 @@
 # Cognitive Profile — Model of the User
 
-> Auto-synthesized by `scripts/profile_synth.py` from `knowledge_base.jsonl` (860 entries). Injected into every chat via the SessionStart hook. Regenerate after KB updates. Every entry is shown in full, dated, and appears in one section only.
+> Auto-synthesized by `scripts/profile_synth.py` from `knowledge_base.jsonl` (867 entries). Injected into every chat via the SessionStart hook. Regenerate after KB updates. Every entry is shown in full, dated, and appears in one section only.
 
 ## Who you are
 _Durable identity — career, ambitions, philosophy, how you see yourself. Oldest first; later entries update earlier ones._
@@ -69,6 +69,7 @@ _Durable identity — career, ambitions, philosophy, how you see yourself. Oldes
 - [2026-09-30 · Cognitive_Pattern] The owner envisions JARVIS enabling ambitious physical engineering projects, holograms, and acting as an autonomous financial manager. Evidence, in the owner's words (2026-05-03, antigravity): "Will JARVIS become to be the AI system that will help me achieve Iron Man like projects? like building a hologram, doing something groundbreaking, make me money by being my top financial manager?"
 - [2026-09-30 · Cognitive_Pattern] The owner experienced a philosophical shift toward detachment and quiet confidence, viewing life as something to be lived rather than needing external importance or validation to be meaningful. Evidence, in the owner's words (2026-05-04, antigravity): "I think life is neither meaningless nor meaningful. It's just there, to be lived."
 - [2026-09-30 · Cognitive_Pattern] The owner contributes ₹3,600 per month to an Employee Provident Fund (EPF). Evidence, in the owner's words (2026-05-14, antigravity): "my epf contribution is of 3600 per month."
+- [2026-09-30 · Cognitive_Pattern] Has invested approximately ₹45,000 in NVIDIA stock and considers it a substantial personal allocation. Evidence, in the owner's words (2026-05-17, antigravity): "I have invested around 45k in indian money in nvidia, it is a lot for me."
 
 ## People in your life
 _Who the people around you are, and what they are to you. Oldest first; later entries update earlier ones._
@@ -596,6 +597,8 @@ _Who the people around you are, and what they are to you. Oldest first; later en
 - [2026-09-30 · Cognitive_Pattern] The owner wants OpenClaude launch scripts to automatically change the working directory to E:\J.A.R.V.I.S. Evidence, in the owner's words (2026-04-29, antigravity): "can we make it so that opncaldue launches in the openclaude as root directory only but immediately a cd E:\J.A.R.V.I.S runs to change the root directory so i dont have to do it manually everytime"
 - [2026-09-30 · Cognitive_Pattern] The owner advocates using generators and yields rather than materializing large lists to prevent out-of-memory errors during data processing. Evidence, in the owner's words (2026-05-02, antigravity): "is using lists truly the best way? we can face an OOM error, shouldn't we stick to like async generators and yields?"
 - [2026-09-30 · Cognitive_Pattern] The owner wants system rules to record only the latest state, excluding historical before-and-after change logs. Evidence, in the owner's words (2026-05-03, antigravity): "don't save before and after stuff nii the rules, it is irrevelevant. Just store the latest info"
+- [2026-09-30 · Cognitive_Pattern] Wants JARVIS long-term memory to capture not only engineering thinking and mental state, but also personal finance to build a holistic model of the user. Evidence, in the owner's words (2026-05-16, antigravity): "for JARVIS to have a better understanding of not only my engineering side of thinking and mental state but also in my personal finance side of things? Wouldn't that be better for JARVIS if he knows everything about me?"
+- [2026-09-30 · Cognitive_Pattern] Mandates that canonical financial strategy references (checking Finance/strategy.md) must be persisted in unconditional workspace rules so they are enforced across all new chats. Evidence, in the owner's words (2026-05-16, antigravity): "Is this stored somewhere as a workspace rule? BEcuase otherwise this won't be applied in a different chat"
 
 ## Recent corrections (last 7 days)
 _Project-specific corrections from the past week. These are NOT identity — never answer "who am I?" from this section._
