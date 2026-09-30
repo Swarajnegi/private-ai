@@ -96,6 +96,7 @@ sys.path.insert(0, str(_REPO_ROOT / "js-development"))
 from jarvis_core.agent.capture import (  # noqa: E402
     append_observation, build_observation, redact)
 from jarvis_core.config import DATA_ROOT  # noqa: E402
+from jarvis_core.agent.codex_paths import rollout_paths  # noqa: E402
 
 _IST = timezone(timedelta(hours=5, minutes=30))
 
@@ -288,7 +289,7 @@ def find_rollouts(root: Optional[Path] = None) -> List[Path]:
     root = Path(root) if root is not None else SESSIONS_ROOT
     if not root.exists():
         return []
-    return sorted(root.rglob("rollout-*.jsonl"))
+    return sorted(rollout_paths(root))
 
 
 def _session_id_from_filename(path: Path) -> str:

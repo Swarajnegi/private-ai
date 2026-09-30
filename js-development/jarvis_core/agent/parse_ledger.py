@@ -57,6 +57,7 @@ if __package__ in (None, ""):
 
 from jarvis_core.agent.parse_rule import PARSE_RULE_VERSION  # noqa: E402
 from jarvis_core.config import DATA_ROOT  # noqa: E402
+from jarvis_core.agent.codex_paths import rollout_paths
 
 HOSTS: Tuple[str, ...] = ("claude", "codex", "antigravity", "jarvis")
 QUEUE_PATH = Path(DATA_ROOT) / "observation_queue.jsonl"
@@ -88,7 +89,7 @@ def _codex_ids() -> FrozenSet[str]:
         if not sdir.exists():
             continue
         try:
-            for p in sdir.rglob("rollout-*.jsonl"):
+            for p in rollout_paths(sdir):
                 m = re.search(r"([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$", p.stem)
                 if m:
                     ids.add(m.group(1))
