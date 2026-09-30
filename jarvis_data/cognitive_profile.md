@@ -1,6 +1,6 @@
 # Cognitive Profile — Model of the User
 
-> Auto-synthesized by `scripts/profile_synth.py` from `knowledge_base.jsonl` (877 entries). Injected into every chat via the SessionStart hook. Regenerate after KB updates. Every entry is shown in full, dated, and appears in one section only.
+> Auto-synthesized by `scripts/profile_synth.py` from `knowledge_base.jsonl` (878 entries). Injected into every chat via the SessionStart hook. Regenerate after KB updates. Every entry is shown in full, dated, and appears in one section only.
 
 ## Who you are
 _Durable identity — career, ambitions, philosophy, how you see yourself. Oldest first; later entries update earlier ones._
