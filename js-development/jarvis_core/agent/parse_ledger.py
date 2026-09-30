@@ -83,10 +83,17 @@ def _codex_ids() -> FrozenSet[str]:
     if not root.exists():
         return frozenset()
     ids = set()
-    for p in root.rglob("rollout-*.jsonl"):
-        m = re.search(r"([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$", p.stem)
-        if m:
-            ids.add(m.group(1))
+    for sub in ("sessions", "archived_sessions"):
+        sdir = root / sub
+        if not sdir.exists():
+            continue
+        try:
+            for p in sdir.rglob("rollout-*.jsonl"):
+                m = re.search(r"([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$", p.stem)
+                if m:
+                    ids.add(m.group(1))
+        except (OSError, FileNotFoundError):
+            continue
     return frozenset(ids)
 
 
