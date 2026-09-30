@@ -1,6 +1,6 @@
 # Cognitive Profile — Model of the User
 
-> Auto-synthesized by `scripts/profile_synth.py` from `knowledge_base.jsonl` (856 entries). Injected into every chat via the SessionStart hook. Regenerate after KB updates. Every entry is shown in full, dated, and appears in one section only.
+> Auto-synthesized by `scripts/profile_synth.py` from `knowledge_base.jsonl` (860 entries). Injected into every chat via the SessionStart hook. Regenerate after KB updates. Every entry is shown in full, dated, and appears in one section only.
 
 ## Who you are
 _Durable identity — career, ambitions, philosophy, how you see yourself. Oldest first; later entries update earlier ones._
@@ -68,6 +68,7 @@ _Durable identity — career, ambitions, philosophy, how you see yourself. Oldes
 - [2026-09-30 · Cognitive_Pattern] The owner is developing JARVIS as a self-funded personal project with no deadline constraints but strict capital limits. Evidence, in the owner's words (2026-05-03, antigravity): "time is not an issue, i don;t have a deadline. this is my personal project. i just have very limited capital."
 - [2026-09-30 · Cognitive_Pattern] The owner envisions JARVIS enabling ambitious physical engineering projects, holograms, and acting as an autonomous financial manager. Evidence, in the owner's words (2026-05-03, antigravity): "Will JARVIS become to be the AI system that will help me achieve Iron Man like projects? like building a hologram, doing something groundbreaking, make me money by being my top financial manager?"
 - [2026-09-30 · Cognitive_Pattern] The owner experienced a philosophical shift toward detachment and quiet confidence, viewing life as something to be lived rather than needing external importance or validation to be meaningful. Evidence, in the owner's words (2026-05-04, antigravity): "I think life is neither meaningless nor meaningful. It's just there, to be lived."
+- [2026-09-30 · Cognitive_Pattern] The owner contributes ₹3,600 per month to an Employee Provident Fund (EPF). Evidence, in the owner's words (2026-05-14, antigravity): "my epf contribution is of 3600 per month."
 
 ## People in your life
 _Who the people around you are, and what they are to you. Oldest first; later entries update earlier ones._
@@ -75,6 +76,7 @@ _Who the people around you are, and what they are to you. Oldest first; later en
 - [2026-09-29 · Semantic] The owner has a sister and is giving her Rs 10k for her birthday. (sister) Evidence, in the owner's words (2026-06-19, claude): "e10k to sister for birthday"
 - [2026-09-29 · Semantic] The owner has a girlfriend and is giving her Rs 7k for her birthday. (gf) Evidence, in the owner's words (2026-06-19, claude): "7k to my gf for her bday"
 - [2026-09-30 · Semantic] Correction of KB 660 (owner, 2026-09-30): the owner's father is 53, retired from the Navy and works as a freelance marine architect; he has been offered a full-time job in Goa starting November 2026. KB 660's '60+ retired govt servant' is wrong. Evidence, in the owner's words: "Dad is retired, he is 53 right now and is a freelance marine architect, recently got offered full time job at goa ffrom november."
+- [2026-09-30 · Semantic] The owner has a sister who gave him ₹25,000 to invest in NVIDIA stock. (sister) Evidence, in the owner's words (2026-05-15, antigravity): "My sister gave me 25k to invest in nvidia"
 
 ## How you think and learn
 - [2026-03-07 · Cognitive_Pattern] Gap: jargon_gap + abstraction_gap + missing_prerequisite. User has strong ML/DL math foundation (backprop, gradient descent, loss functions, linear algebra) but ZERO LLM-specific knowledge (tokenization, positional encoding, attention, transformer input pipeline). Key confusion pattern: invisible operations -- user struggles when system performs actions silently (truncation with no error, implicit subword splitting, hidden padding). Does NOT struggle with math itself, struggles with unexplained mechanics. DIRECTIVE: When explaining LLM/transformer internals, (1) never use NLP jargon without immediate definition, (2) use step-by-step mechanical walkthroughs showing exactly what happens at each stage with real numbers/IDs, (3) anchor new concepts to comparison tables against known references (BERT->MiniLM pattern worked), (4) always include verify-it-yourself code blocks.
