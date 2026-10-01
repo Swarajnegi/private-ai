@@ -478,6 +478,11 @@ def _run_self_test() -> None:
     import asyncio
     import json
     import tempfile
+    from unittest.mock import patch
+    from jarvis_core.agent.tools import cognitive
+    from jarvis_core.agent import domain_classifier
+    from jarvis_core.brain import confidence
+    from jarvis_core.memory import store as memory_store
     from datetime import timedelta, timezone
 
     print("=" * 70)
@@ -579,7 +584,8 @@ def _run_self_test() -> None:
                             name = "research_papers"
                         return [C()]
             mind10, report10 = assemble_mind(
-                llm_call=scripted(["ok"]), kb_path=kb, store=FakeStore(), inhale=False,
+                llm_call=scripted(["ok"]), kb_path=kb, store=FakeStore(),
+                profile_path=profile, queue_path=queue, clock=lambda: FIXED,
                 extra_tools={"calculator": CalculatorTool()},
             )
             check("T10 store wires memory tool + collections line",
@@ -652,7 +658,16 @@ def _run_self_test() -> None:
             check("T12b collections guidance present when store open",
                   "research_papers" in res10.react.messages[0]["content"])
 
-    asyncio.run(scenario())
+    # This assembly test owns its mode and encoder; testing semantic quality
+    # belongs to cognitive.py, not a boot suite loading a real model.
+    fake_embed = lambda texts: [[1.0, 0.0] for _ in texts]
+    with patch.dict('os.environ', {'JARVIS_FULL_PROFILE': '1'}), \
+         patch.object(cognitive, '_default_embed_fn', return_value=fake_embed), \
+         patch.object(domain_classifier, '_build_default_embed_fn', return_value=fake_embed), \
+         patch.object(confidence, '_build_default_embed_fn', return_value=fake_embed), \
+         patch.object(memory_store, '_get_cached_encoder', side_effect=AssertionError('Boot smoke test attempted a real encoder load')) as real_encoder:
+        asyncio.run(scenario())
+        check('T18 no real encoder requested', real_encoder.call_count == 0, str(real_encoder.call_count))
 
     total = passed + len(failed)
     print(f"\n  Passed: {passed}/{total}")

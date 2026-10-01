@@ -828,7 +828,8 @@ def _self_test() -> int:
         empty.mkdir()
         f = run(empty)
         check("T9 a missing artifact is UNKNOWN, never a silent pass",
-              all(x.status == UNKNOWN for x in f), True)
+              all(x.status == UNKNOWN for x in f if x.name != 'no mechanical verdicts')
+              and status_of(f, 'no mechanical verdicts') == OK, True)
         check("T10 UNKNOWN does not make the run fail", report(f), 0)
 
         # T12/T13: the blend must train no text twice. This assertion has been
@@ -903,10 +904,18 @@ def _self_test() -> int:
         check("T19 inhales carrying the whole profile and personal life pass",
               {f.status for f in trunc_inhales_carry_whole_state(root, whole)}, {OK})
         cut = dict(whole, **{"voice inhale": profile_text[:2500]})
-        bad = [f for f in trunc_inhales_carry_whole_state(root, cut) if f.status == FAIL]
-        check("T20 a 2,500-char cut of the profile in the voice inhale is caught",
-              sorted(f.name for f in bad),
-              ["voice inhale carries whole cognitive_profile.md", "voice inhale carries whole personal_life.md body"])
+        from unittest.mock import patch
+        from jarvis_core.brain import context_injector as ci
+        for full_profile in ('0', '1'):
+            with patch.dict('os.environ', {'JARVIS_FULL_PROFILE': full_profile}):
+                findings = trunc_inhales_carry_whole_state(root, cut)
+                bad = [f for f in findings if f.status == FAIL]
+                profile_failures = [f for f in bad if f.name.startswith('voice inhale carries whole cognitive_profile.md')]
+                expected_profiles = len(ci.profile_sections(profile_text, ci.CORE_PROFILE_SECTIONS)) if ci.core_mode_active() else 1
+                check(f"T20 mode={full_profile}: cut profile and missing life are caught",
+                      (len(profile_failures), any(f.name == 'voice inhale carries whole personal_life.md body' for f in bad),
+                       all(f.status == OK for f in findings if f.name.startswith('boot inhale'))),
+                      (expected_profiles, True, True))
         real_inhales = default_inhales(root)
         check("T21 the REAL voice and boot inhales, built from these files, carry both whole",
               {f.status for f in trunc_inhales_carry_whole_state(root, real_inhales)}, {OK})
