@@ -924,6 +924,138 @@ Check the plan for `BroadcastNestedLoopJoin` or `CartesianProduct` before shippi
 > The worst strategy is the broadcast nested loop or a full cartesian product, chosen silently whenever the condition isn't an equality, at multiplicative cost. Fix: manufacture an equality, or use the `RANGE_JOIN` hint — and I'd set `crossJoin.enabled` to false in production so an accidental one fails loudly instead of running for a day.
 
 ---
+
+## A8 · Reading a notebook — which line runs where, and which layer provides it
+
+> **Checklist #1** (Spark Core & Architecture / Spark Internals) and the practical companion to **#7** (Resource Utilization).
+> **PS bank: this is the single most-asked area in the file.** *"What is lazy evaluation in Spark?"* is literally question #1 (L2). Also L114 *"In PySpark, what transformations have you worked on?"*, L188 *"Transformation and action"*, L189 *"Shuffling transformation"*, L240 *"Explain Narrow vs Wide transformations."*
+>
+> **Original question (verbatim):** *"In this line in A6, it is mentioned that '(listing Delta log files, parsing JSON)' are Python heavy tasks not spark ones, so how would i know if i have a dbx notebook, with a bunch of code in it. Which runs on python, which runs on spark, which uses features of python which uses features of dbx which uses delta features and which uses spark features?"*
+>
+> **Verification note:** several rows below are DBR-version-dependent and were written without a live connector to check against. The job-counter probe in the Inspect section is authoritative; treat the tables as a prior.
+
+### What — two independent axes, not one
+
+Same shape as the WSCG-vs-Photon lesson in A2: merging two axes into one is what makes this confusing.
+
+| Axis | Question | Answers |
+|---|---|---|
+| **1 — WHERE** | Does this line create distributed work? | Driver-only · Distributed tasks |
+| **2 — WHO** | Which layer provides this feature? | Python · OSS Spark · OSS Delta · Databricks-only |
+
+A line can be any combination. `dbutils.fs.ls()` is *Databricks-provided* **and** *driver-only*. `df.count()` is *OSS-Spark* **and** *distributed*. Knowing one tells you nothing about the other.
+
+### Mechanism — Axis 1 is lazy evaluation
+
+**The one rule: your Python runs on executors ONLY inside a UDF, Pandas UDF, `mapPartitions`, or `foreachPartition`. Everywhere else it runs on the driver.**
+
+Four buckets:
+
+**Bucket 1 — Pure Python (driver, 0 tasks).** `import`, comprehensions, `requests.get()`, `ThreadPoolExecutor`. No `spark`, no `df`. **The autoscaler sees nothing.**
+
+**Bucket 2 — Transformations (driver builds a plan, 0 tasks).** `.filter()`, `.withColumn()`, `.join()`, `.groupBy().agg()`, `.cache()`. Append to the logical plan, return immediately. Cluster stays idle, correctly.
+
+**Bucket 3 — Actions (submit a job, tasks appear).** `.count()`, `.collect()`, `.show()`, `.take()`, `.first()`, `.toPandas()`, `.write.save()`, `display()`.
+
+> **Heuristic: what does the line return?** Returns a **DataFrame** → transformation, no job. Returns **anything else** → action, job.
+> **Three exceptions** (non-DataFrame return, still zero jobs — plan inspection only): `df.explain()`, `df.printSchema()`, `df.schema` / `.columns` / `.dtypes`.
+
+**Bucket 4 — Metadata & storage-API calls (driver, 0 tasks, NOT free).** `dbutils.fs.ls()`, `os.listdir("/dbfs/...")`, `spark.catalog.listTables()`, `json.load()` over `_delta_log` files.
+
+> **This is the bucket that caused the A6 incident.** Real I/O, real CPU, real driver-heap allocation — and **zero tasks**, so the autoscaler reads an empty queue and scales *down* while the driver is saturated. It *looks* like Spark work because it involves tables and paths. It isn't.
+
+### Output — a realistic notebook, annotated
+
+```python
+# ── CELL 1 ────────────────────────────────────────────────────────
+import json                                    # [PY]        driver · 0 tasks
+from concurrent.futures import ThreadPoolExecutor  # [PY]     driver · 0 tasks
+paths = dbutils.fs.ls("abfss://.../bronze/")   # [DBX+IO]    driver · 0 tasks  WARN
+
+# ── CELL 2 ── the A6 trap, in full ────────────────────────────────
+def log_size(p):
+    entries = dbutils.fs.ls(p + "/_delta_log") # [DBX+IO]    driver · 0 tasks
+    return sum(e.size for e in entries)        # [PY]        driver
+
+with ThreadPoolExecutor(24) as ex:             # [PY]        24 DRIVER threads
+    sizes = list(ex.map(log_size, paths))      # [PY+IO]     0 TASKS, 24x driver heap
+# autoscaler: queue empty -> removes workers. Driver: 24 file lists -> GC stalls.
+
+# ── CELL 3 ── plan building, still nothing runs ───────────────────
+df  = spark.read.table("main.sales.orders")    # [SPARK-META] driver reads log · 0 tasks
+df2 = df.filter(F.col("region") == "EMEA")     # [SPARK-LAZY] plan only · 0 tasks
+df3 = df2.join(dim, "customer_id")             # [SPARK-LAZY] plan only · 0 tasks
+df3.explain()                                  # [SPARK-META] prints plan · 0 tasks
+
+# ── CELL 4 ── first real distributed work ─────────────────────────
+n = df3.count()                                # [SPARK-ACTION] <- FIRST JOB
+display(df3)                                   # [DBX-ACTION]   another job
+df3.write.format("delta").save(out)            # [SPARK+DELTA]  another job
+spark.sql("OPTIMIZE main.sales.orders")        # [DELTA-DDL]    eager -> job
+```
+
+**Cells 1–3 create zero tasks.** On a 3-worker autoscaling cluster, everything before cell 4 is billed idle capacity the autoscaler is actively trying to remove.
+
+### Axis 2 — which layer provides it
+
+| Layer | Tells | Runs without Databricks? |
+|---|---|---|
+| **Python** | `import`, comprehensions, `requests`, `json`, threads | ✅ anywhere |
+| **OSS Spark** | `spark.read`, `df.filter/join/groupBy`, `.count()`, `spark.sql(SELECT)`, `spark.conf` | ✅ any Spark cluster |
+| **OSS Delta** | `format("delta")`, `_delta_log`, `MERGE`/`UPDATE`/`DELETE`, `VERSION AS OF`, `DESCRIBE HISTORY`, `OPTIMIZE`, `ZORDER`, CDF / `table_changes()`, deletion vectors, Liquid Clustering, UniForm | ✅ OSS Delta Lake |
+| **Databricks-only** | `dbutils.*`, `display()`, `%sql`/`%fs`/`%sh`/`%pip`/`%run`, **Photon**, **Delta Cache** (disk cache), **Auto Loader** (`cloudFiles`), **DLT / Lakeflow**, **Unity Catalog**, **Predictive Optimization**, SQL Warehouses, `spark.databricks.*` | ❌ |
+
+> **The one most people get wrong:** `OPTIMIZE`, `ZORDER`, `MERGE`, time travel and Liquid Clustering are **OSS Delta**, not Databricks-proprietary. Photon, Delta *Cache*, Auto Loader, DLT and Unity Catalog are the genuinely proprietary ones. Calling `MERGE` Databricks-only in an interview is a visible tell.
+
+### Fails-on — where the simple rules break
+
+| Line | Looks like | Actually |
+|---|---|---|
+| `spark.read.parquet(path)` | lazy | **Sometimes a job.** Needs schema → lists files. Above `parallelPartitionDiscovery.threshold` (32) the listing goes *distributed* = real tasks |
+| `spark.read.csv(path, inferSchema=True)` | lazy | **Always a job** — scans data to guess types. Pass an explicit schema and it's free |
+| `spark.read.table("cat.sch.tbl")` | same as a path read | **Cheaper** — schema from the Delta log, driver-side (this is A1's point) |
+| `df.cache()` | an action | **Lazy.** Returns a DataFrame; materializes on the *next* action |
+| `spark.sql("SELECT …")` | eager | **Lazy** — returns a DataFrame |
+| `spark.sql("OPTIMIZE …")` / DDL / DML | lazy like other `spark.sql` | **Eager** — DDL and DML execute immediately |
+| `display(df)` | a print statement | **An action.** Triggers a job |
+| `df.toPandas()` / `.collect()` | an action | An action **that also pulls every row to the driver** — A6's S2 OOM path |
+
+### Inspect — measure it, don't reason about it
+
+Spark exposes the job count directly, so this is a fact you can read rather than a judgement you make:
+
+```python
+sc = spark.sparkContext
+
+sc.setJobGroup("probe", "what does this line actually do")
+# ─── the line under test ───
+size = sum(f.size for f in dbutils.fs.ls(path))
+# ───────────────────────────
+print(f"{len(sc.statusTracker().getJobIdsForGroup('probe'))} jobs")
+sc.clearJobGroup()
+```
+
+**`0 jobs` = driver-only, full stop.**
+
+Two cross-checks in the UI: **Jobs tab** — no new row means no distributed work happened. **Executors tab** — "Active Tasks" all zero while the cell runs, with driver CPU high, is the A6 signature exactly.
+
+### Knob
+
+| Knob | Default | Relevance |
+|---|---|---|
+| `spark.sql.sources.parallelPartitionDiscovery.threshold` | `32` | Above this many paths, file listing becomes distributed (tasks appear) |
+| `spark.databricks.io.cache.enabled` | on for some SKUs | Delta Cache — Databricks-only |
+| `spark.sql.adaptive.enabled` | `true` | AQE acts only after a job starts — irrelevant to driver-side work |
+
+### Your answer
+
+> Two separate questions. **Where it runs** is decided by lazy evaluation: transformations return a DataFrame and only build a plan, actions return something else and submit a job. My own Python runs on executors only inside a UDF or `mapPartitions` — everywhere else it's the driver. The bucket people miss is metadata and storage-API work: `dbutils.fs.ls`, catalog lookups, parsing `_delta_log`. That's real I/O and real driver heap with **zero tasks**, so the autoscaler reads an empty queue and scales down while the driver is saturated — exactly the failure mode that produced 70 resizes in three hours.
+>
+> **Which layer provides it** is a separate axis. `MERGE`, `OPTIMIZE`, `ZORDER` and time travel are open-source Delta. Photon, Delta Cache, Auto Loader, DLT and Unity Catalog are the Databricks-proprietary ones.
+>
+> And I don't reason about it in production — I wrap the block in `setJobGroup` and count the jobs it produced. Zero jobs means driver-only, and that's not an opinion.
+
+---
 ---
 
 # PART 2 — Coverage across all 43 checklist topics
@@ -933,13 +1065,13 @@ Check the plan for `BroadcastNestedLoopJoin` or `CartesianProduct` before shippi
 ## Spark Core & Architecture (10)
 | # | Topic | Status | Note |
 |---|---|---|---|
-| 1 | Spark Internals (stages from filter+groupBy) | 🟡 | Plan pipeline covered in A1; **shuffle-boundary stage counting not yet written** — this is the #1 measured gap |
+| 1 | **Spark Internals** (lazy eval, transformation vs action, stages) | 🟡 | Plan pipeline in **A1**; lazy evaluation + transformation/action + driver-vs-executor in **A8** (answers the PS bank's #1 question). **Shuffle-boundary stage counting still unwritten** — the remaining measured gap |
 | 2 | Advanced Optimization (AQE) | ⬜ | Appears 6× in the PS bank. Highest-frequency unanswered topic |
 | 3 | Speculative Execution | ⬜ | |
 | 4 | **Join Strategies (BHJ / SMJ / SHJ / BNLJ)** | ✅ | **A7.** Appears 4× in the PS bank |
 | 5 | Memory Spill Management | 🔵 | Spot-eviction / shuffle-state finding touches this via A6 |
 | 6 | Cluster Sizing & Selection | 🔵 | Four BUPA findings ready — see ammunition index |
-| 7 | **Resource Utilization** | ✅ | **A6** — driver bottleneck + 10-scenario catalogue |
+| 7 | **Resource Utilization** | ✅ | **A6** — driver bottleneck + 10-scenario catalogue · **A8** — the practical companion: how to tell which line creates tasks |
 | 8 | **Photon & Vectorization** | ✅ | **A2** |
 | 9 | **Heap Memory & GC** | 🟡 | S1 in A6 covers driver-heap GC in depth; on-heap/off-heap split and G1GC tuning knobs still unwritten |
 | 10 | **Serverless Architecture** | ✅ | **A3** |
@@ -1001,7 +1133,7 @@ Check the plan for `BroadcastNestedLoopJoin` or `CartesianProduct` before shippi
 | 42 | Agentic AI & AgentBricks | ⬜ | JARVIS build is directly relevant experience here |
 | 43 | Lakebase & Lakehouse Federation | ⬜ | |
 
-**Written 7 / 43** (A1–A7). **Ammunition already exists for 10 more** — see Part 3.
+**Written 8 / 43** (A1–A8). **Ammunition already exists for 10 more** — see Part 3.
 
 ---
 
