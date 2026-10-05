@@ -310,16 +310,25 @@ def inv_client_records_survive(a: Artifacts) -> List[Finding]:
     snap = a.root / "jarvis_data" / "training_corpus" / "client_work_snapshot.jsonl"
     if not snap.exists():
         return [Finding("client records survive", UNKNOWN, "no client_work_snapshot.jsonl")]
-    want = {"engineer": set(), "personalization": set()}
+    # Survival is CONTENT, not path: the corpus drops exact-text duplicates at the
+    # write chokepoint, so two identical notebook cells keep one source_path. On
+    # 2026-10-05 a work-laptop rebuild refreshed the snapshot with 13 such paths
+    # and this check reported them "lost" while every one's text was present.
+    want: Dict[str, List[Tuple[str, str]]] = {"engineer": [], "personalization": []}
     for row in _load(snap):
         if row.get("corpus") in want:
-            want[row["corpus"]].add(str(row.get("source_path")))
-    have = {
-        "engineer": {str(r.get("source_path")) for r in a.engineer if r.get("source_type") == "client_work"},
-        "personalization": {str(r.get("source_path")) for r in a.personalization
-                            if r.get("source_type") == "professional_reasoning"},
+            want[row["corpus"]].append((str(row.get("source_path")), (row.get("text") or "").strip()))
+    kept = {
+        "engineer": [r for r in a.engineer if r.get("source_type") == "client_work"],
+        "personalization": [r for r in a.personalization if r.get("source_type") == "professional_reasoning"],
     }
-    lost = {c: len(want[c] - have[c]) for c in want if want[c] - have[c]}
+    lost = {}
+    for c in want:
+        paths = {str(r.get("source_path")) for r in kept[c]}
+        texts = {(r.get("text") or "").strip() for r in kept[c]}
+        missing = sum(1 for p, t in want[c] if p not in paths and t not in texts)
+        if missing:
+            lost[c] = missing
     return [Finding(
         "client records survive", OK if not lost else FAIL,
         f"{sum(len(v) for v in want.values())} snapshot records all present in the corpora"
@@ -968,6 +977,41 @@ def _self_test() -> int:
         check("T27 an unmasked token is caught", found["shards: no unmasked credential"], FAIL)
         check("T28 unstubbed client_work tool content is caught",
               found["shards: no client_work tool content"], FAIL)
+
+    # T29-T31: client-record survival is judged by content, not by path.
+    def _client_root(tmp: str, snapshot: List[Dict[str, Any]], corpus: List[Dict[str, Any]]) -> Path:
+        tc = Path(tmp) / "jarvis_data" / "training_corpus"
+        tc.mkdir(parents=True)
+        (tc / "client_work_snapshot.jsonl").write_text(
+            "".join(json.dumps(r) + chr(10) for r in snapshot), encoding="utf-8")
+        (tc / "personalization_corpus.jsonl").write_text(
+            "".join(json.dumps(r) + chr(10) for r in corpus), encoding="utf-8")
+        (tc / "engineer_corpus.jsonl").write_text("", encoding="utf-8")
+        return Path(tmp)
+
+    cell = "import pyspark.sql.functions as F" + " " * 80
+    pr = {"source_type": "professional_reasoning"}
+    with tempfile.TemporaryDirectory() as tmp:
+        root = _client_root(tmp,
+                            [{"corpus": "personalization", "source_path": "a.py#block0", "text": cell},
+                             {"corpus": "personalization", "source_path": "b.py#block0", "text": cell}],
+                            [{**pr, "source_path": "a.py#block0", "text": cell}])
+        check("T29 a path the corpus deduplicated, its text kept, is NOT reported lost",
+              inv_client_records_survive(Artifacts(root))[0].status, OK)
+    with tempfile.TemporaryDirectory() as tmp:
+        root = _client_root(tmp,
+                            [{"corpus": "personalization", "source_path": "a.py#block0", "text": cell},
+                             {"corpus": "personalization", "source_path": "c.py#block0", "text": "unique cell " * 20}],
+                            [{**pr, "source_path": "a.py#block0", "text": cell}])
+        check("T30 a snapshot record whose text is gone from the corpus IS reported lost",
+              inv_client_records_survive(Artifacts(root))[0].status, FAIL)
+    with tempfile.TemporaryDirectory() as tmp:
+        root = _client_root(tmp,
+                            [{"corpus": "personalization", "source_path": f"x{i}.py#b", "text": f"cell {i} " * 30}
+                             for i in range(5)],
+                            [])
+        check("T31 the 2026-09-28 shape (a rebuild that drops every client record) still fails",
+              inv_client_records_survive(Artifacts(root))[0].status, FAIL)
 
     print("=" * 78)
     print("  check_pipeline self-test")
