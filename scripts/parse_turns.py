@@ -343,12 +343,17 @@ def _mechanical(items: List[Any]) -> str:
 def submit(verdicts: Any, agent: str, paths: Paths = Paths(),
            priors_fn: Optional[PriorsFn] = None, priors_ready: bool = False,
            append_fn: Optional[Callable[..., Dict[str, Any]]] = None,
-           semantic: bool = True) -> List[TurnReport]:
+           semantic: bool = True, owner_decision: str = "") -> List[TurnReport]:
     """Validate and write each verdict. Never coerces; a rejection writes nothing.
 
     `priors_ready` says `priors_fn` is the live retriever: a tension may then
     cite only a prior it would offer. Without one, a cited prior must at least
     be a real, contradictable KB entry older than the turn.
+
+    `owner_decision` names the KB Decision that lets one agent parse another
+    host's turns (KB 1009: the personal laptop died, so Claude drains all three
+    backlogs). It must be a Decision about parsing; curated_by stays the real
+    agent, so the log still says who judged the turn.
     """
     if not isinstance(verdicts, dict) or not isinstance(verdicts.get("verdicts"), list):
         return [TurnReport("", "", False, ['input must be {"verdicts": [...]}'])]
@@ -369,6 +374,13 @@ def submit(verdicts: Any, agent: str, paths: Paths = Paths(),
     consolidator = None
     now = datetime.now(_IST).isoformat(timespec="seconds")
     agent_host = agent.split("/", 1)[0].lower()
+    cross_host_ok = False
+    if owner_decision:
+        entry = kb.get(str(owner_decision)) or {}
+        if entry.get("type") != "Decision" or "pars" not in str(entry.get("content", "")).lower():
+            return [TurnReport("", "", False,
+                               [f"--owner-decision {owner_decision} is not a KB Decision about parsing"])]
+        cross_host_ok = True
 
     reports: List[TurnReport] = []
     seen_keys: set = set()
@@ -410,9 +422,10 @@ def submit(verdicts: Any, agent: str, paths: Paths = Paths(),
         if not isinstance(verdict, Verdict):
             rep.reasons.extend(verdict)
             continue
-        if agent_host in HOSTS and host in HOSTS and agent_host != host:
+        if agent_host in HOSTS and host in HOSTS and agent_host != host and not cross_host_ok:
             rep.reasons.append(f"a {host} turn cannot be parsed by {agent}: the agent the owner chatted "
-                               "with parses it, each by reading its own turns")
+                               "with parses it, each by reading its own turns (unless an owner "
+                               "Decision says otherwise: --owner-decision <kb id>)")
             continue
         rep.accepted = True
 
@@ -866,6 +879,20 @@ def _self_test() -> int:
               not r4[0].accepted and "cannot be parsed by" in r4[0].reasons[0]
               and not any("gpt-test" in l for l in paths.curation.read_text(encoding="utf-8").splitlines()),
               str(r4[0].reasons))
+        paths4 = Paths(queue=paths.queue, curation=d / "c4.jsonl", kb=d / "kb4.jsonl",
+                       feed=d / "feed4.jsonl", labels=paths.labels, store=paths.store)
+        paths4.kb.write_text(kb_before + json.dumps(
+            {"id": 1009, "timestamp": "2026-10-05T10:00:00+05:30", "type": "Decision", "tags": ["x"],
+             "content": "Claude parses all three hosts' backlogs while the laptop is down."}) + "\n",
+            encoding="utf-8")
+        r5 = submit({"verdicts": [wrong]}, "codex/gpt-test", paths4, semantic=False, owner_decision="429")
+        check("T23 --owner-decision must name a Decision about parsing",
+              len(r5) == 1 and not r5[0].accepted and "not a KB Decision about parsing" in r5[0].reasons[0]
+              and not paths4.curation.exists(), str(r5[0].reasons))
+        r6 = submit({"verdicts": [wrong]}, "codex/gpt-test", paths4, semantic=False, owner_decision="1009")
+        cur4 = [json.loads(l) for l in paths4.curation.read_text(encoding="utf-8").splitlines()]
+        check("T24 an owner Decision lets another host's agent parse, and curated_by stays honest",
+              r6[0].accepted and cur4 and cur4[-1]["curated_by"] == "codex/gpt-test", str(r6[0].lines()))
 
     print(f"  {len(passed)}/{len(passed) + len(failed)} passed")
     return 1 if failed else 0
@@ -889,6 +916,8 @@ def main() -> int:
     p.add_argument("--review", action="store_true", help="verdicts worth a second look")
     p.add_argument("--min-confidence", type=float, default=0.5)
     p.add_argument("--no-semantic", action="store_true", help="exact dedup only (faster)")
+    p.add_argument("--owner-decision", default="", metavar="KB_ID",
+                   help="KB Decision authorizing --agent to parse another host's turns (e.g. 1009)")
     p.add_argument("--self-test", action="store_true")
     args = p.parse_args()
     if hasattr(sys.stdout, "reconfigure"):
@@ -917,7 +946,8 @@ def main() -> int:
                 print(f"  {why}: a cited prior must be a contradictable KB entry older than the turn")
         return _print_reports(submit(data, args.agent, priors_fn=priors_fn,
                                      priors_ready=priors_fn is not None,
-                                     semantic=not args.no_semantic))
+                                     semantic=not args.no_semantic,
+                                     owner_decision=args.owner_decision))
     if args.pending or args.auto:
         if not args.host:
             p.error("--pending/--auto need --host")
