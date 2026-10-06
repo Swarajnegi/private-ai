@@ -246,7 +246,22 @@ The blueprint's success factor for coding rounds is **"narrate reasoning, not ju
 
 **The risk, stated plainly:** if you draw a binary-tree or graph-traversal question, you will be underprepared. That risk is highest at Google (the most generalist bar of the four targets) and lowest at Cisco/Adobe.
 
-**Mitigation if you have slack after Week 11:** add BFS/DFS on a grid and basic tree traversal (~15 problems, ~2 weeks). Grid BFS is the highest-yield of the excluded material and shows up in "shortest path"-shaped questions. Do *not* start DP — it is the lowest yield per hour for a DE loop.
+**Update 2026-10-05:** a DE-relevant graph layer is now IN scope, scheduled in W11–12 of the re-planned 15-week schedule (see Interview_Playbook.md): BFS/DFS on a grid, topological sort (the DAG/dependency shape; Kahn's), intervals, and basic tree traversal, ~25 problems. Still excluded: DP and anything beyond this layer. Total target is ~85–100 problems at ~4h/week DSA.
+
+---
+
+## LeetCode problem list (added 2026-10-06; NeetCode 150 filtered to this roadmap, ~68 problems)
+
+Do these on LeetCode, timed, in Python. The notebooks (`DSA_01`, Phase 0, Phase 5) cover what LeetCode doesn't. Re-solve each cold at +3 and +10 days. Hard/stretch items in *italics* only if ahead of schedule. Skipped on purpose: DP, tries, backtracking, bit tricks, linked lists beyond the three listed, advanced graphs.
+
+| Weeks | Phase | Problems |
+|---|---|---|
+| W2–5 | 1–2 arrays, two pointers, binary search, hashmaps (~24) | Two Sum, Contains Duplicate, Valid Anagram, Group Anagrams, Top K Frequent Elements, Product of Array Except Self, Longest Consecutive Sequence, Encode and Decode Strings, Valid Palindrome, Two Sum II, 3Sum, Container With Most Water, Maximum Subarray, Rotate Image, Set Matrix Zeroes, Binary Search, Search a 2D Matrix, Koko Eating Bananas, Search in Rotated Sorted Array, Find Minimum in Rotated Sorted Array, *Trapping Rain Water*, *Valid Sudoku*, *Time Based Key-Value Store* |
+| W6–7 | 3 stacks/queues (~7) | Valid Parentheses, Min Stack, Evaluate Reverse Polish Notation, Daily Temperatures, LRU Cache, Merge Two Sorted Lists, *Car Fleet* |
+| W9–10 | 4 windows, prefix sums, heaps (~12) | Best Time to Buy and Sell Stock, Longest Substring Without Repeating Characters, Longest Repeating Character Replacement, Permutation in String, Subarray Sum Equals K (not on NC150), Kth Largest Element in a Stream, Last Stone Weight, K Closest Points to Origin, Kth Largest Element in an Array, *Minimum Window Substring*, *Sliding Window Maximum*, *Find Median from Data Stream* |
+| W11–12 | graph layer (~25) | Graphs: Number of Islands, Max Area of Island, Rotting Oranges, Walls and Gates, Clone Graph, Course Schedule, Course Schedule II (topological sort), Number of Connected Components, Graph Valid Tree, *Word Ladder*, *Network Delay Time*. Trees: Maximum Depth, Invert Binary Tree, Same Tree, Binary Tree Level Order Traversal, Binary Tree Right Side View, Validate BST, LCA of a BST. Intervals: Merge Intervals, Insert Interval, Meeting Rooms, Meeting Rooms II, Non-overlapping Intervals |
+
+Source: NeetCode 150 as listed in a public GitHub copy; difficulty labels there may be off, so check on neetcode.io/leetcode.com as you go.
 
 ---
 

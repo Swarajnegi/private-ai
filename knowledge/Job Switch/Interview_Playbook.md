@@ -189,21 +189,27 @@ Every round is covered by a roadmap in this folder. Nothing here depends on file
 
 ---
 
-## The 16-week parallel schedule
+## The 15-week parallel schedule (re-planned 2026-10-05)
 
-Mid-Aug 2026 → end of Nov 2026. Start applying December 2026.
+Week 1 = Oct 5, 2026 → Jan 17, 2027. Start applying mid-Jan 2027. The original mid-Aug start slipped: on Oct 5 only Phase 0 of R01 was in progress. Budget **~10 hrs/week**: DSA 4h · SQL 2h · Design 2h · Theory 1h · Behavioral 0.5h · explain-back 0.5h.
 
-| Weeks | R01 DSA | R02 SQL | R03 Modeling | R04 Sys Design | R05 Behavioral |
+| Weeks | R01 DSA | R02 SQL | Design slot (R03 → R04) | Theory (1h) | R05 Behavioral |
 |---|---|---|---|---|---|
-| **1–4** | Phase 0–1 | Phases 1–2 | Full run | — | mine stories in background |
-| **5–8** | Phase 2–3 | Phase 3 | — | Phases 1–3 | — |
-| **9–13** | Phase 4 | — | — | Phases 4–7 | draft + metric hunt |
-| **14–16** | Phase 5 | — | — | mocks | rehearsal + mocks |
+| **1** | Finish Phase 0; gate: two_sum cold, both ways, <10 min | Ph1 | R03 Ph1 | Spark engine: WSCG vs Photon, two axes | start story log |
+| **2–5** | Ph1–2 (~30 problems) | Ph2–3 | R03 Ph2–5 compressed | RSA bank, highest-frequency answers | log grows |
+| **6–7** | Ph3 stacks/queues | Ph4 | R04 Ph1–2 | Kafka foundations | — |
+| **8** | **Planned buffer week** | — | — | — | — |
+| **9–10** | Ph4 window/prefix, Ph5 start | 1h/wk timed | R04 Ph3 | Spark/Delta internals | build story bank |
+| **11–12** | Ph5 finish + **graph layer** (BFS/DFS grid, topo sort, intervals, tree traversal, ~25 problems) | 1h/wk | R04 Ph4–5 | — | metrics + scope honesty |
+| **13** | mixed timed Mediums, narrated | 1h/wk | R04 Ph6 | — | Googliness prompts |
+| **14–15** | weekly full mock (coding, SQL, design, behavioral); fix top-3 gaps; apply | | | | |
 
-**Total load: ~12–15 hrs/week.** Realistic alongside a full-time Celebal workload, but only if DSA is treated as a **daily** habit (45–60 min) rather than a weekend block. The other tracks rotate.
+Take 1–2 low-stakes real interviews in Dec (W11–12) for calibration.
+
+**Total load: ~10 hrs/week**, alongside a full-time Celebal workload, with DSA as a **daily** habit (40–60 min). Target is ~85–100 problems, not 120–150: a deliberate trade-off.
 
 **Non-negotiables:**
-- DSA runs every single week for all 16. It is the longest-lead skill and the one you're starting from zero on.
+- DSA runs every single week for all 15. It is the longest-lead skill and the one you're starting from zero on.
 - Behavioral story-mining starts in Week 1 even though the roadmap runs W10–16 — you need months of noticing which projects produced real numbers, not a weekend of trying to remember.
 - If you fall behind, cut R03 depth before cutting R01 or R04. Modeling is the most recoverable from first principles under interview pressure; DSA and system design are not.
 
