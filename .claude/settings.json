@@ -164,7 +164,9 @@
       "Bash(python3 scripts/agent_mail.py --answer *)",
       "Bash(python3 -m jarvis_core.specialists.engineer_corpus)",
       "Bash(python3 -m jarvis_core.specialists.personalization_corpus)",
-      "Bash(python3 -m jarvis_core.specialists.blend_corpus)"
+      "Bash(python3 -m jarvis_core.specialists.blend_corpus)",
+      "Bash(python3 scripts/parse_turns.py *)",
+      "Bash(timeout * nice -n 10 python3 scripts/parse_turns.py *)"
     ],
     "additionalDirectories": [
       "/tmp"
