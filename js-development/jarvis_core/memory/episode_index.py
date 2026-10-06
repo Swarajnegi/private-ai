@@ -1199,7 +1199,19 @@ class NumpyBackend:
 # Part 7: THE INDEX
 # =============================================================================
 
-_SCHEMA = """
+# contentless_delete arrived in SQLite 3.43; Ubuntu 22.04's Python links 3.37 and rejects
+# the option outright, so the index could not be built on Linux at all (found 2026-10-06).
+# Below 3.43 a row leaves the contentless table through FTS5's 'delete' command, which
+# must be given the exact values that were inserted -- units keeps them for that reason.
+FTS_CONTENTLESS_DELETE = sqlite3.sqlite_version_info >= (3, 43, 0)
+
+
+def _schema(contentless_delete: bool) -> str:
+    option = " contentless_delete=1," if contentless_delete else ""
+    return _SCHEMA_TEMPLATE.replace("{contentless_delete}", option)
+
+
+_SCHEMA_TEMPLATE = """
 CREATE TABLE IF NOT EXISTS units(
   rid INTEGER PRIMARY KEY, unit_id TEXT UNIQUE NOT NULL, source TEXT, source_key TEXT,
   host TEXT, episode TEXT, session_id TEXT, seq INTEGER, part INTEGER, parts INTEGER,
@@ -1210,7 +1222,7 @@ CREATE INDEX IF NOT EXISTS units_by_ep ON units(episode, source, seq);
 CREATE TABLE IF NOT EXISTS sources(key TEXT PRIMARY KEY, sig TEXT, units INTEGER, at TEXT);
 CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY, value TEXT);
 CREATE VIRTUAL TABLE IF NOT EXISTS units_fts USING fts5(
-  prefix, body, content='', contentless_delete=1, tokenize='porter unicode61');
+  prefix, body, content='',{contentless_delete} tokenize='porter unicode61');
 """
 
 _STOP = set("""a an and are as at be been but by can could did do does doing done for from had has have
@@ -1286,8 +1298,20 @@ class EpisodeIndex:
             # takes the router's lock, so one connection is never used at once.
             self._db = sqlite3.connect(str(self.fts_path), timeout=60, check_same_thread=False)
             self._db.execute("PRAGMA journal_mode=WAL")
-            self._db.executescript(_SCHEMA)
+            self._db.executescript(_schema(self._fts_delete_supported))
         return self._db
+
+    _fts_delete_supported = FTS_CONTENTLESS_DELETE
+
+    def _fts_delete(self, rid: int) -> None:
+        """Remove one row from units_fts; call BEFORE its units row is deleted."""
+        if self._fts_delete_supported:
+            self.db.execute("DELETE FROM units_fts WHERE rowid=?", (rid,))
+            return
+        row = self.db.execute("SELECT prefix, body FROM units WHERE rid=?", (rid,)).fetchone()
+        if row is not None:
+            self.db.execute("INSERT INTO units_fts(units_fts, rowid, prefix, body) VALUES('delete', ?, ?, ?)",
+                            (rid, row[0], row[1]))
 
     def close(self) -> None:
         if self._db is not None:
@@ -1325,7 +1349,7 @@ class EpisodeIndex:
     def rebuild_reset(self) -> None:
         self.db.executescript("DROP TABLE IF EXISTS units; DROP TABLE IF EXISTS sources; "
                               "DROP TABLE IF EXISTS meta; DROP TABLE IF EXISTS units_fts;")
-        self.db.executescript(_SCHEMA)
+        self.db.executescript(_schema(self._fts_delete_supported))
         self.backend.reset({**self._expected_meta(), "built": now_ist()})
         for k, v in self._expected_meta().items():
             self._meta_set(k, str(v))
@@ -1428,7 +1452,7 @@ class EpisodeIndex:
             for u in pending:
                 prev = old.get(u.unit_id)
                 if prev:
-                    self.db.execute("DELETE FROM units_fts WHERE rowid=?", (prev[1],))
+                    self._fts_delete(prev[1])
                     self.db.execute("DELETE FROM units WHERE rid=?", (prev[1],))
                 cur = self.db.execute(
                     "INSERT INTO units(unit_id, source, source_key, host, episode, session_id, seq, part, parts,"
@@ -1458,7 +1482,7 @@ class EpisodeIndex:
         if gone:
             self.backend.delete(gone)
             for uid in gone:
-                self.db.execute("DELETE FROM units_fts WHERE rowid=?", (old[uid][1],))
+                self._fts_delete(old[uid][1])
                 self.db.execute("DELETE FROM units WHERE rid=?", (old[uid][1],))
             stats["deleted"] = stats.get("deleted", 0) + len(gone)
 
@@ -2066,6 +2090,33 @@ def _run_self_test() -> None:
         check("I16 a rebuild takes identical-text vectors from the seed and embeds nothing",
               _Counting.calls == 0 and st4.get("seeded", 0) > 5, f"{_Counting.calls} embedded, {st4}")
         seeded.close()
+
+    # I17: a row leaves the contentless FTS table on every SQLite. The 'delete'-command
+    # path is forced even where contentless_delete exists, so Windows exercises it too.
+    for native in [False] + ([True] if FTS_CONTENTLESS_DELETE else []):
+        with tempfile.TemporaryDirectory() as td:
+            ix = EpisodeIndex(fts_path=Path(td) / "fts.sqlite3", backend=NumpyBackend(),
+                              embedder=_FakeEmbedder(max_tokens=80))
+            ix._fts_delete_supported = native
+            rid = {}
+            for uid, prefix, body in (("u1", "alpha", "zebracrossing appears here"),
+                                      ("u2", "beta", "kiwifruit stays indexed")):
+                cur = ix.db.execute("INSERT INTO units(unit_id, prefix, body) VALUES(?,?,?)", (uid, prefix, body))
+                ix.db.execute("INSERT INTO units_fts(rowid, prefix, body) VALUES(?,?,?)",
+                              (cur.lastrowid, prefix, body))
+                rid[uid] = cur.lastrowid
+
+            def hits(term: str) -> List[Any]:
+                return ix.db.execute("SELECT rowid FROM units_fts WHERE units_fts MATCH ?", (term,)).fetchall()
+            found_before = hits("zebracrossing") == [(rid["u1"],)]
+            ix._fts_delete(rid["u1"])
+            ix.db.execute("DELETE FROM units WHERE rid=?", (rid["u1"],))
+            ix.db.commit()
+            label = "native contentless_delete" if native else "the 'delete' command"
+            check(f"I17 {label} removes the FTS row and leaves its neighbour searchable",
+                  found_before and hits("zebracrossing") == [] and hits("kiwifruit") == [(rid["u2"],)],
+                  f"before={found_before} stale={hits('zebracrossing')} kept={hits('kiwifruit')}")
+            ix.close()
 
     total = passed + len(failed)
     print("-" * 70)
