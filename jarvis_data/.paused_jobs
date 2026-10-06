@@ -4,3 +4,10 @@
 index_episodes
 reindex_memory
 relabel_domains
+# Owner decision 2026-10-06 (KB 1044): the work laptop (7.6 GB RAM, no GPU, the same class as the machine
+# that crashed) must not be put under CPU strain. These two are the heavy clocked jobs: run_all_tests ran
+# 160 suites for up to 30 min every 12 h, and rebuild_corpora rebuilds every corpus daily. Light jobs keep
+# running, including ingest_episodes (shard archiving must outrun Claude Code's 30-day transcript cleanup)
+# and the web UI. The pause also applies on the personal laptop; delete a line to resume it there.
+run_all_tests
+rebuild_corpora
