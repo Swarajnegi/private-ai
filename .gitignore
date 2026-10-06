@@ -40,6 +40,13 @@
 # exclude the raw repo, KEEP the corpus. Their words: "don't push the deepclone
 # code, but remove nothing from the corpus data."
 #
+# REVISED by the user 2026-10-06 (KB 1044): "You can push deepclone code." Applied
+# to the context-store shards, whose client_work tool results carry deepclone
+# content and are now tracked. The ignore rules below are UNCHANGED: the raw
+# client_work/<project>/ repos (with their own .git) are still not tracked, because
+# nobody has asked to commit them. Credentials, connection strings, workspace URLs
+# and table names remain out of tracked files; that decision was not lifted.
+#
 #   1. client_work/  PROJECT FILES EXCLUDED, PER-PROJECT LEARNINGS TRACKED
 #      (revised by the user 2026-09-02; supersedes the blanket exclusion).
 #      Still excluded: 16 MB of verbatim BUPA DeepClone source — the framework
