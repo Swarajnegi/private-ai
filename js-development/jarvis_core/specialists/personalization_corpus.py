@@ -98,6 +98,7 @@ from jarvis_core.memory.cognitive_index import (
     rebuild_index,
 )
 from jarvis_core.agent.curator import load_routing, routes_to
+from jarvis_core.specialists.eval_exclusions import excluded_turn, load_registry
 from jarvis_core.specialists.text_hygiene import corpus_admits
 
 
@@ -536,6 +537,7 @@ def iter_user_voice_records(
         return True
 
     routing = load_routing()
+    registry = load_registry()
 
     if _CONVERSATIONS_DIR.is_dir():
         for path in sorted(_CONVERSATIONS_DIR.glob("*.jsonl")):
@@ -555,6 +557,11 @@ def iter_user_voice_records(
                     if turn.get("role") != "user":
                         continue
                     content = turn.get("content", "")
+                    if excluded_turn(registry, path.stem, str(turn.get("ts", "")), content):
+                        if dropped is not None:
+                            dropped["user_voice:eval_excluded"] = (
+                                dropped.get("user_voice:eval_excluded", 0) + 1)
+                        continue
                     if not content.strip() or not take(content):
                         continue
                     yield CorpusRecord(
@@ -579,6 +586,12 @@ def iter_user_voice_records(
                 except json.JSONDecodeError:
                     continue
                 content = obs.get("user_text", "")
+                if excluded_turn(registry, str(obs.get("session_id", "")), str(obs.get("ts", "")),
+                                 content, str(obs.get("assistant_summary", ""))):
+                    if dropped is not None:
+                        dropped["user_voice:eval_excluded"] = (
+                            dropped.get("user_voice:eval_excluded", 0) + 1)
+                    continue
                 if not content.strip() or not take(content):
                     continue
                 # See engineer_corpus for why this exists and why an uncurated

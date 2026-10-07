@@ -1,0 +1,1820 @@
+{
+ "ok": false,
+ "failures": [
+  "legacy eval marker in training artifact: blended_corpus.jsonl:gold_answer x2",
+  "legacy eval marker in training artifact: blended_corpus.jsonl:recall_eval_heldout x1",
+  "legacy eval marker in training artifact: blended_corpus.jsonl:required_facts x2",
+  "legacy eval marker in training artifact: engineer_corpus.jsonl:gold_answer x2",
+  "legacy eval marker in training artifact: engineer_corpus.jsonl:required_facts x1",
+  "legacy eval marker in training artifact: personalization_corpus.jsonl:recall_eval_heldout x1",
+  "legacy eval marker in training artifact: personalization_corpus.jsonl:required_facts x1",
+  "evaluation question text found in corpora for 4 item(s): ['ms-02', 'ms-08', 't-01', 't-12']"
+ ],
+ "scanned": {
+  "engineer_corpus.jsonl": 3300,
+  "personalization_corpus.jsonl": 1342,
+  "blended_corpus.jsonl": 4134,
+  "sft_pairs.jsonl": 504,
+  "sft_pairs_heldout.jsonl": 55,
+  "knowledge_base": 1084,
+  "cognitive_profile.md": 1,
+  "personal_life.md": 1,
+  "observation_queue": 2637,
+  "queue:excluded": 8,
+  "conversations": 50
+ },
+ "tags": {
+  "eng-a-01": {
+   "source_fraction": 1.0,
+   "in_training": {
+    "0.2": true,
+    "0.5": true,
+    "0.8": true
+   }
+  },
+  "eng-a-02": {
+   "source_fraction": 1.0,
+   "in_training": {
+    "0.2": true,
+    "0.5": true,
+    "0.8": true
+   }
+  },
+  "eng-a-03": {
+   "source_fraction": 1.0,
+   "in_training": {
+    "0.2": true,
+    "0.5": true,
+    "0.8": true
+   }
+  },
+  "eng-a-04": {
+   "source_fraction": 1.0,
+   "in_training": {
+    "0.2": true,
+    "0.5": true,
+    "0.8": true
+   }
+  },
+  "eng-a-05": {
+   "source_fraction": 1.0,
+   "in_training": {
+    "0.2": true,
+    "0.5": true,
+    "0.8": true
+   }
+  },
+  "eng-a-06": {
+   "source_fraction": 1.0,
+   "in_training": {
+    "0.2": true,
+    "0.5": true,
+    "0.8": true
+   }
+  },
+  "eng-a-07": {
+   "source_fraction": 1.0,
+   "in_training": {
+    "0.2": true,
+    "0.5": true,
+    "0.8": true
+   }
+  },
+  "eng-a-08": {
+   "source_fraction": 1.0,
+   "in_training": {
+    "0.2": true,
+    "0.5": true,
+    "0.8": true
+   }
+  },
+  "eng-a-09": {
+   "source_fraction": 1.0,
+   "in_training": {
+    "0.2": true,
+    "0.5": true,
+    "0.8": true
+   }
+  },
+  "eng-a-10": {
+   "source_fraction": 1.0,
+   "in_training": {
+    "0.2": true,
+    "0.5": true,
+    "0.8": true
+   }
+  },
+  "eng-a-11": {
+   "source_fraction": 1.0,
+   "in_training": {
+    "0.2": true,
+    "0.5": true,
+    "0.8": true
+   }
+  },
+  "eng-a-12": {
+   "source_fraction": 1.0,
+   "in_training": {
+    "0.2": true,
+    "0.5": true,
+    "0.8": true
+   }
+  },
+  "eng-a-13": {
+   "source_fraction": 1.0,
+   "in_training": {
+    "0.2": true,
+    "0.5": true,
+    "0.8": true
+   }
+  },
+  "eng-a-14": {
+   "source_fraction": 1.0,
+   "in_training": {
+    "0.2": true,
+    "0.5": true,
+    "0.8": true
+   }
+  },
+  "eng-a-15": {
+   "source_fraction": 1.0,
+   "in_training": {
+    "0.2": true,
+    "0.5": true,
+    "0.8": true
+   }
+  },
+  "eng-a-16": {
+   "source_fraction": 1.0,
+   "in_training": {
+    "0.2": true,
+    "0.5": true,
+    "0.8": true
+   }
+  },
+  "eng-a-17": {
+   "source_fraction": 1.0,
+   "in_training": {
+    "0.2": true,
+    "0.5": true,
+    "0.8": true
+   }
+  },
+  "eng-a-18": {
+   "source_fraction": 1.0,
+   "in_training": {
+    "0.2": true,
+    "0.5": true,
+    "0.8": true
+   }
+  },
+  "eng-a-19": {
+   "source_fraction": 1.0,
+   "in_training": {
+    "0.2": true,
+    "0.5": true,
+    "0.8": true
+   }
+  },
+  "eng-a-20": {
+   "source_fraction": 1.0,
+   "in_training": {
+    "0.2": true,
+    "0.5": true,
+    "0.8": true
+   }
+  },
+  "eng-b-02": {
+   "source_fraction": 1.0,
+   "in_training": {
+    "0.2": true,
+    "0.5": true,
+    "0.8": true
+   }
+  },
+  "eng-b-03": {
+   "source_fraction": 1.0,
+   "in_training": {
+    "0.2": true,
+    "0.5": true,
+    "0.8": true
+   }
+  },
+  "eng-b-04": {
+   "source_fraction": 1.0,
+   "in_training": {
+    "0.2": true,
+    "0.5": true,
+    "0.8": true
+   }
+  },
+  "eng-b-05": {
+   "source_fraction": 1.0,
+   "in_training": {
+    "0.2": true,
+    "0.5": true,
+    "0.8": true
+   }
+  },
+  "eng-b-06": {
+   "source_fraction": 1.0,
+   "in_training": {
+    "0.2": true,
+    "0.5": true,
+    "0.8": true
+   }
+  },
+  "eng-b-07": {
+   "source_fraction": 1.0,
+   "in_training": {
+    "0.2": true,
+    "0.5": true,
+    "0.8": true
+   }
+  },
+  "eng-b-08": {
+   "source_fraction": 1.0,
+   "in_training": {
+    "0.2": true,
+    "0.5": true,
+    "0.8": true
+   }
+  },
+  "eng-b-09": {
+   "source_fraction": 1.0,
+   "in_training": {
+    "0.2": true,
+    "0.5": true,
+    "0.8": true
+   }
+  },
+  "eng-b-10": {
+   "source_fraction": 1.0,
+   "in_training": {
+    "0.2": true,
+    "0.5": true,
+    "0.8": true
+   }
+  },
+  "eng-b-11": {
+   "source_fraction": 1.0,
+   "in_training": {
+    "0.2": true,
+    "0.5": true,
+    "0.8": true
+   }
+  },
+  "eng-b-12": {
+   "source_fraction": 1.0,
+   "in_training": {
+    "0.2": true,
+    "0.5": true,
+    "0.8": true
+   }
+  },
+  "eng-b-13": {
+   "source_fraction": 1.0,
+   "in_training": {
+    "0.2": true,
+    "0.5": true,
+    "0.8": true
+   }
+  },
+  "eng-b-14": {
+   "source_fraction": 1.0,
+   "in_training": {
+    "0.2": true,
+    "0.5": true,
+    "0.8": true
+   }
+  },
+  "eng-b-15": {
+   "source_fraction": 1.0,
+   "in_training": {
+    "0.2": true,
+    "0.5": true,
+    "0.8": true
+   }
+  },
+  "eng-b-16": {
+   "source_fraction": 1.0,
+   "in_training": {
+    "0.2": true,
+    "0.5": true,
+    "0.8": true
+   }
+  },
+  "eng-b-17": {
+   "source_fraction": 1.0,
+   "in_training": {
+    "0.2": true,
+    "0.5": true,
+    "0.8": true
+   }
+  },
+  "eng-b-18": {
+   "source_fraction": 1.0,
+   "in_training": {
+    "0.2": true,
+    "0.5": true,
+    "0.8": true
+   }
+  },
+  "eng-b-19": {
+   "source_fraction": 1.0,
+   "in_training": {
+    "0.2": true,
+    "0.5": true,
+    "0.8": true
+   }
+  },
+  "eng-b-20": {
+   "source_fraction": 1.0,
+   "in_training": {
+    "0.2": true,
+    "0.5": true,
+    "0.8": true
+   }
+  },
+  "eng-c-01": {
+   "source_fraction": 1.0,
+   "in_training": {
+    "0.2": true,
+    "0.5": true,
+    "0.8": true
+   }
+  },
+  "eng-c-02": {
+   "source_fraction": 1.0,
+   "in_training": {
+    "0.2": true,
+    "0.5": true,
+    "0.8": true
+   }
+  },
+  "eng-c-03": {
+   "source_fraction": 1.0,
+   "in_training": {
+    "0.2": true,
+    "0.5": true,
+    "0.8": true
+   }
+  },
+  "eng-c-04": {
+   "source_fraction": 1.0,
+   "in_training": {
+    "0.2": true,
+    "0.5": true,
+    "0.8": true
+   }
+  },
+  "eng-c-05": {
+   "source_fraction": 1.0,
+   "in_training": {
+    "0.2": true,
+    "0.5": true,
+    "0.8": true
+   }
+  },
+  "eng-c-06": {
+   "source_fraction": 1.0,
+   "in_training": {
+    "0.2": true,
+    "0.5": true,
+    "0.8": true
+   }
+  },
+  "eng-c-08": {
+   "source_fraction": 1.0,
+   "in_training": {
+    "0.2": true,
+    "0.5": true,
+    "0.8": true
+   }
+  },
+  "eng-c-09": {
+   "source_fraction": 1.0,
+   "in_training": {
+    "0.2": true,
+    "0.5": true,
+    "0.8": true
+   }
+  },
+  "eng-c-10": {
+   "source_fraction": 1.0,
+   "in_training": {
+    "0.2": true,
+    "0.5": true,
+    "0.8": true
+   }
+  },
+  "eng-c-11": {
+   "source_fraction": 1.0,
+   "in_training": {
+    "0.2": true,
+    "0.5": true,
+    "0.8": true
+   }
+  },
+  "eng-c-12": {
+   "source_fraction": 1.0,
+   "in_training": {
+    "0.2": true,
+    "0.5": true,
+    "0.8": true
+   }
+  },
+  "eng-c-18": {
+   "source_fraction": 1.0,
+   "in_training": {
+    "0.2": true,
+    "0.5": true,
+    "0.8": true
+   }
+  },
+  "eng-c-20": {
+   "source_fraction": 1.0,
+   "in_training": {
+    "0.2": true,
+    "0.5": true,
+    "0.8": true
+   }
+  },
+  "eng-d-01": {
+   "source_fraction": 1.0,
+   "in_training": {
+    "0.2": true,
+    "0.5": true,
+    "0.8": true
+   }
+  },
+  "eng-d-02": {
+   "source_fraction": 1.0,
+   "in_training": {
+    "0.2": true,
+    "0.5": true,
+    "0.8": true
+   }
+  },
+  "eng-d-03": {
+   "source_fraction": 1.0,
+   "in_training": {
+    "0.2": true,
+    "0.5": true,
+    "0.8": true
+   }
+  },
+  "eng-d-04": {
+   "source_fraction": 1.0,
+   "in_training": {
+    "0.2": true,
+    "0.5": true,
+    "0.8": true
+   }
+  },
+  "eng-d-05": {
+   "source_fraction": 1.0,
+   "in_training": {
+    "0.2": true,
+    "0.5": true,
+    "0.8": true
+   }
+  },
+  "eng-d-06": {
+   "source_fraction": 1.0,
+   "in_training": {
+    "0.2": true,
+    "0.5": true,
+    "0.8": true
+   }
+  },
+  "eng-d-07": {
+   "source_fraction": 1.0,
+   "in_training": {
+    "0.2": true,
+    "0.5": true,
+    "0.8": true
+   }
+  },
+  "eng-d-08": {
+   "source_fraction": 1.0,
+   "in_training": {
+    "0.2": true,
+    "0.5": true,
+    "0.8": true
+   }
+  },
+  "eng-d-09": {
+   "source_fraction": 1.0,
+   "in_training": {
+    "0.2": true,
+    "0.5": true,
+    "0.8": true
+   }
+  },
+  "eng-d-10": {
+   "source_fraction": 1.0,
+   "in_training": {
+    "0.2": true,
+    "0.5": true,
+    "0.8": true
+   }
+  },
+  "eng-d-11": {
+   "source_fraction": 1.0,
+   "in_training": {
+    "0.2": true,
+    "0.5": true,
+    "0.8": true
+   }
+  },
+  "eng-d-12": {
+   "source_fraction": 1.0,
+   "in_training": {
+    "0.2": true,
+    "0.5": true,
+    "0.8": true
+   }
+  },
+  "eng-d-13": {
+   "source_fraction": 1.0,
+   "in_training": {
+    "0.2": true,
+    "0.5": true,
+    "0.8": true
+   }
+  },
+  "eng-d-14": {
+   "source_fraction": 1.0,
+   "in_training": {
+    "0.2": true,
+    "0.5": true,
+    "0.8": true
+   }
+  },
+  "eng-d-15": {
+   "source_fraction": 1.0,
+   "in_training": {
+    "0.2": true,
+    "0.5": true,
+    "0.8": true
+   }
+  },
+  "eng-d-16": {
+   "source_fraction": 1.0,
+   "in_training": {
+    "0.2": true,
+    "0.5": true,
+    "0.8": true
+   }
+  },
+  "eng-d-17": {
+   "source_fraction": 1.0,
+   "in_training": {
+    "0.2": true,
+    "0.5": true,
+    "0.8": true
+   }
+  },
+  "eng-d-18": {
+   "source_fraction": 1.0,
+   "in_training": {
+    "0.2": true,
+    "0.5": true,
+    "0.8": true
+   }
+  },
+  "eng-d-19": {
+   "source_fraction": 1.0,
+   "in_training": {
+    "0.2": true,
+    "0.5": true,
+    "0.8": true
+   }
+  },
+  "eng-d-20": {
+   "source_fraction": 1.0,
+   "in_training": {
+    "0.2": true,
+    "0.5": true,
+    "0.8": true
+   }
+  },
+  "pers-01": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "pers-02": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "pers-03": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "pers-04": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "pers-05": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "pers-06": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "pers-07": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "pers-08": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "pers-09": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "pers-10": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "pers-11": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "pers-12": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "pers-13": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "pers-14": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "pers-15": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "pers-16": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "pers-17": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "pers-18": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "pers-19": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "pers-20": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "pers-21": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "pers-22": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "pers-23": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "pers-24": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "pers-25": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "ho-ie-01": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "ho-ie-02": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "ho-ie-03": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "ho-ie-04": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "ho-ie-05": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "ho-ie-06": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "ho-ie-07": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "ho-ie-08": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "ho-ms-01": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "ho-ms-02": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "ho-ms-03": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "ho-ms-04": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "ho-ms-05": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "ho-ms-06": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "ho-ms-07": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "ho-ms-08": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "ho-t-01": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "ho-t-02": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "ho-t-03": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "ho-t-04": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "ho-t-05": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "ho-t-06": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "ho-t-07": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "ho-t-08": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "ho-ku-01": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "ho-ku-02": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "ho-ku-03": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "ho-ku-04": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "ho-ku-05": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "ho-ku-06": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "ho-ku-07": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "ho-ku-08": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "ho-ab-01": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "ho-ab-02": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "ho-ab-03": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "ho-ab-04": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "ho-ab-05": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "ho-ab-06": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "ho-ab-07": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "ho-ab-08": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "ie-01": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "ie-02": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "ie-03": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "ie-04": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "ie-05": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "ie-06": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "ie-07": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "ie-08": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "ie-09": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "ie-10": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "ie-11": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "ie-12": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "ie-13": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "ie-14": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "ie-15": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "ie-16": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "ie-17": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "ie-18": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "ie-19": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "ie-20": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "ie-21": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "ms-01": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "ms-02": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "ms-03": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "ms-04": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "ms-05": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "ms-06": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "ms-07": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "ms-08": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "ms-09": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "ms-10": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "ms-11": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "ms-12": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "ms-13": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "ms-14": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "t-01": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "t-02": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "t-03": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "t-04": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "t-05": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "t-06": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "t-07": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "t-08": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "t-09": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "t-10": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "t-11": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "t-12": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "t-13": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "t-14": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "ku-01": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "ku-02": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "ku-03": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "ku-04": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "ku-05": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "ku-06": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "ku-07": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "ku-08": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "ku-09": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "ku-10": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "ku-11": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "ku-12": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "ku-13": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "ku-14": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "ku-15": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "ku-16": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "ab-01": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "ab-02": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "ab-03": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "ab-04": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "ab-05": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "ab-06": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "ab-07": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "ab-08": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "ab-09": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "ab-10": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "ab-11": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "ab-12": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  },
+  "ab-13": {
+   "source_fraction": null,
+   "in_training": {
+    "0.2": false,
+    "0.5": false,
+    "0.8": false
+   }
+  }
+ },
+ "too_short_to_audit": [
+  "gold:pers-01",
+  "gold:pers-02",
+  "gold:pers-03",
+  "gold:pers-04",
+  "gold:pers-05",
+  "gold:pers-06",
+  "gold:pers-07",
+  "gold:pers-08",
+  "gold:pers-09",
+  "gold:pers-10",
+  "gold:pers-11",
+  "gold:pers-12",
+  "gold:pers-13",
+  "gold:pers-14",
+  "gold:pers-15",
+  "gold:pers-16",
+  "gold:pers-17",
+  "gold:pers-18",
+  "gold:pers-19",
+  "gold:pers-20",
+  "gold:pers-21",
+  "gold:pers-22",
+  "gold:pers-23",
+  "gold:pers-24",
+  "gold:pers-25",
+  "q:ab-01",
+  "q:ab-02",
+  "q:ab-03",
+  "q:ab-05",
+  "q:ab-06",
+  "q:ab-07",
+  "q:ab-08",
+  "q:ab-09",
+  "q:ab-10",
+  "q:ab-11",
+  "q:ab-12",
+  "q:ab-13",
+  "q:ho-ab-01",
+  "q:ho-ab-02",
+  "q:ho-ab-03",
+  "q:ho-ab-04",
+  "q:ho-ab-05",
+  "q:ho-ab-06",
+  "q:ho-ab-07",
+  "q:ho-ab-08",
+  "q:ho-ie-01",
+  "q:ho-ie-02",
+  "q:ho-ku-01",
+  "q:ho-ku-04",
+  "q:ho-ku-05",
+  "q:ho-ms-04",
+  "q:ho-t-08",
+  "q:ie-01",
+  "q:ie-02",
+  "q:ie-04",
+  "q:ie-05",
+  "q:ie-12",
+  "q:ku-01",
+  "q:ku-04",
+  "q:ku-09",
+  "q:ku-10",
+  "q:ku-13",
+  "q:ku-16",
+  "q:ms-01",
+  "q:t-03",
+  "q:t-06",
+  "q:t-11"
+ ],
+ "n_gram": 8,
+ "manifest_sha": null,
+ "owner_gold_items": 25
+}

@@ -90,6 +90,7 @@ from jarvis_core.agent.capture import redact
 from jarvis_core.config import DATA_ROOT, JARVIS_ROOT, KB_PATH, SPECIALIST_CORPUS_ROOT
 from jarvis_core.memory.chunking import RecursiveWordChunker
 from jarvis_core.agent.curator import load_routing, routes_to
+from jarvis_core.specialists.eval_exclusions import excluded_turn, has_canary, load_registry
 from jarvis_core.specialists.text_hygiene import corpus_admits
 
 
@@ -322,6 +323,7 @@ def _iter_conversation_store_records(
     if not _CONVERSATIONS_DIR.is_dir():
         return
     cluster_counts: Dict[str, int] = {}
+    registry = load_registry()
     for path in sorted(_CONVERSATIONS_DIR.glob("*.jsonl")):
         try:
             with path.open("r", encoding="utf-8") as handle:
@@ -329,6 +331,14 @@ def _iter_conversation_store_records(
         except (OSError, json.JSONDecodeError):
             continue
         if not turns:
+            continue
+
+        # A conversation that touched the c002 evaluation is dropped whole: its
+        # surrounding turns carry the same answer key.
+        if has_canary(registry, *(str(t.get("content", "")) for t in turns)):
+            if dropped is not None:
+                dropped["chat_history:eval_excluded"] = (
+                    dropped.get("chat_history:eval_excluded", 0) + len(turns))
             continue
 
         first_user = next((t.get("content", "") for t in turns if t.get("role") == "user"), "")
@@ -342,6 +352,11 @@ def _iter_conversation_store_records(
         for line_no, turn in enumerate(turns):
             content = turn.get("content", "")
             if not content:
+                continue
+            if excluded_turn(registry, path.stem, str(turn.get("ts", "")), content):
+                if dropped is not None:
+                    dropped["chat_history:eval_excluded"] = (
+                        dropped.get("chat_history:eval_excluded", 0) + 1)
                 continue
             yield CorpusRecord(
                 source_type="chat_history",
@@ -369,6 +384,7 @@ def _iter_observation_queue_records(
         return
     cluster_counts: Dict[str, int] = {}
     routing = load_routing()
+    registry = load_registry()
     try:
         handle = _OBSERVATION_QUEUE_PATH.open("r", encoding="utf-8")
     except OSError:
@@ -385,6 +401,13 @@ def _iter_observation_queue_records(
             user_text = obs.get("user_text", "")
             assistant_summary = obs.get("assistant_summary", "")
             if not user_text and not assistant_summary:
+                continue
+
+            if excluded_turn(registry, str(obs.get("session_id", "")), str(obs.get("ts", "")),
+                             user_text, assistant_summary):
+                if dropped is not None:
+                    dropped["chat_history:eval_excluded"] = (
+                        dropped.get("chat_history:eval_excluded", 0) + 1)
                 continue
 
             # ROUTING. Before 2026-09-14 this line did not exist and every

@@ -74,6 +74,7 @@ from typing import Any, Dict, Generator, Optional, Set, Tuple
 
 from jarvis_core.config import SPECIALIST_CORPUS_ROOT
 from jarvis_core.specialists import third_parties
+from jarvis_core.specialists.eval_exclusions import has_canary, load_registry
 
 _ENGINEER_PATH = SPECIALIST_CORPUS_ROOT / "engineer_corpus.jsonl"
 _PERSONALIZATION_PATH = SPECIALIST_CORPUS_ROOT / "personalization_corpus.jsonl"
@@ -159,6 +160,7 @@ class BlendStats:
     output_path: Path
     missing_inputs: Tuple[str, ...] = field(default_factory=tuple)
     third_party_redactions: int = 0
+    eval_excluded: int = 0
 
 
 def _text_key(text: str) -> str:
@@ -239,10 +241,15 @@ def blend(output_path: Optional[Path] = None) -> BlendStats:
     owned_by_personalization = _personalization_keys(_PERSONALIZATION_PATH)
     people = third_parties.load()
     redactions = 0
+    registry = load_registry()
+    eval_excluded = 0
 
     with out.open("w", encoding="utf-8") as handle:
         for record in _iter_corpus(_ENGINEER_PATH, "engineer"):
             text = record.get("text", "")
+            if has_canary(registry, text):
+                eval_excluded += 1
+                continue
             if _text_key(text) in owned_by_personalization:
                 dropped += 1
                 dropped_chars += len(text)
@@ -257,6 +264,9 @@ def blend(output_path: Optional[Path] = None) -> BlendStats:
 
         for _ in range(_PERSONALIZATION_REPEATS):
             for record in _iter_corpus(_PERSONALIZATION_PATH, "personalization"):
+                if has_canary(registry, record.get("text", "")):
+                    eval_excluded += 1
+                    continue
                 record["text"], hits = third_parties.redact(record.get("text", ""), people)
                 redactions += hits
                 handle.write(json.dumps(record, ensure_ascii=False) + "\n")
@@ -279,6 +289,7 @@ def blend(output_path: Optional[Path] = None) -> BlendStats:
         output_path=out,
         missing_inputs=missing,
         third_party_redactions=redactions,
+        eval_excluded=eval_excluded,
     )
 
 

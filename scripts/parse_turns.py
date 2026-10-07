@@ -84,6 +84,7 @@ from jarvis_core.agent.parse_ledger import (  # noqa: E402
 from jarvis_core.agent.parse_rule import PARSE_RULE, PARSE_RULE_VERSION, Verdict, validate_verdict  # noqa: E402
 from jarvis_core.config import DATA_ROOT, KB_PATH  # noqa: E402
 from jarvis_core.memory.episode_store import STORE_ROOT  # noqa: E402
+from jarvis_core.specialists.eval_exclusions import excluded_session, load_registry  # noqa: E402
 
 _IST = timezone(timedelta(hours=5, minutes=30))
 FEED_PATH = Path(DATA_ROOT) / "life_state_feed.jsonl"
@@ -405,6 +406,9 @@ def submit(verdicts: Any, agent: str, paths: Paths = Paths(),
             continue
         if _TEST_SESSION.match(sid):
             rep.reasons.append("test session: ephemeral voicegate turns are never parsed")
+            continue
+        if excluded_session(load_registry(), sid, ts):
+            rep.reasons.append("evaluation session: turns that author the c002 evaluation are never parsed")
             continue
         host = host_of(row)
         user_text = str(row.get("user_text") or "")

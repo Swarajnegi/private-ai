@@ -719,7 +719,34 @@ def inv_shards_are_safe_to_push(a: Artifacts) -> List[Finding]:
     return out
 
 
+def inv_no_eval_canary_in_training(a: Artifacts) -> List[Finding]:
+    """The c002 evaluation must never reach a training artifact or the KB.
+
+    Every c002 file carries a canary from jarvis_data/eval/c002/exclusions.json.
+    A canary inside a corpus, an SFT pair or a knowledge-base entry means the
+    answer key has leaked into what an adapter would learn from.
+    """
+    from jarvis_core.specialists.eval_exclusions import has_canary, load_registry
+    registry = load_registry(a.root / "jarvis_data" / "eval" / "c002" / "exclusions.json")
+    if not registry.canaries:
+        return [Finding("c002 canary absent from training", UNKNOWN, "no canary registered")]
+    kb = _load(a.root / "jarvis_data" / "knowledge_base.jsonl")
+    leaked = []
+    for label, rows in (("engineer", a.engineer), ("personalization", a.personalization),
+                        ("blend", a.blend), ("sft_pairs", a.pairs), ("heldout", a.heldout),
+                        ("knowledge_base", kb)):
+        for n, row in enumerate(rows):
+            if has_canary(registry, json.dumps(row, ensure_ascii=False)):
+                leaked.append(f"{label}#{n}")
+    return [Finding(
+        "c002 canary absent from training", OK if not leaked else FAIL,
+        f"{len(leaked)} records carry a canary" if leaked
+        else f"{len(registry.canaries)} canary scanned across corpora, pairs and KB",
+        leaked[:3])]
+
+
 INVARIANTS: Tuple[Callable[[Artifacts], List[Finding]], ...] = (
+    inv_no_eval_canary_in_training,
     inv_no_exact_duplicates,   # includes inv_blend_duplication_is_explained
     inv_pair_targets_are_owner_prose,
     inv_heldout_is_isolated,

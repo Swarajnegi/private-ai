@@ -92,7 +92,13 @@ RRF_K = 60
 # Text that belongs to the measurement harness, not to the owner's life. A unit
 # that quotes it (a tool result holding recall_eval.jsonl, an assistant message
 # listing gold answers) would let the eval read its own answer key.
-CONTAMINATION_MARKERS = ("recall_eval", "gold_answer", "required_facts", "eval_recall")
+CONTAMINATION_MARKERS = ("recall_eval", "gold_answer", "required_facts", "eval_recall", "eval_c002")
+
+
+def contamination_markers() -> Tuple[str, ...]:
+    """The static markers plus the c002 canaries, which are generated per install."""
+    from jarvis_core.specialists.eval_exclusions import load_registry
+    return CONTAMINATION_MARKERS + tuple(c.lower() for c in load_registry().canaries)
 
 # Vocabulary of talking ABOUT the memory system. Sessions dense in it are
 # usually the owner and an agent debugging recall ("why did you not know Tobu"),
@@ -398,10 +404,11 @@ class RecallRouter:
     def _factor(self, question: str, weight: float) -> Callable[[Any], float]:
         asked_meta = meta_hits(question) >= META_QUESTION_MIN_HITS
         eval_q = question.lower()
+        markers = contamination_markers()
 
         def factor(row: Any) -> float:
             text = f"{row['prefix']}\n{row['body']}".lower()
-            if any(m in text and m not in eval_q for m in CONTAMINATION_MARKERS):
+            if any(m in text and m not in eval_q for m in markers):
                 return 0.0
             if asked_meta or weight <= 0:
                 return 1.0
@@ -427,15 +434,17 @@ class RecallRouter:
 
     def _search(self, query: str, cfg: RecallConfig, exclude: Sequence[str], factor: Callable[[Any], float],
                 sources: Optional[Sequence[str]], time_range: Any, hosts: Optional[Sequence[str]],
-                rerank: bool) -> List[Any]:
+                rerank: bool, time_mode: str = "boost") -> List[Any]:
         return self.index.search(
             query, k=cfg.pool_k, time_range=time_range, hosts=hosts, sources=sources, rerank=rerank,
+            time_mode=time_mode,
             rerank_k=cfg.rerank_k, fetch_k=cfg.fetch_k, dense_k=cfg.dense_k, fts_df_max=cfg.fts_df_max,
             neighbours=1, now=self._now(), exclude_sessions=exclude, factor=factor)
 
     def recall(self, question: str, session_id: str = "", budget_tokens: int = DEFAULT_BUDGET_TOKENS,
                time_range: Any = None, hosts: Optional[Sequence[str]] = None,
-               config: Optional[RecallConfig] = None, openable: bool = True) -> RecallResult:
+               config: Optional[RecallConfig] = None, openable: bool = True,
+               time_mode: str = "boost") -> RecallResult:
         cfg = config or self.config
         if cfg.multi is not None and looks_multi(question):
             cfg = cfg.multi
@@ -454,7 +463,7 @@ class RecallRouter:
                         if self.index.backend.count() == 0:
                             raise RuntimeError("the vector index is empty (rebuild it: "
                                                "python scripts/index_episodes.py --rebuild)")
-                        first = self._search(question, cfg, exclude, factor, sources, time_range, hosts, cfg.rerank)
+                        first = self._search(question, cfg, exclude, factor, sources, time_range, hosts, cfg.rerank, time_mode)
                         break
                     except Exception:                       # noqa: BLE001 — another process may be compacting the store
                         if attempt:
@@ -476,7 +485,7 @@ class RecallRouter:
             t = time.perf_counter()
             subs = plan_queries(question, cfg.sub_queries) if cfg.sub_queries else []
             for sq in subs:
-                res = self._search(sq, cfg, exclude, factor, sources, time_range, hosts, False)
+                res = self._search(sq, cfg, exclude, factor, sources, time_range, hosts, False, time_mode)
                 passes.append((0.7, [r.unit_id for r in res]))
                 by_id.update({r.unit_id: by_id.get(r.unit_id, r) for r in res})
                 queries.append(sq)
@@ -490,7 +499,7 @@ class RecallRouter:
                 ents = entity_terms(texts, question, self.index.doc_freq)
                 if ents:
                     q2 = " ".join(ents) + " " + " ".join(content_words(question)[:6])
-                    res = self._search(q2, cfg, exclude, factor, sources, time_range, hosts, False)
+                    res = self._search(q2, cfg, exclude, factor, sources, time_range, hosts, False, time_mode)
                     passes.append((0.5, [r.unit_id for r in res]))
                     by_id.update({r.unit_id: by_id.get(r.unit_id, r) for r in res})
                     queries.append(q2)

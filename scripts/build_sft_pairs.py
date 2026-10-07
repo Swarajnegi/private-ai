@@ -93,6 +93,7 @@ sys.path.insert(0, str(_REPO_ROOT / "js-development"))
 from jarvis_core.agent.provenance import ECHO_CEILING, EchoIndex  # noqa: E402
 from jarvis_core.config import DATA_ROOT, JARVIS_ROOT, KB_PATH  # noqa: E402
 from jarvis_core.specialists import third_parties  # noqa: E402
+from jarvis_core.specialists.eval_exclusions import excluded_turn, has_canary, load_registry  # noqa: E402
 from jarvis_core.specialists.text_hygiene import (  # noqa: E402
     MACHINE_TEXT, OWNER_PROSE, classify,
 )
@@ -515,9 +516,13 @@ def extract_user_explanations() -> Iterator[SFTPair]:
     records.sort(key=lambda r: str(r.get("ts", "")))
     echo = EchoIndex()
     taken = 0
+    registry = load_registry()
 
     for rec in records:
         text = str(rec.get("user_text", "")).strip()
+        if excluded_turn(registry, str(rec.get("session_id", "")), str(rec.get("ts", "")),
+                         text, str(rec.get("assistant_summary", ""))):
+            continue
         echoed = echo.add_turn(text, str(rec.get("assistant_summary", "")))
         if classify(text, min_chars=_MIN_EXPLANATION_CHARS)[0] != OWNER_PROSE:
             continue
@@ -623,10 +628,13 @@ def extract_ui_sessions() -> Iterator[SFTPair]:
     """
     if not _CONVERSATIONS.is_dir():
         return
+    registry = load_registry()
     for path in sorted(_CONVERSATIONS.glob("*.jsonl")):
         try:
             text = path.read_text(encoding="utf-8", errors="replace")
         except OSError:
+            continue
+        if has_canary(registry, text):
             continue
         turns: List[Dict[str, Any]] = []
         for line in text.splitlines():

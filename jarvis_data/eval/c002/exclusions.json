@@ -1,0 +1,13 @@
+{
+ "_note": "c002 evaluation exclusions. Read by the corpus builders, check_pipeline, the recall router and scripts/eval_c002.py. Sessions listed here are kept out of training and retrieval from `since` on. Every c002 file carries a canary. Do not delete entries.",
+ "sessions": [
+  {
+   "prefix": "f44ca14d-4868-4dc7-9e83-a1f716a0dd14",
+   "since": "2026-10-07T10:02:00+05:30",
+   "reason": "authored the c002 evaluation design and harness"
+  }
+ ],
+ "canaries": [
+  "c002-eval-canary-51602e7e71f6496a89178e115f14146b"
+ ]
+}

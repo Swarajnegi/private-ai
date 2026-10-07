@@ -342,3 +342,6 @@ jarvis_data/.codex_agent_mail_outbox.jsonl
 jarvis_data/.codex_agent_mail_delivery.json
 jarvis_data/.codex_agent_mail_delivery.tmp
 jarvis_data/.mail_watch_codex.json
+
+# c002 evaluation: the index snapshots are large binaries built on demand
+jarvis_data/eval/c002/snapshot/

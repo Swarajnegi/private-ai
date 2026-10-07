@@ -1,5 +1,11 @@
 {
   "permissions": {
+    "deny": [
+      "Read(//home/swara_unix/.jarvis_private/**)",
+      "Edit(//home/swara_unix/.jarvis_private/**)",
+      "Write(//home/swara_unix/.jarvis_private/**)",
+      "Bash(*jarvis_private*)"
+    ],
     "allow": [
       "Bash(python3 scripts/search_memory.py \"bm25 rank_bm25 lucene IDF formula divergence\")",
       "Bash(python3 scripts/search_memory.py \"audit before implement gotcha forward simulation pre-build review\")",

@@ -1,0 +1,64 @@
+{
+ "_note": "c002 protocol DRAFT. Everything under `locked` is frozen by `eval_c002.py lock` and can never change afterwards; `late_bound` holds only what cannot exist yet (the adapter, the serving record, the frozen-context sha). Fields still null must be decided before locking. base_model is a draft default: the owner picks the pilot base.",
+ "canary": "c002-eval-canary-51602e7e71f6496a89178e115f14146b",
+ "locked": {
+  "s0": "You are answering a question from the owner of a personal knowledge system. Answer directly and specifically: give the conclusion first, then the reasoning that supports it. If background material is provided, use it when it is relevant, and say plainly when it does not contain what you need. If you do not know, say so in your first sentence.",
+  "base_model": "qwen/qwen3-8b",
+  "tokenizer": "Qwen/Qwen3-8B",
+  "reference_model": "google/gemini-3.6-flash",
+  "validator": {
+   "name": "validator",
+   "model": "mistralai/mistral-large-2512"
+  },
+  "judges": [
+   {
+    "name": "judge1",
+    "model": "anthropic/claude-sonnet-5"
+   },
+   {
+    "name": "judge2",
+    "model": "openai/gpt-5.5"
+   }
+  ],
+  "sampling": {
+   "temperature": 0,
+   "seeds": [
+    1,
+    2,
+    3
+   ],
+   "max_tokens": 800
+  },
+  "eligibility": {
+   "max_model_len": 32768,
+   "token_safety_margin": 1.15
+  },
+  "thresholds": {
+   "alpha": 0.05,
+   "margin": 0.1,
+   "min_effect": 0.1,
+   "learning_check": 0.1,
+   "guardrail_one_sided": 0.05,
+   "skip_pilot_at": 0.85,
+   "index_first_gap": 0.15,
+   "judge_control_accuracy": 0.9,
+   "judge_agreement": 0.7,
+   "length_stop_rate": 0.02
+  },
+  "T0": null,
+  "items_sha": null,
+  "redaction_vocab_sha": null,
+  "pricing": {},
+  "budget_cap_usd": null
+ },
+ "late_bound": {
+  "adapter_id": null,
+  "adapter_sha": null,
+  "manifest_path": null,
+  "manifest_sha": null,
+  "serving_plan": null,
+  "serving": {},
+  "contexts_sha": null
+ },
+ "lock": {}
+}

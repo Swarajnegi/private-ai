@@ -57,6 +57,7 @@ if __package__ in (None, ""):
 
 from jarvis_core.agent.parse_rule import PARSE_RULE_VERSION  # noqa: E402
 from jarvis_core.config import DATA_ROOT  # noqa: E402
+from jarvis_core.specialists.eval_exclusions import excluded_session, load_registry  # noqa: E402
 from jarvis_core.agent.codex_paths import rollout_paths
 
 HOSTS: Tuple[str, ...] = ("claude", "codex", "antigravity", "jarvis")
@@ -153,6 +154,7 @@ def pending(host: Optional[str] = None, queue_path: Path = QUEUE_PATH,
             curation_path: Path = CURATION_PATH) -> Iterator[PendingTurn]:
     """Pending turns in queue order, optionally for one host."""
     folded = _folded(curation_path)
+    exclusions = load_registry()
     if not queue_path.exists():
         return
     with queue_path.open(encoding="utf-8") as fh:
@@ -163,6 +165,10 @@ def pending(host: Optional[str] = None, queue_path: Path = QUEUE_PATH,
                 continue
             ts, sid = str(row.get("ts") or ""), str(row.get("session_id") or "")
             if not ts or not sid or _TEST_SESSION.match(sid) or not str(row.get("user_text") or "").strip():
+                continue
+            # A session that is authoring an evaluation (c002) is never offered for parsing: a KB fact
+            # distilled from it would put the answer key into retrieval. See specialists/eval_exclusions.py.
+            if excluded_session(exclusions, sid, ts):
                 continue
             if is_parsed(folded.get((ts, sid))):
                 continue
