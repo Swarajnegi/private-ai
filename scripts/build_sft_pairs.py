@@ -94,6 +94,7 @@ from jarvis_core.agent.provenance import ECHO_CEILING, EchoIndex  # noqa: E402
 from jarvis_core.config import DATA_ROOT, JARVIS_ROOT, KB_PATH  # noqa: E402
 from jarvis_core.specialists import third_parties  # noqa: E402
 from jarvis_core.specialists.eval_exclusions import excluded_turn, has_canary, load_registry  # noqa: E402
+from jarvis_core.specialists.retractions import kb_retracted, load_retractions  # noqa: E402
 from jarvis_core.specialists.text_hygiene import (  # noqa: E402
     MACHINE_TEXT, OWNER_PROSE, classify,
 )
@@ -546,6 +547,7 @@ def extract_user_explanations() -> Iterator[SFTPair]:
 
 def extract_kb_verbatim() -> Iterator[SFTPair]:
     """The extraction that replaces the purge. See this module's header."""
+    retractions = load_retractions()
     try:
         handle = Path(KB_PATH).open("r", encoding="utf-8")
     except (OSError, FileNotFoundError):
@@ -560,6 +562,8 @@ def extract_kb_verbatim() -> Iterator[SFTPair]:
             except json.JSONDecodeError:
                 continue
             content = str(entry.get("content", ""))
+            if kb_retracted(retractions, entry.get("id")):
+                continue
             m = _ATTRIBUTED_QUOTE.search(content)
             if not m:
                 continue

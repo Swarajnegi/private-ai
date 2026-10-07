@@ -50,6 +50,15 @@ Companion files: [STATUS.md](STATUS.md) (cross-agent snapshot), [js-learning/JAR
 - [ ] `index_episodes`, `reindex_memory`, `relabel_domains` (c011, c012, c013)
 - Everything else continues. Anything that can wait for the personal laptop waits for it.
 
+## D2. Personalization interview (investigated 2026-10-07)
+
+- [x] Root cause found: on 2026-09-26 the owner asked an off-script question and a free model (`nemotron-3-super:free`) wrote BOTH sides of interview question 6 in the owner's voice (KB 1201 records it).
+- [x] Guard shipped: interview-mode rule on the task, one retry, then a fixed fallback (`brain/interview_guard.py`, 105/105 in the orchestrator self-test).
+- [x] Poisoned turn retracted (verdict `none`) and a retraction registry (`jarvis_data/retractions.jsonl`) now keeps KB 735 and the raw conversation turn out of every corpus builder and out of the retrieval index.
+- [ ] **Corpus rebuild needed** (paused by owner rule): 8 retracted records still sit in the built artifacts. `check_pipeline` reports this as 1 failed until the rebuild runs.
+- [ ] **Owner: the interview has only Questions 1-5 answered (of 43).** Questions 6-43 are the best remaining personalization data and are TRAINING data; they do not replace the 25 c002 held-out answers.
+- [ ] Not unit-tested: the personalization corpus's KB paths (they read through the SQLite cognitive index).
+
 ## E. Training readiness (Stage 5 gate)
 
 Measured 2026-10-07 from `jarvis_data/training_corpus/`:

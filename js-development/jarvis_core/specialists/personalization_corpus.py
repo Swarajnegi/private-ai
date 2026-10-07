@@ -99,6 +99,7 @@ from jarvis_core.memory.cognitive_index import (
 )
 from jarvis_core.agent.curator import load_routing, routes_to
 from jarvis_core.specialists.eval_exclusions import excluded_turn, load_registry
+from jarvis_core.specialists.retractions import conv_turn_retracted, kb_retracted, load_retractions
 from jarvis_core.specialists.text_hygiene import corpus_admits
 
 
@@ -289,9 +290,10 @@ def iter_kb_identity_records() -> Generator[CorpusRecord, None, None]:
     """
     seen_ids = set()
     chunker = _chunker()
+    retractions = load_retractions()
 
     def emit(entry, origin: str) -> Generator[CorpusRecord, None, None]:
-        if entry.id in seen_ids or not entry.content.strip():
+        if entry.id in seen_ids or not entry.content.strip() or kb_retracted(retractions, entry.id):
             return
         seen_ids.add(entry.id)
         for i, chunk in enumerate(chunker.chunk(entry.content)):
@@ -328,7 +330,10 @@ def iter_kb_judgment_records() -> Generator[CorpusRecord, None, None]:
     Skips anything kb_identity already takes, and skips build-log prose.
     """
     chunker = _chunker()
+    retractions = load_retractions()
     for entry in query_all():
+        if kb_retracted(retractions, entry.id):
+            continue
         if entry.cognitive_dimension == "personality":
             continue
         if any(t in entry.tags for t in _IDENTITY_TAGS):
@@ -538,6 +543,7 @@ def iter_user_voice_records(
 
     routing = load_routing()
     registry = load_registry()
+    retractions = load_retractions()
 
     if _CONVERSATIONS_DIR.is_dir():
         for path in sorted(_CONVERSATIONS_DIR.glob("*.jsonl")):
@@ -557,6 +563,10 @@ def iter_user_voice_records(
                     if turn.get("role") != "user":
                         continue
                     content = turn.get("content", "")
+                    if conv_turn_retracted(retractions, path.name, line_no):
+                        if dropped is not None:
+                            dropped["user_voice:retracted"] = dropped.get("user_voice:retracted", 0) + 1
+                        continue
                     if excluded_turn(registry, path.stem, str(turn.get("ts", "")), content):
                         if dropped is not None:
                             dropped["user_voice:eval_excluded"] = (

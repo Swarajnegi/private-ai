@@ -745,7 +745,35 @@ def inv_no_eval_canary_in_training(a: Artifacts) -> List[Finding]:
         leaked[:3])]
 
 
+def inv_no_retracted_material_in_training(a: Artifacts) -> List[Finding]:
+    """Retracted KB entries and conversation turns (jarvis_data/retractions.jsonl) must not be in a corpus.
+
+    Until the next corpus rebuild this FAILS for anything retracted after the last build, which is the
+    truth: those artifacts still hold material known not to be the owner's words."""
+    from jarvis_core.specialists.retractions import load_retractions
+    ret = load_retractions(a.root / "jarvis_data" / "retractions.jsonl")
+    if not ret.kb_ids and not ret.conv_turns:
+        return [Finding("retracted material absent from training", OK, "nothing retracted")]
+    leaked = []
+    for label, rows in (("engineer", a.engineer), ("personalization", a.personalization), ("blend", a.blend), ("sft_pairs", a.pairs)):
+        for n, row in enumerate(rows):
+            sp = str(row.get("source_path", ""))
+            head, _, tail = sp.partition("#")
+            if head.startswith("kb") and tail.split("#")[0] in ret.kb_ids:
+                leaked.append(f"{label}#{n} {sp}")
+            elif tail.startswith("L") and tail[1:].isdigit() and (head, int(tail[1:])) in ret.conv_turns:
+                leaked.append(f"{label}#{n} {sp}")
+            elif sp.startswith("kb#") and sp.split("#")[1] in ret.kb_ids:
+                leaked.append(f"{label}#{n} {sp}")
+    return [Finding(
+        "retracted material absent from training", OK if not leaked else FAIL,
+        f"{len(leaked)} retracted record(s) are still in a built artifact (rebuild the corpora)" if leaked
+        else f"{len(ret.kb_ids)} KB entries and {len(ret.conv_turns)} turns retracted, none present",
+        leaked[:3])]
+
+
 INVARIANTS: Tuple[Callable[[Artifacts], List[Finding]], ...] = (
+    inv_no_retracted_material_in_training,
     inv_no_eval_canary_in_training,
     inv_no_exact_duplicates,   # includes inv_blend_duplication_is_explained
     inv_pair_targets_are_owner_prose,

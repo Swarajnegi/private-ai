@@ -91,6 +91,7 @@ from jarvis_core.config import DATA_ROOT, JARVIS_ROOT, KB_PATH, SPECIALIST_CORPU
 from jarvis_core.memory.chunking import RecursiveWordChunker
 from jarvis_core.agent.curator import load_routing, routes_to
 from jarvis_core.specialists.eval_exclusions import excluded_turn, has_canary, load_registry
+from jarvis_core.specialists.retractions import conv_turn_retracted, kb_retracted, load_retractions
 from jarvis_core.specialists.text_hygiene import corpus_admits
 
 
@@ -264,6 +265,7 @@ def iter_kb_records(
     path = kb_path or KB_PATH
     chunker = _chunker()
     cluster_counts: Dict[str, int] = {}
+    retractions = load_retractions()
     try:
         handle = path.open("r", encoding="utf-8")
     except OSError:
@@ -279,6 +281,10 @@ def iter_kb_records(
                 continue
             content = entry.get("content", "")
             if not content:
+                continue
+            if kb_retracted(retractions, entry.get("id")):
+                if dropped is not None:
+                    dropped["kb_entry:retracted"] = dropped.get("kb_entry:retracted", 0) + 1
                 continue
 
             key = _cluster_key(content)
@@ -324,6 +330,7 @@ def _iter_conversation_store_records(
         return
     cluster_counts: Dict[str, int] = {}
     registry = load_registry()
+    retractions = load_retractions()
     for path in sorted(_CONVERSATIONS_DIR.glob("*.jsonl")):
         try:
             with path.open("r", encoding="utf-8") as handle:
@@ -357,6 +364,10 @@ def _iter_conversation_store_records(
                 if dropped is not None:
                     dropped["chat_history:eval_excluded"] = (
                         dropped.get("chat_history:eval_excluded", 0) + 1)
+                continue
+            if conv_turn_retracted(retractions, path.name, line_no):
+                if dropped is not None:
+                    dropped["chat_history:retracted"] = dropped.get("chat_history:retracted", 0) + 1
                 continue
             yield CorpusRecord(
                 source_type="chat_history",

@@ -76,6 +76,7 @@ from jarvis_core.agent.capture import (
     QUEUE_PATH, append_observation, build_observation, guess_domain,
     strip_harness_blocks,
 )
+from jarvis_core.brain import interview_guard
 from jarvis_core.brain.llm_client import build_llm_call
 from jarvis_core.brain.targets import DEFAULT_MAX_TOKENS
 from jarvis_core.agent.mind import MindResult
@@ -572,6 +573,11 @@ async def ask(
                             f"js-learning/JARVIS_MASTER_ROADMAP.md:\n{summary}"},
             ] + hist
 
+    # Interview mode (the owner's numbered personalization interview): the rule rides on the TASK only, never on
+    # the stored question, and a reply that writes the owner's side of the interview is retried then replaced.
+    # See brain/interview_guard.py: on 2026-09-26 the model answered its own question 6 in the owner's voice.
+    interview_open = interview_guard.open_question(hist)
+    forced_answer: Optional[str] = None
     try:
         mind, boot_report = assemble_mind(
             llm_call=client, store=store, kb_path=kb_path, inhale=inhale,
@@ -584,7 +590,13 @@ async def ask(
             max_iterations_override=max_iterations,
             session_id=sess.session_id,
         )
-        result = await mind.solve(question, history=hist)
+        result = await mind.solve(question + (interview_guard.TASK_SUFFIX if interview_open else ""), history=hist)
+        if interview_open and interview_guard.violates(result.answer):
+            printer("  interview: the reply wrote the owner's side; retrying once with the rule restated")
+            result = await mind.solve(question + interview_guard.STRICT_SUFFIX, history=hist)
+            if interview_guard.violates(result.answer):
+                forced_answer = interview_guard.fallback_reply(interview_open)
+                printer("  interview: still violating; replaced with the open question")
     finally:
         _close_store(store)
 
@@ -601,8 +613,11 @@ async def ask(
     # never presented, stored, or distilled as an answer. The honest fallback
     # — plus whatever evidence WAS retrieved — replaces it everywhere downstream.
     evidence = _evidence_from(result)
-    degenerate = _is_unparsed_answer(result.answer)
-    if degenerate:
+    degenerate = _is_unparsed_answer(result.answer) and forced_answer is None
+    if forced_answer is not None:
+        answer = forced_answer
+        report = ConfidenceReport(1.0, "CONFIDENT", ("interview guard: fixed reply, nothing to ground",), False)
+    elif degenerate:
         msg, grounds = _degenerate_diagnosis(result)
         failure_cause = msg
         found = (" Retrieved this session:\n" + _evidence_digest(evidence)) if evidence else ""
@@ -626,7 +641,7 @@ async def ask(
     critic_client = None
     indep = critic_independent
     critic_desc = "self-audit"
-    audited = reasoning and not degenerate
+    audited = reasoning and not degenerate and forced_answer is None
     if audited:
         if reasoning_gate is not None or critic_llm is not None:
             rgate = reasoning_gate or ReasoningGate(critic_llm)
@@ -2152,6 +2167,53 @@ def _run_self_test() -> None:
             seen50e = _all_seen(llm50e)
             check("T50e status_prefetch defaults OFF at the library level",
                   "DONE-FIXTURE-MARKER" not in seen50e, seen50e[:300])
+
+            # --- Interview guard (2026-09-26: the model answered its own question 6 in the owner's voice) ---
+            iv_hist = [
+                {"role": "user", "content": "Alright Jarvis, ask me these questions one by one."},
+                {"role": "assistant", "content": "**Question 1:** Who are you trying to become?"},
+                {"role": "user", "content": "A calm, capable builder. " * 30},
+                {"role": "assistant", "content": "**Question 6:** What experiences have shaped your worldview most deeply?"},
+                {"role": "user", "content": "Hi, been a while?"},
+                {"role": "assistant", "content": "Hey. Back to question 6: What experiences have shaped your worldview most deeply?"},
+            ]
+            iv_bad = ("**Question 6:** What experiences have shaped your worldview most deeply?\n\n---\n\n"
+                      + "The most formative experience in my development has been the tension between ambition and grounding. " * 8
+                      + "\n\n---\n\nThat covers Question 6. Ready for the next.")
+            iv_q = "how long have i been away for? since we last spoke?"
+            iv_good = "About eleven days, going by the clock. Back to question 6: what experiences have shaped your worldview most deeply?"
+
+            llm60 = scripted_capture(["no plan", iv_bad, "no plan", iv_good])
+            r60 = await ask(iv_q, llm_call=llm60, history=iv_hist, session="interview-60", **common)
+            seen60 = _all_seen(llm60)
+            check("T60 a self-answering reply is retried once and the good retry wins",
+                  r60.answer.strip() == iv_good and "Interview-mode rule, restated" in seen60, r60.answer[:160])
+            check("T60b the interview rule reaches the model on the first attempt",
+                  "Interview-mode rule, not part of the owner's message" in seen60)
+            qrows60 = [json.loads(l) for l in (tdp / "qc.jsonl").read_text(encoding="utf-8").splitlines() if l.strip()]
+            mine60 = [r for r in qrows60 if r.get("user_text", "").startswith("how long have i been away")]
+            check("T60c the rule is never stored in the captured question",
+                  bool(mine60) and all("Interview-mode" not in r["user_text"] for r in mine60), str(mine60)[:200])
+
+            llm61 = scripted_capture(["no plan", iv_bad, "no plan", iv_bad])
+            r61 = await ask(iv_q, llm_call=llm61, history=iv_hist, session="interview-61", **common)
+            check("T61 a persistent violation is replaced by the open question, never shown",
+                  r61.answer.strip() == "I'll keep to the interview. Back to question 6: "
+                  "What experiences have shaped your worldview most deeply?" and "formative experience" not in r61.answer,
+                  r61.answer[:200])
+            check("T61b the replacement is not marked a failed turn", r61.verdict == "CONFIDENT")
+
+            llm62 = scripted_capture(["no plan", "Eleven days. Back to question 6: what shaped your worldview?"])
+            r62 = await ask(iv_q, llm_call=llm62, history=iv_hist, session="interview-62", **common)
+            check("T62 a good short interviewer reply passes untouched, with no retry",
+                  r62.answer.startswith("Eleven days") and "restated" not in _all_seen(llm62), r62.answer[:120])
+
+            llm63 = scripted_capture(["no plan", "Six times seven is 42."])
+            r63 = await ask("what is 6 times 7?", llm_call=llm63,
+                            history=[{"role": "user", "content": "hi"}, {"role": "assistant", "content": "hello"}],
+                            session="interview-63", **common)
+            check("T63 a normal conversation never sees the interview rule",
+                  "Interview-mode" not in _all_seen(llm63) and "42" in r63.answer)
 
     asyncio.run(scenario())
 

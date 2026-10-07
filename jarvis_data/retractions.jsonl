@@ -1,0 +1,2 @@
+{"kind": "kb", "id": 735, "reason": "Episodic session distill whose answer text is JARVIS's own first-person confabulation of interview question 6, not the owner's words (incident 2026-09-26, KB 1201).", "ts": "2026-10-07T17:30:00+05:30"}
+{"kind": "conv_turn", "file": "conv-web-cff653a1-415e-417b-ba68-3ac84f621778.jsonl", "line": 17, "reason": "Assistant turn that wrote both sides of interview question 6 in the owner's voice (incident 2026-09-26, KB 1201).", "ts": "2026-10-07T17:30:00+05:30"}

@@ -921,9 +921,11 @@ def episode_raw_units(records: Iterable[Dict[str, Any]], host: str, session_id: 
 
 
 def kb_raw_units(kb_path: Path) -> Iterator[Dict[str, Any]]:
+    from jarvis_core.specialists.retractions import kb_retracted, load_retractions
+    retractions = load_retractions()
     for line_no, e in _iter_kb(kb_path):
         content = str(e.get("content") or "")
-        if not content.strip():
+        if not content.strip() or kb_retracted(retractions, e.get("id")):
             continue
         ref = _kb_ref(e, line_no)
         tags = ", ".join(map(str, e.get("tags") or []))
