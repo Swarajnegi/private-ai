@@ -160,7 +160,7 @@ With this math:
 * What happens to JARVIS if we ignore this?
 
 **5. The Architectural Code:**
-* Follow `.agent/rules/code-style.md`
+* Follow `.agent/rules/CLAUDE.md` (section "Code style")
 * Looks like `jarvis_core` production code
 * Include runnable demo in `__main__`
 

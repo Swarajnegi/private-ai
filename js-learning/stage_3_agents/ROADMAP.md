@@ -3,7 +3,7 @@
 > **Master Plan Position:** Phase 3 of 6 → [JARVIS_MASTER_ROADMAP.md](../JARVIS_MASTER_ROADMAP.md)
 > **Goal:** Build `jarvis_core/agent/` from scratch — autonomous agents that plan, use tools, execute multi-step tasks, and self-manage memory. JARVIS owns the runtime.
 > **Prerequisites:** Phase 1 (Systems Python), Phase 2 (Memory Layer)
-> **Architectural decision:** Per **Decision 2026-05-13** (reverses 2026-05-01 OpenClaude delegation), JARVIS owns its agent runtime. The earlier "Stage 3 = single mcp_bridge.py" plan from [STAGE_3_OPENCLAUDE_STRATEGY.md](../../STAGE_3_OPENCLAUDE_STRATEGY.md) is SUPERSEDED.
+> **Architectural decision:** Per **Decision 2026-05-13** (reverses 2026-05-01 OpenClaude delegation), JARVIS owns its agent runtime. The earlier "Stage 3 = single mcp_bridge.py" plan (STAGE_3_OPENCLAUDE_STRATEGY.md, since removed from the repo) is SUPERSEDED.
 
 ---
 
@@ -52,16 +52,16 @@
 | **3.1.6** | **`Cognitive_State_Update` Pydantic schema** (metacognitive integration, Decision 2026-05-13) | Typed contract for what the metacognitive daemon writes — defined NOW even though writes start in 3.5 | **COMPLETE** -- `state.py` (493 lines): CognitiveStateUpdate + UserTelemetryState (TextTelemetrySnapshot + acoustic stub). KB L276. |
 | **3.1.7** | **`TextTelemetry` dataclass** (metacognitive integration) | Text-only user-state inference (no voice until Stage 6): prompt_brevity, typo_density, correction_rate, rephrasing, sentiment_shift | **COMPLETE** -- `telemetry.py` (690 lines): TextTelemetry + analyzers. KB L277 (QWERTY adjacency heuristic 48% FP, replaced with specific transpositions + anomalous endings). |
 
-**Practical Exercise:** ✅ `scripts/exercise_3_1.py` (142 lines) wires all 3.1 concepts together — calculator tool registered, parser handling tool-call JSON, error recovery, telemetry analyzers, and Cognitive_State_Update emission.
+**Practical Exercise:** ✅ `js-development/scripts/exercise_3_1.py` (142 lines) wires all 3.1 concepts together — calculator tool registered, parser handling tool-call JSON, error recovery, telemetry analyzers, and Cognitive_State_Update emission.
 
 > **Why This Matters:** Without constrained decoding, tool-calling agents break randomly on malformed output. `outlines.generate.json(model, ToolCallSchema)` guarantees valid ToolCall every time. The model literally cannot produce invalid JSON. The metacognitive schemas land here because they ARE constrained-generation contracts.
 
 ---
 
-## Sub-Phase 3.2: Tool Design & Registration <-- YOU ARE HERE (3/4 complete)
+## Sub-Phase 3.2: Tool Design & Registration ✅ BUILD-COMPLETE (3/4; concept lesson 3.2.4 deferred)
 
-**Lessons 3.2.1 [OK] (concept, audited 2026-05-19 via /next) + 3.2.2 [OK] (18 callable tools shipped across Phases A/B/C) + 3.2.3 [OK] (lifecycle hooks landed 2026-05-29).**
-**Next:** 3.2.4 Tool Composition (concept lesson).
+**Lessons 3.2.1 [OK] (concept, audited 2026-05-19 via /next) + 3.2.2 [OK] (callable tools shipped across Phases A/B/C; count drifts, see `Tool.list_registered()`) + 3.2.3 [OK] (lifecycle hooks landed 2026-05-29).**
+**Deferred:** 3.2.4 Tool Composition (concept lesson); Stage 3 is build-complete and the current position is Stage 5 (see `../JARVIS_MASTER_ROADMAP.md`).
 
 **Phase A (commit 87f82c3, 2026-05-19):** Tool.requires_permission flag + temporal_resolver utility + 6 memory wrappers + calculator.
 **Phase B (commit e865d18, 2026-05-19; refined eaa4a75):** web_search + file_read + code_exec + shell_run.
@@ -84,7 +84,7 @@ Total 18 callable: 16 concurrency-safe, 2 unsafe + requires_permission (code_exe
 
 ---
 
-## Sub-Phase 3.3: Planning & Decomposition 🔄 (2/4 builds shipped 2026-05-29)
+## Sub-Phase 3.3: Planning & Decomposition ✅ BUILD-COMPLETE (2/4 builds shipped 2026-05-29; concept lessons deferred)
 
 **Build steps 3.3.2 + 3.3.3 shipped this commit.** Per user directive (skip-concept-prefer-build), the two concept lessons (3.3.1 + 3.3.4) are DEFERRED pending build-phase closure of Stage 3.
 
@@ -101,7 +101,7 @@ Total 18 callable: 16 concurrency-safe, 2 unsafe + requires_permission (code_exe
 
 ---
 
-## Sub-Phase 3.4: ReAct Pattern + Reflection 🔄 (7/9 builds shipped 2026-05-30; concept lessons deferred per L301)
+## Sub-Phase 3.4: ReAct Pattern + Reflection ✅ BUILD-COMPLETE (7/9 builds shipped 2026-05-30; concept lessons deferred per L301)
 
 **Build closure 2026-05-30 (commit pending — see KB L302).** Workflow-orchestrated parallel build of 6 foundation modules + adversarial review across 4 lenses surfaced 4 critical + 15 high findings; all applied. react.py orchestrator built solo with 36 baseline smoke tests; Workflow 2 review surfaced 1 critical + 4 high more (MIRROR-Lite + bare-JSON tool-call interaction breaking parse; ASK→ALLOW promotion in ask_handler path; per-observation budget dropping later results; LLM-controlled tool args leaking verbatim to trace persister). All 5 fixed + regression-guarded.
 
@@ -266,9 +266,9 @@ criteria, driven by a scripted LLM against the REAL modules):
 |-----------|--------|------------------|
 | 3.0 Entry Sprint (Registry + Cost-with-STEAL-#11 + Tool ABC-with-#8-prep) | [OK] Complete | 3/3 |
 | 3.1 Function Calling + Cognitive_State_Update + TextTelemetry | [OK] Complete | 7/7 |
-| 3.2 Tool Design & Registration (Phases A/B/C shipped — 18 callable tools; 3.2.3 lifecycle hooks shipped) | 🔄 In Progress | 3/4 |
-| 3.3 Planning & Decomposition (3.3.2 plan.py + 3.3.3 executor.py shipped; concept lessons deferred) | 🔄 In Progress | 2/4 |
-| 3.4 ReAct + MIRROR-lite + CoT detector + STEAL #5/#8/#9/#10 (trace, observation, monitor, reflection, permissions, bash_classifier, react.py) | 🔄 In Progress | 7/9 |
+| 3.2 Tool Design & Registration (Phases A/B/C shipped — callable tools, count drifts, see `Tool.list_registered()`; 3.2.3 lifecycle hooks shipped) | ✅ Build-Complete | 3/4 |
+| 3.3 Planning & Decomposition (3.3.2 plan.py + 3.3.3 executor.py shipped; concept lessons deferred) | ✅ Build-Complete | 2/4 |
+| 3.4 ReAct + MIRROR-lite + CoT detector + STEAL #5/#8/#9/#10 (trace, observation, monitor, reflection, permissions, bash_classifier, react.py) | ✅ Build-Complete | 7/9 |
 | 3.5 Memory-Augmented Agents + Heartbeat + /compact + **Cognitive Synthesis Loop** (Wave 1 + Wave 2 + Wave 3 evals/compact; concept lessons deferred per L301) | ✅ Build-Complete | 9/11 |
 | **Final Boss: The Mind** (mind.py — full integration, 7/7 criteria) | ✅ PASSED | 7/7 |
 | **STAGE 3 — Agent Framework** | ✅ **BUILD-COMPLETE 2026-06-04** | all build lessons shipped |
@@ -277,10 +277,10 @@ criteria, driven by a scripted LLM against the REAL modules):
 
 ## What Got Reversed
 
-The earlier "Stage 3 = single deliverable `mcp_bridge.py` exposing Memory primitives as MCP tools for OpenClaude" plan (Decision 2026-05-01, [STAGE_3_OPENCLAUDE_STRATEGY.md](../../STAGE_3_OPENCLAUDE_STRATEGY.md)) is SUPERSEDED per Decision 2026-05-13. The MCP bridge survives only as **optional Stage 5+ work** — *publishing* JARVIS Memory to external tools (Claude Desktop, Antigravity, third-party agents), not as the agent runtime.
+The earlier "Stage 3 = single deliverable `mcp_bridge.py` exposing Memory primitives as MCP tools for OpenClaude" plan (Decision 2026-05-01; STAGE_3_OPENCLAUDE_STRATEGY.md, since removed from the repo) is SUPERSEDED per Decision 2026-05-13. The MCP bridge survives only as **optional Stage 5+ work** — *publishing* JARVIS Memory to external tools (Claude Desktop, Antigravity, third-party agents), not as the agent runtime.
 
 ---
 
 ## After This Phase
 
-→ Proceed to **Phase 4: Multi-Model Orchestration** → [PHASE_04_ROADMAP.md](../orchestration-learning/PHASE_04_ROADMAP.md)
+→ Proceed to **Phase 4: Multi-Model Orchestration** → [stage_4_orchestration/ROADMAP.md](../stage_4_orchestration/ROADMAP.md)

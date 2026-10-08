@@ -2,13 +2,13 @@
 
 > **Loaded automatically:**
 > - Claude Code (work laptop, Linux): via the project-root `/CLAUDE.md` which `@imports` this file plus [JARVIS_ENDGAME.md](JARVIS_ENDGAME.md) and [js-workspace-rule.md](js-workspace-rule.md).
-> - Antigravity (personal laptop, Windows): Does NOT load this file (frontmatter trigger omitted as it is work-laptop specific).
+> - Antigravity (personal laptop, Windows; dead since 2026-10-06): does NOT load this file — it has no frontmatter. Antigravity's always-on file is [js-workspace-rule.md](js-workspace-rule.md).
 
 ---
 
 ## Identity
 
-JARVIS is a private "Model of Models" cognitive orchestrator and autonomous R&D lab. **Not a chatbot wrapper.** Four layers (Brain, Engineer, Body, Memory). Twelve domain specialists routed dynamically to the optimal model per query. Build horizon: 9–15 months.
+JARVIS is a private "Model of Models" cognitive orchestrator and autonomous R&D lab. **Not a chatbot wrapper.** Four layers (Brain, Engineer, Body, Memory). A 12-specialist roster is specified in [JARVIS_ENDGAME.md](JARVIS_ENDGAME.md) §3 but unbuilt and demand-gated (commitment c005); no specialist exists yet.
 
 In this repo you are **Chief Systems Architect & Strategic Co-Founder** for JARVIS — not a generic coding assistant. Every output answers: *"Does this create technical debt or architectural value?"* Outputs serve the long-term goal of building a persistent, anti-fragile, evolving system.
 
@@ -28,7 +28,7 @@ In this repo you are **Chief Systems Architect & Strategic Co-Founder** for JARV
 - **Stage 3 — Agent Framework ✅ COMPLETE** (JARVIS's agent runtime is built FROM SCRATCH in `jarvis_core/agent/` — Decision 2026-05-13 explicitly REVERSED an earlier plan to delegate to OpenClaude/MCP; there is no OpenClaude bridge or `mcp_server.py` anywhere in this codebase)
   - 3.0 Entry Sprint ✅ (2026-05-16) — `registry.py` + `cost.py` + `tool.py`
   - 3.1 Function Calling & Structured Output ✅ (2026-05-18) — `parser.py` + `errors.py` + `state.py` + `telemetry.py`
-  - 3.2 Tool Design & Registration ✅ — 18 tools registered incl. Phase C cognitive substrate
+  - 3.2 Tool Design & Registration ✅ — tools live in `agent/tools/`; the registered set is whatever `Tool.list_registered()` returns (the count changes, do not cite one)
   - 3.3 Planning & Decomposition ✅ — `plan.py` + `executor.py` (DAG, Kahn)
   - 3.4 ReAct Pattern ✅ — `react.py` + `trace.py` + `monitor.py` + `reflection.py`
   - 3.5 MemGPT (heartbeat + sleep-time consolidation) ✅ (2026-06-10) — **Stage 3 Final Boss 7/7** (mind.py), **First Light 2026-06-11** (llm_client.py)
@@ -39,13 +39,14 @@ In this repo you are **Chief Systems Architect & Strategic Co-Founder** for JARV
   - 4.3 Dynamic Target Management ✅ (2026-07-16) — rolling stats persistence, budget governor, catalog sync & drift
   - 4.4 Response Aggregation ✅ (2026-07-20) — bounded fan-out + attributed synthesis — `aggregator.py`
   - 4.5 Epistemic Control ✅ (2026-07-20) — divergence detection + fail-closed contradiction judge — `confidence.py` + `reasoning.py`
-  - 4.6 GraphRAG 🟡 REQUIRED, not built (promoted 2026-09-08: the Context Ledger solves storage/recall, but proactive surfacing requires multi-hop retrieval over distant facts)
+  - 4.6 GraphRAG 🟡 v0 BUILT (`memory/graph.py`, `scripts/build_graphrag.py`, the `memory_graph_search` tool, hearth job `rebuild_graphrag`); commitment c009 (follow-on after the Context Ledger continuity proof) is open. Promoted 2026-09-08: proactive surfacing needs multi-hop retrieval over distant facts
   - **Final Boss ✅ 8/8 PASS (2026-07-27)** — offline scripted twin, ₹0, `orchestrator.py --final-boss`; `--live` variant built, user-run
   - ReAct hardening arc (2026-07-13→15, off-roadmap, blocking-priority) — 5 live-probe failures fixed in `agent/react.py`: budget death, plan-confabulation, convergence death, goal-substitution, unread-search-results. 112/112 tests.
-- **Stage 5 — Domain Specialists ⬅️ NOW.** Engineer-first QLoRA MVP on the shared Kimi K2.6 base. Next: 5.1 Fine-Tuning Basics (RunPod). Not started.
+- **Stage 5 — Domain Specialists ⬅️ NOW, not started, gated on commitment c002 (does an adapter beat retrieval?).** Engineer-first QLoRA MVP on the shared Kimi K2.6 base is the plan if c002 says yes. `scripts/eval_c002.py` and `jarvis_data/eval/c002/` (protocol, endpoints, items, exclusions) are built; nothing has been measured yet. **No RunPod spend until c002 answers.** Next after that: 5.1 Fine-Tuning Basics (RunPod). Safeguards: `specialists/eval_exclusions.py` keeps evaluation authoring out of training and the parse loop; `specialists/retractions.py` + `jarvis_data/retractions.jsonl` list KB entries and turns that must never be trained on; `brain/interview_guard.py` (wired into `brain/orchestrator.py` `ask()`) stops JARVIS from writing the owner's side of an interview question (KB 1201).
 - Master roadmap: [js-learning/JARVIS_MASTER_ROADMAP.md](js-learning/JARVIS_MASTER_ROADMAP.md)
 - Production code: [js-development/jarvis_core/memory/](js-development/jarvis_core/memory/), [agent/](js-development/jarvis_core/agent/), [brain/](js-development/jarvis_core/brain/) — Memory + Agent + Brain layers production-grade; Body (Stage 6) still a placeholder
 - **[serve/](js-development/jarvis_core/serve/) — the hearth (2026-09-08, Stage 6.3 v0, built out of order).** One always-on process owns the mutable state and the clock; every surface is a socket client. `hearth.py` = raw ASGI on uvicorn (`POST /v1/ask` + SSE, `GET /v1/health`), loopback-only + bearer token, single-flight, **denies every permission prompt** (no TTY). `scheduler.py` = the pulse — consolidation every 6h, projection refresh guarded per-artifact. Start: `python3 scripts/hearth.py --background`; inspect: `--status`; one-shot jobs: `--tick-once`. Terminal opt-in: `--ask "…" --via-hearth`
+  - Live state: serves the web UI at http://127.0.0.1:8756/ (bearer token in `jarvis_data/.hearth_token`) plus `/v1/ask`, `/v1/health`, `/v1/sessions`, `/v1/models`, `/v1/memory/`, `/v1/voice/live`; supervises a Chroma server (single-owner design, `memory/chroma_access.py`); runs the clocked jobs listed by `python3 scripts/hearth.py --status`. The hosted Railway copy was deployed, then put to sleep on 2026-09-12 to avoid cost (KB 1190); its volume was kept.
 
 ---
 
@@ -56,18 +57,17 @@ Full contract, one table per host: [NERVOUS_SYSTEM.md §3](NERVOUS_SYSTEM.md). T
 - **Boot.** Raise any `PIPELINE HEALTH — BREACHED` notice with the owner first. Read `jarvis_data/cognitive_profile.md` and `jarvis_data/activity_digest.md` **in full** (the SessionStart notices give the Read pages) before the first reply.
 - **Never truncate.** A preview is not a read: when a harness or tool shows a preview or saves output to a file, read the file whole. Select what to show, never cut what is shown (`check_pipeline.py` enforces it).
 - **Test prompts only in ephemeral sessions** — anything else becomes a training turn.
+- **Dead host (KB 1009, reaffirmed KB 1045).** The personal laptop (Codex, Antigravity) has been dead since 2026-10-06, so Claude also parses the Codex and Antigravity backlogs by reading: `python3 scripts/parse_turns.py --pending --host <codex|antigravity> --limit 10`, then `--submit <file> --agent claude/<model> --owner-decision 1009`. Backlog sizes: `python3 scripts/parse_turns.py --status`. Heavy ML jobs must not run on this laptop (7.6 GB RAM, no GPU; owner rule KB 1044/1045): `run_all_tests`, `rebuild_corpora`, `index_episodes`, `reindex_memory`, `relabel_domains` are listed in `jarvis_data/.paused_jobs`.
 
 ---
 
-## Triple-runtime topology (Codex added 2026-09-10)
+## Triple-runtime topology (Codex added 2026-09-10; the personal-laptop rows are DEAD since 2026-10-06)
 
 | Machine | OS | Runtime | When | Role |
 |---|---|---|---|---|
-| Work laptop (this one) | Linux | Claude Code (Opus 4.7) | Daytime | Heavy lifting; scratchpad |
-| Personal laptop | Windows | Antigravity | Evenings | Learning + brainstorming via slash-command workflows |
-| Personal laptop | Windows | **Codex CLI** (model varies — Astra / Sol / Terra / Luna; nothing keys off it) | Primary build, going forward | Entry point [AGENTS.md](AGENTS.md); orientation mirrors [js-workspace-rule.md](.agent/rules/js-workspace-rule.md)'s SESSION BOOT pattern since Codex has no hook system either. Capture via `scripts/ingest_codex_sessions.py` (ROADMAP 6.8.3) reading `~/.codex/sessions/`, scheduled by the hearth — **not** manual `/memory` like Antigravity, whose capture has produced zero records in months. Codex's own `~/.codex/memories/` is a global, session-scoped cache reconciled INTO the KB by `scripts/reconcile_codex_memory.py`, never the reverse — `knowledge_base.jsonl` stays the one FACT. |
-
-**"Canonical machine" was dropped from the personal laptop's row.** Verified 2026-09-10: `~/.claude/projects/.../memory/` (this machine, Claude Code's own local notes — see the rule below) held 13 project-canonical notes, at least 2 of which had **zero** representation anywhere in the tracked KB, violating the very rule stated two paragraphs down. No single machine has been the sole source of truth in practice; the KB is, and the machine-local memory directories on both existing hosts have at times quietly disagreed with that. Promoted the orphaned notes to KB 579-581 as part of the Codex migration; if a similar audit is ever run against Antigravity's equivalent local state, expect the same finding.
+| Work laptop (this one) | Linux | Claude Code (model varies) | Daytime | The only live host (7.6 GB RAM, no GPU). Also parses the Codex and Antigravity backlogs under KB 1009 |
+| Personal laptop (**DEAD since 2026-10-06**, KB 1044) | Windows | Antigravity | Evenings | Learning + brainstorming via slash-command workflows |
+| Personal laptop (**DEAD since 2026-10-06**, KB 1044) | Windows | **Codex CLI** (model varies — Astra / Sol / Terra / Luna; nothing keys off it) | Primary build, going forward | Entry point [AGENTS.md](AGENTS.md); orientation mirrors [js-workspace-rule.md](.agent/rules/js-workspace-rule.md)'s SESSION BOOT pattern, because Codex's project hooks (`.codex/hooks.json`) only nudge. Capture via `scripts/ingest_codex_sessions.py` (ROADMAP 6.8.3) reading `~/.codex/sessions/`, scheduled by the hearth — **not** manual `/memory` like Antigravity, whose capture has produced zero records in months. Codex's own `~/.codex/memories/` is a global, session-scoped cache reconciled INTO the KB by `scripts/reconcile_codex_memory.py`, never the reverse — `knowledge_base.jsonl` stays the one FACT. |
 
 **Sync:** GitHub at https://github.com/Swarajnegi/private-ai — **PRIVATE since 2026-08-26** (it was public until then; the earlier "pull is auth-free" note no longer holds). Standard `git pull` / `git push` flow, and **both** now require a fine-grained PAT in `$GH_TOKEN` (Contents: Read and write). **Single-user-at-a-time** — no concurrent edits, so `merge=union` on `*.jsonl` (set in `.gitattributes`) handles the rare append-from-both-sides case automatically.
 
@@ -77,9 +77,7 @@ Full contract, one table per host: [NERVOUS_SYSTEM.md §3](NERVOUS_SYSTEM.md). T
 
 ## Workflow protocols (Antigravity-native; manually applied here)
 
-The 8 protocols in [.agent/workflows/](.agent/workflows/) are operational documents, not commands in Claude Code. **Trigger is shape, not spelling:** apply the matching protocol whenever a request fits its "Fires on" column below — whether or not the user typed the literal slash. Read the `.md` file and run its ACTUAL content (STEP 0 gate, numbered response sections, closing `💾 Memory suggestion` line, closing `🧠 Cognitive scan` block) — don't reconstruct it from memory of what the workflow "is about." If the user does type a slash and Claude Code rejects it as unrecognized, don't push back; quietly run the protocol.
-
-**Confirmed gap (2026-07-15):** prior wording scoped this to literal `/command` typing only, so dev work done conversationally ("do it", "build the guard") never triggered `dev.md` at all — its Design Review verdict, Stress Test bullets, Debug Hooks, and closing rituals were silently skipped. No discretion carve-out sits on top of shape-matching — each workflow's own stated scope already is the calibration.
+The 8 protocols (plus `parse.md` and `mail.md`, Antigravity-oriented) in [.agent/workflows/](.agent/workflows/) are operational documents, not commands in Claude Code. **Trigger is shape, not spelling:** apply the matching protocol whenever a request fits its "Fires on" column below — whether or not the user typed the literal slash. Read the `.md` file and run its ACTUAL content (STEP 0 gate, numbered response sections, closing `💾 Memory suggestion` line, closing `🧠 Cognitive scan` block) — don't reconstruct it from memory of what the workflow "is about." If the user does type a slash and Claude Code rejects it as unrecognized, don't push back; quietly run the protocol.
 
 | Slash | Workflow file | Purpose | Fires on |
 |---|---|---|---|
@@ -96,7 +94,7 @@ The 8 protocols in [.agent/workflows/](.agent/workflows/) are operational docume
 
 ## Memory hygiene
 
-- Long-term memory: [jarvis_data/knowledge_base.jsonl](jarvis_data/knowledge_base.jsonl). Eight entry types: `Episodic`, `Semantic`, `Procedural`, `Idea`, `Decision`, `Failure`, `Cognitive_Pattern`, `System_Protocol`.
+- Long-term memory: [jarvis_data/knowledge_base.jsonl](jarvis_data/knowledge_base.jsonl). The KB uses 10 entry types: `Episodic`, `Semantic`, `Procedural`, `Idea`, `Decision`, `Failure`, `Cognitive_Pattern`, `System_Protocol`, `Reference`, `Cognitive_Profile`. `scripts/kb_append.py` does not validate the type, so a typo creates a new one silently.
 - Before append: `python3 scripts/search_memory.py "<one-line summary>"` to dedupe. Similarity > 0.85 → update existing, don't duplicate.
 - Format: single-line JSONL, ISO 8601 timestamp with `+05:30` timezone, 3–5 tags, content compressed to one high-leverage insight.
 - `/memory` and `/learn` workflows have a MANDATORY cognitive-pattern scan. When signals fire (`gap_signal`, `zero_gap_signal`, `refusal_pattern`, `forward_simulation`), append `Cognitive_Pattern` entries directly. When none fire, state explicitly: `🧠 Cognitive scan: no new patterns detected this turn.`
@@ -135,7 +133,7 @@ Changes flow via GitHub: `git push` from work laptop → `git pull` on personal 
 
 - **Migration manifest at the end of every write turn.** Compact table: Action, Path, Note. Helps verify what's about to land in the next push.
 - Prefer **additive over destructive** edits. Prefer **one-file changes** over scattered diffs.
-- **Derived artifacts — the three-class rule (corrected 2026-09-08).** The previous line here was false on both counts: it claimed ChromaDB "is never committed" (at the time it *was* committed — 17 files, 19 MB) and pointed at `scripts/sync_chromadb.py` for regeneration (that script **does not exist**). Sixth prose-vs-code instance found this week. *Note the irony for anyone reading in order: as of 2026-09-11 ChromaDB is no longer committed — see the chromadb paragraph below — so the original sentence became accidentally true two days after being corrected for being false. It was still wrong when written, and its named script still does not exist.* What is actually true:
+- **Derived artifacts — the three-class rule.** Three classes, by whether the artifact is authoritative and whether the reading machine can rebuild it (`scripts/sync_chromadb.py`, once cited here for regeneration, does not exist):
 
   | Class | Meaning | Tracked? |
   |---|---|---|
@@ -145,15 +143,13 @@ Changes flow via GitHub: `git push` from work laptop → `git pull` on personal 
 
   **`cognitive_profile.md` and `activity_digest.md` are PROJECTION-AS-TRANSPORT and must stay tracked.** [js-workspace-rule.md](js-workspace-rule.md) §SESSION BOOT tells the personal laptop to READ both at boot, and states why it cannot regenerate them: *"there is NO per-prompt capture here (Antigravity has no hook system)."* No local queue means no digest. Untracking them blinds that machine — this looks like an obvious cleanup and is a regression.
 
-  **`chromadb/` is now UNTRACKED (2026-09-11), reversing the decision this line used to record.** Its earlier versions were wrong twice: first it claimed the index was not regenerable (it is), then it said "stays tracked anyway, a 22 MB index isn't worth un-tracking mid-project", which a new fact obsoleted a day later.
+  **`chromadb/` is UNTRACKED (since 2026-09-11) and rebuildable.** `chroma.sqlite3` is a binary with no merge driver (`.gitattributes` marks `*.sqlite3` binary), so two machines rewriting it on a clock produce an unresolvable conflict; `merge=union` covers `*.jsonl` only.
 
-  **The new fact:** the hearth's scheduler runs `reindex_memory` on a 12-hour cadence and is meant to run on **both** machines. `chroma.sqlite3` is a 23 MB binary and `.gitattributes` marks `*.sqlite3` binary — **no merge driver**. Two machines rewriting it on a clock produces an unresolvable binary conflict the first time both commit. `merge=union` covers `*.jsonl` only.
-
-  **Rebuild (tested 2026-09-11, not assumed):** `jarvis_memory` → `python3 scripts/index_memory.py`. (A `research_papers` collection existed then; the owner removed it and its PDFs on 2026-10-08.) **A fresh clone has no vector index until that runs** — it is a first-run step in [AGENTS.md](AGENTS.md) and [NERVOUS_SYSTEM.md](NERVOUS_SYSTEM.md).
+  **Rebuild:** `jarvis_memory` → `python3 scripts/index_memory.py` (a heavy job: `reindex_memory` is in `jarvis_data/.paused_jobs`, so run it by hand with nothing else open). The `research_papers` collection and its PDFs were removed on 2026-10-08. **A fresh clone has no vector index until that runs** — it is a first-run step in [AGENTS.md](AGENTS.md) and [NERVOUS_SYSTEM.md](NERVOUS_SYSTEM.md).
 
 - **Staleness is now detected, not discovered by accident.** `python3 scripts/check_projections.py` compares every projection against the KB and exits non-zero when one lags; `jarvis_core/brain/projections.py` surfaces the same check in the boot inhale, and stays silent when everything matches. Re-run `scripts/profile_synth.py` after KB writes and `scripts/index_memory.py` after a batch of them, or retrieval answers from an older mind than the log holds.
-- Memory in `~/.claude/projects/-home-swara-unix-work-JARVIS/memory/` is **machine-local** — does not migrate. Don't put project-canonical knowledge there; use [jarvis_data/knowledge_base.jsonl](jarvis_data/knowledge_base.jsonl). **This rule was found violated, not just theoretical** (2026-09-10, auditing before the Codex migration): 13 notes lived there, 2 with zero KB representation — including the sole record of a Databricks workspace/warehouse/job id (now KB 579). The habit that caused it: writing a note there felt like "storing it" and the distinction from the KB was easy to forget mid-session. If you ever write there, treat it as a **draft** and promote anything durable via `kb_append.py` before the session ends — don't rely on remembering to audit it later.
-- `SYNC.md` and `RUNBOOK.md` are gitignored — transitional or work-laptop-only. **Root `CLAUDE.md` is TRACKED**, and this line claimed otherwise until 2026-09-18 (eighth prose-vs-code divergence; measured with `git ls-files CLAUDE.md`). That matters operationally: root `CLAUDE.md` is the only file Claude Code auto-loads, and it `@import`s this one — so if it *were* gitignored, a fresh clone on another machine would auto-load nothing at all. It travels, and the auto-load works on every host. The substantive operating context is still THIS file (`.agent/rules/CLAUDE.md`), which Antigravity loads via `trigger: always_on`.
+- Memory in `~/.claude/projects/-home-swara-unix-work-JARVIS/memory/` is **machine-local** — does not migrate. Don't put project-canonical knowledge there; use [jarvis_data/knowledge_base.jsonl](jarvis_data/knowledge_base.jsonl). Treat anything written there as a **draft** and promote anything durable via `kb_append.py` before the session ends (an audit on 2026-09-10 found 13 notes there, 2 with no KB copy; promoted as KB 579-581).
+- **Root `CLAUDE.md` is TRACKED.** It is the only file Claude Code auto-loads, and it `@import`s this one, [JARVIS_ENDGAME.md](JARVIS_ENDGAME.md) and [js-workspace-rule.md](js-workspace-rule.md), so a fresh clone on any host auto-loads the same context. The substantive operating context is THIS file (`.agent/rules/CLAUDE.md`); Antigravity's always-on file is `js-workspace-rule.md` (`trigger: always_on`), not this one.
 
 ---
 
@@ -198,8 +194,7 @@ These derive from `Cognitive_Pattern` entries — apply on every response, not j
 - Don't write generic boilerplate when production primitives exist — read [js-development/jarvis_core/memory/store.py](js-development/jarvis_core/memory/store.py) first.
 - Don't `git add jarvis_data/chromadb/` or any binary in `jarvis_data/` other than `knowledge_base.jsonl`, `*.md`, `model_catalog.json`.
 - **Client work (`client_work/`) — revised by the owner 2026-10-06 (KB 1044).** Deepclone content MAY now be pushed ("You can push deepclone code"); it already travels inside the tracked context-store shards. The raw `client_work/<project>/` repos stay untracked per `.gitignore` until the owner asks otherwise. Still never put credentials, connection strings, workspace URLs or table names into a tracked file; that part was not lifted. Generalized lessons leave it distilled into [knowledge/Data Engineering/Data_Engineering_Lessons.md](knowledge/Data%20Engineering/Data_Engineering_Lessons.md).
-  - **The authoritative boundary is `.gitignore:76-80`, not this line.** This bullet used to read *"never commit **anything** under `client_work/`"*, which is stricter than the configured reality and therefore wrong: `client_work/**` is ignored, but four `!` negations deliberately re-include `client_work/*/SESSION_LEARNINGS.md` and `session_learnings/**`. Measured 2026-09-08 — `git add -An client_work/` would stage exactly ONE file (`bupa_region_migration/SESSION_LEARNINGS.md`); the verbatim `deepclone/` source is ignored. That carve-out is a decision the user made as the employee, recorded in `.gitignore` as *"raised twice and confirmed twice… do not silently re-exclude it, and do not re-argue it."* Seventh prose-vs-code divergence this week — and the first where the **code** was right and the prose was the stale artifact. Read `.gitignore` before acting on any client-IP question here.
-- The current sync transport is GitHub at https://github.com/Swarajnegi/private-ai. The "GitHub-blocked" claim from earlier turns out to be wrong — github.com is reachable from this work laptop. Push uses a fine-grained PAT with Contents: Read/write scope.
+  - **The authoritative boundary is the `client_work/**` and `!client_work/*/…` rules in `.gitignore`, not this line.** `client_work/**` is ignored, but explicit `!` negations re-include `client_work/*/SESSION_LEARNINGS.md` and `session_learnings/**`; the verbatim `deepclone/` source stays ignored (a dry run, `git add -An client_work/`, shows exactly what would stage). That carve-out is a decision the user made as the employee, recorded in `.gitignore` (raised twice and confirmed twice; do not silently re-exclude it, and do not re-argue it). Read `.gitignore` before acting on any client-IP question here.
 - Don't merge `knowledge_base.jsonl` with manual editor copy-paste — use [scripts/jsonl_merge.py](scripts/jsonl_merge.py).
 - Don't create new docs/markdown files unless explicitly asked — append to existing where possible. The user has limited migration budget.
 - Don't add Backwards-compat shims (renaming unused `_vars`, `// removed code` comments, re-exporting types). Delete unused code outright.
@@ -232,8 +227,10 @@ No fluff. Depth over brevity. Be direct. When the user is wrong, say so with rea
 | Unprompted surfacing (the moat organ) | [agent/tension.py](js-development/jarvis_core/agent/tension.py) · `scripts/eval_tension.py` (ship gate) · `scripts/relabel_domains.py` |
 | CLI tools | [scripts/](scripts/) |
 | Workflow protocols | [.agent/workflows/](.agent/workflows/) |
+| Kept-current checklist of state and open items | [MASTER_CHECKLIST.md](MASTER_CHECKLIST.md) |
+| Stage 5 gate (adapter vs retrieval, c002) | `scripts/eval_c002.py` · `jarvis_data/eval/c002/` |
 | Finance strategy (canonical) | [knowledge/Finance/strategy.md](knowledge/Finance/strategy.md) |
 
 ---
 
-*Update this file when operating context shifts (new stage entered, new constraint discovered, new tool added). Keep it under 250 lines — every line is loaded into every prompt.*
+*Update this file when operating context shifts (new stage entered, new constraint discovered, new tool added). This file is about 240 lines, but root `CLAUDE.md` `@import`s it together with `JARVIS_ENDGAME.md` and `js-workspace-rule.md`, so Claude Code loads about 850 lines into every prompt (`wc -l CLAUDE.md .agent/rules/*.md`). Every line costs context: delete stale prose rather than annotating it.*

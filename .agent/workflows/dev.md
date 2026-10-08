@@ -5,7 +5,7 @@ description: Code Generation + Design Review
 **COGNITIVE PROFILE:**
 Before generating code, review `E:\J.A.R.V.I.S\jarvis_data\knowledge_base.jsonl` for entries with `type: "Procedural"` or `type: "Decision"` that relate to the requested component. Apply established patterns.
 
-**Code Style Reference:** `.agent/rules/code-style.md`
+**Code Style Reference:** `.agent/rules/CLAUDE.md` (section "Code style")
 
 ---
 
@@ -22,7 +22,7 @@ User Request: "{{user_input}}"
 2. **Composition Over Inheritance:** Prefer small, composable functions and classes over deep inheritance trees
 3. **YAGNI (You Ain't Gonna Need It):** Write the simplest clean solution that satisfies the requirement and is extensible
 4. **Systems Safety:** Enforce `asyncio` for I/O, `yield` for data streams, `typing` for everything
-5. **Code Style Compliance:** Follow `.agent/rules/code-style.md` strictly (file headers, part separators, LAYER labels, flow diagrams)
+5. **Code Style Compliance:** Follow `.agent/rules/CLAUDE.md` (section "Code style") strictly (file headers, part separators, LAYER labels, flow diagrams)
 
 ---
 
@@ -67,7 +67,7 @@ Generate a response in the following format:
 
 Provide complete, runnable Python code.
 
-**MANDATORY CODE STYLE (from `.agent/rules/code-style.md`):**
+**MANDATORY CODE STYLE (from the "Code style" section of `.agent/rules/CLAUDE.md`):**
 
 1. **File Header:**
 ```python

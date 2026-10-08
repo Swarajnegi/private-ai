@@ -13,8 +13,13 @@ With the hearth running, open **http://127.0.0.1:8756/**. The dust assembles the
 `jarvis_data/.hearth_token` (the local hearth token, not an OpenRouter key; it stays in this tab's
 session storage only).
 
-**Hands-free** (`H` or `Space`) keeps the microphone open for the whole conversation. Everything
-after capture runs in the hearth on this laptop: Silero VAD, Whisper `small` on the GPU, the voice
+**Voice needs a CUDA GPU host.** The text UI runs on any host, including this Linux work laptop
+(no GPU; `faster_whisper` and `kokoro` are not installed here). The voice figures below were measured
+on the personal laptop (GTX 1650), which has been dead since 2026-10-06; they have not been
+re-measured since.
+
+**Hands-free** (`H` or `Space`) keeps the microphone open for the whole conversation. On a GPU host,
+everything after capture runs in the hearth: Silero VAD, Whisper `small` on the GPU, the voice
 fast path, and Kokoro `bm_george` speaking sentence by sentence while the answer still streams.
 Measured end of your speech to first audio: **p50 ~1.9 s** (`scripts/verify_voice_live.py`).
 It is built for how people actually talk:
@@ -87,7 +92,7 @@ cd .. && python3 scripts/agent_mail.py --check <claude|codex|antigravity>     # 
 | Read | When |
 |---|---|
 | [`js-learning/stage_*/ROADMAP.md`](js-learning/) | Working inside that stage. Stage 5 and 6 are the live ones |
-| [`.agent/workflows/`](.agent/workflows/) | **Always relevant** — 8 protocols that fire by *request shape*, not by typing a slash. See the canon |
+| [`.agent/workflows/`](.agent/workflows/) | **Always relevant** — 8 protocols (plus 2 Antigravity-only: `mail.md`, `parse.md`) that fire by *request shape*, not by typing a slash. See the canon |
 | [`js-learning/stage_5_specialists/SFT_SPEC.md`](js-learning/stage_5_specialists/SFT_SPEC.md) | Training-data work |
 | [`js-learning/stage_6_integration/VOICE_SPEC.md`](js-learning/stage_6_integration/VOICE_SPEC.md) | Voice / interface work |
 | [`knowledge/`](knowledge/) | Domain questions — see the map below |
@@ -109,8 +114,8 @@ python3 scripts/search_memory.py "<topic>"     # semantic search — do this bef
 | 2 — Memory Layer | ✅ complete |
 | 3 — Agent Framework | ✅ complete — built from scratch, not on a framework |
 | 4 — Multi-Model Orchestration | ✅ complete — Final Boss 8/8 |
-| **5 — Domain Specialists** | ⬅️ **current.** Engineer-first QLoRA on a shared base. Not started |
-| 6 — Integration | scoped; the hearth (6.3) and capture adapters (6.8) shipped early, out of order |
+| **5 — Domain Specialists** | ⬅️ **current.** Engineer-first QLoRA on a shared base. Not started; gated on commitment c002 (`scripts/eval_c002.py` is built, nothing is measured yet) |
+| 6 — Integration | partial: the hearth (6.3), capture adapters (6.8), voice stack (needs a GPU host), local web UI and a Railway slice of 6.7 (asleep since 2026-09-12) shipped, out of order. Not shipped: client shells (6.9), always-reachable hosting (6.7), ambient tiers (6.10) |
 
 **Where it is going**, in one line each — full detail in `JARVIS_ENDGAME.md`:
 
@@ -120,14 +125,16 @@ python3 scripts/search_memory.py "<topic>"     # semantic search — do this bef
   the reason you gave then was never addressed."* A frontier model does everything else if you paste
   the right context; it cannot fire when you did not know to ask. (§1.2)
 - **The open question** is whether a trained adapter beats the retrieval path already built. It is
-  unanswered, and answering it is cheaper than training anything.
+  unanswered, and answering it is cheaper than training anything. The harness exists
+  (`scripts/eval_c002.py`, `jarvis_data/eval/c002/`); **nothing has been measured yet.** What the
+  owner must do next is in [`MASTER_CHECKLIST.md`](MASTER_CHECKLIST.md).
 
 Verify status yourself rather than trusting this table:
 
 ```bash
 python3 scripts/check_projections.py    # is the mind's index current?
 python3 scripts/hearth.py --status      # is the clock running? (work laptop: yes, cron-persisted
-                                        #  since 2026-09-11. Personal laptop: set it up — §6.2)
+                                        #  since 2026-09-11. Personal laptop: dead since 2026-10-06)
 git log --oneline -15                   # what actually happened recently
 ```
 
@@ -179,8 +186,9 @@ Also in [`jarvis_data/`](jarvis_data/): `life_state_feed.jsonl` (surfaced insigh
 |---|---|
 | [`agents_converse/`](agents_converse/) | Agent-to-agent questions and answers, delivered by git |
 | [`.agent/hooks.manifest.json`](.agent/hooks.manifest.json) | The committed hook wiring. `.claude/settings.json` hooks are rehydrated *from* this |
-| [`.claude/settings.json`](.claude/settings.json) | **Tracked since 2026-09-18** — the shared permission allowlist, so a new Claude Code host does not re-approve 164 commands by hand. **Invariant: never put a credential in it** (`GH_TOKEN` goes in the environment, not an allowlist pattern — that is exactly how `b7bfbe6` leaked a PAT). `.claude/settings.local.json` stays per-host and ignored |
+| [`.claude/settings.json`](.claude/settings.json) | **Tracked since 2026-09-18** — the shared permission allowlist, so a new Claude Code host does not re-approve the tracked allowlist by hand. **Invariant: never put a credential in it** (`GH_TOKEN` goes in the environment, not an allowlist pattern — that is exactly how `b7bfbe6` leaked a PAT). `.claude/settings.local.json` stays per-host and ignored |
 | [`NERVOUS_SYSTEM.md`](NERVOUS_SYSTEM.md) | Mechanism, inventory, per-host setup |
+| [`MASTER_CHECKLIST.md`](MASTER_CHECKLIST.md) | Kept-current checklist of state, open items and what the owner must do |
 
 ---
 
@@ -200,8 +208,9 @@ python3 scripts/hearth.py --background  # start the clock (see NERVOUS_SYSTEM.md
 ## Conventions worth knowing before reading the code
 
 - **Tests are `__main__` smoke blocks, not a pytest suite** — run a module directly to test it
-  (`python3 -m jarvis_core.agent.capture`). Deliberate, and there is **no runner**, which is a real
-  gap rather than a hidden feature.
+  (`python3 -m jarvis_core.agent.capture`). Deliberate. `scripts/run_all_tests.py` is the runner
+  (`--list`, `--fast`, `--self-test`); it is heavy, so it is paused on this laptop
+  (`jarvis_data/.paused_jobs`, KB 1044).
 - **Paths never hardcoded** — everything through `config.py`, so one source works on Linux and Windows.
 - **Systems Python is non-negotiable**: generators for pipelines, async for I/O, context managers for
   every external resource, strict typing on cross-layer contracts.
@@ -209,7 +218,7 @@ python3 scripts/hearth.py --background  # start the clock (see NERVOUS_SYSTEM.md
   writers; it does nothing about a writer that was *killed* mid-line.
 - **Write to the KB only via `scripts/kb_append.py`** — it locks, dedups at >0.85 similarity, and
   mints a collision-free id. Never hand-append a line.
-- **Prose rots.** This repo has caught a dozen cases of a comment confidently describing something
+- **Prose rots.** This repo has caught many cases of a comment confidently describing something
   the code no longer does — including a file mis-describing *itself*. Prefer a command that prints
   the answer over a number typed into a document. If you find such a case, fix it *and* say so.
 

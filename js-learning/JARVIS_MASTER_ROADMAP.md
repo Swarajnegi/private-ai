@@ -13,11 +13,15 @@
 Stages 1–4 are complete: Memory closed 2026-05-03, Agent Framework closed with Final Boss 7/7 and
 First Light 2026-06-11, Orchestration closed 2026-07-27 with Final Boss 8/8 PASS (offline, ₹0).
 
-**Next task:** 5.1 Fine-Tuning Basics on RunPod, then the Engineer QLoRA adapter on a shared
-Kimi K2.6 base. The delay is a **deliberate gate, not a blocker** — the user's stated condition is
-corpus richness before spending ~₹2–3K on a training run (KB `corpus_richness_before_spend`).
-Open corpus work: `SFT_SPEC.md`'s 600 instruction/response pairs, and `experience_map.md`
-Parts 3–4.
+**Next task (not yet approved):** 5.1 Fine-Tuning Basics on RunPod, then the Engineer QLoRA adapter
+on a shared Kimi K2.6 base — but **nothing in Stage 5 starts until commitment c002 (adapter vs
+retrieval) is answered**; no RunPod spend before then. The harness `scripts/eval_c002.py` was built
+2026-10-07 (230 self-checks); `jarvis_data/eval/c002/` holds the protocol, endpoints, 72
+engineering items and 25 personalization questions, and **nothing has been measured yet** — the owner
+must answer the 25 private questions and top up OpenRouter. The delay is also a **deliberate gate,
+not a blocker** — the user's stated condition is corpus richness before spending ~₹2–3K on a
+training run (KB `corpus_richness_before_spend`). Open corpus work: `SFT_SPEC.md` (559 SFT pairs
+today against its 400/200 targets), and `experience_map.md` Parts 3–4.
 
 > **Maintenance note (2026-09-03).** This paragraph read *"Stage 3 … NOW: Sub-Phase 3.2"* until
 > today, contradicting the stage table directly below it. Prose status headers rot; the structured
@@ -42,12 +46,12 @@ Parts 3–4.
 ### Stage 3: Agent Framework — The Mind ✅ COMPLETE
 - **Duration:** 10–14 weeks (2.5–3.5 months; net +8–12 weeks vs. the OpenClaude shortcut, compressed via OpenJarvis STEAL targets)
 - **Output:** `jarvis_core/agent/` — Tool ABC + Registry + Cost accounting + ReAct loop + Planner + MemGPT-style memory paging + STEAL #13 tolerant tool-call harness — JARVIS owns the runtime
-- **Roadmap:** [stage_3_agents/ROADMAP.md](stage_3_agents/ROADMAP.md) — see also [STAGE_3_OPENCLAUDE_STRATEGY.md](../STAGE_3_OPENCLAUDE_STRATEGY.md) (SUPERSEDED 2026-05-13, kept for historical context)
+- **Roadmap:** [stage_3_agents/ROADMAP.md](stage_3_agents/ROADMAP.md) — the earlier plan to delegate the runtime to OpenClaude/MCP was REVERSED 2026-05-13 (its strategy file no longer exists)
 
 ### Stage 4: Multi-Model Orchestration — The Brain ✅ COMPLETE (2026-07-27)
 - **Duration:** 2-3 months
 - **Output:** Router + Aggregator + GraphRAG (replaces flat vector search)
-- **Status:** 4.0-4.5 all ✅; 4.6 GraphRAG is **required but not yet built**. It was originally deferred behind an incident trigger, then promoted on 2026-09-08 because proactive surfacing needs multi-hop retrieval over distant personal facts—not merely more storage. **Final Boss 8/8 PASS (offline, ₹0)** closes the shipped 4.0-4.5 scope on 2026-07-27 — see [stage_4_orchestration/ROADMAP.md](stage_4_orchestration/ROADMAP.md) for the full leg-by-leg breakdown.
+- **Status:** 4.0-4.5 all ✅; 4.6 GraphRAG **v0 is built** (`memory/graph.py`, `scripts/build_graphrag.py`, tool `memory_graph_search`, hearth job `rebuild_graphrag`); commitment c009 stays open as the follow-on after the Context Ledger continuity proof. It was originally deferred behind an incident trigger, then promoted on 2026-09-08 because proactive surfacing needs multi-hop retrieval over distant personal facts—not merely more storage. **Final Boss 8/8 PASS (offline, ₹0)** closes the shipped 4.0-4.5 scope on 2026-07-27 — see [stage_4_orchestration/ROADMAP.md](stage_4_orchestration/ROADMAP.md) for the full leg-by-leg breakdown.
 - **Roadmap:** [stage_4_orchestration/ROADMAP.md](stage_4_orchestration/ROADMAP.md)
 
 ### Stage 5: Domain Specialists — The Experts ⬅️ CURRENT
@@ -59,7 +63,7 @@ Parts 3–4.
 - **Duration:** 1-2 months
 - **Output:** Voice + Vision + Context Caching (cloud) + JARVIS MVP + always-reachable memory
   backend (replaces git-sync) + a universal, host-independent capture adapter contract
-- **Verified early delivery:** 6.3's loopback-only hearth v0 and 6.8.1-6.8.4's Codex capture adapter are shipped out of order; the remaining Stage 6 work is still unstarted.
+- **Verified early delivery (shipped out of order):** the hearth/scheduler (6.3; UP locally at 127.0.0.1:8756 with a local web UI), all three capture adapters (6.8.3 closed 2026-09-14), the voice stack (`serve/speech.py`, `serve/live_voice.py`, `brain/voice_path.py`; needs a CUDA host, so unavailable on the work laptop), and the 6.7 always-reachable slice (deployed to Railway, asleep since 2026-09-12, KB 1190). **Not shipped:** vision (6.2), context caching (6.5), JARVIS MVP (6.6), client shells beyond the local web client (6.9).
 - **Roadmap:** [stage_6_integration/ROADMAP.md](stage_6_integration/ROADMAP.md)
 
 ---
@@ -100,7 +104,7 @@ Parts 3–4.
 |---|-----------|--------|------|
 | 3.0 | **Entry Sprint** -- `agent/registry.py` (STEAL #1 RegistryBase) + `agent/cost.py` (STEAL #2 PRICING dict + STEAL #11 cache tiers) + `agent/tool.py` (Tool ABC) | [OK] Complete (2026-05-16) | Foundations landed. 3/3 lessons. |
 | 3.1 | Function Calling & Structured Output (+ `Cognitive_State_Update` Pydantic schema, `TextTelemetry` dataclass) | ✅ Complete (2026-05-18) | parser.py + errors.py + state.py + telemetry.py |
-| 3.2 | Tool Design & Registration | ✅ Complete | 18 tools registered incl. Phase C cognitive substrate |
+| 3.2 | Tool Design & Registration | ✅ Complete | tools registered incl. Phase C cognitive substrate; count drifts, see `Tool.list_registered()` |
 | 3.3 | Planning & Decomposition | ✅ Complete | plan.py + executor.py (DAG, Kahn) |
 | 3.4 | ReAct Pattern (+ MIRROR-lite system prompt, CoT loop detector regex) | ✅ Complete | react.py + trace.py + monitor.py + reflection.py |
 | 3.5 | Memory-Augmented Agents/MemGPT (+ heartbeat loop, sleep-time consolidation) | ✅ Complete (2026-06-10) | Waves 1-3 + Cognitive Synthesis Loop; **Stage 3 Final Boss 7/7 (mind.py), First Light 2026-06-11 (llm_client.py)** |
@@ -126,7 +130,7 @@ Parts 3–4.
 | 4.3 | Dynamic Target Management (rolling stats, budget governor, catalog drift) | ✅ Complete (2026-07-16) |
 | 4.4 | Response Aggregation (escalation-only fan-out, attributed synthesis) | ✅ Complete (2026-07-20) |
 | 4.5 | Epistemic Control (conflict detection, fail-closed judge, human escalation) | ✅ Complete (2026-07-20) |
-| 4.6 | GraphRAG | 🟡 REQUIRED — not built. Promoted 2026-09-08: the Context Ledger solves storage/recall, but cannot discover a relationship between distant facts the user did not know to query. Implement after the always-reachable ledger foundation, in `jarvis_core/memory/graph.py`. |
+| 4.6 | GraphRAG | 🟡 v0 BUILT (`jarvis_core/memory/graph.py`, `scripts/build_graphrag.py`, tool `memory_graph_search`, hearth job `rebuild_graphrag`); c009 open as the follow-on after the Context Ledger continuity proof. Promoted 2026-09-08: the Context Ledger solves storage/recall, but cannot discover a relationship between distant facts the user did not know to query. |
 | Final Boss | Stage-4-closing ritual, 8 legs, offline scripted twin | ✅ Complete (2026-07-27; 8/8 PASS, ₹0; `--live` variant built, user-run) |
 
 ---
@@ -139,7 +143,7 @@ Parts 3–4.
 
 | # | Sub-Phase | Status | Note |
 |---|-----------|--------|------|
-| 5.1 | Fine-Tuning Basics (QLoRA on RunPod, Kimi K2.6 base) | ⬜ | RunPod prepaid only; no local GPU |
+| 5.1 | Fine-Tuning Basics (QLoRA on RunPod, Kimi K2.6 base) | ⬜ | RunPod prepaid only; no local GPU (owner is weighing a custom PC: see [../MASTER_CHECKLIST.md](../MASTER_CHECKLIST.md) section I). Gated on c002 (adapter vs retrieval); `scripts/eval_c002.py` built, nothing measured; no RunPod until c002 answers |
 | 5.2 | The Engineer QLoRA Adapter (Code+Systems + DE on user's private corpus) | ⬜ | MVP — sub-domain isolation discipline applied; adapter seed = Qwen3-Coder-Next 80B/3B-active distilled |
 | 5.3 | Engineer Evaluation (RAGAS + recall@k on engineer-domain test set) | ⬜ | Gate: match Kimi K2.6 base on public benchmarks AND outperform on user's private-corpus tasks (code style, KB recall, error-pattern recognition). NOT "beat GPT-5.5" — that's the wrong frame per Decision 2026-05-03. |
 | 5.4 | Specialist Templating (only after Engineer ships) | ⬜ | Replicate adapter recipe to Doctor / Scientist / Analyst only after Engineer MVP validated |
@@ -153,13 +157,13 @@ Parts 3–4.
 
 | # | Sub-Phase | Status |
 |---|-----------|--------|
-| 6.1 | Voice Input (Whisper) | ⬜ |
+| 6.1 | Voice Input (Whisper) | PARTIAL - stack shipped (`serve/speech.py`, `serve/live_voice.py`, `brain/voice_path.py`); needs a CUDA host, not available on the work laptop |
 | 6.2 | Vision Input (LLaVA) | ⬜ |
 | 6.3 | Unified API Layer | SHIPPED v0 - loopback hearth; client shells/queueing remain |
-| 6.4 | Conversation Memory | ⬜ |
+| 6.4 | Conversation Memory | PARTIAL - `jarvis_data/conversations/` + `brain/session_writer.py` |
 | 6.5 | Context Caching (optional cloud-assisted code) | ⬜ |
 | 6.6 | JARVIS MVP | ⬜ |
-| 6.7 | Always-Reachable Memory Backend (replaces git-sync; any device, no manual pull) | ⬜ |
+| 6.7 | Always-Reachable Memory Backend (replaces git-sync; any device, no manual pull) | Slice built and deployed to Railway, asleep since 2026-09-12 (KB 1190) |
 | 6.8 | Universal Capture Adapter (host-independent awareness capture, not per-IDE bespoke) | COMPLETE - 6.8.1-6.8.4 |
 
 ---
@@ -171,15 +175,15 @@ Parts 3–4.
 | 1 | Systems Python | ✅ Sufficient |
 | 2 | Memory Layer | ✅ Complete (8/8 sub-phases; Final Boss executed 2026-05-03) |
 | 3 | Agent Framework (`jarvis_core/agent/` from scratch — Decision 2026-05-13) | ✅ Complete (ReAct + tools + errors + STEAL #8/#9/#13) |
-| 4 | Orchestration (Kimi K2.6 brain + 12 QLoRA adapters) | ✅ Shipped scope: 4.0-4.5 and Final Boss 8/8 PASS 2026-07-27. 4.6 GraphRAG is a required follow-on, not yet built; it is no longer trigger-deferred. |
-| 5 | Specialists (Engineer-first MVP) | ⬜ 0% ⬅️ CURRENT |
-| 6 | Integration | PARTIAL, out-of-order - 6.3 v0 and 6.8.1-6.8.4 shipped |
+| 4 | Orchestration (Kimi K2.6 brain + 12 QLoRA adapters) | ✅ Shipped scope: 4.0-4.5 and Final Boss 8/8 PASS 2026-07-27. 4.6 GraphRAG v0 is built (`memory/graph.py`); c009 open as the follow-on. |
+| 5 | Specialists (Engineer-first MVP) | ⬜ 0% ⬅️ CURRENT (gated on c002; nothing measured yet) |
+| 6 | Integration | PARTIAL, out-of-order - hearth/scheduler (6.3), three capture adapters (6.8), voice stack (GPU host only), local web UI, 6.7 slice (deployed, asleep) shipped; vision, MVP, shells beyond local web not shipped |
 
 ---
 
 ## Next Action
 
-**Start:** Stage 5.1 -- Fine-Tuning Basics (QLoRA on RunPod, Kimi K2.6 base). Stage 4 closed 2026-07-27 (Final Boss 8/8 PASS); this is the roadmap's own stated next step.
+**Start (once c002 is answered, not before):** Stage 5.1 -- Fine-Tuning Basics (QLoRA on RunPod, Kimi K2.6 base). Stage 4 closed 2026-07-27 (Final Boss 8/8 PASS); this is the roadmap's own stated next step, gated on c002 (`scripts/eval_c002.py`, `jarvis_data/eval/c002/`; nothing measured; the owner must answer 25 private questions and top up OpenRouter).
 **First Lesson:** 5.1 -- QLoRA fundamentals, then 5.2 The Engineer adapter (MVP, sub-domain isolation).
-**Files:** `js-development/jarvis_core/brain/` (Stage 4 substrate, done) → Stage 5 work lands in a new `jarvis_core/specialists/` (not yet created).
+**Files:** `js-development/jarvis_core/brain/` (Stage 4 substrate, done) → Stage 5 corpus work already lives in `jarvis_core/specialists/` (blend, engineer, personalization, client snapshot, third_parties, text_hygiene, eval_exclusions, retractions); no training code yet.
 **References:** [stage_5_specialists/ROADMAP.md](stage_5_specialists/ROADMAP.md)

@@ -1,6 +1,6 @@
 # 🚀 PROJECT JARVIS: THE MASTER BLUEPRINT (ENDGAME ARCHITECTURE)
 
-> **Last Updated:** 2026-08-10 (§3 roster gated by demand signal per the two-moats split, NOT personal-data availability — corrected same-day after briefly re-deriving and contradicting the 2026-07-18 REVISED decision; costs below still verified against RunPod public pricing page, May 2026)
+> **Last Updated:** 2026-10-08, fact corrections only (hardware, voice, privacy exception, shipped-vs-planned models, status table). Architecture decisions and cost tables were not revisited; last substantive edit 2026-09-28. Earlier note, 2026-08-10: §3 roster gated by demand signal per the two-moats split, NOT personal-data availability; costs below verified against the RunPod public pricing page, May 2026
 > **Referenced by:** `.agent/rules/js-workspace-rule.md` (co-located in rules — auto-loaded every conversation)
 > **Knowledge Base:** `jarvis_data/knowledge_base.jsonl` (entries tagged `specialist_roster`, `embedding_clusters`)
 
@@ -87,10 +87,11 @@ JARVIS operates on a **cloud-first, prepaid infrastructure**. Earlier drafts of 
 - Runs **embedding models** locally (MiniLM today, SPECTER2 / CodeBERT / PubMedBERT in Stage 5) on CPU (~2GB RAM total across cluster)
 - Runs **ChromaDB** vector store on disk
 - Runs all **Python orchestration code** (routing, chunking, retrieval, agents)
-- Runs **Whisper** for voice input (CPU mode, slower but free) — Stage 6
+- Runs **Whisper** `small` and Kokoro TTS for voice, resident on a CUDA GPU in the hearth (`serve/speech.py`); a host without a GPU, such as the current Linux work laptop, cannot run the voice stack — Stage 6
 - **Cost:** ₹0/month
 - **Privacy:** Documents, embeddings, and the knowledge_base.jsonl never leave the local machine
-- **Hardware reality:** work laptop is company-controlled WSL Ubuntu; personal laptop is Windows + WSL Ubuntu. Neither has discrete GPU. No purchase planned.
+  - **Railway exception, 2026-09-12:** the hosted Railway volume holds 618 knowledge-base records and the conversation history; the service has been asleep since the same day (KB 1190).
+- **Hardware reality (2026-10-08):** the work laptop is a company-controlled Linux machine with no GPU and 7.6 GB RAM. The personal Windows laptop (GTX 1650 4 GB) has been dead since 2026-10-06 (KB 1044). A custom PC build (RTX 5070 Ti, with a planned upgrade to an RTX 5090 or a 60-series card) is under consideration but not purchased; see `MASTER_CHECKLIST.md` §I.
 
 ### The Foundry (The Cloud) — RunPod, Prepaid Credits Only
 - **Phase 1-3 (current):** OpenRouter API for cheap/free LLMs (~₹400-2,000/month)
@@ -221,7 +222,7 @@ reasoning happens elsewhere and only when summoned. Build targets live at
 
 ### Embedding Model Clusters (Memory Layer — orthogonal to specialists)
 
-The embedding stack stays on the **local laptop** (CPU, ~Rs 0/month). Specialists query the same shared embedding space; the LoRA adapters do NOT change embeddings. Stage 2.5 cutover: MiniLM-L6-v2 → EmbeddingGemma-300M (better instruction-retrieval, multilingual, sub-22 ms latency, drop-in replacement).
+The embedding stack stays on the **local laptop** (CPU, ~Rs 0/month). Specialists query the same shared embedding space; the LoRA adapters do NOT change embeddings. Stage 2.5 cutover: MiniLM-L6-v2 → EmbeddingGemma-300M (better instruction-retrieval, multilingual, sub-22 ms latency, drop-in replacement) — planned; the shipped store (`memory/store.py`) still uses `all-MiniLM-L6-v2`, and the EpisodeIndex uses its own embedder (`memory/episode_index.py`).
 
 ```
 Cluster A: EmbeddingGemma 300M (768d)   → General text, conversation, Strategist, Analyst, default
@@ -233,7 +234,7 @@ Cluster F: MatSciBERT (768d)            → Mechanic, Chemist (materials)
 
 Total VRAM for ALL embedding models: ~2GB (fit permanently on any machine, CPU-only, Rs 0)
 
-Reranker (Stage 2.5.3): mxbai-rerank-large-v2 (1.5B Apache-2.0, ~150ms CPU for 20 chunks)
+Reranker (Stage 2.5.3): planned: mxbai-rerank-large-v2 (1.5B Apache-2.0, ~150ms CPU for 20 chunks); shipped: `cross-encoder/ms-marco-MiniLM-L-6-v2` (`memory/rerank.py`)
 ```
 
 ---
@@ -321,7 +322,7 @@ Same cold-wake + agent infrastructure, different specialists active in parallel.
 | 7 | Strategist | Stage 5 | ₹17,040 |
 | 8-12 | Rest | Stage 5-6 | ₹20,540 |
 
-**Real near-term ticket, per the demand-signal gate (not a corpus gate — see §3's two-moats correction): Engineer alone (₹1,480-2,960), then Analyst once a real build decision is made (+₹1,480-2,590). Everything else waits for a demand signal, not for personal data to materialize — any of rows 3-9/11 could be built on public-corpus domain genius alone whenever there's an actual reason to.**
+**Real near-term ticket, per the demand-signal gate (not a corpus gate — see §3's two-moats correction): Engineer alone (₹1,480-2,960), then Analyst once a real build decision is made (+₹1,480-2,590). Everything else waits for a demand signal, not for personal data to materialize — any of rows 3-9/11 could be built on public-corpus domain genius alone whenever there's an actual reason to.** (`MASTER_CHECKLIST.md` §E flags a plausibility doubt on these tables: they budget Engineer QLoRA on one A40, while §2 says the Kimi K2.6 base needs at least 4× A5000 just to serve; untested.)
 
 ### Monthly Usage Cost (Cold-Wake Sessions)
 
@@ -362,6 +363,8 @@ LAYER 3: Graph Search (GraphRAG — explicit entity relationships)
 LAYER 4: Keyword Search (BM25 — term frequency)
   → Good for: Exact string matches, error codes, chemical names, part numbers
 ```
+
+Status per layer (2026-10-08): semantic search shipped (`memory/store.py`); ColBERT skipped (concept learned, implementation dropped over storage); graph search v0 built (`memory/graph.py`, tool `memory_graph_search`); BM25 shipped (`memory/bm25.py`, fused in `memory/hybrid.py`).
 
 ### Memory Management
 - **MemGPT (Autonomous Paging):** The orchestrator manages its own memory like an OS, promoting hot facts to context and demoting cold facts to disk.
@@ -417,12 +420,12 @@ JARVIS does not just "run cron jobs." It executes intelligent loops while the us
 | **1 (Systems Python)** | ✅ Sufficient | Async, generators, context managers, object model (1.4/1.5 deliberately deferred) |
 | **2 (Memory Layer)** | ✅ Complete — closed 2026-05-03 | Embeddings, ChromaDB, chunking, hybrid search, cross-encoder rerank, KB compaction |
 | **3 (Agent Framework)** | ✅ Complete | Tool ABC + registry, planner (DAG/Kahn), ReAct loop, MemGPT paging. Built from scratch in `jarvis_core/agent/` per Decision 2026-05-13 |
-| **4 (Orchestration)** | ✅ Shipped scope closed 2026-07-27 | Router (84% frozen gate), model-pool failover, aggregator, epistemic control. Final Boss 8/8 PASS offline, ₹0. 4.6 GraphRAG is required but not built: it was promoted 2026-09-08 because proactive surfacing needs multi-hop retrieval over distant facts. |
-| **5 (Specialists)** | ⬅️ **CURRENT — not started** | Engineer-first QLoRA adapter on a shared Kimi K2.6 base. Next task: 5.1 Fine-Tuning Basics on RunPod |
-| **6 (Integration)** | Scoped, not started | Voice, vision, unified API, client shells (6.9), ambient presence tier (6.10). 6.1–6.6 self-flagged as stale pre-Stage-3 drafts |
+| **4 (Orchestration)** | ✅ Shipped scope closed 2026-07-27 | Router (84% frozen gate), model-pool failover, aggregator, epistemic control. Final Boss 8/8 PASS offline, ₹0. 4.6 GraphRAG v0 is built (`memory/graph.py`, `scripts/build_graphrag.py`, tool `memory_graph_search`); it was promoted 2026-09-08 because proactive surfacing needs multi-hop retrieval over distant facts, and its follow-on c009 is open. |
+| **5 (Specialists)** | ⬅️ **CURRENT — not started** | Engineer-first QLoRA adapter on a shared Kimi K2.6 base. Gated on commitment c002 (does an adapter beat retrieval?): `scripts/eval_c002.py` is built, nothing is measured. Next task after that: 5.1 Fine-Tuning Basics on RunPod |
+| **6 (Integration)** | Partial | Shipped out of order: hearth + scheduler (6.3), three capture adapters (6.8.3), voice stack (needs a GPU host), local web UI, a Railway slice of 6.7 (asleep since 2026-09-12). Not shipped: client shells (6.9), always-reachable hosting (6.7), ambient presence tiers (6.10), vision. 6.1–6.6 self-flagged as stale pre-Stage-3 drafts |
 
 **Current Position:** Stage 5 — Domain Specialists. Stages 1–4 complete. Stage 5 not yet started;
-the gate is deliberate (corpus richness before RunPod spend), not a blocker.
+the gate is deliberate (c002, and corpus richness before RunPod spend), not a blocker.
 
 ---
 

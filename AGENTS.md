@@ -5,6 +5,11 @@
 > Codex now supports project hooks. This file remains the boot contract; the
 > fail-soft `.codex/hooks.json` startup and backlog reminders do not replace its
 > required full reads and manual judgment.
+>
+> **DEAD HOST (since 2026-10-06, KB 1044).** The personal laptop (Codex, Antigravity) is dead;
+> the work laptop (Linux, Claude Code) is the only live host. Claude parses the Codex and
+> Antigravity backlogs by reading, under KB 1009 (`python3 scripts/parse_turns.py --status` for
+> the sizes). The Codex-side instructions below apply when that laptop returns.
 
 ---
 
@@ -23,7 +28,7 @@ treat this file as a lighter substitute for it.
 
 ## THE MEMORY CONTRACT — your duty on this host (owner's decision 2026-09-28)
 
-**You parse your own turns. Nothing else will.** The agent the owner is chatting with parses
+**You parse your own turns. Nothing else will** (while this host is dead, Claude parses the Codex backlog under KB 1009). The agent the owner is chatting with parses
 those turns into training routing and KB knowledge, by ONE rule — `PARSE_RULE` in
 `js-development/jarvis_core/agent/parse_rule.py`, the single source for all four agents (print it:
 `cd js-development && PYTHONPATH=. python -m jarvis_core.agent.parse_rule --print`). There is no
@@ -184,11 +189,10 @@ use_memories = true
 **Why starting the hearth is not optional.** `ingest_codex` is what turns this host's transcripts
 into captured turns. Without a running hearth it fires only when a human remembers to run it — and
 manual capture is exactly what produced **zero** records over months on Antigravity, the other
-hookless host. The adapter existing is not the adapter running.
+host with no capture hook. The adapter existing is not the adapter running.
 
-**And starting it by hand is not enough — make it persistent, or it dies at the next reboot.**
-That is not hypothetical: the work laptop's hearth was started once on 2026-09-08 and was found
-dead three days later, because WSL shut its VM down and nothing restarted it. Add a keepalive:
+**And starting it by hand is not enough — make it persistent, or it dies at the next reboot**
+(WSL shuts its VM down and nothing restarts the hearth). Add a keepalive:
 
 ```bash
 # PREFLIGHT — none of these are WSL defaults; check before trusting crontab:
@@ -205,8 +209,8 @@ Safe to fire repeatedly — `--background` refuses when one is already live. If 
 **native Windows** rather than WSL, `--background` cannot work at all (it needs `os.fork`); use
 Task Scheduler instead. Full reasoning and the Windows variant: NERVOUS_SYSTEM.md §6.2.
 
-**One hearth per MACHINE, not per agent** — you and Antigravity share this laptop, so you share its
-hearth. Check with `--status` before assuming; if it is down, JARVIS is not learning from your work.
+**One hearth per MACHINE, not per agent.** Check with `--status` before assuming; if it is down,
+JARVIS is not learning from your work.
 
 `JARVIS_ROOT` resolves automatically from this file's location (`jarvis_core/config.py`); no path
 edits needed on Windows vs Linux.
@@ -231,8 +235,9 @@ write without conflict. `python scripts/parse_turns.py --status` shows the backl
   `python3 scripts/kb_append.py --type <Type> --tags a,b,c --content "..."` — it holds the file
   lock, dedups at >0.85 similarity, and mints a collision-free id. Never hand-append a line.
 - Before appending anything substantial: `python3 scripts/search_memory.py "<summary>"` first.
-- Eight entry types: `Episodic`, `Semantic`, `Procedural`, `Idea`, `Decision`, `Failure`,
-  `Cognitive_Pattern`, `System_Protocol`.
+- The KB uses 10 entry types: `Episodic`, `Semantic`, `Procedural`, `Idea`, `Decision`, `Failure`,
+  `Cognitive_Pattern`, `System_Protocol`, `Reference`, `Cognitive_Profile`. `kb_append.py` does not
+  validate the type, so a typo creates a new one silently.
 - Cognitive-pattern scan is continuous, not a special case — evaluate every prompt/response pair
   for signal (gap, zero-gap, refusal, forward-simulation) and append directly when one fires.
 
@@ -245,7 +250,7 @@ write without conflict. `python scripts/parse_turns.py --status` shows the backl
   `.gitignore` comments before acting on any client-IP question.
 - Don't stage binaries under `jarvis_data/` other than what's already tracked (check `git status`
   before `git add -A`) — all of `jarvis_data/chromadb/` is gitignored as of 2026-09-11 and
-  regenerates via `index_memory.py` + `ingest.py`; it was un-tracked because two machines running
+  regenerates via `index_memory.py`; it was un-tracked because two machines running
   the hearth would both rewrite a 23 MB binary with no merge driver.
 - Don't merge `knowledge_base.jsonl` by hand — use `scripts/jsonl_merge.py` if a manual merge is
   ever needed; normally `git`'s `merge=union` on `*.jsonl` (set in `.gitattributes`) handles it.

@@ -130,4 +130,4 @@ Build a complete memory system that:
 
 ## After This Phase
 
-→ Proceed to **Phase 3: Agent Framework** → [PHASE_03_ROADMAP.md](../agent-learning/PHASE_03_ROADMAP.md)
+→ Proceed to **Phase 3: Agent Framework** → [stage_3_agents/ROADMAP.md](../stage_3_agents/ROADMAP.md)

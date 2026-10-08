@@ -42,7 +42,9 @@
 
 ---
 
-## Sub-Phase 6.1: Voice Input ⬜
+## Sub-Phase 6.1: Voice Input 🔄 **stack shipped; runs on a GPU host only, not on the work laptop**
+
+> **State (2026-10-08):** the voice stack is built: `serve/speech.py`, `serve/live_voice.py`, `brain/voice_path.py`, with voice endpoints on the hearth. It needs a CUDA host, and the only live host (the work laptop) has no GPU, so it cannot run here. The lesson table below is the original draft and was not worked through lesson-by-lesson.
 
 **Goal:** Let JARVIS hear you — the "Iron Man" experience.
 
@@ -110,7 +112,9 @@ loopback (Tailscale is step 9), no remote approval. `GET /v1/health` is the only
 
 ---
 
-## Sub-Phase 6.4: Conversation Memory ⬜
+## Sub-Phase 6.4: Conversation Memory 🔄 **partial**
+
+> **State (2026-10-08):** conversation history is persisted to `jarvis_data/conversations/` and distilled by `brain/session_writer.py`; the lesson table below is the original draft.
 
 **Goal:** JARVIS remembers what you talked about — across sessions.
 
@@ -162,13 +166,12 @@ and refactor a module with full dependency awareness.
 
 ## Sub-Phase 6.7: Always-Reachable Memory Backend ⬜
 
-> **Implementation state (2026-09-12):** a first, deliberately narrow vertical
-> slice is built but not yet deployed: the hearth now exposes authenticated,
+> **Implementation state (2026-10-08, updated from 2026-09-12): the slice was deployed to Railway
+> and has been ASLEEP since 2026-09-12 (KB 1190).** As built on 2026-09-12: the hearth now exposes authenticated,
 > allowlisted JSONL-ledger read/union-write endpoints and
 > `scripts/sync_remote_memory.py` batches local facts to the Railway-mounted
-> durable volume. It still needs a separate sync bearer token configured in
-> Railway, a deployed build, scheduled sync on each host, and the 6.7.3
-> cross-device continuity proof before this row can be called complete.
+> durable volume. The 6.7.3 cross-device continuity proof has not been done, so this row cannot be
+> called complete, and while the hosting is asleep nothing is reachable beyond the work laptop.
 
 **Goal:** Today, "portable across machines" means git push/pull between exactly two known
 laptops, with an explicit single-user-at-a-time constraint. That's a real, working mechanism for
@@ -193,7 +196,7 @@ that depends on yesterday's conversation — no manual sync step first.
 
 **Goal:** Awareness capture — the mechanism that makes JARVIS actually know what you did — is
 host-specific today: automatic via hooks on Claude Code, manual via `/memory` on Antigravity (no
-hook system there). The underlying organ (`jarvis_core/agent/capture.py`) is already built to be
+hook system there; replaced 2026-09-14 by the hourly `ingest_antigravity` job). The underlying organ (`jarvis_core/agent/capture.py`) is already built to be
 host-independent per its own design; what's missing is a defined, minimal adapter contract so a
 brand-new host gets full capture parity without bespoke, one-off wiring each time.
 
@@ -210,11 +213,9 @@ brand-new host gets full capture parity without bespoke, one-off wiring each tim
 | 6.8.1 | Audit the existing capture organ | ✅ confirmed host-agnostic: `build_observation`/`append_observation`/`redact` have zero `~/.claude/` paths. Only `extract_turn`'s transcript parser and the Stop-hook event shape were Claude-specific |
 | 6.8.2 | Define the adapter contract | ✅ *(implicit, proven by 6.8.3 rather than written as a standalone spec)*: parse your host's transcript into `{user_text, assistant_summary, model, ts}`, call the same two organ functions. One required organ change: `build_observation` gained an optional `ts` override — live capture stamps "now" correctly, but an adapter ingesting a HISTORICAL transcript must supply the turn's own time or corrupt every timestamp-ordered consumer downstream (`recall.py`, `agent/tension.py`) |
 | 6.8.3 | Build a second reference adapter | ✅ `scripts/ingest_codex_sessions.py` (25/25 tests) — reads Codex's own persisted rollouts from `~/.codex/sessions/`, feeds the same organ Claude Code's Stop hook uses. Proves the contract generalizes: this is a **different host, different transcript format, different lifecycle** (no hooks at all — a scheduled reader instead), same queue schema, same downstream consumers unmodified |
-| 6.8.4 | Explicit degraded mode | ✅ `AGENTS.md`'s CAPTURE STATUS section: tells Codex to run `--status`/`--dry-run` and say plainly if capture isn't currently running here, rather than assume the pipeline is live. Antigravity's equivalent statement updated in `js-workspace-rule.md` — still degraded, honestly, because it's still unknown whether Antigravity persists a readable transcript at all |
+| 6.8.4 | Explicit degraded mode | ✅ `AGENTS.md`'s CAPTURE STATUS section: tells Codex to run `--status`/`--dry-run` and say plainly if capture isn't currently running here, rather than assume the pipeline is live. Antigravity's equivalent statement updated in `js-workspace-rule.md` — degraded at the time of this row (2026-09-10); superseded by the hourly `ingest_antigravity` job once 6.8.3 closed for Antigravity on 2026-09-14 |
 
-**What this did NOT close:** Antigravity capture is unchanged — still manual `/memory` only. 6.8.3
-proved the *contract* generalizes; it did not give Antigravity a transcript to read. That remains a
-scoping question (does the host persist anything on disk?), not an architecture one anymore.
+**Superseded 2026-09-14 (6.8.3 closed for Antigravity):** the paragraph that used to sit here said Antigravity capture was still manual `/memory` only. That is no longer true. `scripts/ingest_antigravity_sessions.py` reads Antigravity's persisted transcripts and runs hourly as the hearth job `ingest_antigravity`. (Both the Codex and Antigravity hosts have been unavailable since 2026-10-06; the work laptop is the only live host and Claude parses the other hosts' backlogs under KB 1009.)
 
 **Practical Exercise:** ✅ done — ingested 7 real historical exchanges from 2 real Codex rollouts
 (sessions from 2026-07-15 and 2026-09-05, both predating this sub-phase's own start), verified
@@ -225,7 +226,9 @@ the corpus has ever held.
 
 ---
 
-## Sub-Phase 6.9: Client Shells ⬜
+## Sub-Phase 6.9: Client Shells 🔄 **local web client only**
+
+> **State (2026-10-08):** the only client shell is the local web UI served by the hearth (`serve/ui`, source in `serve/frontend`). No desktop app, phone app, Telegram bot or PWA exists, and nothing is reachable beyond the work laptop while the 6.7 hosting is asleep.
 
 **Goal:** Put JARVIS on the surfaces the user actually lives on. Today JARVIS is reachable only
 from a terminal inside this repo — `orchestrator.py --ask` on one laptop. The stated endgame is a
@@ -277,8 +280,8 @@ insufficient. Handed to Codex as `agents_converse/q_002.md`.
 > is a novelty with a battery cost. **Build 6.10 only after the organ demonstrably produces
 > insights worth interrupting someone for** — measured, not assumed.
 >
-> Current state of that organ: `agent/life_state_monitor.py` has surfaced **3 insights, ever**, all
-> on 2026-06-18. It was starved for 80 days by the deadlock described in row 0 below, fixed
+> Current state of that organ (as of this note's writing, 2026-09-06): `agent/life_state_monitor.py` had surfaced **3 insights, ever**, all
+> on 2026-06-18. `jarvis_data/life_state_feed.jsonl` now holds 6 lines (the 3 from 2026-06-18, then one on 2026-09-28 and two on 2026-10-06). It was starved for 80 days by the deadlock described in row 0 below, fixed
 > 2026-09-06. Whether it produces anything worth hearing at a sustained rate is now measurable and
 > **unmeasured** — that measurement is the real gate on this sub-phase, not 6.1–6.9.
 >
@@ -359,7 +362,9 @@ sub-phase below.
 | 2 | **The restaurant call stays.** My objection was US-centric and I withdrew it: India has no bot-disclosure statute for a personal agent placing a call, and TRAI's UCC framework governs *marketing*, not this | Requirement that replaces the objection: **a call must end in verifiable confirmation** (callback, SMS, or booking reference) or it reports failure. A booking you wrongly believe succeeded is worse than none. The user's own framing of the failure register — *"They hung up on me, sir."* — is now the worked example in `VOICE_SPEC.md` |
 | 3 | **Device-key storage gets an interface now**, implemented as a plain file | Free today, expensive later: moving to OS keychain / Android Keystore / iOS Secure Enclave after devices are enrolled means re-enrolling all of them. Broader host-compromise threat model is deliberately deferred until JARVIS is complete |
 | 4 | **Telegram now → native Android later. iOS dropped.** | Android: Firebase Cloud Messaging is free, Play Store is a **one-time $25**. iOS is **$99/yr ≈ ₹8,300 — 38% of the conservative annual envelope**, for one user, on an envelope with no hosting line. 6.9 client-shell order is therefore: Telegram bot → browser PWA → native Android. Not iOS |
-| 5 | **GraphRAG (4.6) is promoted from deferred to required** | See below — it is the completion of the context design, not an optional retrieval upgrade |
+| 5 | **GraphRAG (4.6) is promoted from deferred to required** | See below — it is the completion of the context design, not an optional retrieval upgrade. v0 has since been built (`memory/graph.py`); c009 open |
+
+> **Note (2026-10-08):** the hosting these decisions depend on (Railway, 6.7) has been asleep since 2026-09-12 (KB 1190), so Telegram and Tailscale reachability are currently unbuilt as well as undecided. The decisions above are unchanged.
 
 ### Storage vs index — the distinction that fixes row 0b's cousin
 
@@ -372,7 +377,7 @@ two is what produced the live drift recorded below.
 | **Storage** — authoritative, the only thing that is *true* | append-only log | `knowledge_base.jsonl` + the new Context Ledger |
 | **Index** — derived, disposable, rebuildable | semantic | ChromaDB ✅ |
 | | token-level | ColBERT ⏭ (concept learned, skipped on storage cost) |
-| | **graph / multi-hop** | **GraphRAG ⏭ NOT BUILT — now required** |
+| | **graph / multi-hop** | **GraphRAG 🟡 v0 BUILT (`memory/graph.py`); c009 open as follow-on** |
 | | keyword | BM25 ✅ |
 | | structured | `cognitive_index.sqlite3` ✅ |
 
@@ -404,22 +409,22 @@ did not know to ask."* GraphRAG is the last piece of the context design, not an 
 
 | # | Requirement (ENDGAME §1.1) | State |
 |---|---|---|
-| **0** | **Used at all — reached for, not just built** | 🔴 **19 `--ask` sessions lifetime; 0 in the last 30 days; last use 2026-08-03** |
-| **0b** | **Proactive surfacing alive — the actual differentiator (§1.2)** | 🟡 **Unstarved 2026-09-06 after 80 days dead. 3 insights surfaced ever, all 2026-06-18. Rate now measurable, still unmeasured** |
+| **0** | **Used at all — reached for, not just built** | 🔴 **Run `usage.read_usage()` (`brain/usage.py`) for the current number: 2026-10-08 returns 3 lifetime sessions, 3 in the last 30 days, last use 2026-09-14** |
+| **0b** | **Proactive surfacing alive — the actual differentiator (§1.2)** | 🟡 **Unstarved 2026-09-06 after 80 days dead. `life_state_feed.jsonl` holds 6 lines on 2026-10-08 (3 on 2026-06-18, 3 since). Rate now measurable, still unmeasured** |
 | 1 | Reasoning core reachable end-to-end | ✅ Stage 4 closed — Final Boss 8/8 **offline scripted twin**, not a live run |
-| 2 | Corpus assembled for the trained adapter | ✅ 2,143 engineer + 921 personalization records |
+| 2 | Corpus assembled for the trained adapter | ✅ measured 2026-10-08: 3,300 engineer + 1,342 personalization records (4,134 blended), 559 SFT pairs |
 | 3 | **Adapter actually trained** | ⬜ Not started. Gated on row 0 by the user's own condition (corpus richness / value before spend), not blocked |
-| 4 | Adapter deployed and serving | ⬜ Stage 5.4 |
-| 5 | Voice in / voice out | ⬜ 6.1 |
+| 4 | Adapter deployed and serving | ⬜ Stage 5.2.4 |
+| 5 | Voice in / voice out | 🔄 6.1 stack shipped; needs a GPU host (not the work laptop) |
 | 6 | Vision in | ⬜ 6.2 |
-| 7 | Unified API | ⬜ 6.3 |
-| 8 | Memory reachable from any device | ⬜ 6.7 |
-| 9 | Web / desktop / phone clients | ⬜ 6.9 |
+| 7 | Unified API | 🔄 6.3 v0 shipped (the hearth); client shells and queueing remain |
+| 8 | Memory reachable from any device | 🔄 6.7 slice deployed to Railway, asleep since 2026-09-12 |
+| 9 | Web / desktop / phone clients | 🔄 local web client only (`serve/ui`); no desktop or phone client |
 | 10 | Ambient — always-on tier, cameras + mics live | ⬜ 6.10 |
 
 **Row 0 added 2026-09-06, and it precedes everything.** An external audit named the failure mode —
-*"a platform in search of a repeated job"* — and checking it took one command: `conversations/` holds
-19 real sessions, the last on 2026-08-03, against 535 captured turns of *building* JARVIS in the same
+*"a platform in search of a repeated job"* — and checking it took one command: `conversations/` held
+19 real sessions, the last on 2026-08-03 (as of that 2026-09-06 check; see row 0 for the current number), against 535 captured turns of *building* JARVIS in the same
 period. The system had not been opened in a month and **nothing in this repo noticed**, because every
 other instrument here counts construction. `conversations/` was the only usage log and had no reader.
 
@@ -476,14 +481,15 @@ The complete system that:
 
 | Sub-Phase | Status | Lessons Complete |
 |-----------|--------|------------------|
-| 6.1 Voice Input | ⬜ Not Started | 0/4 |
+| 6.1 Voice Input | 🔄 Stack shipped (`serve/speech.py`, `serve/live_voice.py`, `brain/voice_path.py`); GPU host only | lessons not tracked individually |
 | 6.2 Vision Input | ⬜ Not Started | 0/4 |
 | 6.3 Unified API Layer | SHIPPED v0 - hearth | 4/4 core lessons; queueing/client shells remain |
-| 6.4 Conversation Memory | ⬜ Not Started | 0/4 |
+| 6.4 Conversation Memory | 🔄 Partial (`conversations/`, `brain/session_writer.py`) | lessons not tracked individually |
 | 6.5 Context Caching (Cloud) | ⬜ Not Started | 0/4 |
 | 6.6 JARVIS MVP | ⬜ Not Started | 0/4 |
-| 6.7 Always-Reachable Memory Backend | 🔄 v0 ledger sync built; not deployed or cross-device verified | 1/4 |
-| 6.8 Universal Capture Adapter | COMPLETE - 6.8.1-6.8.4 | 4/4 |
+| 6.7 Always-Reachable Memory Backend | 🔄 v0 ledger sync built and deployed to Railway, asleep since 2026-09-12 (KB 1190); cross-device continuity not verified | 1/4 |
+| 6.8 Universal Capture Adapter | COMPLETE - 6.8.1-6.8.4; Codex and Antigravity ingest adapters both live (6.8.3 closed for Antigravity 2026-09-14) | 4/4 |
+| 6.9 Client Shells | 🔄 Local web client only (`serve/ui`) | not tracked |
 
 ---
 

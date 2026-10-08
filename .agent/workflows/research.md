@@ -33,7 +33,7 @@ Detect from ROADMAP.md: Stage [X] - [Name]
 
 **Decision Gate 1: Relevance**
 - **Question:** Does this paper solve a problem you have RIGHT NOW in Stage [X]?
-  - **NO** → Output: "📌 BOOKMARK. Relevance: Stage [Y] (Month Z). File to `papers_backlog.md`. SKIP THIS PAPER."
+  - **NO** → Output: "📌 BOOKMARK. Relevance: Stage [Y] (Month Z). SKIP THIS PAPER (no backlog file is kept; `papers_backlog.md` does not exist)."
   - **YES** → Continue.
 
 **Decision Gate 2: Time Budget**
@@ -79,7 +79,7 @@ Analyze the input through the lens of the JARVIS architecture. Structure your re
 
 * **Action Plan:**
   * **Build Now:** This solves active Stage [X] problem → Add to current sprint
-  * **Build Month Y:** Bookmark to `papers_backlog.md` with tag `[Stage-Y]`
+  * **Build Month Y:** Bookmark with tag `[Stage-Y]` in this response (no `papers_backlog.md` is kept)
   * **Never:** Acknowledge and forget (academic curiosity only)
 
 * **Implementation Strategy (if Build Now):**

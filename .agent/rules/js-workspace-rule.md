@@ -16,7 +16,7 @@ Every output must serve the long-term goal of building a persistent, anti-fragil
 
 ## THE MEMORY CONTRACT — your duty on this host (owner's decision 2026-09-28)
 
-**You parse your own turns. Nothing else will.** The agent the owner is chatting with parses those turns into training routing and KB knowledge, by ONE rule — `PARSE_RULE` in `js-development/jarvis_core/agent/parse_rule.py`, the single source for all four agents (print it: `cd js-development && PYTHONPATH=. python -m jarvis_core.agent.parse_rule --print`). No paid background curator exists any more. Antigravity has no hooks, so this is a written duty — **at boot and about every 10 turns**. Automate what you can (owner directive 2026-09-28): turn the loop into a workflow (e.g. `.agent/workflows/parse.md`) and any automation your host supports, and record it in NERVOUS_SYSTEM.md §3.3 and agent mail. All four agents stay in sync from 2026-09-28 on: one rule, one tool, one health check:
+**You parse your own turns. Nothing else will.** The agent the owner is chatting with parses those turns into training routing and KB knowledge, by ONE rule — `PARSE_RULE` in `js-development/jarvis_core/agent/parse_rule.py`, the single source for all four agents (print it: `cd js-development && PYTHONPATH=. python -m jarvis_core.agent.parse_rule --print`). No paid background curator exists any more. Antigravity has no hooks, so this is a written duty — **at boot and about every 10 turns**. The loop is automated as `.agent/workflows/parse.md`. All four agents stay in sync from 2026-09-28 on: one rule, one tool, one health check:
 
     python scripts/ingest_antigravity_sessions.py                          # put this session's turns in the queue
     python scripts/parse_turns.py --pending --host antigravity --limit 10  # at boot: --limit 20 to drain backlog
@@ -48,13 +48,15 @@ JARVIS's consciousness travels with this repo (Consciousness Portability Contrac
 5. **Run the parse loop** (THE MEMORY CONTRACT above) with `--limit 20` to drain backlog.
 6. For topic context, `python scripts/search_memory.py "<topic>"` as usual.
 
-**Capture status on this host (ROADMAP 6.8.3, closed 2026-09-14):** Automatic per-turn capture is now LIVE via `scripts/ingest_antigravity_sessions.py`, scheduled hourly on the hearth (`initial_delay_seconds=240.0`). It reads complete transcripts (`transcript_full.jsonl` / `transcript.jsonl` / `overview.txt`) directly from `~/.gemini/antigravity-ide/brain/`. Transcripts are never pruned by Antigravity; historical backfill of 359 turns from April 2026 onward has been ingested into `observation_queue.jsonl`. You can check or trigger it manually anytime via `python scripts/ingest_antigravity_sessions.py` (with `--status`, `--dry-run`, or `--self-test`).
+**This machine (the personal Windows laptop) has been DEAD since 2026-10-06 (KB 1044); until it returns, Claude Code on the work laptop parses the Antigravity and Codex backlogs by reading (KB 1009; check `python3 scripts/parse_turns.py --status`). The capture and hearth paragraphs below describe how it works while this laptop is up.**
 
-**The hearth on this machine serves you AND Codex** — it is one per machine, not per agent. It runs both `ingest_codex` and `ingest_antigravity`, keeping experience capture continuous, and keeps consolidation, projections, and `activity_digest.md` fresh on a clock instead of on someone's memory. If `python3 scripts/hearth.py --status` says it is down, start it and make it persistent — see NERVOUS_SYSTEM.md §6.2 for the recipe.
+**Capture status on this host (ROADMAP 6.8.3, closed 2026-09-14):** When this laptop is up, automatic per-turn capture runs via `scripts/ingest_antigravity_sessions.py`, scheduled hourly on the hearth (`initial_delay_seconds=240.0`). It reads complete transcripts (`transcript_full.jsonl` / `transcript.jsonl` / `overview.txt`) directly from `~/.gemini/antigravity-ide/brain/`. Transcripts are never pruned by Antigravity; historical backfill of 359 turns from April 2026 onward has been ingested into `observation_queue.jsonl`. You can check or trigger it manually anytime via `python scripts/ingest_antigravity_sessions.py` (with `--status`, `--dry-run`, or `--self-test`).
 
-**Read [NERVOUS_SYSTEM.md](../../NERVOUS_SYSTEM.md) §1, §3, §5.3, and §7.1 once on this machine.** §3 is the Memory Contract. §1 corrects four misconceptions that otherwise produce confidently wrong answers about what JARVIS can see. §5.3 and §7.1 detail the native capture adapter implementation.
+**The hearth on this machine (when it is up) serves you AND Codex** — it is one per machine, not per agent. It runs both `ingest_codex` and `ingest_antigravity`, keeping experience capture continuous, and keeps consolidation, projections, and `activity_digest.md` fresh on a clock instead of on someone's memory. If `python3 scripts/hearth.py --status` says it is down, start it and make it persistent — see NERVOUS_SYSTEM.md §6.2 for the recipe.
 
-**The adapter contract is fully realized across all three hosts (ROADMAP 6.8.3):** Claude Code (hooks), Codex (`ingest_codex_sessions.py`), and Antigravity (`ingest_antigravity_sessions.py`) all feed into the identical `capture.py` core organ (`build_observation`, `append_observation`, `redact`). Zero hosts are now degraded or uncaptured.
+**Read [NERVOUS_SYSTEM.md](../../NERVOUS_SYSTEM.md) §1, §3 and §5.3 once on this machine.** §3 is the Memory Contract. §1 corrects four misconceptions that otherwise produce confidently wrong answers about what JARVIS can see. §5.3 details the native capture adapter implementation.
+
+**The adapter contract is implemented for all three hosts (ROADMAP 6.8.3):** Claude Code (hooks), Codex (`ingest_codex_sessions.py`), and Antigravity (`ingest_antigravity_sessions.py`) all feed into the identical `capture.py` core organ (`build_observation`, `append_observation`, `redact`). Only the Claude Code host is live while the personal laptop is dead.
 
 ---
 
@@ -82,12 +84,8 @@ When answering, adopt the stance of the relevant sub-system:
 
 ## CURRENT BUILD STATE
 
-- **Stage 1 — Systems Python:** ✅ Sufficient (generators, async foundations, object model — the language fundamentals the runtime itself is written in).
-- **Stage 2 — Memory Layer:** ✅ Complete (closed 2026-05-03). ChromaDB + BM25 + hybrid search + cross-encoder rerank + KB compaction, all in `jarvis_core/memory/`.
-- **Stage 3 — Agent Framework:** ✅ Complete. Built FROM SCRATCH in `jarvis_core/agent/` — a 2026-05-13 decision explicitly REVERSED an earlier plan to delegate to OpenClaude/MCP. There is no OpenClaude bridge or `mcp_server.py` anywhere in this codebase.
-- **Stage 4 — Multi-Model Orchestration:** ✅ Complete (closed 2026-07-27), in `jarvis_core/brain/`. Intent router (84% frozen-gate accuracy) + model-pool failover + response aggregation + epistemic control (fail-closed contradiction judge) all shipped. **Final Boss** (the 8-leg Stage-4-closing *verification* harness, `orchestrator.py --final-boss`) passed 8/8 offline, ₹0 — this is a test harness, NOT the same thing as the `--ask` terminal interface itself.
-- **Stage 5 — Domain Specialists:** ⬅️ CURRENT. Engineer-first QLoRA MVP on a shared Kimi K2.6 base. Not started yet; next task is 5.1 Fine-Tuning Basics on RunPod.
-- Master roadmap: `js-learning/JARVIS_MASTER_ROADMAP.md`.
+Stages 1–4 are complete; stage-by-stage status lives in `js-learning/JARVIS_MASTER_ROADMAP.md` and the kept-current snapshot in `STATUS.md`.
+Stage 5 (Domain Specialists) is not started and is gated on commitment c002 (does a trained adapter beat retrieval?); no RunPod spend until c002 answers.
 
 ---
 
@@ -109,7 +107,7 @@ When answering, adopt the stance of the relevant sub-system:
 ## AVAILABLE WORKFLOWS
 
 See `.agent/workflows/` for full workflow definitions. Invoked via `/command` syntax.
-Workflows: `/learn`, `/memory`, `/research`, `/dev`, `/architecture-review`, `/next`, `/master-planner`, `/route-model`
+Workflows: `/learn`, `/memory`, `/research`, `/dev`, `/architecture-review`, `/next`, `/master-planner`, `/route-model`, `/parse`, `/mail`
 
 ---
 
@@ -157,11 +155,11 @@ These rules apply to **every response**, not just when workflows are invoked. Th
 ## STRATEGIC PRINCIPLES (The "Iron Man" Constraints)
 
 1.  **Single-Model First:**
-    - Build a working JARVIS with ONE model before adding specialists (currently: OpenRouter free/low-cost models + Gemini; Stage 5 moves to a shared Kimi K2.6 base for QLoRA specialists).
+    - Build a working JARVIS with ONE model before adding specialists (currently: OpenRouter free/low-cost models + Gemini; Stage 5, if c002 approves it, moves to a shared Kimi K2.6 base for QLoRA specialists).
     - 80% of value comes from single-model + RAG + tools. Specialists are Stage 5+.
 2.  **Hardware Reality (Cloud-First + Local Retrieval):**
     - Embedding models + ChromaDB run locally on laptop (CPU, ₹0/month).
-    - LLM generation via cloud APIs (OpenRouter free/low-cost tier through Stage 4; RunPod cold-wake pods from Stage 5 entry for QLoRA training + specialist inference).
+    - LLM generation via cloud APIs (OpenRouter free/low-cost tier through Stage 4; RunPod cold-wake pods from Stage 5 entry, after c002, for QLoRA training + specialist inference).
     - Cannot run all specialists simultaneously. Design for dynamic loading/unloading.
     - Full architecture details: `E:\J.A.R.V.I.S\.agent\rules\JARVIS_ENDGAME.md`
 3.  **Expectation Calibration:**

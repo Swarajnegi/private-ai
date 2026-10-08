@@ -4,15 +4,18 @@
 > Written 2026-08-26 because "gather until the corpus is rich" had no stopping criterion — a
 > condition that cannot be met by observation is not a plan. This replaces it with numbers.
 >
-> **Status (2026-09-12): BUILT — `scripts/build_sft_pairs.py`. 459 source pairs (414 train + 45 held-out).**
+> **Status (re-measured 2026-10-08): BUILT — `scripts/build_sft_pairs.py`. 559 source pairs (504 train + 55 held-out).** The table below and its prose were written 2026-09-12 when there were 459 (414 train + 45 held-out); the numbers in the table are now current.
 >
 > | Bucket | Target | Built | |
 > |---|---|---|---|
-> | Engineer | 400 | **360** | 90% — mechanical sources nearly exhausted |
-> | Personalization | 200 | **99** | 50% — three public Substack essays imported; decision-explanation sessions remain the bottleneck |
+> | Engineer | 400 | **367** (331 train + 36 held-out) | 92% — mechanical sources nearly exhausted |
+> | Personalization | 200 | **192** (173 train + 19 held-out) | 96% — three public Substack essays imported; decision-explanation sessions remain the bottleneck |
 >
-> Every §8 criterion is met except the counts: `source_path` on all 459, `messages` format,
-> a stratified 10% held-out slice carved before training with a fixed seed, zero train/heldout leakage.
+> Every §8 criterion is met: `source_path` on every pair, `messages` format, and a stratified 10%
+> held-out slice carved before training with a fixed seed. **Two caveats found since:** the held-out
+> slice is too small to measure with (19 personalization pairs), and the earlier claim of "zero
+> train/heldout leakage" was found false. The c002 evaluation set (`jarvis_data/eval/c002/`, see
+> `ROADMAP.md`) is separate from this held-out slice and is what Stage 5's gate relies on.
 >
 > **The measurement that matters, and it is not good news.** Adding these pairs moves the
 > personalization character share from **13.4% → 13.7%**. Effectively nothing, because 90% of the
@@ -39,7 +42,7 @@ Two objectives, two data shapes, one training run.
 | Record | `{"text": "..."}` | `{"messages": [user, assistant]}` |
 | Loss on | every token | **assistant tokens only** |
 | Teaches | how the user's material *sounds* | how to *respond* |
-| Have today | **3,064 records / ~1.29 M tokens** | **0** |
+| Have today | **4,134 blended records** (`blended_corpus.jsonl`; 3,064 records / ~1.29 M tokens on the original 2026-08-26 date, tokens not re-measured) | **559 pairs** (504 train + 55 held-out) |
 
 **Why not raw alone.** Kimi K2.6 is already instruction-tuned — it can answer questions. The risk is
 the reverse: ~1.29 M tokens of raw code and prose pushes the weights toward *"continue this
@@ -115,7 +118,7 @@ mechanism is training the exact thing the user rejects in others.
 
 **Do not source Engineer pairs from `chat_history`.** Verified 2026-08-26: 371 of 434 Claude Code
 turns have their assistant side truncated at the old 400-char cap. They are summaries, not answers.
-Only 63 are intact — not a corpus. (Cap raised to 2,000 on 2026-08-21, so turns captured *from now
+Only 63 are intact — not a corpus. (Cap raised to 2,000 on 2026-08-21 and then removed entirely on 2026-09-18 (`agent/capture.py`), so turns captured *from now
 on* are viable; this constraint is historical only.)
 
 ---
@@ -170,6 +173,14 @@ The second type did occur once by accident — the "unreasonable men" turn in th
 exactly the right shape. It happened because the question was named and bounded and the answer was
 theirs. That should be deliberate, not lucky.
 
+**The best remaining source (2026-10-08).** The owner's 43-question personalization interview is the
+largest untouched supply of decision-explanation pairs: only Q1-5 are answered, the other 38 are not.
+Its answers are **training data** and do **not** replace the 25 private c002 held-out answers, which
+must stay out of training. Two guards keep the wrong text out of the corpora:
+`specialists/eval_exclusions.py` keeps c002 evaluation material out, and `specialists/retractions.py`
+keeps known-bad text out (for example the 2026-09-26 incident where JARVIS answered its own Q6 in the
+owner's voice, KB 1201; `brain/interview_guard.py` now prevents the interviewer from doing that).
+
 **Practical rule for me:** in a decision-explanation session, my job is to ask and shut up. Long
 analytical replies are what make a turn *un*-usable as a pair — the assistant side has to be theirs.
 
@@ -187,8 +198,8 @@ analytical replies are what make a turn *un*-usable as a pair — the assistant 
 
 ## 8. Definition of done
 
-1. `jarvis_data/training_corpus/sft_pairs.jsonl` exists, ~600 records, every one carrying `source_path`.
-2. Engineer/personalization split is 400/200 ±10%.
+1. `jarvis_data/training_corpus/sft_pairs.jsonl` exists, ~600 records (504 train + 55 held-out in `sft_pairs_heldout.jsonl` = 559 on 2026-10-08), every one carrying `source_path`.
+2. Engineer/personalization split is 400/200 ±10% (measured 2026-10-08: 559 pairs, 367 Engineer / 192 Personalization, both inside the band of 360-440 / 180-220; total ~600 within 7%).
 3. A held-out slice is separated before any training run.
 4. `blend_corpus.py` reports raw vs SFT share **by character**, not by record count — the mistake
    already made once and fixed on 2026-08-22.

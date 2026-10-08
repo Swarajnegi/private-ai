@@ -3,7 +3,7 @@
 > **Master Plan Position:** Phase 5 of 6 → [JARVIS_MASTER_ROADMAP.md](../JARVIS_MASTER_ROADMAP.md)  
 > **Goal:** Ship ONE specialist end-to-end (The Engineer) before templating the recipe to the rest of the roster. Engineer-first MVP per Decision 2026-05-01; QLoRA-on-shared-Kimi-K2.6-base recipe per Decision 2026-05-03.  
 > **Prerequisites:** Phase 1-4 (Python, Memory, Agents, Orchestration)  
-> **Hardware:** RunPod only, prepaid credits, no local GPU. Engineer adapter trains on A40 ($0.44/hr ≈ ₹37/hr). See `JARVIS_ENDGAME.md` §2 (GPU selection table + "Why no local GPU") and §3.6 (per-specialist cost breakdown).
+> **Hardware:** RunPod only, prepaid credits, no local GPU. Engineer adapter trains on A40 ($0.44/hr ≈ ₹37/hr). See `JARVIS_ENDGAME.md` §2 (GPU selection table + "Why no local GPU") and §3.6 (per-specialist cost breakdown). A custom-PC alternative is being weighed (owner concept, not purchased): see [../../MASTER_CHECKLIST.md](../../MASTER_CHECKLIST.md) section I.
 
 ---
 
@@ -30,15 +30,25 @@ Nobody has tested it. Testing it costs nothing and is a strict prerequisite to t
 Engineer training run, because a "yes" and a "no" imply completely different next quarters.
 
 Two measurements that make this urgent rather than academic:
-- **Measured 2026-09-22: 23 sessions lifetime, 10 in the last 30 days, last used 2026-09-14**
-  (`brain/usage.py`, including web-UI sessions by reading their first record timestamp). The old
-  19/0 figure was a filename-parser blind spot, not evidence of disuse. This establishes real use,
-  but it does not yet establish that an adapter beats retrieval plus proactive surfacing.
+- **`--ask` usage: run `usage.read_usage()` (`brain/usage.py`) for the current number** — on 2026-10-08
+  it returns 3 lifetime sessions, 3 in the last 30 days, last used 2026-09-14. Earlier figures in
+  this repo (19/0, then 23/10) came from different counting methods and are superseded by the
+  command output. Either way it does not yet establish that an adapter beats retrieval plus
+  proactive surfacing.
 - **The Stage-4 Final Boss that "closed" the prerequisite stage is an offline scripted twin** — fake
   embeddings, scripted conflicts, zero live calls. Real end-to-end behaviour is untested.
 
 **Do not start 5.1 on RunPod until the open question above has an evidenced answer.** Everything
 below remains the correct recipe *if* the answer is yes.
+
+**The mechanism that answers it is commitment c002, and it is built but has measured nothing
+(2026-10-08).** `scripts/eval_c002.py` (built 2026-10-07, 230 self-checks) compares an adapter arm
+against retrieval arms under a protocol locked before any adapter result exists. Its inputs live in
+`jarvis_data/eval/c002/`: `protocol.json` (still unlocked), `endpoints.json`, `exclusions.json`,
+`items_engineering.jsonl` (72 engineering items) and `personalization_questions.jsonl` (25
+questions); the owner's private answers and private results are kept outside the repo in
+`~/.jarvis_private/c002/` (override with `JARVIS_PRIVATE_DIR`). Still open before any result exists:
+the owner answers the 25 private questions and tops up OpenRouter. No RunPod spend until c002 answers.
 
 ---
 
@@ -56,7 +66,7 @@ below remains the correct recipe *if* the answer is yes.
 
 ---
 
-## Sub-Phase 5.1: Fine-Tuning Basics ⬜
+## Sub-Phase 5.1: Fine-Tuning Basics ⬜ <-- YOU ARE HERE (next sub-phase, gated on c002; not started)
 
 **Goal:** Learn to adapt base models to specific domains.
 
@@ -84,11 +94,11 @@ below remains the correct recipe *if* the answer is yes.
 
 **Practical Exercise:** Engineer adapter loads onto the shared Kimi K2.6 base and correctly answers a JARVIS-codebase question the base model alone gets wrong.
 
-**Progress (2026-08-03):** 5.2.1 + 5.2.2 done. 5.2.1 satisfied by design, not separate code — the corpus builder only pulls `code_systems` (jarvis_core/) + `data_engineering` (DE corpus) + cross-cutting personalization (KB, chat-history) sources, no frontend/backend material exists to accidentally include. 5.2.2 shipped as `jarvis_core/specialists/engineer_corpus.py` — verified run: 402 jarvis_core_code + 453 kb_entry + 493 chat_history + 125 de_corpus records (1,473 total) written to `jarvis_data/training_corpus/engineer_corpus.jsonl`. Two honest gaps carried forward: the `error_log` source correctly yields 0 (nothing persists errors to disk anywhere in this codebase yet); DE-corpus scope is 5 hand-picked authored files, not the whole `knowledge/Data Engineering/` tree (exam-bank/interview-test material excluded as a judgment call — see the module's own comments). 5.2.3 (RunPod training) and 5.2.4 (RouteTarget integration) remain blocked on an actual RunPod account existing.
+**Progress (2026-08-03; corpus counts in this paragraph and the next two are as of that date, measured 2026-10-08: `engineer_corpus.jsonl` 3,300 records, `personalization_corpus.jsonl` 1,342, `blended_corpus.jsonl` 4,134, `client_work_snapshot.jsonl` 947, plus 504 train + 55 held-out SFT pairs, see `SFT_SPEC.md`):** 5.2.1 + 5.2.2 done. 5.2.1 satisfied by design, not separate code — the corpus builder only pulls `code_systems` (jarvis_core/) + `data_engineering` (DE corpus) + cross-cutting personalization (KB, chat-history) sources, no frontend/backend material exists to accidentally include. 5.2.2 shipped as `jarvis_core/specialists/engineer_corpus.py` — verified run: 402 jarvis_core_code + 453 kb_entry + 493 chat_history + 125 de_corpus records (1,473 total) written to `jarvis_data/training_corpus/engineer_corpus.jsonl`. Two honest gaps carried forward: the `error_log` source correctly yields 0 (nothing persists errors to disk anywhere in this codebase yet); DE-corpus scope is 5 hand-picked authored files, not the whole `knowledge/Data Engineering/` tree (exam-bank/interview-test material excluded as a judgment call — see the module's own comments). 5.2.3 (RunPod training) and 5.2.4 (RouteTarget integration) remain blocked on an actual RunPod account existing.
 
 **Data-quality fix (2026-08-03, same day):** user pushed back on whether the extracted data was actually correct and sufficient. Verification found real (non-hallucinated) near-duplication: the same question asked repeatedly across separate debugging sessions produced 6 near-identical KB entries about one RunPod decision and 5+5 conversation files repeating "tell me what jarvis is about"/"consult your own knowledge base" verbatim — none exact-duplicate text, so exact dedup wouldn't have caught them. Added prefix-based near-duplicate capping (keep first 2 occurrences per near-identical opening, drop the rest) to `iter_kb_records` (entry-level, pre-chunk) and both chat-history iterators (file-level for ConversationStore, so a capped conversation is dropped whole, never partially). Verified precisely: both KB clusters correctly reduced to 2 survivors each, both conversation-file clusters correctly reduced from 5 to 2 each. 122 near-duplicate records removed (19 kb_entry + 103 chat_history); corpus now 1,356 records. **Known remaining gap, not fixed:** single-occurrence low-value content (trivial/off-topic exchanges asked only once, e.g. "is the earth flat?", "what is 2+2?") isn't caught by repetition-based capping — deliberately left for manual review rather than guessed at with a fragile content-quality heuristic.
 
-**Separately raised, not yet resolved:** whether the *volume* of even a clean corpus (1,356 raw text records, ~3MB) is enough for a QLoRA adapter, and whether Qwen3-Coder-Next's own baseline competence is sufficient such that personalization-only fine-tuning is the right call at all (vs. needing a better seed or more volume). Per `JARVIS_ENDGAME.md`'s own philosophy ("the moat is personalization, not parameter count"), general software-engineering competence is supposed to come from the seed model, not this corpus — but that assumption is untested until Stage 5.3's evaluation gate (match base on public benchmarks AND beat it on private-corpus tasks) actually runs, which requires 5.2.3 training first.
+**Separately raised, not yet resolved:** whether the *volume* of even a clean corpus (1,356 raw text records, ~3MB on 2026-08-03; 3,300 engineer records on 2026-10-08) is enough for a QLoRA adapter, and whether Qwen3-Coder-Next's own baseline competence is sufficient such that personalization-only fine-tuning is the right call at all (vs. needing a better seed or more volume). Per `JARVIS_ENDGAME.md`'s own philosophy ("the moat is personalization, not parameter count"), general software-engineering competence is supposed to come from the seed model, not this corpus — but that assumption is untested until Stage 5.3's evaluation gate (match base on public benchmarks AND beat it on private-corpus tasks) actually runs, which requires 5.2.3 training first.
 
 ---
 
@@ -156,8 +166,8 @@ Have the Engineer-first MVP fully proven out:
 
 | Sub-Phase | Status | Lessons Complete |
 |-----------|--------|------------------|
-| 5.1 Fine-Tuning Basics | 🔄 In Progress | 1/4 |
-| 5.2 The Engineer QLoRA Adapter | 🔄 In Progress | 2/4 |
+| 5.1 Fine-Tuning Basics | ⬜ Not Started | 0/4 |
+| 5.2 The Engineer QLoRA Adapter | ⬜ Not Started (corpus lessons 5.2.1-5.2.2 done; no training or integration) | 2/4 |
 | 5.3 Engineer Evaluation | ⬜ Not Started | 0/4 |
 | 5.4 Specialist Templating | ⬜ Not Started | 0/4 |
 | 5.5 Roster Expansion | ⬜ Not Started | 0/4 |

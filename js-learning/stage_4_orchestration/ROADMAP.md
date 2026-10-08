@@ -18,7 +18,7 @@
 | **4.3** | Dynamic Target Management ✅ COMPLETE (2026-07-16) | 3 (Pass B) | Chaos tests: vanished model + budget-90% downshift both route around; fail-closed to free tier |
 | **4.4** | Response Aggregation ✅ COMPLETE (2026-07-20) | 3 (Pass B) | Attributed synthesis from real free-model fan-out; triggers only on escalation |
 | **4.5** | Epistemic Control ✅ COMPLETE (2026-07-20) | 3 (Pass B) | 6/6 engineered conflicts flagged, 0/6 false flags; judge failure proves fail-closed |
-| **4.6** | GraphRAG | — | 🟡 **REQUIRED, NOT BUILT** — promoted 2026-09-08 because the proactive-surfacing moat needs multi-hop retrieval, not only a larger context ledger |
+| **4.6** | GraphRAG | — | 🟡 **v0 BUILT** (`memory/graph.py`, `scripts/build_graphrag.py`, tool `memory_graph_search`, hearth job `rebuild_graphrag`); commitment c009 open as the follow-on after the Context Ledger continuity proof. Promoted 2026-09-08 because the proactive-surfacing moat needs multi-hop retrieval, not only a larger context ledger |
 
 **Pass A → Pass B gate** (from the master roadmap): Router achieves ≥80% routing accuracy on the frozen 50-query labeled set (`js-development/tests/router_eval.jsonl`). Degenerate routers (always-default, always-largest) score ~20% by stratification — both baselines printed in every gate report so the gate can't be vacuous.
 
@@ -32,7 +32,7 @@
 | Kimi K2.6 on RunPod deployment | **Deferred → Stage 5 entry** | ₹0 constraint; the whole brain stack programs against the `LLMCall` seam, so where weights live is invisible to Stage 4 code. **Flag:** ENDGAME §2 VRAM math is internally inconsistent (1T INT4 ≈ ~500GB resident weights does not fit "4×A5000 96GB" or "one A100 80GB") — correct empirically before Stage 5 budgets commit |
 | Speculative decoding (draft 4.3.5) | **Cut → Stage 5** | An inference-server flag, not JARVIS code; meaningless via API |
 | ModernBERT-Large as the first router | **Conditional** | Training data (labeled routing decisions) doesn't exist yet — the RoutingLedger built in 4.2 *creates* it. Interim = nearest-prototype classifier (proven `domain_classifier.py` pattern). ModernBERT fires only if the gate fails <80%, else lands as Stage 5 specialist #1 |
-| 4.6 GraphRAG | **Required follow-on** | The original incident trigger did not fire, but the architecture changed: an always-reachable Context Ledger makes stored facts reachable, while GraphRAG is what can connect distant facts when neither was named in a query. Builds in `jarvis_core/memory/graph.py` after the ledger foundation is proven. |
+| 4.6 GraphRAG | **v0 built; c009 open as follow-on** | The original incident trigger did not fire, but the architecture changed: an always-reachable Context Ledger makes stored facts reachable, while GraphRAG is what can connect distant facts when neither was named in a query. v0 now lives in `jarvis_core/memory/graph.py`; c009 tracks the follow-on after the ledger foundation is proven. |
 | Aggregation as a default path | **Re-scoped: escalation-only** | Fan-out costs N× per query; Single-Model-First holds. Triggers: gate failure, multi-domain label, explicit flag |
 | *(new)* Per-model protocol layer | **Added as 4.1** | L322: mirror burial, tool-format dialects, empty reasoning-channel content, 429 storms — observed across 4 models in one afternoon. Not theoretical |
 
@@ -86,7 +86,7 @@
 | 4.1.1 | **ModelProfile registry ✅ (Wave 1, 2026-06-15)** | Per-model conduct as DATA (mirror on/off, monitor, max_iterations, reasoning-channel doc, notes); exact→family→DEFAULT resolution; OVERRIDES-ONLY (no catalog dup); seeded from the 4 First-Light models; conservative DEFAULT (mirror OFF, monitor ON). Resolved in orchestrator (policy), applied in boot (mechanism). The `enable_mirror=False` hardcode is now profile-resolved data. `brain/model_profiles.py` + `jarvis_data/model_profiles.json` | shipped |
 | 4.1.2 | ProtocolAdapter | LLMCall-wrapping middleware: dialect translation, empty-content reasoning-channel fold, system-prompt folding, per-profile mirror toggle. The Mind never learns models have dialects. (Capability-parse of the catalog = here, SUGGEST-only, never auto-apply) | `/dev Build brain/protocol.py middleware.` |
 | 4.1.3 | RouteTarget contract | `name / kind (API_MODEL\|POD_ADAPTER\|FRONTIER_VALVE) / profile / llm_call / ensure_ready() / release() / ledger_summary()`. OpenRouterTarget live; **RunPodTarget/PodHandle as offline contract STUBS only** (adapter_id seam for Stage 5); EscapeValveTarget structurally OUTSIDE the router pool — explicit user flag only. **Re-home `llm_client.py` → `brain/`** (grep importers, fix call sites, no shim) | `/dev Build brain/targets.py; re-home llm_client.py.` |
-| 4.1.4 | ModelPool + failover | STEAL #7 (`ai_model_repos/OpenClaude/python/smart_router.py`): health ping, EMA latency, error-penalty scoring; 429 cooldown + ordered failover-peer walk (target-layer, distinct from llm_client's in-place retries); per-target CostTracker ledgers | `/dev Build brain/model_pool.py (SmartRouter port).` |
+| 4.1.4 | ModelPool + failover | STEAL #7 (source: OpenClaude's `python/smart_router.py`; the OpenClaude repo copy under `ai_model_repos/` has since been removed, `brain/model_pool.py` is now the only version): health ping, EMA latency, error-penalty scoring; 429 cooldown + ordered failover-peer walk (target-layer, distinct from llm_client's in-place retries); per-target CostTracker ledgers | `/dev Build brain/model_pool.py (SmartRouter port).` |
 
 **Wave split:** 4.1.0 + 4.1.1 = **Wave 1 (shipped)** — per-model conduct is data, the mirror-off hardcode is gone, `--ask` is safe + profile-aware on any model. 4.1.2–4.1.4 = **Wave 2** — protocol middleware + RouteTarget + pool/failover (the multi-model machinery 4.2's Router consumes; needs ≥2 routable targets to mean anything).
 
@@ -178,7 +178,9 @@
 
 ---
 
-## Sub-Phase 4.6: GraphRAG 🟡 REQUIRED, NOT BUILT
+## Sub-Phase 4.6: GraphRAG 🟡 v0 BUILT (c009 open)
+
+**Status (2026-10-08):** v0 is built as a rebuildable, evidence-backed projection in `jarvis_core/memory/graph.py` (stdlib JSON index, not the NetworkX store planned below), with `scripts/build_graphrag.py`, the agent tool `memory_graph_search`, and the hearth job `rebuild_graphrag`. Commitment c009 stays open as the follow-on after the Context Ledger continuity proof. The paragraph below is the original deferral text, kept for history.
 
 Row kept for master-roadmap traceability. **Trigger:** first KB-logged retrieval failure requiring entity-hop reasoning. Lands in `jarvis_core/memory/graph.py` (NetworkX in-process; no graph database at this corpus size). Rationale: 324 KB entries, zero logged multi-hop failures — every past retrieval failure was classification-quality, already fixed by `domain_classifier.py`.
 
@@ -215,7 +217,7 @@ Row kept for master-roadmap traceability. **Trigger:** first KB-logged retrieval
 | 4.3 Dynamic Target Management | 3 (Pass B) | ✅ Complete (2026-07-16; rolling stats persistence + budget governor + catalog drift; 38/38 model_pool, 20/20 llm_client) | 3/3 |
 | 4.4 Response Aggregation | 3 (Pass B) | ✅ Complete (2026-07-20; bounded fan-out + voting/synthesis + quality filter; 18/18 aggregator.py) | 3/3 |
 | 4.5 Epistemic Control | 3 (Pass B) | ✅ Complete (2026-07-20; divergence gate 6/6+6/6 exact + fail-closed contradiction judge + escalation policy; 20/20 confidence.py, 48/48 reasoning.py, 91/91 orchestrator.py) | 3/3 |
-| 4.6 GraphRAG | — | 🟡 Required after Context Ledger foundation | — |
+| 4.6 GraphRAG | — | 🟡 v0 built (`memory/graph.py`); c009 open as follow-on | — |
 | Final Boss | 3 (Pass B closing) | ✅ Complete (2026-07-27; offline 8/8 PASS in `orchestrator.py`; 91/91 full regression held; `--live` variant built, not assistant-run) | 8/8 |
 
 ---
@@ -230,7 +232,7 @@ Row kept for master-roadmap traceability. **Trigger:** first KB-logged retrieval
 | Speculative decoding | Stage 5+ | vLLM server-side flag on owned pods |
 | outlines / constrained generation | Stage 5 | Needs logit access (vLLM `guided_json`); impossible via OpenRouter |
 | MCP publishing (L237) | Stage 5+ | External consumers exist |
-| GraphRAG | required follow-on | Context Ledger proves remote facts are authoritative; GraphRAG then enables multi-hop proactive retrieval over them → `jarvis_core/memory/graph.py` |
+| GraphRAG | v0 built; c009 open as follow-on | Context Ledger proves remote facts are authoritative; GraphRAG then enables multi-hop proactive retrieval over them → `jarvis_core/memory/graph.py` |
 | Voice/vision (Interface), always-on daemons, agent swarms | Stage 6 | Stage 6 reuses `ensure_ready()/release()` as its cold-wake primitive |
 | $10 OpenRouter limit-raise (50 → 1000 req/day) | when 429s bite | The only recommended spend before the Final Boss, and optional |
 

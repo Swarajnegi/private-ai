@@ -50,7 +50,7 @@ Once the script returns the Top 3 array, present it to the user.
    - *Why this fits:* [Reasoning]
 
 **Architectural Verdict:** 
-Tell the user exactly which one of the 3 to copy and paste into their `$env:OPENAI_MODEL` variable for OpenClaude, and *why* it is the ultimate winner.
+Tell the user exactly which one of the 3 to use, and *why* it is the ultimate winner.
 
 ---
 

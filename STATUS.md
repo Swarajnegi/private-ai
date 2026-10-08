@@ -5,152 +5,122 @@
 > is a snapshot, not a log. If something below is stale by the time you read it, fix it and say
 > so in your commit message; don't leave a wrong number here because it was true once.
 
-**Last surveyed:** 2026-09-29, by codex for the memory-contract and dormancy sections. Other sections retain the 2026-09-28 Claude survey and must be rechecked before use.
-**Since the last survey (2026-09-22):** the owner found that JARVIS did not know them — interview
-answers and the people in their life never reached it — and that training was fed by turns
-nobody had judged. Measuring why produced **the Memory Contract** (NERVOUS_SYSTEM.md §3), now
-live: the agent the owner chats with parses those turns by one rule, no paid background calls,
-no truncation, failures loud to all four agents.
+**Last surveyed:** 2026-10-08, by Claude (Sonnet 5.5), from the commands named in each section. Every
+number below is a command's output on that day; re-run the command, don't trust the digit.
+Companion checklist: [MASTER_CHECKLIST.md](MASTER_CHECKLIST.md) (the fuller to-do view; this file is the cross-agent snapshot).
+**Since the 2026-09-29 survey:** the personal laptop died (2026-10-06), heavy jobs were paused on
+the work laptop, the c002 evaluation harness was built (nothing measured), JARVIS was caught
+answering its own interview question, and the research papers were removed (2026-10-08).
 
 ---
 
 ## 1. Is anything broken right now?
 
-**Yes.** The 2026-09-29 bootstrap reports 1,169 unparsed Codex turns, other-host backlogs, and a stale `chromadb/jarvis_memory` projection (814 KB entries versus 769 indexed). Heavy Chroma jobs are paused after a Windows memory crash; do not treat this as a retrieval success. Re-check with `python scripts/pipeline_health.py`
-(one line per breach, silent when healthy) and `python3 scripts/check_pipeline.py`.
+**Yes: 10 breaches** (`python3 scripts/pipeline_health.py`, silent when healthy). They reduce to four causes:
 
-- **Curation had stalled for 13 days, invisibly.** The hourly `curate_turns` job (paid Gemini via
-  OpenRouter) failed **185 of 195 runs** since 2026-09-15 on HTTP 402 (credits); 1,833 turns sat
-  uncurated and flowed into both corpora. Root cause was structural, not the balance: the only
-  writer of verdicts was a paid background job, and no agent ever saw job health. **Resolved by
-  design:** the job is removed and parsing moved to the agents (below).
-- **`reindex_memory` fails, and the failure was hidden.** 16 of 17 runs failed with ChromaDB
-  `InternalError: Error in compaction: Failed to apply logs to the metadata segment` (Windows
-  host). A later guard-skip overwrote `last_status` with "skipped — guard reports nothing to
-  do", so `hearth.py --status` looked healthy. The scheduler change in this contract keeps
-  `last_success_ts` / `consecutive_failures`, and `pipeline_health.py` judges jobs by last success.
-  The index itself is **still not rebuilt** — unclaimed. `chromadb/` is a projection (NERVOUS_SYSTEM §1.3),
-  so rebuilding it from scratch with `scripts/index_memory.py` loses nothing.
-- **Fixed today: on Windows the profile never reached Claude Code at all.** `inject_profile.py`
-  wrote raw UTF-8 to a cp1252 pipe; the first `→` raised, the `except` swallowed it, the hook
-  emitted 0 bytes. And where it did work, the harness cuts SessionStart output over ~10 KB to a
-  2 KB preview of a ~650 KB profile. Both SessionStart injectors now emit a short read-in-full
-  notice instead.
+- **Parse backlog, by design of the host topology.** `python3 scripts/parse_turns.py --status`:
+  claude 0, codex 951 (oldest 2026-09-13), antigravity 167 (oldest 2026-05-21), jarvis 0. The
+  Codex and Antigravity hosts live on the dead laptop; Claude parses their backlogs by reading
+  (KB 1009, 1045). Codex's own session may only parse Codex turns.
+- **Corpora 2.9 days old (limit 48 h), six artifacts, and a stale vector index.** `rebuild_corpora`,
+  `reindex_memory`, `index_episodes`, `relabel_domains` and `run_all_tests` are paused (section 4).
+  `chromadb/jarvis_memory` holds 661 entries against 1085 in the KB. Search results come from an older mind than the log holds.
+- **`check_pipeline.py` reports 1 failed** (`python3 scripts/check_pipeline.py`; 29 ok, 0 unmeasurable):
+  8 retracted records are still inside the built corpora. Only the paused rebuild clears it. This is also why the hearth job `check_pipeline` shows FAILED.
+- **OpenRouter balance is negative.** Tool-using deep turns return HTTP 402. Owner.
+
+Hearth (`python3 scripts/hearth.py --status`): UP on 127.0.0.1:8756, Chroma supervised by it on
+127.0.0.1:8759 (single-owner design); every other clocked job reports ok except the paused or
+failing ones named above. `python3 scripts/bootstrap_jarvis.py --check` shows the machine view.
 
 ## 2. What's mid-flight
 
-**The Memory Contract is live; the parse backlog is the work now.** Codex has personally reviewed and submitted its first 22 turns under rule v1. The project hook passes local tests and its definitions have trusted hashes in this machine's Codex config, but actual fresh-session execution is not yet evidenced. Every agent parses its own
-host's turns with `scripts/parse_turns.py` by `PARSE_RULE` v1 (`jarvis_core/agent/parse_rule.py`).
-Claude Code is nudged by a `UserPromptSubmit` hook at 10+ pending; Codex and Antigravity run it at
-boot and about every 10 turns (written duties in `AGENTS.md` / `js-workspace-rule.md`); JARVIS
-parses its own on the hearth every 15 minutes. Backlog at the 2026-09-29 Codex check
-(`cd js-development && PYTHONPATH=. python -m jarvis_core.agent.parse_ledger --status`):
+**The Memory Contract is live.** One parse rule (`jarvis_core/agent/parse_rule.py`), no paid background
+calls. `python3 scripts/parse_turns.py --routing`: 1507 turns routed, 428 trainable; verdicts under
+rule v1 by agent: claude 1103, antigravity 320, codex 50, jarvis 31.
 
-| host | pending | oldest |
+**The personal laptop has been dead since 2026-10-06 (KB 1044).** The work laptop is under an owner
+rule not to take heavy load (7.6 GB RAM, no GPU). `jarvis_data/.paused_jobs` pauses `run_all_tests`,
+`rebuild_corpora`, `index_episodes`, `reindex_memory`, `relabel_domains`; light jobs, shard archiving and the web UI run on.
+
+**Hosting.** Railway was deployed, then put to sleep 2026-09-12 to avoid cost (KB 1190); its volume was kept.
+The hearth and web UI run locally at 127.0.0.1:8756, restarted by cron (every 10 min and at reboot); token is `jarvis_data/.hearth_token`.
+Nothing is reachable from a phone. The hosting strategy is the owner's call (section 4).
+
+**The personalization interview.** 43 numbered questions; only Q1-Q5 are answered. On 2026-09-26 a free
+model wrote both sides of Q6 in the owner's voice (KB 1201). `brain/interview_guard.py` now prevents it. The
+poisoned copies (KB 735 and one conversation turn) are listed in `jarvis_data/retractions.jsonl`, and every corpus builder and
+the retrieval index skip them. The already-built corpora still contain them until the rebuild runs (section 1).
+
+**c002, the Stage 5 adapter-versus-retrieval test (₹0): harness built, nothing measured.**
+`scripts/eval_c002.py` landed 2026-10-07 in commit 56884ab: 230 hermetic self-checks; an independent review
+found 20 defects, all fixed. `jarvis_data/eval/c002/` holds the protocol (unlocked), endpoints, 72 engineering items,
+25 personalization questions and the exclusions registry. The leakage audit FAILS today, correctly: eval
+markers sit in three corpora (legacy), and four recall tuning questions (`ms-02`, `ms-08`, `t-01`, `t-12`) appear
+verbatim in training. None of the 40 frozen held-out items leaked. Adapter arms refuse to run until the audit passes.
+Never tested here: the real router provider, index builder, tokenizer, live endpoints.
+
+**Research papers and their Chroma collection were removed 2026-10-08 (owner decision).** `research_papers` is no longer rebuilt anywhere.
+
+**GraphRAG v0** is built locally: 1,098 nodes, 92 edges (`jarvis_data/graph_index.json`, rebuilt by the hearth job `rebuild_graphrag`).
+Proof that the Context Ledger carries continuity is still pending (c009).
+
+## 3. Open commitments (`python3 scripts/commitments.py --list`)
+
+| id | what | state |
 |---|---|---|
-| claude | 516 | 2026-06-25 |
-| codex | 1,169 | 2026-09-11 |
-| antigravity | 417 | 2026-04-05 |
-| jarvis | 0 | — |
+| c002 | Stage 5 adapter-vs-retrieval decision (review 2026-10-11) | harness built, no measurement; needs owner input (section 4) |
+| c004 | Revoke exposed GitHub PAT and legacy OpenRouter keys | owner-only; review overdue since 2026-09-12; owner said to leave it (2026-10-06) |
+| c005 | Keep the 12-specialist roster demand-gated | standing policy, not a task |
+| c009 | GraphRAG follow-on after Context Ledger proof (review 2026-10-11) | open |
+| c011-c013 | Run `index_episodes`, `relabel_domains`, `reindex_memory` by hand, one at a time | paused by owner rule; c013 explicitly does not rebuild `research_papers` |
 
-These are **all** captured turns, not only the 1,833 never curated: a verdict counts only under
-the current rule version, so the old Gemini verdicts (which carried no knowledge extraction) are
-re-offered. Each agent drains 20 per session start plus 10 per trigger. Codex answered q_009 in
-`agents_converse/a_009.md`; the shared rule now explicitly excludes ambient UI and quoted
-external content from evidence. Do not parse another host's backlog under Codex.
+c001, c008 and c010 were abandoned by append-only events; c006 was auto-closed by an overbroad keyword
+check and is not proof GraphRAG is finished. Dormancy: `scripts/eval_dormancy.py` reports the Tier 1 gate; `commitment_runs.jsonl` is the quiet-week record.
 
-**The JARVIS web UI and voice were rebuilt 2026-09-27 (KB 757 + the Phase 2/3 entry).** Old UI and the
-whisper.cpp/Piper stack are deleted; `serve/speech.py` keeps Whisper + Kokoro resident on the GPU,
-`brain/voice_path.py` answers spoken/typed turns with one streamed call (~1.9 s p50 to first audio),
-`serve/live_voice.py` (WS `/v1/voice/live`) does continuation-merge and barge-in. **Tool-using (deep)
-turns still HTTP 402** — OpenRouter balance is negative; only a top-up fixes it. Any test of the live
-socket must open it `ephemeral` (as `scripts/verify_voice_live.py` does) or its prompts enter the corpus.
-
-**The personalization interview (JARVIS UI) is still in progress** — 43 numbered questions, not 45; resume
-it at `http://127.0.0.1:8756/?session=conv-web-cff653a1-415e-417b-ba68-3ac84f621778`.
-`extract_ui_sessions()` already pairs each real question with the real answer, so answers landing
-now are captured in their best shape. No action unless you see the extractor mis-split a question.
-
-## 3. Open commitments with a task attached (`scripts/commitments.py --list`)
-
-**2026-09-29 dormancy correction:** The Tier 1 gold snapshot has 1 true positive (`c004`), 8 true negatives, and no measured miss; that is too small to infer broad recall. `scripts/eval_dormancy.py` reports the gate. The 22 old hearth runs have only aggregate counters, not due-ID history. A new append-only `commitment_runs.jsonl` starts the auditable quiet week; Tier 2 and Tier 3 remain gated. `c001`, `c008`, and `c010` were superseded by append-only abandon events, while `c009` and `c013` carry their live obligations. `c006` was historically auto-closed by an overbroad keyword check and must not be mistaken for proof that GraphRAG is finished. `c004` remains overdue and requires the owner's credential action.
-
-| id | what | who should act |
-|---|---|---|
-| c002 | Stage 5 adapter-vs-retrieval decision | No trained adapter exists; comparison remains gated |
-| c004 | Revoke exposed GitHub PAT and legacy OpenRouter keys | Owner-only action, review overdue |
-| c005 | Keep the 12-specialist roster demand-gated | Standing policy, not an immediate task |
-| c009 | GraphRAG follow-on after Context Ledger continuity proof | Open, review 2026-10-11 |
-| c011–c013 | Memory/episode/domain maintenance after Windows diagnostic | Paused heavy jobs; run one at a time only under the agreed safe conditions |
-
-Mail: `python scripts/agent_mail.py --check codex` reported no unanswered Codex questions on 2026-09-29. Historical q_007/q_008 references above are superseded; check mail again before acting.
+**Mail** (`python3 scripts/agent_mail.py --list`): q_046, q_047 and q_048, all Claude to Codex, are open and wait for the dead laptop. Everything else is answered.
 
 ## 4. Decisions waiting on the user (not on any agent)
 
-- The Memory Contract is already in Git. This survey's new Codex hook and dormancy evidence
-  still require their own reviewed commit and push.
-- Top up OpenRouter — no longer needed for curation (no paid background calls); still needed for
-  JARVIS's tool-using deep turns (HTTP 402).
-- ~~`personal_life.md` consent call~~ **resolved 2026-09-23 (KB 698), revised 2026-09-28** — people in the
-  owner's life now reach JARVIS **as context** (`personal_life.md` is an inhale provider; `person` facts from
-  the parse go to the KB), and **never training**: names are redacted to role placeholders everywhere training
-  reads (`specialists/third_parties.py`, list in `jarvis_data/third_parties.json`, check_pipeline invariant).
-- ~~312 KB entries in both corpora~~ **resolved 2026-09-18 (KB 676)** — personalization owns shared text,
-  the blend trains nothing twice (14.1% personalization share).
-- **Rebuild tracked training artifacts ONLY on the work laptop.** `client_work/` source exists only there;
-  a personal-laptop rebuild silently drops ~248 `professional_reasoning` records (measured 2026-09-23).
+- **Answer the 25 c002 personalization questions** in the private answers file (outside the repo; agents are denied access). Edit it in an editor, never in a chat.
+- **Top up OpenRouter.** The c002 judges and reference arm are paid, and deep turns fail with 402 without it.
+- **Set c002 T0, and decide whether `client_work` content may be used in training.** The push rule was relaxed 2026-10-06; training use was never decided.
+- **Rebuild versus pause (conflict, not resolved here).** Rule A (measured 2026-09-23): tracked training artifacts must be rebuilt only on the work laptop, because `client_work/` source exists only there and a personal-laptop rebuild silently drops about 248 `professional_reasoning` records. Rule B (KB 1044/1045, 2026-10-06): the work laptop must not take heavy load, so `rebuild_corpora` is paused there, and the personal laptop is dead. Result today: nobody can rebuild, the corpora are 2.9 days old, 8 retracted records remain in them, and the c002 leakage audit cannot pass.
+- **Finish the interview** (Q6-Q43). It is training data; it does not replace the 25 c002 answers.
+- **Custom PC build gates** (see MASTER_CHECKLIST section I): nothing is bought until the evaluation and a cloud pilot say so.
+- **Hosting strategy** (pay for always-on, tunnel to a home machine, or self-host on the planned PC).
+- `git push origin main` after each run of commits. Agent pushes are blocked by the classifier; never push `backup-local-main`.
 
-Listed so nobody re-discovers and re-reports them as new findings.
+Settled, listed so nobody re-reports them: `personal_life.md` reaches JARVIS as context but never training (KB 698, revised 2026-09-28); shared KB text is owned by personalization so the blend trains nothing twice (KB 676).
 
 ## 5. Structural position
 
-Stages 1–4 complete. Stage 5 gated on c002/q_007 — current evidence is 23 lifetime sessions and 10 in the last 30 days, but no adapter-vs-retrieval evaluation yet; don't start training before that lands.
-Stage 6: everything shipped so far (hearth, scheduler, three capture adapters, curation) is the
-memory/capture layer *underneath* it. 6.9 (client shells) depends on 6.7 (always-reachable
-memory), which has a slice built but **not deployed** — `_remote_sync_configured()` is False on
-every machine. Nobody is working it; it is the actual unlock, not a side quest.
+Stages 1-4 complete. Stage 5 is gated on c002: `usage.read_usage()` (from `jarvis_core.brain`) prints lifetime
+`--ask` sessions 3, last 2026-09-14, 23 days ago; no adapter exists and the comparison has not been run, so do not start training.
+Stage 6: the hearth, scheduler, three capture adapters and the voice stack are the memory/capture layer underneath it. 6.9 (client shells) depends on 6.7
+(always-reachable memory), which exists as code and as a sleeping hosted copy (above). Nobody is working it.
 
-## 6. Host topology — now FOUR runtimes, and what changed today
+## 6. Host topology
 
-| Machine | Runtimes |
-|---|---|
-| Work laptop (Linux) | Claude Code |
-| Personal laptop (Windows) | Antigravity · Codex CLI · **Claude Code (new, 2026-09-18)** |
+| Machine | Runtimes | State |
+|---|---|---|
+| Work laptop (Linux) | Claude Code | the only live host; hearth + web UI run here |
+| Personal laptop (Windows) | Antigravity, Codex CLI, Claude Code | dead since 2026-10-06 |
 
-Three defects that would have hit the new host, all found by measurement:
+`.claude/settings.json` is tracked, so a new Claude Code host inherits its permission approvals.
+**Invariant: never put a credential in that file** (`GH_TOKEN` belongs in the environment). Guard:
+`grep -E 'github_pat_|ghp_|sk-or-v1-|AKIA' .claude/settings.json` (0 hits on 2026-10-08).
 
-1. **`.agent/rules/CLAUDE.md` claimed root `CLAUDE.md` is gitignored.** It is tracked. Eighth
-   prose-vs-code divergence. Load-bearing: root `CLAUDE.md` is the only file Claude Code
-   auto-loads, and it `@import`s the rules — had the prose been true, a fresh clone would
-   auto-load nothing.
-2. **`NERVOUS_SYSTEM.md` §5.1 said Claude Code setup was "automatic… nothing else to do."** True on
-   a prepared machine, false on a fresh clone — venv and ChromaDB don't travel either, and those
-   steps sat only under §5.2 as if Codex-specific. §5.1 now carries the host-agnostic block.
-3. **`.claude/settings.json` is now TRACKED** (reversing the 2026-09-08 leak untracking), so a new
-   Claude Code host inherits 164 permission approvals instead of rebuilding them by hand. The one
-   credential-bearing entry was removed. **Invariant: never put a credential in that file** —
-   `GH_TOKEN` goes in the environment, not an allowlist pattern. That is exactly how `b7bfbe6`
-   leaked a PAT: through an approved command *string*, where no secret-shaped config key would
-   ever show up in an audit. Guard: `grep -E 'github_pat_|ghp_|sk-or-v1-|AKIA' .claude/settings.json`
+## 7. Live issues worth knowing before you touch the queue
 
-## 7. Two live issues worth knowing before you touch the queue
+**Multi-host KB id collisions will recur.** On 2026-09-18 both machines assigned id 665 independently;
+`merge=union` kept both and `profile_synth.py` crashed on a UNIQUE constraint. Host-prefixed or content-derived ids are unclaimed work.
 
-**Multi-host KB id collisions are now real, not theoretical.** On 2026-09-18 both machines
-independently assigned id **665** to different entries between syncs; `merge=union` concatenated
-both, and `profile_synth.py` crashed on a UNIQUE constraint. Resolved by renumbering (→667) and
-regenerating the projections. **This will recur** — sequential ids assigned independently on two
-machines collide whenever both write between syncs. A real fix (host-prefixed or content-derived
-ids) is unclaimed work and a good Codex task.
-
-**`MAX_ASSISTANT_CHARS` raised 2000 → 8000** (`agent/capture.py`), matching the user side.
-Measurement that prompted it: 268 of 1420 assistant summaries (18.9%) sat exactly at the 2000
-ceiling — cut mid-thought, losing the *why* the 2026-08-19 note says the cap exists to preserve.
-Queue is 11 MB, so the cost is a couple of MB. **Applies going forward only.** Previously-captured
-turns stay truncated; a backfill is *possible* on the work laptop (raw transcripts are on disk,
-160 MB) but needs design, because the queue is append-only and naive re-capture would duplicate
-rows rather than replace them. Unclaimed.
+**No cap on captured assistant text** (`agent/capture.py`, since 2026-09-18). The old ceiling was removed
+rather than raised, and re-adding one is a regression. Turns captured before then (about 19% were cut at 2000
+characters) stay truncated; backfilling needs design because the queue is append-only. Unclaimed.
 
 ---
 
-*If you're updating this file: replace the numbers in §1–2, don't add a new dated section. A
+*If you're updating this file: replace the numbers in §1-2, don't add a new dated section. A
 status file that grows forever stops being something anyone reads in full.*

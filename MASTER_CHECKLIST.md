@@ -1,8 +1,9 @@
 # JARVIS MASTER CHECKLIST
 
-> Snapshot, not a log. **Update this file, don't append to it.** Last written 2026-10-07 by Claude
-> (Sonnet 5.5) from measured state: `check_pipeline.py`, `parse_turns.py --status/--routing`,
-> `training_corpus/*.jsonl`, STATUS.md, `commitments.py --list`. Where a number could not be
+> Snapshot, not a log. **Update this file, don't append to it.** Last written 2026-10-08 by Claude
+> (Sonnet 5.5) from measured state: `check_pipeline.py`, `pipeline_health.py`, `parse_turns.py --status/--routing`,
+> `training_corpus/*.jsonl`, `graph_index.json`, STATUS.md, `commitments.py --list`. Counts are
+> a snapshot; the command beside each is the live figure. Where a number could not be
 > re-measured it says so. `[x]` done, `[ ]` open, `[~]` partial. **Owner** = only the owner can do it.
 
 Companion files: [STATUS.md](STATUS.md) (cross-agent snapshot), [js-learning/JARVIS_MASTER_ROADMAP.md](js-learning/JARVIS_MASTER_ROADMAP.md) (stage status, authoritative), [.agent/rules/JARVIS_ENDGAME.md](.agent/rules/JARVIS_ENDGAME.md) (§1.1 goal, §1.2 differentiator).
@@ -28,16 +29,16 @@ Companion files: [STATUS.md](STATUS.md) (cross-agent snapshot), [js-learning/JAR
 - [x] Hearth (always-on process, scheduler, bearer-token API)
 - [x] Capture adapters for all three hosts (Claude hooks, Codex, Antigravity)
 - [x] Memory Contract live: one parse rule (`parse_rule.py`), no paid background calls
-- [x] GraphRAG v0 built locally (625 nodes / 54 evidence-backed edges, `memory_graph_search`); proof of the Context Ledger continuity layer still pending (c009)
+- [x] GraphRAG v0 built locally (1,098 nodes / 92 edges in `jarvis_data/graph_index.json`, rebuilt by the hearth job `rebuild_graphrag`; `memory_graph_search`); proof of the Context Ledger continuity layer still pending (c009)
 - [x] Voice stack rebuilt 2026-09-27 (resident Whisper + Kokoro, streamed single call)
-- [x] Pipeline integrity: `check_pipeline.py` 28 ok / 0 failed / 0 unmeasurable (2026-10-07)
+- [x] Pipeline integrity checker (`python3 scripts/check_pipeline.py`): 29 ok / 1 failed / 0 unmeasurable on 2026-10-08; the 1 failure is the retracted-records item in D2
+- [x] Research papers and their Chroma collection removed (owner decision, 2026-10-08)
 
 ## C. Current breaches and blockers (re-check: `python3 scripts/pipeline_health.py`)
 
-- [ ] **Codex parse backlog: 951 turns**, oldest 2026-09-13 (limit 24 h / 200). 188 parsed so far under this effort.
-- [ ] **Antigravity parse backlog: 167 turns**, oldest 2026-05-21.
-- [ ] Claude backlog ~0 (new turns appear every session).
-- [ ] `chromadb/jarvis_memory` stale: 661 indexed vs 1,079 KB entries. Expected while `reindex_memory` is paused.
+- [ ] **Parse backlog** (`python3 scripts/parse_turns.py --status`): Codex 951, oldest 2026-09-13 (limit 24 h / 200); Antigravity 167, oldest 2026-05-21; Claude 0 (new turns appear every session).
+- [ ] `chromadb/jarvis_memory` stale: 661 indexed vs 1085 KB entries (`python3 scripts/pipeline_health.py`). Expected while `reindex_memory` is paused.
+- [ ] Six built corpora are 2.9 days old against a 48 h limit, because `rebuild_corpora` is paused (D).
 - [ ] `cognitive_profile.md` / `cognitive_index.sqlite3` lag the KB by a few entries until `profile_synth.py` runs (held until parsing settles).
 - [ ] **OpenRouter balance negative** → tool-using deep turns return HTTP 402. **Owner.**
 - [ ] **Personal laptop dead** → Codex and Antigravity cannot run; Claude parses their backlogs under KB 1009.
@@ -46,7 +47,7 @@ Companion files: [STATUS.md](STATUS.md) (cross-agent snapshot), [js-learning/JAR
 
 ## D. Paused by owner rule (KB 1044/1045, 2026-10-06) — do not run
 
-- [ ] `run_all_tests`, `rebuild_corpora` (the two heavy ML jobs paused on this machine)
+- [ ] `run_all_tests`, `rebuild_corpora` (the two heavy clocked jobs paused on this machine). **Conflict, owner decides:** the earlier rule says corpora are rebuilt only on the work laptop (`client_work/` exists only there), and this pause forbids the work laptop from rebuilding; the personal laptop is dead. Nothing can rebuild today.
 - [ ] `index_episodes`, `reindex_memory`, `relabel_domains` (c011, c012, c013)
 - Everything else continues. Anything that can wait for the personal laptop waits for it.
 
@@ -55,13 +56,13 @@ Companion files: [STATUS.md](STATUS.md) (cross-agent snapshot), [js-learning/JAR
 - [x] Root cause found: on 2026-09-26 the owner asked an off-script question and a free model (`nemotron-3-super:free`) wrote BOTH sides of interview question 6 in the owner's voice (KB 1201 records it).
 - [x] Guard shipped: interview-mode rule on the task, one retry, then a fixed fallback (`brain/interview_guard.py`, 105/105 in the orchestrator self-test).
 - [x] Poisoned turn retracted (verdict `none`) and a retraction registry (`jarvis_data/retractions.jsonl`) now keeps KB 735 and the raw conversation turn out of every corpus builder and out of the retrieval index.
-- [ ] **Corpus rebuild needed** (paused by owner rule): 8 retracted records still sit in the built artifacts. `check_pipeline` reports this as 1 failed until the rebuild runs.
+- [ ] **Corpus rebuild needed** (paused by owner rule): 8 retracted records still sit in the built artifacts. `python3 scripts/check_pipeline.py` reports this as its 1 failed item until the rebuild runs.
 - [ ] **Owner: the interview has only Questions 1-5 answered (of 43).** Questions 6-43 are the best remaining personalization data and are TRAINING data; they do not replace the 25 c002 held-out answers.
 - [ ] Not unit-tested: the personalization corpus's KB paths (they read through the SQLite cognitive index).
 
 ## E. Training readiness (Stage 5 gate)
 
-Measured 2026-10-07 from `jarvis_data/training_corpus/`:
+Measured 2026-10-07 (corpora last built 2026-10-05, unchanged) from `jarvis_data/training_corpus/`:
 
 | Item | Target | Have |
 |---|---|---|
@@ -69,10 +70,10 @@ Measured 2026-10-07 from `jarvis_data/training_corpus/`:
 | SFT pairs, Personalization | 200 | 192 (173 train + 19 held-out) |
 | Held-out set | enough to measure | 55 total — **too small for the personalization side (19)** |
 | Blended corpus | — | 4,134 records |
-| Turns routed under rule v1 | — | 1,497 (425 trainable) |
+| Turns routed under rule v1 (`python3 scripts/parse_turns.py --routing`) | — | 1,507 (428 trainable) |
 
-- [~] **c002: adapter-vs-retrieval evaluation (₹0).** Harness BUILT 2026-10-07: `scripts/eval_c002.py` (self-test 148/148), design in the approved plan. Nothing has been MEASURED yet. Status below:
-  - [x] Exclusion registry + canary, wired into the corpus builders, `check_pipeline` invariant (29 ok / 0 failed)
+- [~] **c002: adapter-vs-retrieval evaluation (₹0).** Harness BUILT 2026-10-07: `scripts/eval_c002.py` (commit 56884ab; 230 hermetic self-checks; an independent review found 20 defects, all fixed), design in the approved plan. Nothing has been MEASURED yet. Status below:
+  - [x] Exclusion registry + canary, wired into the corpus builders, `check_pipeline` invariant (the c002 canary line passes)
   - [x] 72 engineering items (34 recall / 38 apply), machine-checked, deduped across authors; 25 personalization questions; protocol draft + endpoints
   - [x] Leakage audit runs against the real corpora (14 s). It FAILS today, correctly: eval markers sit in `blended_corpus`, `engineer_corpus` and `personalization_corpus` (legacy), and 4 recall TUNING questions (`ms-02`, `ms-08`, `t-01`, `t-12`) appear verbatim in training. None of the 40 frozen held-out items leaked. Fix = rebuild the corpora (paused) after which the audit is re-run; adapter arms refuse to run until it passes.
   - [ ] **Owner: answer the 25 questions** in the private answers file (outside the repo, mode 600, deny-ruled for agents). Edit it in an editor, never in a chat.
@@ -109,9 +110,9 @@ Measured 2026-10-07 from `jarvis_data/training_corpus/`:
 ## H. Housekeeping nobody has claimed
 
 - [ ] Multi-host KB id collisions will recur (host-prefixed or content-derived ids needed).
-- [ ] Backfill of assistant summaries truncated at 2,000 chars before 2026-09 (design needed; the queue is append-only).
+- [ ] Backfill of assistant summaries truncated at 2,000 chars before 2026-09-18, when the cap was removed entirely (design needed; the queue is append-only).
 - [ ] Personalization interview: 43 numbered questions, in progress. **Owner.**
-- [ ] Codex reminders q_047 / q_048 wait for the personal laptop.
+- [ ] Codex mail q_046, q_047 and q_048 are open and wait for the personal laptop (`python3 scripts/agent_mail.py --list`).
 - [ ] `git push origin main` after each local run of commits. **Owner** (classifier blocks agent pushes; never push `backup-local-main`).
 
 ## I. Custom PC build (owner concept, 2026-10-07) — NOT purchased, gated on tests
