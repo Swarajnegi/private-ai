@@ -31,19 +31,6 @@
           }
         ]
       }
-    ],
-    "PostToolUse": [
-      {
-        "matcher": "Edit|Write|MultiEdit",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"$CLAUDE_PROJECT_DIR/rfm_2.0/scripts/hooks/corpus-post-edit.mjs\"",
-            "timeout": 20,
-            "statusMessage": "Checking Corpus edit"
-          }
-        ]
-      }
     ]
   }
 }

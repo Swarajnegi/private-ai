@@ -63,7 +63,6 @@
       "Bash(PYTHONPATH=js-development python3 js-development/jarvis_core/agent/tools/shell.py)",
       "Bash(awk '{print $5, $9}')",
       "Bash(git rm *)",
-      "Bash(rm -f jarvis_data/knowledge_base.jsonl.bak)",
       "Bash(python3 scripts/search_memory.py \"auto push learning artifacts cross laptop sync directive\")",
       "Bash(python3 scripts/search_memory.py \"auto push learning artifacts\")",
       "Bash(python3 scripts/search_memory.py \"auto push learning artifacts cross laptop\")",
@@ -308,19 +307,6 @@
             ],
             "timeout": 15,
             "statusMessage": "Checking agent mail"
-          }
-        ]
-      }
-    ],
-    "PostToolUse": [
-      {
-        "matcher": "Edit|Write|MultiEdit",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"$CLAUDE_PROJECT_DIR/rfm_2.0/scripts/hooks/corpus-post-edit.mjs\"",
-            "timeout": 20,
-            "statusMessage": "Checking Corpus edit"
           }
         ]
       }

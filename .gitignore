@@ -100,9 +100,6 @@ env/
 *.key
 
 # -- Regenerable build noise --------------------------------------------------
-# Local reference frames, browser screenshots and one-off validator cache.
-.tmp/core-reference/
-artifacts/jarvis-ui/
 __pycache__/
 *.py[cod]
 *$py.class
@@ -114,7 +111,6 @@ __pycache__/
 node_modules/
 .runtime/
 .cache/
-.venv-voice/
 dist/
 build/
 
@@ -160,7 +156,6 @@ desktop.ini
 jarvis_data/token_ratios.json
 jarvis_data/token_ratios.json.lock
 jarvis_data/model_stats.jsonl
-inspect_conv.py
 
 # -- Context Ledger (per-session verbatim archive of evicted context) --------
 # Append-only spans written before compaction evicts them, keyed by
@@ -230,8 +225,6 @@ jarvis_data/hearth.log
 jarvis_data/hearth_watchdog.log
 # Chroma ownership (2026-09-29): lock + descriptor of the one process that owns chromadb/, and its log.
 jarvis_data/.chroma_direct.lock
-jarvis_data/.chroma_write.lock
-jarvis_data/.chroma_write.lock.lock
 jarvis_data/.chroma_server.json
 jarvis_data/chroma_server.log
 
@@ -276,6 +269,7 @@ jarvis_data/.antigravity_ingest_watermark.jsonl
 # commitments.jsonl is a tracked fact. Its sibling lock only serializes writers
 # on one machine and has no meaning after a pull.
 jarvis_data/commitments.jsonl.lock
+jarvis_data/commitment_runs.jsonl.lock
 
 # -- rfm/ — A SEPARATE REPO, NOT JARVIS CONTENT (2026-09-08) ------------------
 # Working clone of https://github.com/Swarajnegi/dadfinanceapp.git — the user's
@@ -292,7 +286,6 @@ jarvis_data/commitments.jsonl.lock
 #
 # Also 9.5 MB of built .apk at the repo root, which is its own reason.
 rfm/
-dadfinanceapp/
 
 # ---- voice (2026-09-27) ------------------------------------------------------
 # voice_latency.jsonl is a machine-local instrument (serve/speech.log_latency):
@@ -305,9 +298,6 @@ jarvis_data/voice_latency.jsonl.lock
 # voice samples come from the resident Kokoro engine), and binary.
 artifacts/voice-samples/
 artifacts/voice-test/
-.tmp/ui-shots/
-.tmp/austensor-ref/
-.tmp/removed-jarvis-tests-2026-09-28/
 
 # ---- context store (2026-09-28, Context Store Phase 2) ------------------------
 # The verbatim episode store is machine-local (full tool outputs, ~GBs). What
@@ -331,6 +321,7 @@ jarvis_data/.codex_agent_mail_outbox.jsonl
 jarvis_data/.codex_agent_mail_delivery.json
 jarvis_data/.codex_agent_mail_delivery.tmp
 jarvis_data/.mail_watch_codex.json
+jarvis_data/.mail_watch_claude.json
 
 # c002 evaluation: the index snapshots are large binaries built on demand
 jarvis_data/eval/c002/snapshot/
