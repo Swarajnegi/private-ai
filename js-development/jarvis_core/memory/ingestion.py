@@ -349,11 +349,15 @@ if __name__ == "__main__":
     print("  JARVIS IngestionPipeline — Live Run")
     print("=" * 60)
 
-    pipeline = IngestionPipeline(collection_name="research_papers")
-    target = str(JARVIS_ROOT / "research_papers" / "RAGs" / "2407.19813v3.pdf")
+    if len(sys.argv) < 3:
+        print("usage: python -m jarvis_core.memory.ingestion <pdf_path> <collection_name>\n"
+              "       (never 'jarvis_memory': index_memory.py rebuilds it from the knowledge base)")
+        raise SystemExit(2)
+    target, collection = sys.argv[1], sys.argv[2]
+    pipeline = IngestionPipeline(collection_name=collection)
 
     print(f"\n  Target     : {Path(target).name}")
-    print(f"  Collection : research_papers")
+    print(f"  Collection : {collection}")
     print(f"  Category   : ai")
     print(f"  Specialist : {SPECIALIST_MAP.get('ai', _DEFAULT_SPECIALIST)}")
 

@@ -55,7 +55,7 @@
 | Lesson | Topic | JARVIS Use Case | Command |
 |--------|-------|-----------------|---------|
 | 2.3.1 | Chunking Strategies | Split documents intelligently | **COMPLETE** |
-| 2.3.2 | PDF Parsing | Extract text from research papers | **COMPLETE** |
+| 2.3.2 | PDF Parsing | Extract text from PDFs | **COMPLETE** (the research PDFs, their index and the paper-based demo labs were removed 2026-10-08) |
 | 2.3.3 | Code Parsing | Ingest your own codebase | **COMPLETE** — `jarvis_core/memory/code_parser.py` (tree-sitter, function-level chunks) |
 | 2.3.4 | Deduplication | Don't store the same content twice | **COMPLETE** — md5 NoveltyGate + upsert in `store.py` |
 

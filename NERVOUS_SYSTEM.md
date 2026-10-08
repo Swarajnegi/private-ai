@@ -505,7 +505,7 @@ Both are in the KB with full mechanisms (search `def-time binding`, `regex close
 ## 4. The inventory — what does NOT travel via `git pull`
 
 The repo **is** the mind: the knowledge base, the cognitive profile, the activity digest, the
-training corpus, `.agent/rules/`, the research PDFs, and the ChromaDB SQLite file are all tracked.
+training corpus and `.agent/rules/` are tracked. The ChromaDB files are not (see §4.2).
 What follows is everything that is not, in four classes.
 
 ```bash
@@ -531,12 +531,14 @@ git check-ignore -v <path>            # why is this ignored? (silence = it is NO
 ### Class 2 — The whole vector store, and why it stopped being tracked
 
 **`jarvis_data/chromadb/` is gitignored as of 2026-09-11.** A fresh clone has **no vector index**,
-and semantic search returns nothing until you rebuild it. Both halves:
+and semantic search returns nothing until you rebuild it:
 
 ```bash
 python3 scripts/index_memory.py                                    # jarvis_memory (from the KB)
-python3 scripts/ingest.py <pdf> --collection research_papers       # research_papers, per PDF
 ```
+
+(A second collection, `research_papers`, existed until 2026-10-08; the owner removed it and its PDFs as
+unused.)
 
 **Why it was un-tracked**, since this reverses an earlier recorded decision: `chroma.sqlite3` is a
 23 MB binary, `.gitattributes` marks `*.sqlite3` binary, and so it has **no merge driver**. The
@@ -544,12 +546,8 @@ hearth's `reindex_memory` job rewrites it every 12 hours and is meant to run on 
 which produces an unresolvable binary conflict the first time both sides commit. `merge=union`
 rescues `*.jsonl` only, not this.
 
-**The rebuild was tested, not assumed.** Running `ingest.py` against a real tracked PDF with
-`JARVIS_ROOT` pointed at a scratch directory produced 99 embeddings in ~18 s, so all 24 tracked
-PDFs rebuild in roughly 8 minutes. That matters because the *previous* version of this claim was
-wrong in the opposite direction — it asserted `research_papers` was unrebuildable because the PDFs
-were gitignored, when every one of them is tracked. Two wrong claims about the same directory, in
-opposite directions, before anyone ran the command.
+**The rebuild was tested, not assumed** (2026-09-11), because an earlier version of this claim was
+wrong. Run the command above and check the collection count.
 
 > **Historical note for anyone reading old commits:** until 2026-09-11 most of `chromadb/` was
 > tracked while the `jarvis_memory` vector segment alone was untracked-but-not-gitignored — so a
@@ -628,8 +626,6 @@ python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 python3 scripts/bootstrap_jarvis.py     # safe to re-run
 python3 scripts/index_memory.py         # rebuild jarvis_memory — chromadb/ does NOT travel (Class 2)
-# and, if you want paper retrieval (24 tracked PDFs, ~8 min total):
-for p in research_papers/*/*.pdf; do python3 scripts/ingest.py "$p" --collection research_papers; done
 ```
 
 **Also on a new machine — set Codex's own model.** `~/.codex/config.toml` is outside the repo, so

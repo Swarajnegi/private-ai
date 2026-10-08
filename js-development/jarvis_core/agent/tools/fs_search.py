@@ -68,7 +68,7 @@ from jarvis_core.config import JARVIS_ROOT
 _SKIP_DIRS = frozenset({
     ".git", "chromadb", "chromadb_backups", "__pycache__", ".venv", "venv",
     "node_modules", "ai_model_repos", ".mypy_cache", ".pytest_cache", ".ruff_cache",
-    "extracted_images", "research_papers",
+    "extracted_images",
 })
 # Extensions we never scan for content (binary / huge).
 _BINARY_EXT = frozenset({

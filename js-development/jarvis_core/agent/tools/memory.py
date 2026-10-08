@@ -213,8 +213,8 @@ def _chroma_to_hits(chroma_result: Dict[str, Any]) -> List[Dict[str, Any]]:
 
 _COLLECTION_NOTE = (
     "ChromaDB collection name. The collection that exists is 'jarvis_memory' (chunks of "
-    "the knowledge base). The research papers are NOT loaded (owner decision 2026-09-29: "
-    "they were a memory-layer test; scripts/ingest.py can load them again). "
+    "the knowledge base). The research papers were removed (owner decision 2026-10-08: "
+    "they were a memory-layer test). "
     "The owner's conversations and history are NOT here: use memory_recall for those "
     "('episodes' has its own embedder and must not be queried through this tool)."
 )
@@ -338,7 +338,7 @@ class MemoryBM25SearchTool(MemoryToolBase):
     input_schema = MemoryBM25SearchInput
 
     # Stage 3.2.3 lifecycle hook: collections to proactively warm on setup().
-    # Override per-instance: tool = MemoryBM25SearchTool(store=s); tool.warm_collections = ["research_papers"]
+    # Override per-instance: tool = MemoryBM25SearchTool(store=s); tool.warm_collections = ["<collection>"]
     warm_collections: List[str] = []
 
     @property
@@ -521,7 +521,7 @@ class MemoryRerankTool(MemoryToolBase):
 # =============================================================================
 
 class MemoryUnifiedRetrieveInput(ToolInput):
-    collection: str = Field(default="jarvis_memory", description="ChromaDB collection name: 'jarvis_memory' (knowledge-base chunks); the research papers are not loaded.")
+    collection: str = Field(default="jarvis_memory", description="ChromaDB collection name: 'jarvis_memory' (knowledge-base chunks).")
     query: str = Field(description="Natural-language query text.")
     k: int = Field(default=5, ge=1, le=50, description="Final number of precision results.")
     use_expansion: bool = Field(

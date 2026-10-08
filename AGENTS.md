@@ -162,8 +162,6 @@ python3 scripts/index_memory.py              # rebuilds the jarvis_memory vector
                                               # jarvis_data/chromadb/ is GITIGNORED as of
                                               # 2026-09-11, so a fresh clone has NO vector index
                                               # and semantic search returns nothing until this runs.
-# Optional, for research-paper retrieval (24 tracked PDFs, ~8 min):
-for p in research_papers/*/*.pdf; do python3 scripts/ingest.py "$p" --collection research_papers; done
 python3 scripts/hearth.py --background       # START THE CLOCK — see below, this is not optional
 python3 scripts/hearth.py --status           # confirm ingest_codex is listed
 ```

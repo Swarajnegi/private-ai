@@ -3,7 +3,7 @@
 #
 # POLICY CHANGE 2026-08-26. The repo went PRIVATE and the user directed that
 # EVERYTHING be tracked — training corpus, personal notes, client work, the
-# capture queue, ChromaDB, research papers, machine-local settings. The previous
+# capture queue, ChromaDB, machine-local settings. The previous
 # policy excluded most of that for privacy or size reasons; those exclusions are
 # gone, along with the comments that justified them.
 #
@@ -185,19 +185,11 @@ jarvis_data/conversations/*.lock
 #                            NO per-prompt capture here (Antigravity has no hook
 #                            system)". No local queue => no digest. Untracking
 #                            them BLINDS that machine.
-#   chromadb/               CORRECTED 2026-09-10 — the line this replaces was
-#                            wrong on the load-bearing fact and I (Claude) wrote
-#                            it. It claimed "research_papers is not regenerable
-#                            — the source PDFs are gitignored too." Verified:
-#                            all 24 source PDFs ARE tracked (git ls-files
-#                            research_papers/ | grep -c '.pdf$' => 24; `git
-#                            check-ignore` matches nothing under that dir).
-#                            BOTH halves of chromadb/ rebuild:
-#                              jarvis_memory     -> scripts/index_memory.py
-#                              research_papers   -> scripts/ingest.py <pdf>
-#                                                   --collection research_papers,
-#                                                   once per PDF (no batch mode
-#                                                   exists yet — 24 calls today)
+#   chromadb/               REBUILDABLE (corrected 2026-09-10, updated 2026-10-08):
+#                            the `jarvis_memory` index rebuilds with
+#                            scripts/index_memory.py. The old `research_papers`
+#                            collection and its source PDFs were removed on
+#                            2026-10-08 (owner decision: no use).
 #                            (SUPERSEDED 2026-09-11: this said "chromadb/ stays
 #                            tracked anyway — not worth ripping out mid-project."
 #                            It was un-tracked one day later once the hearth made
@@ -252,18 +244,15 @@ jarvis_data/chroma_server.log
 # driver. Two machines rewriting it on a clock produces an unresolvable binary
 # conflict the first time both sides commit. `merge=union` rescues *.jsonl only.
 #
-# Both collections are genuinely regenerable, and this was TESTED before
-# untracking rather than assumed (the earlier version of this claim was wrong
-# in the opposite direction and sat here for weeks):
-#   jarvis_memory   (1,114 emb) -> python3 scripts/index_memory.py
-#   research_papers (156 emb)   -> python3 scripts/ingest.py <pdf> \
-#                                    --collection research_papers  (per PDF)
-# Verified 2026-09-11 by running ingest.py against a real tracked PDF with
-# JARVIS_ROOT pointed at a scratch dir: 99 embeddings in 18.5 s, so all 24
-# tracked PDFs rebuild in roughly 8 minutes. All 24 PDFs are tracked.
+# The index is genuinely regenerable, and this was TESTED before untracking
+# rather than assumed (an earlier version of this claim was wrong and sat here
+# for weeks):
+#   jarvis_memory -> python3 scripts/index_memory.py
+# (A `research_papers` collection existed when this was written; it and its PDFs
+# were removed 2026-10-08.)
 #
 # CONSEQUENCE, stated so nobody is surprised: a fresh clone has NO vector index
-# and semantic search returns nothing until both commands above are run. That is
+# and semantic search returns nothing until the command above is run. That is
 # a documented first-run step in AGENTS.md and NERVOUS_SYSTEM.md §4.2.
 # History still contains the old blobs; removing those needs a rewrite, which is
 # deliberately out of scope.

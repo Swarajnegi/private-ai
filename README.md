@@ -172,7 +172,6 @@ Also in [`jarvis_data/`](jarvis_data/): `life_state_feed.jsonl` (surfaced insigh
 | [`knowledge/AI ML/`](knowledge/AI%20ML/) | ML notes and interview prep |
 | [`knowledge/Finance/`](knowledge/Finance/) | **`strategy.md` is canonical** — check it first for any finance question |
 | [`knowledge/literature/`](knowledge/literature/), [`knowledge/Job Switch/`](knowledge/Job%20Switch/) | Reading notes; career material |
-| [`research_papers/`](research_papers/) | 24 source PDFs, tracked. Rebuild their index with `scripts/ingest.py` |
 
 ### Coordination
 
@@ -194,11 +193,6 @@ python3 scripts/bootstrap_jarvis.py     # rehydrates hooks from the committed ma
 python3 scripts/index_memory.py         # REQUIRED — chromadb/ is gitignored, so a fresh clone has
                                         # no vector index and semantic search returns nothing
 python3 scripts/hearth.py --background  # start the clock (see NERVOUS_SYSTEM.md §6)
-```
-
-Optional, for research-paper retrieval (~8 min):
-```bash
-for p in research_papers/*/*.pdf; do python3 scripts/ingest.py "$p" --collection research_papers; done
 ```
 
 ---

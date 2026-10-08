@@ -4,12 +4,15 @@ ingest.py
 JARVIS Memory Layer: Canonical PDF Ingestion Runner.
 
 Run with (activate venv first):
-    python scripts/ingest.py <path_to_pdf> [--category ai] [--collection research_papers]
+    python scripts/ingest.py <path_to_pdf> --collection <name> [--category ai]
+
+--collection is required. There is no default: the `research_papers` collection and its
+PDFs were removed on 2026-10-08, and `jarvis_memory` must never be used here because
+scripts/index_memory.py rebuilds it from the knowledge base.
 
 Examples:
-    python scripts/ingest.py "research_papers/RAGs/2407.19813v3.pdf"
-    python scripts/ingest.py "research_papers/RAGs/2407.19813v3.pdf" --category biology
-    python scripts/ingest.py "/absolute/path/to/paper.pdf" --category physics --collection research_papers
+    python scripts/ingest.py "/path/to/paper.pdf" --collection my_papers
+    python scripts/ingest.py "/path/to/paper.pdf" --collection my_papers --category biology
 
 =============================================================================
 THE BIG PICTURE
@@ -77,8 +80,9 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--collection",
         type=str,
-        default="research_papers",
-        help="ChromaDB collection name to ingest into. Default: research_papers.",
+        required=True,
+        help="ChromaDB collection name to ingest into (required; never 'jarvis_memory', "
+             "which index_memory.py rebuilds from the knowledge base).",
     )
     return parser
 
