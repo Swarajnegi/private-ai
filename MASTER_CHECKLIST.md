@@ -147,8 +147,14 @@ episode-index smoke checks pass 49/49, including both SQLite deletion paths.
 Codex capture found this session and seven unique keys were individually parsed;
 the inherited backlogs remain Codex 951 / Antigravity 167. `check_pipeline.py`
 reports 29 ok / 1 failed: eight retracted records remain in the built training
-artifacts. Keep the five job pauses and the existing corpora. OpenRouter key/model
-setup is deferred to the final owner-guided step. A live answer, fresh hook lifecycle
+artifacts. Keep the five job pauses and the existing corpora. On 2026-10-13 the
+owner saved a new OpenRouter key in the Windows user environment; authentication
+succeeded. The isolated live orchestration check called the calculator and answered
+`17 × 19 = 323`, with three model calls and $0 spend, using
+`apodex/apodex-1.1-mini:free`, now the user-environment default. Its conversation
+store and session state were temporary; capture and KB distillation were disabled.
+The generic free-router attempt timed out, and `cohere/north-mini-code:free`
+produced a protocol failure. A live answer through the browser UI, fresh hook lifecycle
 execution, reboot persistence and the hand-carried private files remain unverified;
 the work laptop must not be decommissioned on the strength of these partial checks.
 
@@ -178,7 +184,7 @@ the work laptop must not be decommissioned on the strength of these partial chec
 **On the next host**
 - [ ] Personal Claude account (Pro, or Max if limits bite) or the Codex/Antigravity equivalent; log in.
 - [ ] New fine-grained GitHub PAT (Contents: read and write); clone `https://github.com/Swarajnegi/private-ai.git` to a short path without spaces; set `git config user.name/user.email`.
-- [ ] New OpenRouter key and model as environment variables.
+- [x] New OpenRouter key and model as Windows user environment variables; authentication and an isolated free-model orchestration answer verified 2026-10-13.
 - [ ] Restore `.jarvis_private/` into the home folder (owner-only permissions) and keep the chat backup with it.
 - [x] Python environment, `pip install -r requirements.txt`, `scripts/bootstrap_jarvis.py`, `scripts/index_memory.py` — verified on the native Windows host above.
 - [ ] Decide `jarvis_data/.paused_jobs` for that machine; if the heavy jobs may run, run `scripts/rebuild_corpora.py` and `scripts/index_episodes.py` once.
