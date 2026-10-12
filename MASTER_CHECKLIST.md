@@ -1,10 +1,12 @@
 # JARVIS MASTER CHECKLIST
 
-> Snapshot, not a log. **Update this file, don't append to it.** Last written 2026-10-08 by Claude
+> Snapshot, not a log. **Update this file, don't append to it.** Global survey 2026-10-08 by Claude
 > (Sonnet 5.5) from measured state: `check_pipeline.py`, `pipeline_health.py`, `parse_turns.py --status/--routing`,
 > `training_corpus/*.jsonl`, `graph_index.json`, STATUS.md, `commitments.py --list`. Counts are
 > a snapshot; the command beside each is the live figure. Where a number could not be
 > re-measured it says so. `[x]` done, `[ ]` open, `[~]` partial. **Owner** = only the owner can do it.
+> Section J's native Windows cutover verification was updated by Codex on 2026-10-12;
+> that partial host setup does not re-measure the older global survey.
 
 Companion files: [STATUS.md](STATUS.md) (cross-agent snapshot), [js-learning/JARVIS_MASTER_ROADMAP.md](js-learning/JARVIS_MASTER_ROADMAP.md) (stage status, authoritative), [.agent/rules/JARVIS_ENDGAME.md](.agent/rules/JARVIS_ENDGAME.md) (§1.1 goal, §1.2 differentiator).
 
@@ -134,6 +136,22 @@ Owner's V1 list is a **price snapshot and partly outdated**; confirm every item 
 
 **Agent on the next host:** this section tells you what travels and how the setup worked on the work laptop. It does not prescribe the Windows setup; adapt each mechanism to your environment, then prove it works with the checks under "Verify".
 
+**Current cutover verification (2026-10-12, Codex):** native Windows host
+`LAPTOP-SMOU1K0D`, 16 GB RAM, repo root `D:\J.A.R.V.I.S`. Python 3.12.4 and the pinned
+dependencies are installed in `.venv/`; package/model caches and installation temp
+files use `.cache/` and `.runtime/tmp/` on D. The KB has 1,090 entries, including
+three evidenced facts from this session; `jarvis_memory` has 1,887 chunks after
+rebuilding. Hearth and its supervised Chroma server are up; authenticated health
+and the web UI return HTTP 200; the per-user logon watchdog is installed. Windows
+episode-index smoke checks pass 49/49, including both SQLite deletion paths.
+Codex capture found this session and seven unique keys were individually parsed;
+the inherited backlogs remain Codex 951 / Antigravity 167. `check_pipeline.py`
+reports 29 ok / 1 failed: eight retracted records remain in the built training
+artifacts. Keep the five job pauses and the existing corpora. OpenRouter key/model
+setup is deferred to the final owner-guided step. A live answer, fresh hook lifecycle
+execution, reboot persistence and the hand-carried private files remain unverified;
+the work laptop must not be decommissioned on the strength of these partial checks.
+
 **Travels via git:** KB, profile, digest, observation queue, parse verdicts, retractions, c002 harness, context-store shards (verbatim Claude Code transcripts, compressed), `.agent/` (rules, workflows, hook manifest), `.claude/settings.json` (hooks, home-relative deny rules), `.codex/hooks.json`, `jarvis_data/.paused_jobs`.
 **Carried by hand (owner's personal cloud):** `.jarvis_private/` (c002 owner answers; restore it in the home folder) and `claude_chats_backup_2026-10-08/` (raw Claude Code chats, incl. RSA and Job Switch; an archive that nothing reads, the shards already cover them).
 **Recreate, never copy:** OpenRouter key, GitHub PAT. **Rebuild:** the Python environment, `jarvis_data/chromadb/`, the episode index. **Lost on purpose:** `.claude/settings.local.json`, Claude Code's machine-local memory notes (their durable content is in the KB, incl. KB 1202-1203). **Stays off personal machines:** `client_work/` raw repos.
@@ -162,9 +180,9 @@ Owner's V1 list is a **price snapshot and partly outdated**; confirm every item 
 - [ ] New fine-grained GitHub PAT (Contents: read and write); clone `https://github.com/Swarajnegi/private-ai.git` to a short path without spaces; set `git config user.name/user.email`.
 - [ ] New OpenRouter key and model as environment variables.
 - [ ] Restore `.jarvis_private/` into the home folder (owner-only permissions) and keep the chat backup with it.
-- [ ] Python environment, `pip install -r requirements.txt`, `scripts/bootstrap_jarvis.py`, `scripts/index_memory.py`.
+- [x] Python environment, `pip install -r requirements.txt`, `scripts/bootstrap_jarvis.py`, `scripts/index_memory.py` — verified on the native Windows host above.
 - [ ] Decide `jarvis_data/.paused_jobs` for that machine; if the heavy jobs may run, run `scripts/rebuild_corpora.py` and `scripts/index_episodes.py` once.
-- [ ] Keep the hearth alive across reboots with that OS's scheduler.
+- [~] Keep the hearth alive across reboots with that OS's scheduler — HKCU logon watchdog installed and running; a reboot/logon cycle has not been tested.
 
 **Verify nothing was lost**
 - [ ] `scripts/bootstrap_jarvis.py --check`, `scripts/pipeline_health.py`, `scripts/check_pipeline.py`, `scripts/parse_turns.py --status`.

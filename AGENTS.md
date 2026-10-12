@@ -6,10 +6,11 @@
 > fail-soft `.codex/hooks.json` startup and backlog reminders do not replace its
 > required full reads and manual judgment.
 >
-> **DEAD HOST (since 2026-10-06, KB 1044).** The personal laptop (Codex, Antigravity) is dead;
-> the work laptop (Linux, Claude Code) is the only live host. Claude parses the Codex and
-> Antigravity backlogs by reading, under KB 1009 (`python3 scripts/parse_turns.py --status` for
-> the sizes). The Codex-side instructions below apply when that laptop returns.
+> **ACTIVE HOST (2026-10-12 cutover).** Codex now runs on native Windows at
+> `D:\J.A.R.V.I.S` on `LAPTOP-SMOU1K0D` (16 GB RAM). The work laptop is retired as a
+> JARVIS host; its decommissioning waits for the cutover verification in
+> `MASTER_CHECKLIST.md` §J. Codex resumes parsing its own backlog by reading;
+> the old dead-host exception is historical, not this host's operating mode.
 
 ---
 
@@ -158,6 +159,17 @@ memory is a fast cache that periodically donates into it, never the other way ro
 ---
 
 ## First-run setup on a fresh machine
+
+**Owner storage rule (2026-10-12):** all downloads, Python environments, libraries,
+CUDA components, model weights, caches and installation temporary files stay under
+`D:\J.A.R.V.I.S`; never download them to `C:`. This host uses `.venv/`, `.cache/`
+and `.runtime/tmp/` in that folder. Route `TEMP`, `TMP`, `PIP_CACHE_DIR`, `HF_HOME`,
+`HF_HUB_CACHE`, `SENTENCE_TRANSFORMERS_HOME`, `TORCH_HOME`, `XDG_CACHE_HOME` and
+other tools' cache variables there before installing or loading models. The local
+`.runtime/environment.ps1` sets the process environment; the cache paths are also
+persisted in the current user's Windows environment for the watchdog. Reading
+existing Codex transcripts or using the already installed base Python on `C:` is
+not a download. Do not move or recreate those host-owned files as part of setup.
 
 **First session after the 2026-10 cutover:** the work laptop is retired as a JARVIS host (owner decision 2026-10-12). Read [MASTER_CHECKLIST.md](MASTER_CHECKLIST.md) §J (what travels, how the setup worked on the work laptop, how to verify nothing was lost) and your agent mail (`python scripts/agent_mail.py --check codex`) before the steps below; adapt them to this machine.
 
