@@ -130,7 +130,7 @@ Owner's V1 list is a **price snapshot and partly outdated**; confirm every item 
 
 ## J. Cutover: work laptop → next host with a personal account (owner decision 2026-10-12)
 
-**Situation.** Celebal moved Claude Team to Enterprise (backup deadline 15 Oct 2026), so JARVIS stops on the work laptop and the company account. The Enterprise account is used only for DE learning, job-switch and RSA prep, in `~/work/prep/` on the work laptop: a copy made 2026-10-12, with no JARVIS hooks. The next host is the repaired personal laptop or a new machine, **native Windows, no WSL** (WSL was used only because Claude Code had trouble on the work laptop), running Claude Code, Codex or Antigravity. The owner has saved the two hand-carried folders to a personal cloud, and everything is pushed.
+**Situation.** Celebal moved Claude Team to Enterprise (backup deadline 15 Oct 2026), so JARVIS stops on the work laptop and the company account. The Enterprise account is used only for DE learning, job-switch and RSA prep, in `~/work/Claude Learning/` on the work laptop: a copy made 2026-10-12, with no JARVIS hooks. The next host is the repaired personal laptop or a new machine, **native Windows, no WSL** (WSL was used only because Claude Code had trouble on the work laptop), running Claude Code, Codex or Antigravity. The owner has saved the two hand-carried folders to a personal cloud, and everything is pushed.
 
 **Agent on the next host:** this section tells you what travels and how the setup worked on the work laptop. It does not prescribe the Windows setup; adapt each mechanism to your environment, then prove it works with the checks under "Verify".
 
