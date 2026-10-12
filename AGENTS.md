@@ -159,6 +159,8 @@ memory is a fast cache that periodically donates into it, never the other way ro
 
 ## First-run setup on a fresh machine
 
+**First session after the 2026-10 cutover:** the work laptop is retired as a JARVIS host (owner decision 2026-10-12). Read [MASTER_CHECKLIST.md](MASTER_CHECKLIST.md) §J (what travels, how the setup worked on the work laptop, how to verify nothing was lost) and your agent mail (`python scripts/agent_mail.py --check codex`) before the steps below; adapt them to this machine.
+
 ```bash
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt

@@ -4,6 +4,8 @@
 > - Claude Code (work laptop, Linux): via the project-root `/CLAUDE.md` which `@imports` this file plus [JARVIS_ENDGAME.md](JARVIS_ENDGAME.md) and [js-workspace-rule.md](js-workspace-rule.md).
 > - Antigravity (personal laptop, Windows; dead since 2026-10-06): does NOT load this file — it has no frontmatter. Antigravity's always-on file is [js-workspace-rule.md](js-workspace-rule.md).
 
+> **⚠️ Fresh machine, or the first session after the 2026-10 cutover?** The work laptop is retired as a JARVIS host (owner decision 2026-10-12). Before anything else, read [MASTER_CHECKLIST.md](../../MASTER_CHECKLIST.md) §J (what travels, how the setup worked on the work laptop, how to verify nothing was lost) and your agent mail (`python3 scripts/agent_mail.py --check claude`).
+
 ---
 
 ## Identity

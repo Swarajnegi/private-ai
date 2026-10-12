@@ -128,44 +128,52 @@ Owner's V1 list is a **price snapshot and partly outdated**; confirm every item 
 - [ ] UPS for an always-on host (power cuts corrupt append-only logs).
 - Local capability by GPU (from memory of specs, not measured): 16GB = 8B QLoRA comfortable, 14B tight; **5090 32GB** = 32B Q4 inference fits and 32B QLoRA becomes plausible.
 
-## J. Cutover: work laptop → personal machine with a personal Claude account (owner decision 2026-10-12)
+## J. Cutover: work laptop → next host with a personal account (owner decision 2026-10-12)
 
-Why: Celebal moves Claude Team to Enterprise (backup deadline 15 Oct 2026). JARVIS stops on the work laptop and the company account. The Enterprise account is used only for DE learning, job-switch and RSA prep, in `~/work/prep/` on the work laptop: a copy made 2026-10-12, with no JARVIS hooks. The target machine is not decided yet; it will run **native Windows, no WSL** (owner, 2026-10-12: WSL was used only because Claude Code had trouble on the work laptop). Use `python`, not `python3`, in every command on it.
+**Situation.** Celebal moved Claude Team to Enterprise (backup deadline 15 Oct 2026), so JARVIS stops on the work laptop and the company account. The Enterprise account is used only for DE learning, job-switch and RSA prep, in `~/work/prep/` on the work laptop: a copy made 2026-10-12, with no JARVIS hooks. The next host is the repaired personal laptop or a new machine, **native Windows, no WSL** (WSL was used only because Claude Code had trouble on the work laptop), running Claude Code, Codex or Antigravity. The owner has saved the two hand-carried folders to a personal cloud, and everything is pushed.
 
-**Travels via git:** KB, profile, digest, observation queue, parse verdicts, retractions, c002 harness, context-store shards (Claude Code transcripts in compressed form), `.agent/`, `.claude/settings.json` (hooks, home-relative deny rules), `.paused_jobs`.
-**Does not travel; carry by hand:** `~/.jarvis_private/` (c002 owner answers), `~/claude_chats_backup_2026-10-08/` (raw Claude Code chats, incl. RSA and Job Switch). **Recreate, never copy:** OpenRouter key, GitHub PAT. **Rebuild:** `.venv`, `chromadb/`. **Accept the loss:** `.claude/settings.local.json`, Claude Code's machine-local memory notes (their durable content is in the KB, incl. KB 1202-1203). **Stays off the personal machine:** `client_work/` raw repos.
+**Agent on the next host:** this section tells you what travels and how the setup worked on the work laptop. It does not prescribe the Windows setup; adapt each mechanism to your environment, then prove it works with the checks under "Verify".
 
-**Before 15 Oct, on the work laptop**
-- [ ] `git push origin main`; check the latest commit on GitHub.
-- [ ] Copy `~/.jarvis_private/` and `~/claude_chats_backup_2026-10-08/` to personal storage (USB or a personal cloud).
-- [ ] Export claude.ai data (Settings → Privacy → Export data); save RSA and Job Switch claude.ai chats, project files and instructions.
-- [ ] From now on, never open Claude Code inside `~/work/JARVIS` while logged into the Enterprise account. Prep happens in `~/work/prep/`.
+**Travels via git:** KB, profile, digest, observation queue, parse verdicts, retractions, c002 harness, context-store shards (verbatim Claude Code transcripts, compressed), `.agent/` (rules, workflows, hook manifest), `.claude/settings.json` (hooks, home-relative deny rules), `.codex/hooks.json`, `jarvis_data/.paused_jobs`.
+**Carried by hand (owner's personal cloud):** `.jarvis_private/` (c002 owner answers; restore it in the home folder) and `claude_chats_backup_2026-10-08/` (raw Claude Code chats, incl. RSA and Job Switch; an archive that nothing reads, the shards already cover them).
+**Recreate, never copy:** OpenRouter key, GitHub PAT. **Rebuild:** the Python environment, `jarvis_data/chromadb/`, the episode index. **Lost on purpose:** `.claude/settings.local.json`, Claude Code's machine-local memory notes (their durable content is in the KB, incl. KB 1202-1203). **Stays off personal machines:** `client_work/` raw repos.
 
-**On the personal machine (native Windows)**
-- [ ] Install Python 3.12 from python.org (tick "Add python.exe to PATH"), Git for Windows (Claude Code on Windows runs hooks through Git Bash), then Claude Code. Turn off the Store aliases: Settings → Apps → Advanced app settings → App execution aliases → off for `python.exe` and `python3.exe`.
-- [ ] Claude Pro on the personal account; `/login` in Claude Code with that account. Pro limits are lower than Team; long JARVIS sessions may need Max.
-- [ ] Clone to a short path without spaces, e.g. `C:\JARVIS`: `git clone https://github.com/Swarajnegi/private-ai.git C:\JARVIS`, with a new fine-grained PAT (Contents: read and write) given to Git Credential Manager; set `git config user.name/user.email`.
-- [ ] New OpenRouter key as a user environment variable: `setx OPENROUTER_API_KEY "…"` and `setx OPENROUTER_MODEL "…"`, then open a new terminal.
-- [ ] Restore `%USERPROFILE%\.jarvis_private\` and the chat backup.
-- [ ] First run in PowerShell from the repo: `python -m venv .venv`, `.venv\Scripts\activate`, `pip install -r requirements.txt`, `python scripts\bootstrap_jarvis.py`, `python scripts\index_memory.py`.
-- [ ] Decide `jarvis_data\.paused_jobs` for that machine: delete a line to resume a heavy job if the hardware can take it, then run `python scripts\rebuild_corpora.py` once.
-- [ ] Hearth (no cron on Windows; `hearth.py --background` cannot work without `os.fork`): `python scripts\windows_hearth_watchdog.py --install`, then `--status`, then `python scripts\hearth.py --status` shows UP. It runs while you are logged in (NERVOUS_SYSTEM.md §6.2).
-- [ ] Optional, untested: put the backed-up `.jsonl` transcripts in the new `%USERPROFILE%\.claude\projects\<path-key>\` so `/resume` can open old chats.
-- [ ] Codex and Antigravity, if that machine has them: NERVOUS_SYSTEM.md §5.2 and §5.3 (their native-Windows notes).
+### How it worked on the work laptop (adapt to your environment)
 
-**Known Windows gaps — fix these on the new machine first (untestable on the Linux work laptop)**
-- [ ] **Hooks call `python3`.** Every hook in `.agent/hooks.manifest.json` and `.claude/settings.json` runs `python3` and swallows its own errors, so if `python3` does not resolve in Git Bash, capture, profile injection and health notices fail with no message. Test: in Git Bash run `python3 --version`. If it fails, change the hook `command` to `python` (or `py`) in both files, rerun `python scripts\bootstrap_jarvis.py`, and commit. Proof it works: a new Claude Code session shows the profile and digest pointers, and `jarvis_data\observation_queue.jsonl` grows after one turn.
-- [ ] **`bootstrap_jarvis.py --check` looks for `.venv/bin/python3`.** On Windows the interpreter is `.venv\Scripts\python.exe`, so it reports the venv MISSING when it is present. Fix the check there.
-- [ ] Private-answer deny rules use `~/.jarvis_private/**`; confirm with `/permissions` that they resolve to `%USERPROFILE%`.
-- [ ] Minor: `scripts/parse_turns.py`, `brain/routing_ledger.py` and `brain/model_stats.py` skip file locking on Windows (they use only `fcntl`); `jarvis_core/locking.py` has the Windows path to switch them to.
+| Piece | How it ran on the work laptop (Linux, WSL Ubuntu 22.04) |
+|---|---|
+| Python | A venv at `.venv/` (`.venv/bin/python3`), packages from `requirements.txt`. Scripts were run as `python3 scripts/<name>.py` from the repo root; library code is imported with `js-development` on the path. |
+| Claude Code hooks | Declared in `.agent/hooks.manifest.json`; `scripts/bootstrap_jarvis.py` merges them into `.claude/settings.json`. Each hook runs the command `python3 -c "<runner>" <hook>.py`: the runner finds the repo (via `CLAUDE_PROJECT_DIR` or the nearest folder holding `scripts/hooks/`), adds `js-development` to the path, runs `scripts/hooks/<hook>.py`, **swallows every error and always exits 0**. Hooks use whatever `python3` is on the PATH, not the venv. A broken interpreter therefore fails silently: no error, no capture. |
+| The 11 hooks | UserPromptSubmit: `notice_runtime_change` (model-change notice), `capture_gap_nudge` (PARSE BACKLOG nudge), `mail_watch` (agent mail). Stop: `capture_turn` (writes the turn to `observation_queue.jsonl`), `run_consolidation` (feeds the surfacing organ). SessionStart: `surface_pipeline_health`, `inject_profile` and `inject_recent_activity` (the "read the profile and digest in full" pointers), `surface_life_state` (proactive surfacing), `check_agent_mail`. PreCompact: `pre_compact_capture` (stores the session before compaction). |
+| Codex / Antigravity capture | No per-turn hooks. The hearth's hourly `ingest_codex` / `ingest_antigravity` jobs read their transcript folders (`~/.codex/sessions/`, `~/.gemini/antigravity-ide/brain/`) into the same queue. NERVOUS_SYSTEM.md §5.2-§5.3. |
+| The hearth | `scripts/hearth.py`: one process per machine that owns the clocked jobs (`--status` lists them), serves the web UI and `/v1/*` on `127.0.0.1:8756` (bearer token auto-minted in `jarvis_data/.hearth_token`) and supervises a single-owner Chroma server on `127.0.0.1:8759` (`memory/chroma_access.py`). Kept alive by two user-crontab lines, `@reboot` and `*/10`, each running `.venv/bin/python3 scripts/hearth.py --background`; `--background` detaches by double `os.fork` and refuses when a hearth already holds the port, so the 10-minute line is a harmless self-heal. NERVOUS_SYSTEM.md §6.2 also documents a Windows watchdog (`scripts/windows_hearth_watchdog.py`) built for the personal laptop. |
+| Heavy jobs | Listed in `jarvis_data/.paused_jobs` (owner rule KB 1044/1045: the work laptop had 7.6 GB RAM and no GPU). The hearth skips them. Delete a line on a machine that can take the load. |
+| Secrets | `OPENROUTER_API_KEY` and `OPENROUTER_MODEL` exported in `~/.bashrc`; the GitHub PAT in `~/.git-credentials`. |
+| Private c002 answers | `~/.jarvis_private/c002/owner_answers.md` (folder 700, file 600). Agents must never read it; `.claude/settings.json` denies `Read/Edit/Write(~/.jarvis_private/**)` and any Bash command mentioning `jarvis_private`. |
+| File locking | Append-only logs are locked through `jarvis_core/locking.py` (`fcntl` on POSIX, `msvcrt` on Windows) or local equivalents, and every append heals a missing final newline first (CLAUDE.md, Code style). |
+| Memory flow | turn → `observation_queue.jsonl` → parse loop (`parse_turns.py`, the rule in `agent/parse_rule.py`) → KB and `turn_curation.jsonl` → `profile_synth.py` → `cognitive_profile.md`; `refresh_digest` → `activity_digest.md`; `ingest_episodes` archives transcripts into the context-store shards; `index_memory.py` / `index_episodes.py` build the vector indexes for recall. |
+
+**Linux-specific on the work laptop (facts to account for, not fixes):** every hook calls `python3`; `bootstrap_jarvis.py --check` looks for `.venv/bin/python3`; the hearth's keepalive is cron and `--background` needs `os.fork`; `scripts/parse_turns.py`, `brain/routing_ledger.py` and `brain/model_stats.py` lock with `fcntl` only, and skip locking where it is missing; paths in docs and commands use `/`.
+
+### Steps
+
+**On the next host**
+- [ ] Personal Claude account (Pro, or Max if limits bite) or the Codex/Antigravity equivalent; log in.
+- [ ] New fine-grained GitHub PAT (Contents: read and write); clone `https://github.com/Swarajnegi/private-ai.git` to a short path without spaces; set `git config user.name/user.email`.
+- [ ] New OpenRouter key and model as environment variables.
+- [ ] Restore `.jarvis_private/` into the home folder (owner-only permissions) and keep the chat backup with it.
+- [ ] Python environment, `pip install -r requirements.txt`, `scripts/bootstrap_jarvis.py`, `scripts/index_memory.py`.
+- [ ] Decide `jarvis_data/.paused_jobs` for that machine; if the heavy jobs may run, run `scripts/rebuild_corpora.py` and `scripts/index_episodes.py` once.
+- [ ] Keep the hearth alive across reboots with that OS's scheduler.
 
 **Verify nothing was lost**
-- [ ] `python scripts\bootstrap_jarvis.py --check`, `python scripts\pipeline_health.py`, `python scripts\check_pipeline.py`, `python scripts\parse_turns.py --status`.
-- [ ] KB line count matches GitHub (`(Get-Content jarvis_data\knowledge_base.jsonl).Count`); `python scripts\search_memory.py "RSA prep"` returns results.
-- [ ] A new Claude Code session in the repo shows the profile and digest pointers at start; the web UI at http://127.0.0.1:8756/ answers a question.
+- [ ] `scripts/bootstrap_jarvis.py --check`, `scripts/pipeline_health.py`, `scripts/check_pipeline.py`, `scripts/parse_turns.py --status`.
+- [ ] **Capture works:** a new Claude Code session shows the profile and digest pointers at start, and `observation_queue.jsonl` grows by one row after one turn.
+- [ ] KB line count matches GitHub; `scripts/search_memory.py "RSA prep"` returns results; the web UI at http://127.0.0.1:8756/ answers a question.
+- [ ] The private-answer deny rules resolve to that machine's home folder (`/permissions` in Claude Code).
 
 **Decommission the work laptop (only after the checks above pass)**
 - [ ] `crontab -e`: remove the two hearth lines; stop the hearth and its Chroma server (`python3 scripts/hearth.py --status` gives the pids).
 - [ ] Remove the OpenRouter lines from `~/.bashrc` and the GitHub entry from `~/.git-credentials`; revoke the old OpenRouter key and the old PAT at the providers.
-- [ ] Delete `~/work/JARVIS`, `~/.jarvis_private`, `~/.claude/projects/-home-swara-unix-work-JARVIS` and `~/claude_chats_backup_2026-10-08` (once the off-laptop copy is confirmed).
+- [ ] Delete `~/work/JARVIS`, `~/.jarvis_private`, `~/.claude/projects/-home-swara-unix-work-JARVIS` and `~/claude_chats_backup_2026-10-08`.
 - [ ] Only then log Claude Code into the Enterprise account.
