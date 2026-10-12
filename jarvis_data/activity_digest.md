@@ -6,25 +6,34 @@
 > the DISTILLED, 7-day, human-readable form (observation_queue.jsonl
 > itself is also tracked; corrected 2026-09-10, this line used to
 > falsely claim otherwise).
-> Generated 2026-10-06T06:57:11+05:30 on HRM5472-NEW.
+> Generated 2026-10-12T08:00:11+05:30 on HRM5472-NEW.
 
-RECENT ACTIVITY — your own captured turns across ALL chats, last 7 days (95 turns, 8 chats). Source: local observation_queue.jsonl — this is your actual per-prompt activity log, NOT git. Use it to stay aware of what you have been working on across chats.
-SELF-STATE: latest captured turn was produced by claude-sonnet-5-5 on HRM5472-NEW — brain swaps this window: claude-sonnet-5-5 -> claude-opus-5-5 (2026-09-29); claude-opus-5-5 -> claude-sonnet-5-5 (2026-09-29); claude-sonnet-5-5 -> claude-opus-5-5 (2026-09-29); claude-opus-5-5 -> claude-sonnet-5-5 (2026-09-29); claude-sonnet-5-5 -> claude-opus-5-5 (2026-09-29); claude-opus-5-5 -> claude-opus-5 (2026-10-05); claude-opus-5 -> claude-sonnet-5-5 (2026-10-05).
+RECENT ACTIVITY — your own captured turns across ALL chats, last 7 days (80 turns, 2 chats). Source: local observation_queue.jsonl — this is your actual per-prompt activity log, NOT git. Use it to stay aware of what you have been working on across chats.
+SELF-STATE: latest captured turn was produced by claude-sonnet-5-5 on HRM5472-NEW — brain swaps this window: claude-opus-5 -> claude-sonnet-5-5 (2026-10-05); claude-sonnet-5-5 -> claude-opus-5-5 (2026-10-06); claude-opus-5-5 -> claude-sonnet-5-5 (2026-10-06); claude-sonnet-5-5 -> claude-opus-5-5 (2026-10-06); claude-opus-5-5 -> claude-sonnet-5-5 (2026-10-07); claude-sonnet-5-5 -> claude-opus-5-5 (2026-10-07); claude-opus-5-5 -> claude-sonnet-5-5 (2026-10-07); claude-sonnet-5-5 -> claude-opus-5-5 (2026-10-08); claude-opus-5-5 -> claude-sonnet-5-5 (2026-10-08).
 
+- 2026-10-09 (Fri): 1 turns [1 chat(s)] — finance×1
+    • can you search in amazon great indian sale right now th eprices of each componnet in v1 pc build ? and how muhc discount is being given
+- 2026-10-08 (Thu): 9 turns [1 chat(s)] — unknown×5, data-engineering×2, jarvis-build×1, ai-ml×1
+    • alright, I'll tell you when i'm done answerin all questions:
+      until then i want you to:
+      1. clean the JARVIS workspace, any stale files, folders that we created for temp update or temp use, remove them.
+      2. Any stale docs that are imp but not updated, update them.
+      3. except JARVIS and rfm (corpus app) nothing must be there. I think researc papers are also of no use.
+- 2026-10-07 (Wed): 28 turns [1 chat(s)] — unknown×25, ai-ml×1, finance×1, data-engineering×1
+    • pushed.
+      Alright now i want you to get me up to speed.
+      What is the absolute current state of jarvis
+      What are the open items currently
+      Is jarvis on it's way to a good training corpus so it is qualified for it's 1st ever training.
+      And do you genuinely and honestly no cap, see jarvis heading to the final jarvis I desired while startin the project.
+      Also i have a custom pc build concept that i will give to you after your answer. Brining much better local resources for JARVIS buidling.
+- 2026-10-06 (Tue): 39 turns [2 chat(s)] — data-engineering×16, ai-ml×15, unknown×7, jarvis-build×1
+    • alright, do you think just following your roadmap and solving all problems you put in your notebooks is enough? or should we also consider leetcode top 50/top 100 questions or Striver's DSA sheet??
+    • alright, don't do anythin on this machine that can later be done in my personal laptop.
+      and specially nothing that puts strain on cpu or gpu, i can't damage work laptop like i did my personal laptop.
+      Answer the agent mails but work won;t be done by them because my personal laptop is dead so codex and antigravity wont work.
+      Push whatever is held.
+      You can push deepclone code.
 - 2026-10-05 (Mon): 3 turns [2 chat(s)] — unknown×3
     • get the latest pull from jarvis.
     • all this is being taken care of by the "JS build" caht/session. You just focus on the prep, and any insights you find or training data or cognintive data form my preperation and my writing and learning style or watever that helps jarvis along the way you do it but don't do the chores that the dedicated js build chat is supposed to do. Got it?
-- 2026-09-30 (Wed): 24 turns [5 chat(s)] — unknown×21, finance×2, data-engineering×1
-    • what is the ending of loki season 2? in regards to the temporal loom and why loki has to hold some strings and sit ona  throne?
-    • i didnt ask you to start implementing anything, i only asked info and the actual action item list, so aswer all the questions i asked precious turn and then give the actual action item list.
-      We will implement tomorrow, I'm done for the day.
-    • <external_codex_apps_open_page>{"page_id":null}</external_codex_apps_open_page>
-- 2026-09-29 (Tue): 68 turns [5 chat(s)] — unknown×52, ai-ml×7, data-engineering×5, jarvis-build×2, finance×2
-    • commit and push
-    • 1. Redacting client identifiers from the capture queue and shards before any push. The queue is tracked in git, so client names already sit in it. Nothing is pushed until you decide.
-      2. Committing and pushing Phases 1–2.
-      do #2
-      for #1, you can redact, but make sure that all of deepclone frameowork along with the tes_cases_orchestrator job i created and all test notebooks inside that job are propelry commited and pushed and used in training along with session learnings etc
-    • get the latest pull and tell me if anything's been assigned to you to implement, check the agent mail as well
-    • check out this video for new strategies for viral-shorts clips that we cna use to make shorts for youtube
-      https://youtu.be/a-yeaMDQN8w?si=Lm5beEEboxZoWhDm

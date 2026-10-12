@@ -127,3 +127,39 @@ Owner's V1 list is a **price snapshot and partly outdated**; confirm every item 
 - [ ] If bought: amend ENDGAME §2 ("no local GPU") and §3.6; add a KB decision; record that **Kimi K2.6 (1T) still cannot run locally** and RunPod remains the path for it, unless the owner retargets Stage 5 to a 7-14B base.
 - [ ] UPS for an always-on host (power cuts corrupt append-only logs).
 - Local capability by GPU (from memory of specs, not measured): 16GB = 8B QLoRA comfortable, 14B tight; **5090 32GB** = 32B Q4 inference fits and 32B QLoRA becomes plausible.
+
+## J. Cutover: work laptop → personal machine with a personal Claude account (owner decision 2026-10-12)
+
+Why: Celebal moves Claude Team to Enterprise (backup deadline 15 Oct 2026). JARVIS stops on the work laptop and the company account. The Enterprise account is used only for DE learning, job-switch and RSA prep, in `~/work/prep/` on the work laptop: a copy made 2026-10-12, with no JARVIS hooks. The target machine is not decided yet; the steps assume Windows + WSL Ubuntu.
+
+**Travels via git:** KB, profile, digest, observation queue, parse verdicts, retractions, c002 harness, context-store shards (Claude Code transcripts in compressed form), `.agent/`, `.claude/settings.json` (hooks, home-relative deny rules), `.paused_jobs`.
+**Does not travel; carry by hand:** `~/.jarvis_private/` (c002 owner answers), `~/claude_chats_backup_2026-10-08/` (raw Claude Code chats, incl. RSA and Job Switch). **Recreate, never copy:** OpenRouter key, GitHub PAT. **Rebuild:** `.venv`, `chromadb/`. **Accept the loss:** `.claude/settings.local.json`, Claude Code's machine-local memory notes (their durable content is in the KB, incl. KB 1202-1203). **Stays off the personal machine:** `client_work/` raw repos.
+
+**Before 15 Oct, on the work laptop**
+- [ ] `git push origin main`; check the latest commit on GitHub.
+- [ ] Copy `~/.jarvis_private/` and `~/claude_chats_backup_2026-10-08/` to personal storage (USB or a personal cloud).
+- [ ] Export claude.ai data (Settings → Privacy → Export data); save RSA and Job Switch claude.ai chats, project files and instructions.
+- [ ] From now on, never open Claude Code inside `~/work/JARVIS` while logged into the Enterprise account. Prep happens in `~/work/prep/`.
+
+**On the personal machine**
+- [ ] Claude Pro on the personal account; install Claude Code; `/login` with that account. Pro limits are lower than Team; long JARVIS sessions may need Max.
+- [ ] WSL Ubuntu; preflight in NERVOUS_SYSTEM.md §6.2 (systemd on, cron installed and running), plus `python3`, `python3-venv`, `git`.
+- [ ] New fine-grained GitHub PAT (Contents: read and write) as `GH_TOKEN`; `git clone https://github.com/Swarajnegi/private-ai.git JARVIS`; set `git config user.name/user.email`.
+- [ ] New OpenRouter key: `export OPENROUTER_API_KEY=…` and `export OPENROUTER_MODEL=…` in `~/.bashrc`.
+- [ ] Restore `~/.jarvis_private/` (`chmod 700` on the folder, `600` on the file) and the chat backup.
+- [ ] First run (NERVOUS_SYSTEM.md §5.1): `python3 -m venv .venv && source .venv/bin/activate`, `pip install -r requirements.txt`, `python3 scripts/bootstrap_jarvis.py`, `python3 scripts/index_memory.py`.
+- [ ] Decide `jarvis_data/.paused_jobs` for that machine: delete a line to resume a heavy job if the hardware can take it, then run `python3 scripts/rebuild_corpora.py` once.
+- [ ] Hearth: the two cron lines from NERVOUS_SYSTEM.md §6.2 with the new path; `python3 scripts/hearth.py --status` shows UP.
+- [ ] Optional, untested: put the backed-up `.jsonl` transcripts in the new `~/.claude/projects/<path-key>/` so `/resume` can open old chats.
+- [ ] Codex and Antigravity, if that machine has them: NERVOUS_SYSTEM.md §5.2 and §5.3.
+
+**Verify nothing was lost**
+- [ ] `python3 scripts/bootstrap_jarvis.py --check`, `python3 scripts/pipeline_health.py`, `python3 scripts/check_pipeline.py`, `python3 scripts/parse_turns.py --status`.
+- [ ] `wc -l jarvis_data/knowledge_base.jsonl` matches GitHub; `python3 scripts/search_memory.py "RSA prep"` returns results.
+- [ ] A new Claude Code session in the repo shows the profile and digest pointers at start; the web UI at http://127.0.0.1:8756/ answers a question.
+
+**Decommission the work laptop (only after the checks above pass)**
+- [ ] `crontab -e`: remove the two hearth lines; stop the hearth and its Chroma server (`python3 scripts/hearth.py --status` gives the pids).
+- [ ] Remove the OpenRouter lines from `~/.bashrc` and the GitHub entry from `~/.git-credentials`; revoke the old OpenRouter key and the old PAT at the providers.
+- [ ] Delete `~/work/JARVIS`, `~/.jarvis_private`, `~/.claude/projects/-home-swara-unix-work-JARVIS` and `~/claude_chats_backup_2026-10-08` (once the off-laptop copy is confirmed).
+- [ ] Only then log Claude Code into the Enterprise account.

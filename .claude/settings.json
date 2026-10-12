@@ -1,9 +1,9 @@
 {
   "permissions": {
     "deny": [
-      "Read(//home/swara_unix/.jarvis_private/**)",
-      "Edit(//home/swara_unix/.jarvis_private/**)",
-      "Write(//home/swara_unix/.jarvis_private/**)",
+      "Read(~/.jarvis_private/**)",
+      "Edit(~/.jarvis_private/**)",
+      "Write(~/.jarvis_private/**)",
       "Bash(*jarvis_private*)"
     ],
     "allow": [
