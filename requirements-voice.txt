@@ -1,0 +1,12 @@
+# Voice pipeline direct requirements (CPU)
+# Constrained by requirements.txt to preserve torch==2.11.0+cpu, numpy==2.2.6, etc.
+-c requirements.txt
+kokoro==0.9.4
+faster-whisper==1.2.1
+misaki[en]==0.9.4
+soundfile==0.14.0
+# English phonemization resources tested on native Windows; installed in the D-drive venv.
+espeakng-loader==0.2.4
+ctranslate2==4.8.3
+spacy==3.8.16
+en-core-web-sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl

@@ -114,6 +114,7 @@ class EngineState:
     warm: bool = False
     warm_seconds: Optional[float] = None
     error: Optional[str] = None
+    errors: Dict[str, str] = field(default_factory=dict)
 
 
 class SpeechEngine:
@@ -129,21 +130,36 @@ class SpeechEngine:
         self._tts_lock = threading.Lock()
         self._warm_lock = threading.Lock()
 
+    def _sync_error(self) -> None:
+        """Keep the legacy error string consistent with independent component failures."""
+        self.state.error = "; ".join(
+            f"{component}: {message}" for component, message in sorted(self.state.errors.items())
+        ) or None
+
     def warm(self) -> EngineState:
         with self._warm_lock:
             if self.state.warm:
                 return self.state
             t0 = time.perf_counter()
             cuda = _init_torch_cuda()
-            try:
-                self._load_stt(cuda)
-            except Exception as e:                          # noqa: BLE001
-                self.state.error = f"stt: {type(e).__name__}: {e}"
-            try:
-                self._load_tts(cuda)
-            except Exception as e:                          # noqa: BLE001
-                self.state.error = f"tts: {type(e).__name__}: {e}"
+            if self._stt is None:
+                try:
+                    self._load_stt(cuda)
+                    self.state.errors.pop("stt", None)
+                except Exception as e:                          # noqa: BLE001
+                    self.state.errors["stt"] = f"{type(e).__name__}: {e}"
+            if self._tts is None:
+                try:
+                    self._load_tts(cuda)
+                    self.state.errors.pop("tts", None)
+                except Exception as e:                          # noqa: BLE001
+                    self.state.errors["tts"] = f"{type(e).__name__}: {e}"
             self.state.warm = self._stt is not None and self._tts is not None
+            if self.state.warm:
+                self.state.errors.clear()
+                self.state.error = None
+            else:
+                self._sync_error()
             self.state.warm_seconds = round(time.perf_counter() - t0, 2)
             return self.state
 
@@ -174,7 +190,9 @@ class SpeechEngine:
         if self._stt is None:
             self.warm()
         if self._stt is None:
-            raise RuntimeError(self.state.error or "speech-to-text unavailable")
+            stt_err = self.state.errors.get("stt")
+            msg = f"stt: {stt_err}" if stt_err else (self.state.error or "speech-to-text unavailable")
+            raise RuntimeError(msg)
         with self._stt_lock:
             try:
                 return self._run_stt(self._stt, audio)
@@ -205,7 +223,9 @@ class SpeechEngine:
         if self._tts is None:
             self.warm()
         if self._tts is None:
-            raise RuntimeError(self.state.error or "text-to-speech unavailable")
+            tts_err = self.state.errors.get("tts")
+            msg = f"tts: {tts_err}" if tts_err else (self.state.error or "text-to-speech unavailable")
+            raise RuntimeError(msg)
         if voice not in TTS_VOICES:
             voice = TTS_VOICE
         with self._tts_lock:
@@ -217,7 +237,8 @@ class SpeechEngine:
         s = self.state
         return {"warm": s.warm, "stt": s.stt_device, "tts": s.tts_device,
                 "stt_model": STT_MODEL, "voice": TTS_VOICE, "voices": list(TTS_VOICES),
-                "warm_seconds": s.warm_seconds, "error": s.error}
+                "warm_seconds": s.warm_seconds, "error": s.error,
+                "errors": dict(s.errors)}
 
 
 ENGINE = SpeechEngine()
@@ -516,6 +537,103 @@ def _run_self_test(live: bool = False) -> int:
         lines = p.read_text(encoding="utf-8").splitlines()
         check("L1 a torn last line is healed before appending",
               json.loads(lines[-1]).get("stage"), "x")
+
+    # Mocked SpeechEngine tests: both fail, stt-only fail, tts-only fail, retry success, retained partial availability
+    class DummyTTS:
+        def __call__(self, text: str, voice: str = "bm_lewis", speed: float = 1.05):
+            arr = np.zeros(TTS_RATE, dtype=np.float32)
+            yield None, None, arr
+
+    class DummySTT:
+        def transcribe(self, audio: np.ndarray, **kwargs):
+            class Seg:
+                text = "mocked speech"
+            return [Seg()], None
+
+    # M1-M6: STT-only fail
+    eng1 = SpeechEngine()
+    def fail_stt(cuda: bool):
+        raise RuntimeError("whisper load error")
+    def load_tts(cuda: bool):
+        eng1._tts, eng1.state.tts_device = DummyTTS(), "cpu"
+    eng1._load_stt = fail_stt
+    eng1._load_tts = load_tts
+    eng1.warm()
+    check("M1 stt-only fail: warm is False", eng1.state.warm, False)
+    check("M2 stt-only fail: errors dict has stt", eng1.state.errors, {"stt": "RuntimeError: whisper load error"})
+    check("M3 stt-only fail: error string matches backward compatibility", eng1.state.error, "stt: RuntimeError: whisper load error")
+    check("M4 stt-only fail: status() reflects error and errors dict",
+          eng1.status().get("errors") == {"stt": "RuntimeError: whisper load error"} and
+          eng1.status().get("error") == "stt: RuntimeError: whisper load error", True)
+    check("M5 stt-only fail: tts remains usable (partial availability)", len(list(eng1.synthesize("test"))) > 0, True)
+    stt_raised = False
+    try:
+        eng1.transcribe(np.zeros(STT_RATE, dtype=np.float32))
+    except RuntimeError as e:
+        stt_raised = "stt: RuntimeError: whisper load error" in str(e)
+    check("M6 stt-only fail: transcribe raises stt error", stt_raised, True)
+
+    # M7-M11: TTS-only fail
+    eng2 = SpeechEngine()
+    def load_stt(cuda: bool):
+        eng2._stt, eng2.state.stt_device = DummySTT(), "cpu"
+    def fail_tts(cuda: bool):
+        raise RuntimeError("kokoro load error")
+    eng2._load_stt = load_stt
+    eng2._load_tts = fail_tts
+    eng2.warm()
+    check("M7 tts-only fail: warm is False", eng2.state.warm, False)
+    check("M8 tts-only fail: errors dict has tts", eng2.state.errors, {"tts": "RuntimeError: kokoro load error"})
+    check("M9 tts-only fail: error string matches backward compatibility", eng2.state.error, "tts: RuntimeError: kokoro load error")
+    check("M10 tts-only fail: stt remains usable (partial availability)", eng2.transcribe(np.zeros(STT_RATE, dtype=np.float32)), "mocked speech")
+    tts_raised = False
+    try:
+        list(eng2.synthesize("test"))
+    except RuntimeError as e:
+        tts_raised = "tts: RuntimeError: kokoro load error" in str(e)
+    check("M11 tts-only fail: synthesize raises tts error", tts_raised, True)
+
+    # M12-M15: Both fail
+    eng3 = SpeechEngine()
+    def fail_stt3(cuda: bool):
+        raise RuntimeError("whisper fail")
+    def fail_tts3(cuda: bool):
+        raise RuntimeError("kokoro fail")
+    eng3._load_stt = fail_stt3
+    eng3._load_tts = fail_tts3
+    eng3.warm()
+    check("M12 both fail: warm is False", eng3.state.warm, False)
+    check("M13 both fail: errors dict has both keys", eng3.state.errors, {"stt": "RuntimeError: whisper fail", "tts": "RuntimeError: kokoro fail"})
+    check("M14 both fail: error joins without overwriting", eng3.state.error, "stt: RuntimeError: whisper fail; tts: RuntimeError: kokoro fail")
+    check("M15 both fail: status() reflects both errors", eng3.status().get("errors") == eng3.state.errors, True)
+
+    # M16-M19: Retry success from tts-only fail
+    def recover_tts(cuda: bool):
+        eng2._tts, eng2.state.tts_device = DummyTTS(), "cpu"
+    eng2._load_tts = recover_tts
+    eng2.warm()
+    check("M16 retry success: warm becomes True", eng2.state.warm, True)
+    check("M17 retry success: errors dict cleared to empty", eng2.state.errors, {})
+    check("M18 retry success: error string becomes None", eng2.state.error, None)
+    check("M19 retry success: both components now functional",
+          eng2.transcribe(np.zeros(STT_RATE, dtype=np.float32)) == "mocked speech" and len(list(eng2.synthesize("test"))) > 0, True)
+
+    # M20-M22: Retained partial availability across retries
+    eng4 = SpeechEngine()
+    load_counts = {"stt": 0, "tts": 0}
+    def count_load_stt(cuda: bool):
+        load_counts["stt"] += 1
+        eng4._stt, eng4.state.stt_device = DummySTT(), "cpu"
+    def count_fail_tts(cuda: bool):
+        load_counts["tts"] += 1
+        raise RuntimeError("persistent tts fail")
+    eng4._load_stt = count_load_stt
+    eng4._load_tts = count_fail_tts
+    eng4.warm()  # attempt 1
+    eng4.warm()  # attempt 2 (retry still failing)
+    check("M20 retained partial availability: working stt not reloaded unnecessarily", load_counts["stt"], 1)
+    check("M21 retained partial availability: stt remains operational despite retry fail", eng4.transcribe(np.zeros(STT_RATE, dtype=np.float32)), "mocked speech")
+    check("M22 retained partial availability: error state retained", eng4.state.errors, {"tts": "RuntimeError: persistent tts fail"})
 
     if live:
         st = ENGINE.warm()
