@@ -410,6 +410,7 @@ export class Field {
   private wordMat: THREE.ShaderMaterial;
   private core: THREE.Points;
   private word: THREE.Points;
+  private wordHome = new THREE.Vector3();
   private glow: THREE.Sprite;
   private clock = new THREE.Clock();
   private target = STATE.waking;
@@ -499,6 +500,9 @@ export class Field {
       this.wordMat.uniforms.uForm.value = 1;
     }
     addEventListener("resize", () => this.resize());
+    document.getElementById("gate")?.addEventListener("scroll", () => this.resize());
+    const gate = document.querySelector(".gate-inner");
+    if (gate) new ResizeObserver(() => this.resize()).observe(gate);
     addEventListener("pointermove", (e) => {
       this.pointer.set(e.clientX / innerWidth - 0.5, e.clientY / innerHeight - 0.5);
     });
@@ -516,11 +520,20 @@ export class Field {
     // Keep the core the same apparent size on a phone as on a desktop.
     this.camera.position.set(0, 0, w < 700 ? 6.2 : 4.3);
     this.camera.updateProjectionMatrix();
-    // The wordmark is 3.3 units wide; on a phone only ~2 units are in view.
-    // Grain size is NOT scaled with the fit — the phone camera already sits
-    // farther back, and scaling again made the word vanish (measured).
+    // Fit the wordmark to its layout box without shrinking the grains too.
     const halfW = Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2)) * this.camera.position.z * this.camera.aspect;
-    this.word?.scale.setScalar(Math.min(1, (halfW * 2 * 0.86) / 3.3));
+    const halfH = halfW / this.camera.aspect;
+    const title = document.getElementById("gate-title")?.getBoundingClientRect();
+    if (title && this.stage !== "live") {
+      // The layout reserves this box even when the token form appears or wraps.
+      this.word.scale.setScalar(Math.min(1,
+        (halfW * 2 * title.width / w) / 3.3,
+        (halfH * 2 * title.height / h) / (3.3 * 260 / 1400)));
+      this.word.position.set(
+        ((title.left + title.width / 2) / w - 0.5) * halfW * 2,
+        (0.5 - (title.top + title.height / 2) / h) * halfH * 2 + 0.1, 0);
+      this.wordHome.copy(this.word.position);
+    }
   }
 
   /** The user entered: the sand flows into the core and the core lights. */
@@ -594,6 +607,7 @@ export class Field {
       if (wu.uForm.value >= 1) this.stage = "held";
     } else if (this.stage === "collapsing") {
       wu.uCollapse.value = Math.min(1, this.stageT / 1.8);
+      this.word.position.lerpVectors(this.wordHome, this.core.position, ease(wu.uCollapse.value));
       u.uReveal.value = ease(Math.min(1, Math.max(0, (this.stageT - 0.6) / 1.5)));
       if (this.stageT > 2.3) {
         this.stage = "live";
