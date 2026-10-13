@@ -11,6 +11,8 @@ import { marked } from "marked";
 import * as api from "./api";
 import { Field } from "./field";
 import { Live, type CoreState } from "./live";
+import { SessionsView } from "./sessions";
+import { SystemView } from "./system";
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -123,22 +125,27 @@ addEventListener("resize", layout);
 // Dim the core when another section is over it: the core never competes
 // with text for attention, and never sits under it at full brightness.
 const sections = ["core", "sessions", "system"].map((id) => $(id));
-const io = new IntersectionObserver(
-  (entries) => {
-    for (const e of entries) {
-      if (!e.isIntersecting) continue;
-      const id = e.target.id;
-      document.querySelectorAll<HTMLAnchorElement>(".acts a").forEach((a) =>
-        a.setAttribute("aria-current", String(a.dataset.act === id)),
-      );
-      field?.setDim(id === "core" ? 1 : 0.22);
-      if (id === "sessions") void renderSessions();
-      if (id === "system") void renderSystem();
-    }
-  },
-  { threshold: 0.45 },
-);
-sections.forEach((s) => io.observe(s));
+// Section height varies with records and expanded diagnostics; position owns selection.
+let activeSection = "";
+let sectionFrame = 0;
+function queueSectionUpdate(): void {
+  if (sectionFrame) return;
+  sectionFrame = requestAnimationFrame(() => {
+    sectionFrame = 0;
+    const active = sections.filter((el) => el.getBoundingClientRect().top <= innerHeight * 0.3).at(-1) || sections[0];
+    if (active.id === activeSection) return;
+    activeSection = active.id;
+    document.querySelectorAll<HTMLAnchorElement>(".acts a").forEach((a) =>
+      a.setAttribute("aria-current", String(a.dataset.act === active.id)),
+    );
+    field?.setDim(active.id === "core" ? 1 : 0.22);
+    if (active.id === "sessions") void renderSessions();
+    if (active.id === "system") void renderSystem();
+  });
+}
+addEventListener("scroll", queueSectionUpdate, { passive: true });
+addEventListener("resize", queueSectionUpdate);
+queueSectionUpdate();
 
 // ---- dialogue ------------------------------------------------------------
 const turns = $<HTMLOListElement>("turns");
@@ -362,142 +369,22 @@ addEventListener("keydown", (e) => {
   if (e.key.toLowerCase() === "d") toggleDialogue();
 });
 
-// ---- 02 sessions -----------------------------------------------------------
-async function renderSessions(): Promise<void> {
-  const grid = $("session-grid");
-  try {
-    const list = await api.sessions();
-    grid.replaceChildren(
-      ...list.map((s, i) => {
-        const b = document.createElement("button");
-        b.type = "button";
-        b.className = "card";
-        if (s.session_id === session) b.setAttribute("aria-current", "true");
-        const when = s.latest_ts ? new Date(s.latest_ts).toLocaleString([], { dateStyle: "medium", timeStyle: "short" }) : "";
-        const kind = s.session_id.startsWith("conv-web-") ? "Web · voice" : "Terminal";
-        b.innerHTML = `<span class="card-kind"></span><p class="card-title"></p>
-          <span class="card-foot"><span></span><span class="card-arrow">↗</span></span>`;
-        b.prepend(sigil(s.session_id));
-        b.querySelector(".card-kind")!.textContent = `${String(i + 1).padStart(2, "0")} · ${kind}`;
-        b.querySelector(".card-title")!.textContent = s.title || s.first_prompt || s.session_id;
-        b.querySelector(".card-foot span")!.textContent = `${s.turn_count} turns · ${when}`;
-        b.addEventListener("click", async () => {
-          remember(s.session_id);
-          live.setSession(s.session_id);
-          await loadHistory();
-          $("core").scrollIntoView();
-        });
-        return b;
-      }),
-    );
-    if (!list.length) grid.textContent = "No conversations yet.";
-  } catch (e) {
-    grid.textContent = (e as Error).message;
-  }
-}
+// ---- 02 sessions / 03 system -----------------------------------------------
+const sessionsView = new SessionsView($("sessions"), () => session, sigil, async (id) => {
+  remember(id);
+  live.setSession(id);
+  await loadHistory();
+  $("core").scrollIntoView();
+});
+const systemView = new SystemView($("system"));
 
-// ---- 03 system ---------------------------------------------------------------
-function fmtUptime(s: number): string {
-  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
-  return h ? `${h} h ${m} min` : `${m} min`;
-}
-
-/** scripts/pipeline_health.py's report, as /v1/health carries it. */
-type PipelineReport = {
-  healthy: boolean | null;
-  status?: string;
-  generated_at?: string;
-  breaches: Array<{ check: string; detail: string }>;
-  backlog: Record<string, { pending: number; oldest: string; oldest_age_h?: number | null }>;
-};
-type CellFn = (no: string, title: string, sub: string, body: string | Node) => HTMLElement;
-
-/** Every breach, whole and red. A healthy pipeline says so in one line. */
-function pipelineCell(cell: CellFn, p: PipelineReport | null): HTMLElement {
-  if (!p) return cell("01", "Pipeline health", "Not reported", "This hearth does not report pipeline health.");
-  if (p.healthy === null) return cell("01", "Pipeline health", "Computing", p.status || "The first report is being built.");
-  if (p.healthy) return cell("01", "Pipeline health", `Healthy · ${p.generated_at ?? ""}`, "Every job, backlog, corpus, projection and no-truncation check passes.");
-  const list = document.createElement("ul");
-  list.className = "breaches";
-  for (const b of p.breaches) {
-    const li = document.createElement("li");
-    li.innerHTML = `<span class="breach-check"></span><span class="breach-detail"></span>`;
-    li.children[0].textContent = b.check;
-    li.children[1].textContent = b.detail;
-    list.append(li);
-  }
-  const c = cell("01", "Pipeline health", `${p.breaches.length} breach${p.breaches.length === 1 ? "" : "es"} · ${p.generated_at ?? ""}`, list);
-  c.classList.add("cell-wide", "cell-bad");
-  return c;
-}
-
-/** Unparsed turns per host: whose parse is overdue, and by how long. */
-function backlogCell(cell: CellFn, p: PipelineReport | null): HTMLElement {
-  const hosts = Object.entries(p?.backlog ?? {});
-  if (!hosts.length) return cell("02", "Parse backlog", "Per host", p ? "No backlog reported yet." : "Not reported.");
-  const list = document.createElement("ul");
-  list.className = "jobs";
-  const flagged = new Set((p?.breaches ?? []).filter((b) => b.check.startsWith("backlog:")).map((b) => b.check.slice(8)));
-  let total = 0;
-  for (const [host, slot] of hosts) {
-    total += slot.pending;
-    const li = document.createElement("li");
-    li.innerHTML = `<span></span><span></span>`;
-    li.children[0].textContent = host;
-    const age = slot.oldest_age_h != null ? ` · oldest ${slot.oldest_age_h >= 48 ? `${(slot.oldest_age_h / 24).toFixed(1)} d` : `${slot.oldest_age_h} h`}` : "";
-    li.children[1].textContent = `${slot.pending} unparsed${age}`;
-    if (flagged.has(host)) li.children[1].classList.add("bad");
-    list.append(li);
-  }
-  return cell("02", "Parse backlog", `${total} turns waiting for their agent`, list);
-}
-
-async function renderSystem(): Promise<void> {
-  const grid = $("system-grid");
-  try {
-    const h = await api.health();
-    const cell = (no: string, title: string, sub: string, body: string | Node) => {
-      const c = document.createElement("div");
-      c.className = "cell";
-      c.innerHTML = `<span class="cell-no"></span><h3></h3><span class="cell-sub"></span>`;
-      c.querySelector(".cell-no")!.textContent = no;
-      c.querySelector("h3")!.textContent = title;
-      c.querySelector(".cell-sub")!.textContent = sub;
-      if (typeof body === "string") {
-        const p = document.createElement("p");
-        p.textContent = body;
-        c.append(p);
-      } else c.append(body);
-      return c;
-    };
-    const jobs = document.createElement("ul");
-    jobs.className = "jobs";
-    for (const j of h.jobs || []) {
-      const li = document.createElement("li");
-      const status = String(j.last_status ?? j.status ?? "—");
-      li.innerHTML = `<span></span><span></span>`;
-      li.children[0].textContent = String(j.name ?? "job");
-      li.children[1].textContent = status;
-      if (/fail/i.test(status) || Number(j.consecutive_failures ?? 0) > 0) li.children[1].classList.add("bad");
-      jobs.append(li);
-    }
-    const warm = h.warm || { state: "unknown", seconds: null, error: null };
-    const pipeline = (h as api.Health & { pipeline?: PipelineReport | null }).pipeline ?? null;
-    grid.replaceChildren(
-      pipelineCell(cell, pipeline),
-      backlogCell(cell, pipeline),
-      cell("03", "Hearth", "Always-on process", `Up ${fmtUptime(h.uptime_seconds)} · ${h.busy ? "working on a question" : "idle"} · ${h.requests_served} served, ${h.requests_rejected} refused.`),
-      cell("04", "Warm-up", `State · ${warm.state}`, warm.error ? `Degraded: ${warm.error}` : warm.seconds != null ? `Models and memory loaded in ${warm.seconds} s at start.` : "Loading models and memory."),
-      cell("05", "Voice", `Ears ${engineInfo.stt ?? "—"} · Voice ${engineInfo.tts ?? "—"}`, engineInfo.voice ? `Speech-to-text: Whisper ${engineInfo.stt_model}. Speaking as ${engineInfo.voice}.` : "Connect the core to see the voice engine."),
-      cell("06", "Scheduled jobs", `${(h.jobs || []).length} on the clock`, (h.jobs || []).length ? jobs : "This hearth runs without a clock."),
-    );
-    if (h.last_error) grid.append(cell("07", "Last error", "Most recent failure", h.last_error));
-  } catch (e) {
-    grid.textContent = (e as Error).message;
-  }
-}
+async function renderSessions(): Promise<void> { if (api.token()) await sessionsView.refresh(); }
+async function renderSystem(): Promise<void> { if (api.token()) await systemView.refresh(); }
+document.querySelector('a[data-act="sessions"]')!.addEventListener("click", () => void renderSessions());
+document.querySelector('a[data-act="system"]')!.addEventListener("click", () => void renderSystem());
 setInterval(() => {
-  if (document.visibilityState === "visible" && $("system").getBoundingClientRect().top < innerHeight) void renderSystem();
+  const rect = $("system").getBoundingClientRect();
+  if (document.visibilityState === "visible" && rect.top < innerHeight && rect.bottom > 0) void renderSystem();
 }, 15000);
 
 // ---- arrival -----------------------------------------------------------------
@@ -530,6 +417,11 @@ async function enter(): Promise<void> {
   setTimeout(layout, 50);
   live.connect();
   await loadHistory();
+  // A section deep link may have tried to load before the token was verified.
+  for (const [id, refresh] of [["sessions", renderSessions], ["system", renderSystem]] as const) {
+    const rect = $(id).getBoundingClientRect();
+    if (rect.top < innerHeight && rect.bottom > 0) void refresh();
+  }
 }
 
 document.body.classList.add("arriving");

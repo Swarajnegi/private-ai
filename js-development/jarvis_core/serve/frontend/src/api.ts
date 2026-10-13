@@ -15,6 +15,31 @@ export type Session = {
   latest_ts?: string;
   turn_count: number;
 };
+export type PipelineReport = {
+  healthy: boolean | null;
+  status?: string;
+  generated_at?: string;
+  breaches: Array<{ check: string; detail: string }>;
+  backlog: Record<string, { pending: number; oldest: string; oldest_age_h?: number | null }>;
+};
+export type JobStatus = {
+  name: string;
+  paused?: boolean;
+  status?: string;
+  last_status?: string;
+  consecutive_failures?: number;
+  last_run_ts?: number | null;
+  last_output?: string;
+  [key: string]: unknown;
+};
+export type VoiceCapabilities = {
+  warm: boolean;
+  stt: string;
+  tts: string;
+  voice: string;
+  stt_model: string;
+  error: string | null;
+};
 export type Health = {
   ok: boolean;
   uptime_seconds: number;
@@ -23,7 +48,8 @@ export type Health = {
   requests_rejected: number;
   last_error: string;
   warm?: { state: string; seconds: number | null; error: string | null };
-  jobs?: Array<Record<string, unknown>>;
+  jobs?: JobStatus[];
+  pipeline?: PipelineReport | null;
 };
 
 const TOKEN_KEY = "jarvis_hearth_token";
@@ -70,6 +96,7 @@ export async function json<T>(path: string, init: RequestInit = {}): Promise<T> 
 }
 
 export const health = () => json<Health>("/v1/health");
+export const voiceCapabilities = () => json<VoiceCapabilities>("/v1/voice/capabilities");
 export const verify = () => json<{ ok: boolean }>("/v1/auth/verify");
 export const sessions = () =>
   json<{ sessions: Session[] }>("/v1/sessions").then((d) =>

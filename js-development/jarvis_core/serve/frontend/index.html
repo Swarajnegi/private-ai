@@ -92,15 +92,45 @@
 
       <section id="sessions" class="act act-sessions" aria-label="Sessions">
         <p class="kicker">02 / Sessions</p>
-        <h2>Every conversation, kept.</h2>
-        <p class="lede">Resume any thread. The record is the hearth's, written after every answer — this page only reads it.</p>
-        <div id="session-grid" class="grid"></div>
+        <div class="session-heading">
+          <div>
+            <h2>Every conversation, kept.</h2>
+            <p class="lede">Resume any thread. The record is the hearth's, written after every answer — this page only reads it.</p>
+          </div>
+          <div class="session-tools">
+            <label class="sr" for="session-search">Search sessions</label>
+            <div class="session-search-box">
+              <span aria-hidden="true">⌕</span>
+              <input id="session-search" type="search" placeholder="Search sessions…" autocomplete="off" />
+              <button id="session-clear" class="link" type="button" aria-label="Clear session search" hidden>×</button>
+            </div>
+            <div class="session-filters" role="group" aria-label="Session source">
+              <button class="link" type="button" data-source="all" aria-pressed="true">All</button>
+              <button class="link" type="button" data-source="web" aria-pressed="false">Web / Voice</button>
+              <button class="link" type="button" data-source="terminal" aria-pressed="false">Terminal</button>
+            </div>
+          </div>
+        </div>
+        <div class="session-feedback">
+          <p id="session-status" role="status" aria-live="polite">Loading conversations…</p>
+          <button id="session-retry" class="link" type="button" hidden>Retry</button>
+        </div>
+        <div id="session-grid" class="grid" aria-label="Conversations"></div>
+        <div class="session-bottom">
+          <p id="session-results" class="micro" tabindex="-1"></p>
+          <button id="session-more" class="link" type="button" hidden>Load more</button>
+        </div>
+        <p class="session-hint">Open a session to read the full conversation.</p>
       </section>
 
       <section id="system" class="act act-system" aria-label="System">
         <p class="kicker">03 / System</p>
         <h2>The hearth, as it actually is.</h2>
-        <p class="lede">Live state from <code>/v1/health</code>, including every breach <code>scripts/pipeline_health.py</code> finds. Nothing on this page is decorative.</p>
+        <p class="lede">Live state from the hearth. Nothing on this page is decorative.</p>
+        <div class="system-feedback">
+          <p id="system-status" role="status" aria-live="polite">Loading live state…</p>
+          <button id="system-retry" class="link" type="button" hidden>Retry</button>
+        </div>
         <div id="system-grid" class="cells"></div>
       </section>
     </main>

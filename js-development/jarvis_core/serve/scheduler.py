@@ -685,11 +685,13 @@ class Scheduler:
     def status(self) -> List[Dict[str, Any]]:
         """Per-job state for GET /v1/health. A silent scheduler is a bug."""
         now = self._clock()
+        paused = paused_jobs()
         out: List[Dict[str, Any]] = []
         for job in self._jobs:
             st = self._state(job.name)
             out.append({
                 "name": job.name,
+                "paused": job.name in paused,
                 "every_hours": round(job.interval_seconds / HOUR, 2),
                 "interval_seconds": job.interval_seconds,
                 "initial_delay_seconds": job.initial_delay_seconds,
@@ -830,6 +832,17 @@ def _run_self_test() -> None:
         check("T13 the failure is recorded with its exit code",
               bad_state["failures"] == 1 and "rc=3" in bad_state["status"],
               str(bad_state))
+        from unittest.mock import patch
+        with patch(f"{__name__}.paused_jobs", return_value=frozenset({"bad"})):
+            paused_status = {row["name"]: row for row in s_fail.status()}
+            check("T13a status identifies owner-paused jobs without losing the last failure",
+                  paused_status["bad"]["paused"] is True
+                  and paused_status["good"]["paused"] is False
+                  and paused_status["bad"]["last_rc"] == 3
+                  and "rc=3" in paused_status["bad"]["last_status"])
+        with patch(f"{__name__}.paused_jobs", return_value=frozenset()):
+            check("T13b status re-reads pauses instead of caching a removed pause",
+                  all(row["paused"] is False for row in s_fail.status()))
 
         # T14: an exploding runner becomes a result, never an escaped exception.
         async def exploding(argv: Sequence[str], timeout: float) -> Tuple[int, str]:
