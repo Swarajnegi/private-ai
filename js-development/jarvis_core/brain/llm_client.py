@@ -918,7 +918,11 @@ def main() -> int:
     p.add_argument("--live", action="store_true", help="Real ping (needs OPENROUTER_API_KEY)")
     p.add_argument("--first-thought", action="store_true",
                    help="Live Final Boss: Mind + real model + calculator tool")
+    p.add_argument("--self-test", action="store_true", help="Run offline smoke tests only")
     args = p.parse_args()
+    if args.self_test:
+        _run_self_test()
+        return 0
     if args.live:
         asyncio.run(_live_ping())
         return 0

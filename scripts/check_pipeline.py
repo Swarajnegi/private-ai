@@ -752,6 +752,8 @@ def inv_no_retracted_material_in_training(a: Artifacts) -> List[Finding]:
     truth: those artifacts still hold material known not to be the owner's words."""
     from jarvis_core.specialists.retractions import load_retractions
     ret = load_retractions(a.root / "jarvis_data" / "retractions.jsonl")
+    if not any((a.engineer, a.personalization, a.blend, a.pairs, a.heldout)):
+        return [Finding("retracted material absent from training", UNKNOWN, "training artifacts absent")]
     if not ret.kb_ids and not ret.conv_turns:
         return [Finding("retracted material absent from training", OK, "nothing retracted")]
     leaked = []

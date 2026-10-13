@@ -39,19 +39,29 @@ Companion files: [STATUS.md](STATUS.md) (cross-agent snapshot), [js-learning/JAR
 ## C. Current breaches and blockers (re-check: `python3 scripts/pipeline_health.py`)
 
 - [ ] **Parse backlog** (`python3 scripts/parse_turns.py --status`): Codex 951, oldest 2026-09-13 (limit 24 h / 200); Antigravity 167, oldest 2026-05-21; Claude 0 (new turns appear every session).
-- [ ] `chromadb/jarvis_memory` stale: 661 indexed vs 1085 KB entries (`python3 scripts/pipeline_health.py`). Expected while `reindex_memory` is paused.
-- [ ] Six built corpora are 2.9 days old against a 48 h limit, because `rebuild_corpora` is paused (D).
+- [x] Active-host memory index refreshed 2026-10-13: 1,133 entries / 1,930 chunks.
+- [x] Five generated corpus artifacts rebuilt 2026-10-13; all 30 pipeline invariants passed. The client snapshot is an input, preserved unchanged.
 - [ ] `cognitive_profile.md` / `cognitive_index.sqlite3` lag the KB by a few entries until `profile_synth.py` runs (held until parsing settles).
 - [ ] **OpenRouter balance negative** → tool-using deep turns return HTTP 402. **Owner.**
 - [ ] **Personal laptop dead** → Codex and Antigravity cannot run; Claude parses their backlogs under KB 1009.
 - [ ] Tension evaluation positive case failed on a provider connection error at last report (Codex, 2026-09-12). **Not re-checked since.**
 - [ ] Exposed-key item c004 still open in the registry. **Owner**; the owner has said to leave it (2026-10-06), no agent action.
 
-## D. Paused by owner rule (KB 1044/1045, 2026-10-06) — do not run
+## D. Guarded maintenance on the active host (owner approval 2026-10-13)
 
-- [ ] `run_all_tests`, `rebuild_corpora` (the two heavy clocked jobs paused on this machine). **Conflict, owner decides:** the earlier rule says corpora are rebuilt only on the work laptop (`client_work/` exists only there), and this pause forbids the work laptop from rebuilding; the personal laptop is dead. Nothing can rebuild today.
-- [ ] `index_episodes`, `reindex_memory`, `relabel_domains` (c011, c012, c013)
-- Everything else continues. Anything that can wait for the personal laptop waits for it.
+- [x] Shared exclusive execution for scheduled jobs and the five manual maintenance commands.
+- [x] CPU-only resource policy: mains power, 4 GiB available RAM, two threads,
+  below-normal priority, bounded timeouts, process-tree cleanup and visible deferrals.
+- [x] Real memory-index, domain-label and corpus validation. Thirty pipeline
+  invariants passed; 947 client-snapshot records preserved without raw client source.
+- [x] Bounded episode validation: three real sources, 254 dense vectors. This is
+  not completion of the entire historical index.
+- [ ] Remaining historical episode sources: the six-hour incremental job catches up.
+- Cadences: memory 12 h; episodes 6 h; labels 24 h; corpora 48 h;
+  tests check daily after changes with a weekly fallback. Capture remains unchanged.
+- [x] All five jobs enabled after validation; watchdog restart, live cadences,
+  UI availability and local voice round trip verified. `.paused_jobs` and
+  `/v1/health` remain authoritative for subsequent activation changes.
 
 ## D2. Personalization interview (investigated 2026-10-07)
 

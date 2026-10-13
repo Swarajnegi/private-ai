@@ -55,6 +55,14 @@ STEP 4: upsert into the `jarvis_memory` collection with a deterministic id
 
 from __future__ import annotations
 
+# Acquire the shared execution lease before importing model-dependent organs.
+if __name__ == "__main__":
+    import sys as _boot_sys
+    from pathlib import Path as _BootPath
+    _boot_sys.path.insert(0, str(_BootPath(__file__).resolve().parents[1] / "js-development"))
+    from jarvis_core.serve.maintenance import cli_entry as _maintenance_entry
+    _maintenance_entry("reindex_memory", __file__)
+
 import argparse
 import hashlib
 import json

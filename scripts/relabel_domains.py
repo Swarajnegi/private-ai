@@ -64,6 +64,14 @@ STEP 4: --gold scores the hand-labelled sample and exits non-zero below the bar,
 
 from __future__ import annotations
 
+# Acquire the shared execution lease before importing model-dependent organs.
+if __name__ == "__main__":
+    import sys as _boot_sys
+    from pathlib import Path as _BootPath
+    _boot_sys.path.insert(0, str(_BootPath(__file__).resolve().parents[1] / "js-development"))
+    from jarvis_core.serve.maintenance import cli_entry as _maintenance_entry
+    _maintenance_entry("relabel_domains", __file__)
+
 import argparse
 import json
 import sys

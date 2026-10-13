@@ -2375,7 +2375,11 @@ def main() -> int:
                         "remote approval exists (the Commitment gate) this becomes "
                         "the default, because one process owning mutable state is "
                         "otherwise strictly better than two.")
+    p.add_argument("--self-test", action="store_true", help="Run offline smoke tests only")
     args = p.parse_args()
+    if args.self_test:
+        _run_self_test()
+        return 0
     if args.final_boss:
         tgts = [m.strip() for m in args.targets.split(",")] if args.targets else None
         return asyncio.run(_final_boss(live=args.live, budget_usd=args.budget, targets=tgts))

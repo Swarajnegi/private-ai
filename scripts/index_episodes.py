@@ -48,6 +48,14 @@ STEP 3: --eval-retrieval: for every question, search (dense + FTS + rerank),
 
 from __future__ import annotations
 
+# Acquire the shared execution lease before importing model-dependent organs.
+if __name__ == "__main__":
+    import sys as _boot_sys
+    from pathlib import Path as _BootPath
+    _boot_sys.path.insert(0, str(_BootPath(__file__).resolve().parents[1] / "js-development"))
+    from jarvis_core.serve.maintenance import cli_entry as _maintenance_entry
+    _maintenance_entry("index_episodes", __file__)
+
 import argparse
 import json
 import statistics
@@ -221,7 +229,8 @@ def _dir_bytes(p: Path) -> int:
     return sum(f.stat().st_size for f in p.rglob("*") if f.is_file()) if p.exists() else 0
 
 
-def run_build(index: "ei.EpisodeIndex", rebuild: bool, quiet: bool = False) -> Dict[str, Any]:
+def run_build(index: "ei.EpisodeIndex", rebuild: bool, quiet: bool = False,
+              limit_sources: Optional[int] = None) -> Dict[str, Any]:
     with try_exclusive_lock(ei.STORE_ROOT / "index") as got:
         if not got:
             print("another index build holds the lock; exiting without work")
@@ -231,7 +240,8 @@ def run_build(index: "ei.EpisodeIndex", rebuild: bool, quiet: bool = False) -> D
         import torch
         if torch.cuda.is_available():
             torch.cuda.reset_peak_memory_stats()
-        stats = index.build(rebuild=rebuild, log=(lambda s: None) if quiet else print)
+        stats = index.build(rebuild=rebuild, log=(lambda s: None) if quiet else print,
+                            limit_sources=limit_sources)
         stats["vram_peak_mb"] = index.embedder.vram_peak_mb() if hasattr(index.embedder, "vram_peak_mb") else None
         return stats
 
@@ -283,8 +293,12 @@ def main() -> int:
     ap.add_argument("--only", default="", help="comma list of question ids")
     ap.add_argument("--now", default=EVAL_NOW, help="reference time for relative expressions")
     ap.add_argument("--quiet", action="store_true")
+    ap.add_argument("--limit-sources", type=int, default=None,
+                    help="bounded incremental validation: process at most this many changed sources")
     ap.add_argument("--self-test", action="store_true")
     args = ap.parse_args()
+    if args.limit_sources is not None and args.limit_sources < 1:
+        ap.error("--limit-sources must be positive")
     for stream in (sys.stdout, sys.stderr):
         try:
             stream.reconfigure(encoding="utf-8", errors="replace")
@@ -355,7 +369,7 @@ def main() -> int:
                                    "latency": lat, **res}, ensure_ascii=False, indent=1), encoding="utf-8")
         print(f"report: {out}")
         return 0
-    st = run_build(index, rebuild=args.rebuild, quiet=args.quiet)
+    st = run_build(index, rebuild=args.rebuild, quiet=args.quiet, limit_sources=args.limit_sources)
     print(json.dumps(st, indent=1))
     print(json.dumps(index.status(), indent=1))
     return 0

@@ -1,0 +1,3 @@
+# Optional local episode encoder dependencies; preserve core CPU pins.
+-c requirements.txt
+einops==0.8.1

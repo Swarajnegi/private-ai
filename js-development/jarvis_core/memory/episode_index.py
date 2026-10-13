@@ -192,6 +192,9 @@ class Embedder:
             device = self._device or ("cuda" if torch.cuda.is_available() else "cpu")
             self._model = SentenceTransformer(self.spec.model, device=device,
                                               trust_remote_code=self.spec.trust_remote_code)
+            if self.spec.name == "nomic":
+                from jarvis_core.memory.nomic_compat import ensure_nomic_mask
+                ensure_nomic_mask(self._model[0].auto_model)
             self._model.max_seq_length = self.spec.max_tokens
         return self._model
 
@@ -1516,6 +1519,7 @@ class EpisodeIndex:
                     stats["sources_unchanged"] = stats.get("sources_unchanged", 0) + 1
                     continue
                 if limit_sources is not None and done >= limit_sources:
+                    stats["sources_pending"] = stats.get("sources_pending", 0) + 1
                     continue
                 t0 = time.perf_counter()
                 before = stats.get("embedded", 0)
@@ -1528,7 +1532,7 @@ class EpisodeIndex:
                 stats["sources_synced"] = stats.get("sources_synced", 0) + 1
                 log(f"  {key}: {n} units ({stats.get('embedded', 0) - before} embedded, "
                     f"{time.perf_counter() - t0:.1f}s)")
-        if limit_sources is None:
+        if limit_sources is None or not stats.get("sources_pending", 0):
             stale = [r[0] for r in self.db.execute("SELECT key FROM sources") if r[0] not in live_keys]
             for key in stale:
                 self._sync_source(key, iter(()), stats)

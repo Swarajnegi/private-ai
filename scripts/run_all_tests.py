@@ -91,7 +91,16 @@ STEP 4: report PASS / FAIL / TIMEOUT / SIDE-EFFECT per module and exit
 
 from __future__ import annotations
 
+# Acquire the shared execution lease before importing model-dependent organs.
+if __name__ == "__main__":
+    import sys as _boot_sys
+    from pathlib import Path as _BootPath
+    _boot_sys.path.insert(0, str(_BootPath(__file__).resolve().parents[1] / "js-development"))
+    from jarvis_core.serve.maintenance import cli_entry as _maintenance_entry
+    _maintenance_entry("run_all_tests", __file__)
+
 import argparse
+import ast
 import os
 import re
 import subprocess
@@ -156,6 +165,7 @@ class Suite:
     slow: bool
     has_suite: bool = True
     root: Path = _REPO_ROOT
+    command_self_test: bool = False
 
     @property
     def rel(self) -> str:
@@ -175,7 +185,9 @@ class Suite:
     def argv(self, python: str) -> List[str]:
         """Prefer the module's own declared entry point over a bare run."""
         cmd = [python, str(self.path)]
-        if self.uses_flag:
+        if self.command_self_test:
+            cmd.append("self-test")
+        elif self.uses_flag:
             cmd.append("--self-test")
         return cmd
 
@@ -204,15 +216,60 @@ def discover(root: Optional[Path] = None) -> List[Suite]:
                 continue
             if _MAIN_GUARD not in text:
                 continue
-            uses_flag = bool(_SELF_TEST_FLAG.search(text))
+            uses_flag, command_test, bare_test = test_entrypoint(text)
             suites.append(Suite(
                 path=path,
                 uses_flag=uses_flag,
                 slow=any(marker in text for marker in _SLOW_MARKERS),
-                has_suite=uses_flag or bool(_SUITE_MARKERS.search(text)),
+                has_suite=uses_flag or command_test or bare_test,
                 root=base,
+                command_self_test=command_test,
             ))
     return suites
+
+
+def test_entrypoint(text: str) -> Tuple[bool, bool, bool]:
+    """Recognize executable declarations, never examples inside strings."""
+    flag = command = bare = False
+    try:
+        tree = ast.parse(text)
+        nodes = ast.walk(tree)
+        for node in nodes:
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.args:
+                value = node.args[0]
+                if isinstance(value, ast.Constant):
+                    flag |= node.func.attr == "add_argument" and value.value == "--self-test"
+                    command |= node.func.attr == "add_parser" and value.value == "self-test"
+            if (isinstance(node, ast.Compare) and isinstance(node.left, ast.Constant)
+                    and node.left.value == "--self-test" and len(node.ops) == 1
+                    and isinstance(node.ops[0], ast.In) and len(node.comparators) == 1):
+                target = node.comparators[0]
+                flag |= (isinstance(target, ast.Attribute) and target.attr == "argv"
+                         and isinstance(target.value, ast.Name) and target.value.id == "sys")
+            if isinstance(node, ast.Compare) and len(node.ops) == 1 and isinstance(node.ops[0], ast.Eq):
+                operands = [node.left, *node.comparators]
+                flag |= (any(isinstance(x, ast.Constant) and x.value == "--self-test" for x in operands)
+                         and any(isinstance(x, ast.Subscript) and isinstance(x.value, ast.Attribute)
+                                 and x.value.attr == "argv" and isinstance(x.value.value, ast.Name)
+                                 and x.value.value.id == "sys" for x in operands))
+        for block in tree.body:
+            if not isinstance(block, ast.If):
+                continue
+            condition = block.test
+            if not (isinstance(condition, ast.Compare) and isinstance(condition.left, ast.Name)
+                    and condition.left.id == "__name__" and len(condition.ops) == 1
+                    and isinstance(condition.ops[0], ast.Eq) and len(condition.comparators) == 1
+                    and isinstance(condition.comparators[0], ast.Constant)
+                    and condition.comparators[0].value == "__main__"):
+                continue
+            for statement in block.body:
+                if isinstance(statement, (ast.Expr, ast.Raise)):
+                    bare |= any(isinstance(call, ast.Call) and isinstance(call.func, ast.Name)
+                                and call.func.id in {"_self_test", "_run_self_test", "_smoke"}
+                                for call in ast.walk(statement))
+    except SyntaxError:
+        return False, False, False
+    return flag, command, bare
 
 
 def _dirty_paths(root: Path) -> Set[str]:
@@ -363,6 +420,19 @@ def _self_test() -> int:
         (pkg / "slow.py").write_text(
             '# uses chromadb\ndef _smoke():\n    return 0\n'
             'if __name__ == "__main__":\n    raise SystemExit(_smoke())\n', encoding="utf-8")
+        (scripts / "membership.py").write_text(
+            'import sys\nfrom pathlib import Path\ndef _self_test(): return 0\n'
+            'if __name__ == "__main__":\n'
+            '    if "--self-test" in sys.argv: raise SystemExit(_self_test())\n'
+            '    Path(__file__).with_suffix(".live").write_text("live hook")\n', encoding="utf-8")
+        (scripts / "command.py").write_text(
+            'import argparse\ndef _self_test(): return 0\np=argparse.ArgumentParser()\n'
+            'sub=p.add_subparsers(dest="command", required=True)\nsub.add_parser("self-test")\n'
+            'if __name__ == "__main__":\n    p.parse_args()\n    raise SystemExit(_self_test())\n', encoding="utf-8")
+        (scripts / "example_only.py").write_text(
+            '\'\'\'def _self_test(): pass; parser.add_argument("--self-test")\'\'\'\n'
+            'from pathlib import Path\nif __name__ == "__main__":\n'
+            '    Path(__file__).with_suffix(".live").write_text("not a suite")\n', encoding="utf-8")
 
         found = {s.path.name: s for s in discover(root)}
         check("T1 discovers modules with a __main__", "good.py" in found, True)
@@ -379,6 +449,11 @@ def _self_test() -> int:
         results = {r.suite.path.name: r for r in
                    run_all(root=root, timeout=60, python=sys.executable)}
         check("T6 a flagged module is invoked WITH --self-test", results["flagged.py"].status, PASS)
+        check("T6b argv membership selects the hook self-test", results["membership.py"].status, PASS)
+        check("T6c the hook live path is never executed", (scripts / "membership.live").exists(), False)
+        check("T6d positional self-test subcommand is invoked", results["command.py"].status, PASS)
+        check("T6e examples in docstrings do not declare executable tests", results["example_only.py"].status, NO_SUITE)
+        check("T6f the example-only live path is never executed", (scripts / "example_only.live").exists(), False)
         check("T7 a passing module passes", results["good.py"].status, PASS)
         check("T8 a non-zero exit is a FAIL", results["bad.py"].status, FAIL)
         # T8b is the fix for the first real run: a CLI tool must never be

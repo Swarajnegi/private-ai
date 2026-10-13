@@ -800,7 +800,7 @@ second opinion the agent verdict gets checked against was silently degrading.
 **A job's status must never hide its failure.** Measured 2026-09-28: `reindex_memory` failed 16 of
 17 runs (a ChromaDB `InternalError` in compaction), but a later guard-skip overwrote
 `last_status`, so `--status` read "skipped — guard reports nothing to do". `pipeline_health.py`
-judges each job by its last *success*, not its last status line.
+judges each job by its actual successes and separately verified freshness, not its last status line. A freshness skip never clears a failed execution.
 
 > **THE HEARTH RUNS THE CODE IT BOOTED WITH.** Adding a job to `default_jobs()` does nothing to a
 > running hearth — and `--status` looks perfectly healthy while the new job silently does not exist.
@@ -919,10 +919,34 @@ A stale `.hearth_jobs.json` reports the last tick, which may be weeks old — th
   every other process reaches the index as an HTTP client through `memory/chroma_access.py`. Several
   processes compacting one SQLite file had made `reindex_memory` fail 20 of 21 runs. `hearth.py
   --status` shows the server line.
-- **Paused jobs.** `jarvis_data/.paused_jobs` (one job name per line; read by `serve/scheduler.py`)
-  holds the heavy jobs back: `index_episodes`, `reindex_memory`, `relabel_domains` (a memory crash,
-  2026-09-29) and `run_all_tests`, `rebuild_corpora` (KB 1044/1045: this work laptop has 7.6 GB RAM
-  and no GPU). Delete a line to resume a job; light jobs keep running. Open items: c011-c013.
+- **Exclusive maintenance on the active Windows host (owner-approved 2026-10-13).**
+  Every scheduled job and direct execution of the five maintenance scripts shares
+  `.runtime/maintenance.lock`. Children reuse an ancestor-verified execution lease;
+  an environment flag alone cannot bypass it. Windows Job Objects contain complete
+  process trees, including timeout/cancellation/restart cleanup. Output is spooled
+  intact under `.runtime/` and previous failures remain visible until a real success.
+- **Laptop policy.** Heavy starts require mains power and 4 GiB available physical
+  RAM; missing measurements defer. Below 2 GiB for ten seconds aborts the tree.
+  Resource deferrals retry after ten minutes; heavy failures retry after six hours.
+  Heavy jobs use two numerical/tokenizer threads, below-normal priority, at most
+  30 minutes (domain labelling retains its 15-minute limit), and a two-minute
+  cooldown that still allows light work. This does not diagnose previous BSODs.
+- **Cadences.** Memory indexing checks every 12 h; incremental episode indexing
+  runs every 6 h; domain labelling checks changed inputs every 24 h; corpora check
+  changed inputs every 48 h. Fast tests check daily and execute after source or
+  dependency changes, with a seven-day fallback. Capture and other light cadences
+  are unchanged. Missed intervals are not replayed. Tests must use declared offline
+  entry points rather than a CLI's live path.
+- **Owner pauses.** `jarvis_data/.paused_jobs` remains authoritative. The owner
+  approved removal of the five historical pauses only after bounded validation on
+  `D:\J.A.R.V.I.S`. New jobs or failures are not silently unpaused. Corpus rebuilding
+  retains the client snapshot when raw client source is absent. Episode indexing's
+  optional `--limit-sources` supports bounded validation; a successful partial pass
+  reports pending sources and does not mean the historical index is complete.
+- **Episode encoder setup.** Install `requirements-episodes.txt` in the D-drive
+  venv for Nomic's pinned `einops` dependency. The Nomic-specific compatibility
+  adapter restores its missing encoder mask on Transformers 5 without changing
+  core library versions, weights, embedding dimensions or other model instances.
 - **c002 evaluation harness.** `scripts/eval_c002.py` with `jarvis_data/eval/c002/` (protocol,
   endpoints, items, exclusions). The owner's private answers live outside the repo and are denied to
   agents; nothing is measured yet. Status: [`MASTER_CHECKLIST.md`](MASTER_CHECKLIST.md) §E.

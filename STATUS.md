@@ -16,22 +16,28 @@ answering its own interview question, and the research papers were removed (2026
 
 ## 1. Is anything broken right now?
 
-**Yes: 10 breaches** (`python3 scripts/pipeline_health.py`, silent when healthy). They reduce to four causes:
+**Active-host maintenance update, 2026-10-13 (Codex).** The native Windows
+host at `D:\J.A.R.V.I.S` is the owner's girlfriend's HP OMEN: i7-10750H,
+16 GB RAM, RTX 2060 with 6 GB VRAM. Current model work uses CPU-only Torch.
+Voice is restored locally; the UI and Core renderer are unchanged.
 
-- **Parse backlog, by design of the host topology.** `python3 scripts/parse_turns.py --status`:
-  claude 0, codex 951 (oldest 2026-09-13), antigravity 167 (oldest 2026-05-21), jarvis 0. The
-  Codex and Antigravity hosts live on the dead laptop; Claude parses their backlogs by reading
-  (KB 1009, 1045). Codex's own session may only parse Codex turns.
-- **Corpora 2.9 days old (limit 48 h), six artifacts, and a stale vector index.** `rebuild_corpora`,
-  `reindex_memory`, `index_episodes`, `relabel_domains` and `run_all_tests` are paused (section 4).
-  `chromadb/jarvis_memory` holds 661 entries against 1085 in the KB. Search results come from an older mind than the log holds.
-- **`check_pipeline.py` reports 1 failed** (`python3 scripts/check_pipeline.py`; 29 ok, 0 unmeasurable):
-  8 retracted records are still inside the built corpora. Only the paused rebuild clears it. This is also why the hearth job `check_pipeline` shows FAILED.
-- **OpenRouter balance is negative.** Tool-using deep turns return HTTP 402. Owner.
+- Memory indexing validated against all 1,133 KB entries (1,930 chunks).
+- Domain labelling validated against 2,709 captured turns.
+- Corpus rebuilding passed all 30 pipeline invariants, removing the eight
+  retracted built records. The 947-record client snapshot is byte-for-byte intact.
+- Episode indexing validated on three real sources (254 dense vectors);
+  the remaining historical sources still need incremental catch-up.
+- The fast-suite runner now selects offline flags and positional self-test
+  subcommands correctly, including mail hooks, rather than their live paths.
+- All five maintenance jobs are enabled after validation; Hearth was restarted
+  through its existing watchdog and local speech synthesis/transcription passed.
+- Scheduling now serializes every scheduled job and the five manual maintenance
+  commands through a shared lease and Windows process-tree supervision. Heavy
+  starts require mains power and 4 GiB free RAM; resource deferrals are visible.
 
-Hearth (`python3 scripts/hearth.py --status`): UP on 127.0.0.1:8756, Chroma supervised by it on
-127.0.0.1:8759 (single-owner design); every other clocked job reports ok except the paused or
-failing ones named above. `python3 scripts/bootstrap_jarvis.py --check` shows the machine view.
+These measurements update maintenance on this host, not the older global
+Stage 5 survey below. Codex's individually reviewed backlog remains open;
+no bulk verdicts were submitted during this maintenance repair.
 
 ## 2. What's mid-flight
 
@@ -39,18 +45,19 @@ failing ones named above. `python3 scripts/bootstrap_jarvis.py --check` shows th
 calls. `python3 scripts/parse_turns.py --routing`: 1507 turns routed, 428 trainable; verdicts under
 rule v1 by agent: claude 1103, antigravity 320, codex 50, jarvis 31.
 
-**The personal laptop has been dead since 2026-10-06 (KB 1044).** The work laptop is under an owner
-rule not to take heavy load (7.6 GB RAM, no GPU). `jarvis_data/.paused_jobs` pauses `run_all_tests`,
-`rebuild_corpora`, `index_episodes`, `reindex_memory`, `relabel_domains`; light jobs, shard archiving and the web UI run on.
+**The work laptop is retired as a JARVIS host.** Codex and Antigravity now
+use the native Windows D-drive checkout. The owner authorized enabling the
+five maintenance jobs after bounded validation on 2026-10-13. The pause registry
+and live health report are authoritative for activation and any subsequent pause.
 
 **Hosting.** Railway was deployed, then put to sleep 2026-09-12 to avoid cost (KB 1190); its volume was kept.
-The hearth and web UI run locally at 127.0.0.1:8756, restarted by cron (every 10 min and at reboot); token is `jarvis_data/.hearth_token`.
+The hearth and web UI run locally at 127.0.0.1:8756, restarted by the existing Windows watchdog at sign-in; token is `jarvis_data/.hearth_token`.
 Nothing is reachable from a phone. The hosting strategy is the owner's call (section 4).
 
 **The personalization interview.** 43 numbered questions; only Q1-Q5 are answered. On 2026-09-26 a free
 model wrote both sides of Q6 in the owner's voice (KB 1201). `brain/interview_guard.py` now prevents it. The
 poisoned copies (KB 735 and one conversation turn) are listed in `jarvis_data/retractions.jsonl`, and every corpus builder and
-the retrieval index skip them. The already-built corpora still contain them until the rebuild runs (section 1).
+the retrieval index skip them. The 2026-10-13 rebuild removed the retracted material from the built corpora.
 
 **c002, the Stage 5 adapter-versus-retrieval test (₹0): harness built, nothing measured.**
 `scripts/eval_c002.py` landed 2026-10-07 in commit 56884ab: 230 hermetic self-checks; an independent review
@@ -73,7 +80,7 @@ Proof that the Context Ledger carries continuity is still pending (c009).
 | c004 | Revoke exposed GitHub PAT and legacy OpenRouter keys | owner-only; review overdue since 2026-09-12; owner said to leave it (2026-10-06) |
 | c005 | Keep the 12-specialist roster demand-gated | standing policy, not a task |
 | c009 | GraphRAG follow-on after Context Ledger proof (review 2026-10-11) | open |
-| c011-c013 | Run `index_episodes`, `relabel_domains`, `reindex_memory` by hand, one at a time | paused by owner rule; c013 explicitly does not rebuild `research_papers` |
+| c011-c013 | Run `index_episodes`, `relabel_domains`, `reindex_memory` by hand, one at a time | guarded CPU maintenance authorized 2026-10-13; initial episode catch-up remains; c013 does not rebuild `research_papers` |
 
 c001, c008 and c010 were abandoned by append-only events; c006 was auto-closed by an overbroad keyword
 check and is not proof GraphRAG is finished. Dormancy: `scripts/eval_dormancy.py` reports the Tier 1 gate; `commitment_runs.jsonl` is the quiet-week record.
@@ -85,7 +92,9 @@ check and is not proof GraphRAG is finished. Dormancy: `scripts/eval_dormancy.py
 - **Answer the 25 c002 personalization questions** in the private answers file (outside the repo; agents are denied access). Edit it in an editor, never in a chat.
 - **Top up OpenRouter.** The c002 judges and reference arm are paid, and deep turns fail with 402 without it.
 - **Set c002 T0, and decide whether `client_work` content may be used in training.** The push rule was relaxed 2026-10-06; training use was never decided.
-- **Rebuild versus pause (conflict, not resolved here).** Rule A (measured 2026-09-23): tracked training artifacts must be rebuilt only on the work laptop, because `client_work/` source exists only there and a personal-laptop rebuild silently drops about 248 `professional_reasoning` records. Rule B (KB 1044/1045, 2026-10-06): the work laptop must not take heavy load, so `rebuild_corpora` is paused there, and the personal laptop is dead. Result today: nobody can rebuild, the corpora are 2.9 days old, 8 retracted records remain in them, and the c002 leakage audit cannot pass.
+- **Rebuild versus pause is resolved on the active host.** The owner approved
+  guarded CPU maintenance on 2026-10-13. The corpus rebuild preserves the client
+  snapshot when raw client source is absent. It does not authorize training.
 - **Finish the interview** (Q6-Q43). It is training data; it does not replace the 25 c002 answers.
 - **Custom PC build gates** (see MASTER_CHECKLIST section I): nothing is bought until the evaluation and a cloud pilot say so.
 - **Hosting strategy** (pay for always-on, tunnel to a home machine, or self-host on the planned PC).

@@ -43,6 +43,14 @@ STEP 3: on the first non-zero exit, stop and exit with that code. Exit 0 only
 
 from __future__ import annotations
 
+# Acquire the shared execution lease before importing model-dependent organs.
+if __name__ == "__main__":
+    import sys as _boot_sys
+    from pathlib import Path as _BootPath
+    _boot_sys.path.insert(0, str(_BootPath(__file__).resolve().parents[1] / "js-development"))
+    from jarvis_core.serve.maintenance import cli_entry as _maintenance_entry
+    _maintenance_entry("rebuild_corpora", __file__)
+
 import argparse
 import os
 import subprocess

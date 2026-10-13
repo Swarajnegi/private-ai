@@ -77,12 +77,17 @@ import os
 import sys
 import time
 from dataclasses import dataclass, field
+from contextvars import ContextVar
 from pathlib import Path
 from typing import Any, Awaitable, Callable, Dict, List, Optional, Sequence, Tuple
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))  # standalone-run safety
 
 from jarvis_core.config import DATA_ROOT, JARVIS_ROOT
+from jarvis_core.serve import maintenance
+
+_ACTIVE_RUNTIME = ContextVar("maintenance_runtime", default=None)
+_ACTIVE_HEAVY = ContextVar("maintenance_heavy", default=False)
 
 STATE_PATH = Path(DATA_ROOT) / ".hearth_jobs.json"
 
@@ -202,6 +207,13 @@ class JobState:
     last_failure_ts: float = 0.0
     consecutive_failures: int = 0
     first_seen_ts: float = 0.0
+    last_checked_ts: float = 0.0
+    last_fresh_ts: float = 0.0
+    next_attempt_ts: float = 0.0
+    deferred_reason: str = ""
+    input_fingerprint: str = ""
+    running: bool = False
+    measurements: Dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -213,6 +225,10 @@ class JobState:
             "last_failure_ts": self.last_failure_ts,
             "consecutive_failures": self.consecutive_failures,
             "first_seen_ts": self.first_seen_ts,
+            "last_checked_ts": self.last_checked_ts, "last_fresh_ts": self.last_fresh_ts,
+            "next_attempt_ts": self.next_attempt_ts, "deferred_reason": self.deferred_reason,
+            "input_fingerprint": self.input_fingerprint, "running": self.running,
+            "measurements": self.measurements,
         }
 
     @classmethod
@@ -232,6 +248,12 @@ class JobState:
         s.last_failure_ts = float(raw.get("last_failure_ts", 0.0) or 0.0)
         s.consecutive_failures = int(raw.get("consecutive_failures", 0) or 0)
         s.first_seen_ts = float(raw.get("first_seen_ts", 0.0) or 0.0)
+        for key in ("last_checked_ts", "last_fresh_ts", "next_attempt_ts"):
+            setattr(s, key, float(raw.get(key, 0.0) or 0.0))
+        s.deferred_reason = str(raw.get("deferred_reason", ""))
+        s.input_fingerprint = str(raw.get("input_fingerprint", ""))
+        s.running = bool(raw.get("running", False))
+        s.measurements = dict(raw.get("measurements", {}))
         if "consecutive_failures" not in raw:
             s._backfill_legacy()
         return s
@@ -310,7 +332,7 @@ def default_jobs(python: Optional[str] = None,
             argv=(py, str(scripts / "index_memory.py")),
             guard=guard_for("chromadb"),
             interval_seconds=12 * HOUR,
-            retry_after_failure_seconds=30 * 60.0,
+            retry_after_failure_seconds=6 * HOUR,
             timeout_seconds=1800.0,
             initial_delay_seconds=300.0,
             description="re-embed the knowledge base into chromadb when stale"),
@@ -355,9 +377,9 @@ def default_jobs(python: Optional[str] = None,
                         "write this machine's shards, merge the other machine's"),
         Job(name="index_episodes",
             argv=(py, str(base / "scripts" / "index_episodes.py")),
-            interval_seconds=HOUR,
-            retry_after_failure_seconds=30 * 60.0,
-            timeout_seconds=3600.0,
+            interval_seconds=6 * HOUR,
+            retry_after_failure_seconds=6 * HOUR,
+            timeout_seconds=1800.0,
             initial_delay_seconds=1200.0,
             description="incrementally index the verbatim episode store (dense + "
                         "keyword) so recall sees this hour's sessions"),
@@ -406,7 +428,8 @@ def default_jobs(python: Optional[str] = None,
                         "duplication in blended_corpus on its first run"),
         Job(name="run_all_tests",
             argv=(py, str(scripts / "run_all_tests.py"), "--fast"),
-            interval_seconds=12 * HOUR,
+            interval_seconds=24 * HOUR,
+            retry_after_failure_seconds=6 * HOUR,
             timeout_seconds=1800.0,
             initial_delay_seconds=1020.0,
             description="every smoke suite in the repo. Before this existed "
@@ -415,7 +438,8 @@ def default_jobs(python: Optional[str] = None,
                         "went unrun in a working session"),
         Job(name="relabel_domains",
             argv=(py, str(scripts / "relabel_domains.py")),
-            interval_seconds=12 * HOUR,
+            interval_seconds=24 * HOUR,
+            retry_after_failure_seconds=6 * HOUR,
             timeout_seconds=900.0,
             initial_delay_seconds=780.0,
             description="the context-free second opinion the curator is checked "
@@ -432,8 +456,9 @@ def default_jobs(python: Optional[str] = None,
                         "explicit review-due open loops; no prose inference"),
         Job(name="rebuild_corpora",
             argv=(py, str(scripts / "rebuild_corpora.py")),
-            interval_seconds=24 * HOUR,
-            timeout_seconds=3600.0,
+            interval_seconds=48 * HOUR,
+            retry_after_failure_seconds=6 * HOUR,
+            timeout_seconds=1800.0,
             initial_delay_seconds=1260.0,
             description="engineer -> personalization -> blend -> SFT pairs -> "
                         "check_pipeline, pure code. Before 2026-09-28 the corpora "
@@ -464,41 +489,17 @@ async def _subprocess_runner(argv: Sequence[str], timeout: float) -> Tuple[int, 
     Returns:
         (returncode, the job's whole output). rc 127 if spawn failed.
     """
+    runtime = _ACTIVE_RUNTIME.get()
+    if runtime is None:
+        raise RuntimeError("subprocess runner requires a maintenance lease")
     try:
-        proc = await asyncio.create_subprocess_exec(
-            *argv, cwd=str(JARVIS_ROOT),
-            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT,
-            env={**os.environ, "PYTHONUNBUFFERED": "1"})
-    except (OSError, ValueError) as e:
-        # Some managed Windows hosts deny a Python process spawning another
-        # Python process (WinError 5), despite allowing the same entry point
-        # from an interactive shell.  GraphRAG rebuild is the one scheduled
-        # job that is a small, deterministic, side-effect-contained projection;
-        # safely rebuild it in-process rather than silently leaving it stale.
-        # Do NOT generalize this to consolidating, capture, or model work: their
-        # subprocess isolation is intentionally load-bearing.
-        if isinstance(e, PermissionError) and any(
-            Path(part).name == "build_graphrag.py" for part in argv
-        ):
-            try:
-                from jarvis_core.memory.graph import build_graph
-                stats = build_graph()
-                return 0, (f"in-process fallback after WinError 5: "
-                           f"{stats.nodes} nodes, {stats.edges} edges -> {stats.path}")
-            except Exception as fallback_error:
-                return 127, (f"spawn failed: {type(e).__name__}: {e}; "
-                             f"GraphRAG fallback failed: {type(fallback_error).__name__}: {fallback_error}")
+        return await runtime.run(argv, timeout, heavy=_ACTIVE_HEAVY.get())
+    except PermissionError as e:
+        if any(Path(part).name == "build_graphrag.py" for part in argv):
+            from jarvis_core.memory.graph import build_graph
+            stats = build_graph()
+            return 0, f"in-process fallback after {e}: {stats.nodes} nodes, {stats.edges} edges -> {stats.path}"
         return 127, f"spawn failed: {type(e).__name__}: {e}"
-    try:
-        out, _ = await asyncio.wait_for(proc.communicate(), timeout=timeout)
-    except asyncio.TimeoutError:
-        try:
-            proc.kill()
-        except ProcessLookupError:
-            pass
-        return 124, f"timed out after {timeout:.0f}s"
-    text = (out or b"").decode("utf-8", errors="replace").strip()
-    return int(proc.returncode or 0), text
 
 
 class Scheduler:
@@ -522,6 +523,7 @@ class Scheduler:
         clock: Callable[[], float] = time.time,
         poll_seconds: float = _POLL_SECONDS,
         logger: Optional[Callable[[str], None]] = None,
+        resource_probe: Callable[[], maintenance.Resources] = maintenance.resources,
     ) -> None:
         self._jobs = list(jobs) if jobs is not None else default_jobs()
         self._state_path = Path(state_path)
@@ -533,6 +535,12 @@ class Scheduler:
         self._task: Optional[asyncio.Task] = None
         self._stopping = asyncio.Event()
         self._started_at = clock()
+        self._tick_lock = asyncio.Lock()
+        self._deferrals: Dict[str, str] = {}
+        self._runtime = maintenance.Runtime(
+            runtime_dir=(JARVIS_ROOT / ".runtime" if Path(state_path) == STATE_PATH
+                         else Path(state_path).parent / ".runtime"),
+            probe=resource_probe, clock=clock)
 
     # ---- persistence (a PROJECTION: losing it costs one early run) -------
 
@@ -554,7 +562,8 @@ class Scheduler:
                 indent=2, ensure_ascii=False), encoding="utf-8")
             tmp.replace(self._state_path)      # atomic: a crash mid-write cannot corrupt
         except OSError as e:
-            self._log(f"state save failed ({type(e).__name__}) — continuing")
+            self._runtime.metrics["state_commit_failed"] = True
+            raise RuntimeError(f"maintenance state commit failed: {type(e).__name__}: {e}") from e
 
     def _state(self, name: str) -> JobState:
         st = self._states.setdefault(name, JobState())
@@ -586,62 +595,131 @@ class Scheduler:
         Returns:
             Job names actually executed (a guard-skipped job is not included).
         """
-        now = self._clock()
-        ready_from = 0.0 if ignore_stagger else self._started_at
+        async with self._tick_lock:
+            return await self._tick_exclusive(ignore_stagger)
+
+    async def _tick_exclusive(self, ignore_stagger: bool) -> List[str]:
         ran: List[str] = []
-        paused = paused_jobs()
         for job in self._jobs:
-            st = self._state(job.name)
-            if job.name in paused:
-                continue
-            if not job.is_due(now, st.last_run, ready_from, st.consecutive_failures > 0):
-                continue
-            # A job whose last real run failed is retried WITHOUT its guard:
-            # the guard can say "fresh" about an artifact the failed run left
-            # half-written, and skipping on its word would hide the failure
-            # forever. Only a real exit 0 clears consecutive_failures.
-            if job.guard and st.consecutive_failures == 0:
-                rc, out = await self._run_one(job.guard, job.timeout_seconds, job.name)
-                if rc == 0:
-                    st.last_run = now
+            # Nonblocking across processes: a manual run never creates a
+            # second scheduler queue and a competing tick never loses state.
+            with self._runtime.lease(job.name) as acquired:
+                if not acquired:
+                    self._deferrals[job.name] = "another maintenance job owns the lease"
+                    continue
+                self._states = self._load()
+                missing = [item.name for item in self._jobs if item.name not in self._states]
+                for name in missing:
+                    self._state(name)
+                if missing:
+                    self._save()
+                st = self._state(job.name)
+                now = self._clock()
+                if st.running:
+                    # The previous supervisor was interrupted; lease recovery
+                    # has already verified its process tree is gone.
+                    st.running = False
+                    st.last_rc = 130
+                    st.last_status = "FAILED rc=130 — previous supervisor interrupted"
+                    st.consecutive_failures += 1
+                    st.failures += 1
+                    st.runs += 1
+                    st.last_failure_ts = st.last_run = now
+                    st.last_output = self._runtime.metrics.get("recovered_output", st.last_output)
+                    st.last_output += "\nPrevious supervisor interrupted; process tree recovered."
+                    st.next_attempt_ts = now + 6 * HOUR
+                    self._save()
+                if job.name in paused_jobs(self._state_path.parent):
+                    continue
+                reference = max(st.last_run, st.last_fresh_ts)
+                ready_from = now - job.initial_delay_seconds if ignore_stagger else self._started_at
+                if now < st.next_attempt_ts or not job.is_due(now, reference, ready_from, st.consecutive_failures > 0):
+                    continue
+                self._deferrals.pop(job.name, None)
+                if job.name in maintenance.HEAVY:
+                    reason = self._runtime.deferred(job.name)
+                    if reason:
+                        st.deferred_reason = reason
+                        st.last_checked_ts = now
+                        st.next_attempt_ts = now + 600
+                        self._save()
+                        continue
+                st.deferred_reason = ""
+                st.next_attempt_ts = 0
+                st.last_checked_ts = now
+                fingerprinted = job.name in {"relabel_domains", "rebuild_corpora", "run_all_tests"}
+                before = maintenance.fingerprint(job.name) if fingerprinted else ""
+                weekly_due = job.name == "run_all_tests" and (not st.last_success_ts or now - st.last_success_ts >= 7 * 24 * HOUR)
+                if (fingerprinted and not st.consecutive_failures and not weekly_due
+                        and st.input_fingerprint == before and maintenance.outputs_exist(job.name)):
                     st.skipped += 1
-                    st.last_success_ts = now
-                    st.last_status = "skipped — guard reports nothing to do"
+                    st.last_fresh_ts = self._clock()
+                    st.last_status = "skipped — inputs unchanged; previous execution details retained"
                     self._save()
                     continue
-                self._log(f"{job.name}: guard exit {rc} -> work needed")
-            elif job.guard:
-                self._log(f"{job.name}: last run failed — retrying without the guard")
-            started = self._clock()
-            rc, out = await self._run_one(job.argv, job.timeout_seconds, job.name)
-            st.last_run = self._clock()
-            st.last_duration_s = round(st.last_run - started, 2)
-            st.last_rc = rc
-            st.last_output = out
-            st.runs += 1
-            if rc == 0:
-                st.last_status = "ok"
-                st.last_success_ts = st.last_run
-                st.consecutive_failures = 0
-            else:
-                st.failures += 1
-                st.consecutive_failures += 1
-                st.last_failure_ts = st.last_run
-                st.last_status = f"FAILED rc={rc}"
-                self._log(f"{job.name}: FAILED rc={rc} — {out}")
-            ran.append(job.name)
-            self._save()
+                if job.guard and st.consecutive_failures == 0:
+                    rc, out = await self._run_one(job.guard, job.timeout_seconds, job.name)
+                    if rc == 0:
+                        st.skipped += 1
+                        st.last_fresh_ts = self._clock()
+                        st.last_status = "skipped — guard reports nothing to do"
+                        self._save()
+                        continue
+                started = self._clock()
+                st.running = True
+                self._save()
+                try:
+                    rc, out = await self._run_one(job.argv, job.timeout_seconds, job.name,
+                                                  heavy=job.name in maintenance.HEAVY)
+                except asyncio.CancelledError:
+                    self._record(st, 130, self._runtime.metrics.get("interrupted_output", "") + "\nMaintenance cancelled; process tree cleaned up.", started)
+                    self._save()
+                    raise
+                previous_fresh_ts = st.last_fresh_ts
+                self._record(st, rc, out, started)
+                if rc == 0 and fingerprinted:
+                    after = maintenance.fingerprint(job.name)
+                    st.input_fingerprint = before if before == after else ""
+                    if before != after:
+                        st.last_fresh_ts = previous_fresh_ts
+                ran.append(job.name)
+                self._save()
         return ran
 
+    def _record(self, st: JobState, rc: int, output: str, started: float) -> None:
+        st.running = False
+        st.last_run = self._clock()
+        st.last_duration_s = round(st.last_run - started, 2)
+        st.last_checked_ts = st.last_run
+        st.last_rc, st.last_output = rc, output
+        st.measurements = dict(self._runtime.metrics)
+        st.runs += 1
+        if rc == 0:
+            st.last_status = "ok"
+            st.last_success_ts = st.last_run
+            st.last_fresh_ts = st.last_run
+            st.consecutive_failures = 0
+        else:
+            st.failures += 1
+            st.consecutive_failures += 1
+            st.last_failure_ts = st.last_run
+            st.last_status = f"FAILED rc={rc}"
+            st.next_attempt_ts = st.last_run + 6 * HOUR if rc in (maintenance.RESOURCE_ABORT, 130) else 0
+
     async def _run_one(self, argv: Sequence[str], timeout: float,
-                       job_name: str) -> Tuple[int, str]:
+                       job_name: str, *, heavy: bool = False) -> Tuple[int, str]:
         """Never let a job's failure escape as an exception — it is a result."""
+        lease_token = _ACTIVE_RUNTIME.set(self._runtime)
+        heavy_token = _ACTIVE_HEAVY.set(heavy)
         try:
             return await self._runner(argv, timeout)
         except asyncio.CancelledError:
             raise
         except Exception as e:
             return 1, f"runner raised: {type(e).__name__}: {e}"
+        finally:
+            _ACTIVE_RUNTIME.reset(lease_token)
+            _ACTIVE_HEAVY.reset(heavy_token)
 
     # ---- lifecycle -------------------------------------------------------
 
@@ -678,6 +756,10 @@ class Scheduler:
             await asyncio.wait_for(task, timeout=5.0)
         except (asyncio.TimeoutError, asyncio.CancelledError):
             task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
         self._log("clock stopped")
 
     # ---- observability ---------------------------------------------------
@@ -685,17 +767,24 @@ class Scheduler:
     def status(self) -> List[Dict[str, Any]]:
         """Per-job state for GET /v1/health. A silent scheduler is a bug."""
         now = self._clock()
-        paused = paused_jobs()
+        snapshot = self._load()
+        paused = paused_jobs(self._state_path.parent)
         out: List[Dict[str, Any]] = []
         for job in self._jobs:
-            st = self._state(job.name)
+            st = snapshot.get(job.name) or self._state(job.name)
             out.append({
                 "name": job.name,
+                "running": st.running,
+                "deferred_reason": self._deferrals.get(job.name, st.deferred_reason),
+                "next_attempt_ts": st.next_attempt_ts or None,
+                "last_checked_ts": st.last_checked_ts or None,
+                "last_fresh_ts": st.last_fresh_ts or None,
+                "measurements": st.measurements,
                 "paused": job.name in paused,
                 "every_hours": round(job.interval_seconds / HOUR, 2),
                 "interval_seconds": job.interval_seconds,
                 "initial_delay_seconds": job.initial_delay_seconds,
-                "guarded": bool(job.guard),
+                "guarded": bool(job.guard) or job.name in {"relabel_domains", "rebuild_corpora", "run_all_tests"},
                 "status": st.last_status,
                 "last_status": st.last_status,
                 "last_rc": st.last_rc,
@@ -906,8 +995,8 @@ def _run_self_test() -> None:
               by_name16["parse_jarvis_turns"].argv[2:] == ("--host", "jarvis", "--auto", "--limit", "10")
               and by_name16["parse_jarvis_turns"].interval_seconds == 15 * 60.0,
               str(by_name16["parse_jarvis_turns"].argv))
-        check("T16f corpora are rebuilt daily",
-              by_name16["rebuild_corpora"].interval_seconds == 24 * HOUR
+        check("T16f corpora are checked every 48 hours",
+              by_name16["rebuild_corpora"].interval_seconds == 48 * HOUR
               and Path(by_name16["rebuild_corpora"].argv[1]).name == "rebuild_corpora.py")
         check("T17 consolidate is UNguarded (its whole point is to run anyway)",
               not jobs[0].guard and jobs[1].guard and jobs[2].guard)
@@ -976,8 +1065,9 @@ def _run_self_test() -> None:
         clock.advance(11.0)
         loop.run_until_complete(s23.tick())
         st23 = s23.status()[0]
-        check("T27 once healthy, a guard-skip counts as a verified success",
-              "guard" in st23["status"] and st23["last_success_ts"] == clock.t, str(st23))
+        check("T27 freshness preserves actual execution time",
+              st23["consecutive_failures"] == 0 and st23["last_fresh_ts"] == clock()
+              and st23["last_success_ts"] < clock(), str(st23))
         check("T27b status() carries the whole last output",
               st23["last_output"] == "out of fix.py", st23["last_output"])
 
@@ -1022,8 +1112,14 @@ def _run_self_test() -> None:
         check("T20 start() spawns the polling task", started)
         check("T21 stop() joins it and clears the handle", stopped)
 
-        rc22, out22 = loop.run_until_complete(_subprocess_runner(
-            [sys.executable or "python", "-c", "print('START' + 'x' * 5000 + 'END')"], 60.0))
+        output_runtime = maintenance.Runtime(runtime_dir=Path(td) / "output-runtime")
+        with output_runtime.lease("output-fixture") as got:
+            token = _ACTIVE_RUNTIME.set(output_runtime)
+            try:
+                rc22, out22 = loop.run_until_complete(_subprocess_runner(
+                    [sys.executable or "python", "-c", "print('START' + 'x' * 5000 + 'END')"], 60.0))
+            finally:
+                _ACTIVE_RUNTIME.reset(token)
         check("T22 a job's whole output is kept, not its last 400 chars",
               rc22 == 0 and out22.startswith("START") and out22.endswith("END")
               and len(out22) == 5008, f"rc={rc22} len={len(out22)}")

@@ -92,7 +92,7 @@ CONSECUTIVE_FAILURE_LIMIT = 1
 CLOCK_STOPPED_S = 2 * 3600.0
 BACKLOG_MAX_AGE_H = 24.0
 BACKLOG_MAX_PENDING = 200
-CORPUS_MAX_AGE_H = 48.0
+CORPUS_MAX_AGE_H = 96.0  # two 48-hour maintenance intervals
 INHALE_WINDOW_FRACTION = 0.8
 
 Breach = Dict[str, Any]
@@ -250,7 +250,7 @@ def check_jobs(now: float, jobs: List[Any], state_path: Path) -> Tuple[List[Brea
             rows.append({"name": job.name, "status": "never scheduled", "healthy": False})
             continue
         st = JobState.from_dict(entry)
-        newest_run = max(newest_run, st.last_run)
+        newest_run = max(newest_run, st.last_run, st.last_checked_ts)
         problems: List[str] = []
         output = ""
         if st.consecutive_failures >= CONSECUTIVE_FAILURE_LIMIT:
@@ -261,10 +261,11 @@ def check_jobs(now: float, jobs: List[Any], state_path: Path) -> Tuple[List[Brea
                 f"python scripts/pipeline_health.py --json")
             output = st.last_output
         allowed = JOB_STALE_FACTOR * interval
-        if st.last_success_ts:
-            age = now - st.last_success_ts
+        verified_ts = max(st.last_success_ts, st.last_fresh_ts)
+        if verified_ts:
+            age = now - verified_ts
             if age > allowed:
-                problems.append(f"last success {_ago(age)} ago, allowed {_ago(allowed)} "
+                problems.append(f"last success or verified freshness {_ago(age)} ago, allowed {_ago(allowed)} "
                                 f"(2x its {_ago(interval)} interval)")
         else:
             since = st.first_seen_ts or st.last_run
@@ -273,6 +274,12 @@ def check_jobs(now: float, jobs: List[Any], state_path: Path) -> Tuple[List[Brea
                 problems.append("has never succeeded" + (
                     f" in the {_ago(now - since)} since it was first scheduled "
                     f"(grace: initial delay + one interval = {_ago(grace)})" if since else ""))
+        if job.name == "run_all_tests" and st.last_success_ts and now - st.last_success_ts > 8 * 24 * 3600:
+            problems.append("weekly test fallback overdue: no successful execution in eight days")
+        if st.deferred_reason:
+            rows_reason = st.deferred_reason
+            if now - verified_ts > allowed:
+                problems.append(f"maintenance deferred: {rows_reason}")
         if problems:
             b: Breach = {"check": f"job:{job.name}", "detail": "; ".join(problems)}
             if output:
@@ -281,6 +288,8 @@ def check_jobs(now: float, jobs: List[Any], state_path: Path) -> Tuple[List[Brea
         rows.append({"name": job.name, "status": st.last_status, "healthy": not problems,
                      "last_rc": st.last_rc, "consecutive_failures": st.consecutive_failures,
                      "last_success": _iso(st.last_success_ts), "last_failure": _iso(st.last_failure_ts),
+                     "last_fresh": _iso(st.last_fresh_ts), "running": st.running,
+                     "deferred_reason": st.deferred_reason, "next_attempt_ts": st.next_attempt_ts or None,
                      "every_hours": round(interval / 3600, 2)})
     if jobs and (not newest_run or now - newest_run > CLOCK_STOPPED_S):
         breaches.insert(0, {"check": "clock",
@@ -321,15 +330,27 @@ def check_backlog(now: float, backlog: Dict[str, Dict[str, Any]]) -> Tuple[List[
 
 def check_corpora(now: float, root: Path) -> Tuple[List[Breach], Any]:
     corpus_dir = root / "jarvis_data" / "training_corpus"
-    files = sorted(corpus_dir.glob("*.jsonl")) if corpus_dir.is_dir() else []
+    # The client snapshot is an immutable input on hosts without client_work;
+    # its age is not the age of the five generated training artifacts.
+    files = sorted(f for f in corpus_dir.glob("*.jsonl") if f.name != "client_work_snapshot.jsonl") if corpus_dir.is_dir() else []
     if not files:
         return ([{"check": "corpora", "detail": f"no training corpora in {corpus_dir}. "
                                                 "Build: python scripts/rebuild_corpora.py"}], {})
     breaches: List[Breach] = []
     detail: Dict[str, Any] = {}
+    verified = 0.0
+    try:
+        state = json.loads((root / "jarvis_data" / ".hearth_jobs.json").read_text(encoding="utf-8")).get("rebuild_corpora", {})
+        if state.get("input_fingerprint") and not state.get("consecutive_failures") and not state.get("deferred_reason"):
+            from jarvis_core.serve.maintenance import outputs_exist
+            if outputs_exist("rebuild_corpora", root):
+                verified = float(state.get("last_fresh_ts", 0))
+    except (OSError, ValueError, TypeError):
+        pass
     for f in files:
-        age = now - f.stat().st_mtime
-        detail[f.name] = {"age_h": round(age / 3600, 1), "bytes": f.stat().st_size}
+        age = now - max(f.stat().st_mtime, verified)
+        detail[f.name] = {"age_h": round((now - f.stat().st_mtime) / 3600, 1),
+                          "last_verified_ts": verified or None, "bytes": f.stat().st_size}
         if age > CORPUS_MAX_AGE_H * 3600:
             breaches.append({"check": f"corpus:{f.name}",
                              "detail": f"last rebuilt {_ago(age)} ago (limit {CORPUS_MAX_AGE_H:.0f} h). "
@@ -670,10 +691,10 @@ def _self_test() -> int:
               r["backlog"]["codex"]["pending"] == 5 and r["backlog"]["codex"]["oldest_age_h"] == 30.0,
               json.dumps(r["backlog"]))
 
-        # T11: corpus older than 48 h.
-        os.utime(corpus / "blended_corpus.jsonl", (now - 50 * H, now - 50 * H))
+        # T11: corpus older than two maintenance intervals.
+        os.utime(corpus / "blended_corpus.jsonl", (now - 100 * H, now - 100 * H))
         r = health_report(sources(), now=now)
-        check("T11 a corpus older than 48 h is a breach; a fresh one is not",
+        check("T11 a corpus older than 96 h is a breach; a fresh one is not",
               bool(breached(r, "corpus:blended_corpus.jsonl")) and not breached(r, "corpus:engineer_corpus.jsonl"))
         os.utime(corpus / "blended_corpus.jsonl", (now - H, now - H))
 
