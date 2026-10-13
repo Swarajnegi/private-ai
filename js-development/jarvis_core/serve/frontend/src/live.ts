@@ -39,6 +39,7 @@ export class Live {
   private outRate = 24000;
   private wantHandsFree = false;
   private closedByUs = false;
+  private acceptAudio = false;
   micLevel = 0;
   state: CoreState = "waking";
 
@@ -100,6 +101,7 @@ export class Live {
 
   private onJson(raw: string): void {
     const ev = JSON.parse(raw);
+    if (ev.session && ev.session !== this.session && ev.type !== "session") return;
     switch (ev.type) {
       case "state":
         this.state = ev.state;
@@ -113,6 +115,9 @@ export class Live {
         break;
       case "retract":
         this.handlers.retract?.();
+        break;
+      case "cancelled":
+        this.handlers.error?.("Reply stopped. You can ask another question.");
         break;
       case "stop_audio":
         this.flushPlayback();
@@ -137,13 +142,14 @@ export class Live {
         this.handlers.ready?.(ev.engine || {});
         break;
       case "audio_start":
+        this.acceptAudio = true;
         this.outRate = ev.rate || 24000;
         break;
     }
   }
 
   private onAudio(buf: ArrayBuffer): void {
-    if (!this.ctx || !this.out) return;
+    if (!this.acceptAudio || !this.ctx || !this.out) return;
     const pcm = new Int16Array(buf);
     const audio = this.ctx.createBuffer(1, pcm.length, this.outRate);
     const ch = audio.getChannelData(0);
@@ -176,7 +182,8 @@ export class Live {
   /** Stop JARVIS mid-sentence, locally at once and on the server. */
   interrupt(): void {
     this.flushPlayback();
-    this.send({ type: "interrupt" });
+    this.acceptAudio = false;
+    this.send({ type: "interrupt", cancel_turn: true });
   }
 
   ask(question: string): void {
@@ -186,7 +193,10 @@ export class Live {
   setSpeak(on: boolean): void {
     this.speakReplies = on;
     this.send({ type: "config", speak: on });
-    if (!on) this.interrupt();
+    if (!on) {
+      this.flushPlayback();
+      this.send({ type: "interrupt", cancel_turn: false });
+    }
   }
 
   /** Free models only: for when the paid balance is empty. */
@@ -196,6 +206,8 @@ export class Live {
   }
 
   setSession(id: string): void {
+    this.flushPlayback();
+    this.acceptAudio = false;
     this.session = id;
     this.send({ type: "config", session: id });
   }

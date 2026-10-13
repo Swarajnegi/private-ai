@@ -208,15 +208,18 @@ function finishAnswer(text: string, path: string, model?: string): void {
 }
 
 async function loadHistory(): Promise<void> {
+  const requestedSession = session;
   turns.replaceChildren();
   pending = null;
   try {
-    const msgs = await api.sessionTurns(session);
+    const msgs = await api.sessionTurns(requestedSession);
+    if (requestedSession !== session) return;
     for (const m of msgs) {
       if (m.role === "user") addTurn("user", m.content);
       else if (m.role === "assistant") addTurn("jarvis", m.content);
     }
   } catch (e) {
+    if (requestedSession !== session) return;
     if (!(e instanceof api.HttpError && e.status === 404)) whisper(String((e as Error).message), true);
   }
   if (!turns.children.length) {
@@ -236,8 +239,9 @@ function whisper(text: string, bad = false): void {
 // ---- live events -----------------------------------------------------------
 live
   .on("state", (s) => {
+    $("stop").toggleAttribute("disabled", !["thinking", "transcribing", "speaking"].includes(s));
     field?.setState(s);
-    whisper(WHISPER[s] || s);
+    if (!$("whisper").classList.contains("bad") || !["idle", "listening"].includes(s)) whisper(WHISPER[s] || s);
     $("core-title").textContent = TITLE[s] || s;
     document.querySelectorAll<HTMLLIElement>("#states li").forEach((li) =>
       li.setAttribute("data-active", String(li.dataset.state === PILL[s])),
@@ -281,8 +285,12 @@ live
     if (pending) {
       pending.el.classList.remove("pending");
       pending.el.classList.add("error");
+      const detail = document.createElement("span");
+      detail.className = "turn-meta";
+      detail.textContent = msg;
+      pending.el.append(detail);
       pending = null;
-    }
+    } else addTurn("jarvis", msg, "Request status").el.classList.add("error");
   })
   .on("session", remember)
   .on("ready", (engine) => {
@@ -344,7 +352,10 @@ $("composer").addEventListener("submit", (e) => {
   input.value = "";
 });
 $("dialogue-toggle").addEventListener("click", toggleDialogue);
+$("stop").addEventListener("click", () => live.interrupt());
 $("new-session").addEventListener("click", () => {
+  $("heard").textContent = "";
+  whisper("Starting a new conversation");
   remember(api.newSessionId());
   live.setSession(session);
   void loadHistory();

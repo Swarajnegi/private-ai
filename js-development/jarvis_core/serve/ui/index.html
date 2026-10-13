@@ -6,8 +6,8 @@
     <meta name="color-scheme" content="dark" />
     <title>J.A.R.V.I.S</title>
     <link rel="icon" href="/ui/favicon.svg" type="image/svg+xml" />
-    <script type="module" crossorigin src="/ui/assets/index-tn6AJme_.js"></script>
-    <link rel="stylesheet" crossorigin href="/ui/assets/index-DIgtm8V7.css">
+    <script type="module" crossorigin src="/ui/assets/index-BuhaDRPQ.js"></script>
+    <link rel="stylesheet" crossorigin href="/ui/assets/index-DmUSxHuF.css">
   </head>
   <body class="arriving">
     <canvas id="field" aria-hidden="true"></canvas>
@@ -49,8 +49,9 @@
           </ol>
         </div>
 
-        <div class="caption" aria-live="polite">
-          <p id="heard" class="heard"></p>
+        <div class="core-footer">
+        <div class="caption" aria-live="polite" aria-label="Current transcript and status">
+          <p id="heard" class="heard" tabindex="0" aria-label="Current transcript"></p>
           <p id="whisper" class="whisper">Awaiting the field.</p>
         </div>
 
@@ -68,6 +69,7 @@
           <p class="micro dim">Interaction protocol</p>
           <p class="keys"><kbd>H</kbd> Hands-free · <kbd>Esc</kbd> Stop · <kbd>V</kbd> Voice · <kbd>F</kbd> Free · <kbd>D</kbd> Dialogue</p>
         </div>
+        </div>
 
         <aside class="dialogue" id="dialogue" aria-label="Conversation">
           <header class="dialogue-head">
@@ -80,12 +82,13 @@
           <ol id="turns" class="turns"></ol>
         </aside>
 
-        <form id="composer" class="composer" autocomplete="off">
+        <form id="composer" class="composer" autocomplete="off" novalidate>
           <button id="mic" class="mic" type="button" aria-label="Listen" title="Listen (Space when not typing)">
             <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
           </button>
           <label class="sr" for="prompt">Message JARVIS</label>
           <input id="prompt" name="prompt" type="text" placeholder="Speak, or type to JARVIS" enterkeyhint="send" />
+          <button id="stop" class="stop" type="button" disabled title="Stop the current reply (Esc)">Stop</button>
           <button id="send" class="send" type="submit" aria-label="Send">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h13M13 6l6 6-6 6"/></svg>
           </button>

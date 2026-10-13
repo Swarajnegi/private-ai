@@ -362,6 +362,7 @@ class VoiceBrain:
                     break
         finally:
             stop_all()
+            await asyncio.gather(*tasks.values(), return_exceptions=True)
         yield {"type": "done", "model": chain[winner], "answer": "".join(parts).strip(),
                "total": round(time.perf_counter() - t0, 3)}
 

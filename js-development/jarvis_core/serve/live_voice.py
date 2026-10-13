@@ -47,9 +47,9 @@ doing at that moment:
               the room does not trigger it). The answer already given is
               persisted; what the user says becomes the next turn.
 
-    DEEP      a tool-using answer is running in the full orchestrator, which
-              cannot be interrupted mid-run; new speech is held and becomes
-              the next turn when it finishes.
+    DEEP      a tool-using answer is running in the full orchestrator. New
+              speech waits for its answer; Stop or a session change cancels
+              the worker and waits for cleanup before another turn can start.
 
 =============================================================================
 PROTOCOL
@@ -84,6 +84,7 @@ server -> client
 from __future__ import annotations
 
 import asyncio
+from contextlib import aclosing
 import json
 import re
 import time
@@ -99,7 +100,8 @@ Receive = Callable[[], Awaitable[Dict[str, Any]]]
 Send = Callable[[Dict[str, Any]], Awaitable[None]]
 
 DEEP_ACK = "One moment, sir."
-BUSY_LINE = "One moment, sir. I'm still on the previous question."
+BUSY_MESSAGE = "Another conversation is still running. Stop that reply before sending this question."
+VOICE_PROGRESS_TIMEOUT_S = 60.0
 COMMIT_GRACE_S = 0.25
 INCOMPLETE_GRACE_S = 1.5
 LISTEN_THRESHOLD = 0.5
@@ -148,11 +150,12 @@ class LiveSession:
         self.merge_next = False
         self.merging = False          # between a cancelled answer and its merged resubmit
         self.queued: List[np.ndarray] = []
+        self.speaker: Optional[_Speaker] = None
 
     # ---- transport -------------------------------------------------------
 
     async def send(self, obj: Dict[str, Any]) -> None:
-        await self._emit({"type": "websocket.send", "text": json.dumps(obj, ensure_ascii=False)})
+        await self._emit({"type": "websocket.send", "text": json.dumps({"session": self.session, **obj}, ensure_ascii=False)})
 
     async def send_audio(self, pcm: bytes) -> None:
         await self._emit({"type": "websocket.send", "bytes": pcm})
@@ -189,7 +192,11 @@ class LiveSession:
         kind = msg.get("type")
         if kind in ("hello", "config"):
             if isinstance(msg.get("session"), str) and msg["session"].strip():
-                self.session = msg["session"].strip()
+                requested = msg["session"].strip()
+                if requested != self.session:
+                    await self.cancel_turn()
+                    self.session = requested
+                    await self.send({"type": "state", "state": self.state})
             if msg.get("voice") in TTS_VOICES:
                 self.voice = msg["voice"]
             if "hands_free" in msg:
@@ -207,8 +214,12 @@ class LiveSession:
             if question and not self._busy():
                 self.turn_audio = None
                 self.turn = asyncio.create_task(self.run_turn(question, t_heard=time.perf_counter()))
+            elif question:
+                await self.send({"type": "error", "error": "A reply is already running. Use Stop or New conversation."})
         elif kind == "interrupt":
             self.stop_audio.set()
+            if msg.get("cancel_turn", True):
+                await self.cancel_turn()
 
     async def on_audio(self, pcm: bytes) -> None:
         if not self.hands_free or self.vad is None:
@@ -282,7 +293,41 @@ class LiveSession:
 
     # ---- a turn ----------------------------------------------------------
 
+    async def cancel_turn(self) -> None:
+        self.stop_audio.set()
+        await self.send({"type": "stop_audio"})
+        self.queued = []
+        self.pending_audio = None
+        for task in (self.pending_task, self.turn):
+            if task is not None and task is not asyncio.current_task() and not task.done():
+                task.cancel()
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    pass
+        self.pending_task = self.turn = None
+        self.turn_speaking = False
+        await self._rest_state()
+
     async def run_turn(self, question: str, t_heard: float, t_stt: Optional[float] = None,
+                       audio_s: Optional[float] = None) -> None:
+        try:
+            await self._run_turn(question, t_heard, t_stt, audio_s)
+        except asyncio.CancelledError:
+            await self.send({"type": "cancelled"})
+            raise
+        except Exception as error:
+            message = ("The model stopped responding. You can retry or start a new conversation."
+                       if isinstance(error, asyncio.TimeoutError) else f"Reply failed: {error}")
+            await self.send({"type": "error", "error": message})
+        finally:
+            if self.speaker is not None:
+                self.speaker.abandon()
+                await self.speaker.finish()
+                self.speaker = None
+            await self._after_turn()
+
+    async def _run_turn(self, question: str, t_heard: float, t_stt: Optional[float] = None,
                        audio_s: Optional[float] = None) -> None:
         from jarvis_core.brain.voice_path import persist_turn
         timing: Dict[str, Any] = {"session": self.session, "chars_in": len(question), "audio_s": audio_s,
@@ -294,37 +339,41 @@ class LiveSession:
             self.session = f"conv-web-{uuid.uuid4()}"
             await self.send({"type": "session", "session": self.session})
         if self.hearth._slot.locked():
-            await self._speak_line(BUSY_LINE, timing, t_heard)
-            await self._after_turn()
+            await self.send({"type": "error", "error": BUSY_MESSAGE})
             return
         await self.set_state("thinking")
-        speaker = _Speaker(self, timing, t_heard)
+        speaker = self.speaker = _Speaker(self, timing, t_heard)
         chunker = SentenceChunker()
         answer, model, cancelled = "", "", False
         async with self.hearth._slot:
-            async for ev in self.brain.respond(question, self.session, cancel=self.turn_cancel,
-                                                free_only=self.free_only):
-                if ev["type"] == "cancelled":
-                    cancelled = True
-                    break
-                if ev["type"] == "first":
-                    timing["first_token_s"] = round(time.perf_counter() - t_heard, 3)
-                    model = ev["model"]
-                elif ev["type"] == "token":
-                    await self.send({"type": "token", "text": ev["text"]})
-                    for sentence in chunker.push(ev["text"]):
-                        speaker.say(sentence)
-                elif ev["type"] == "done":
-                    answer, model = ev["answer"], ev["model"]
-                elif ev["type"] == "deep":
-                    self.turn_path, model = "deep", ev["model"]
-                    speaker.say(DEEP_ACK)
-                    answer = await self._deep(question, speaker)
-                    break
-                elif ev["type"] == "error":
-                    await self.send({"type": "error", "error": ev["error"]})
-                    speaker.say("I've lost the connection to my models, sir.")
-                    break
+            async with aclosing(self.brain.respond(question, self.session, cancel=self.turn_cancel,
+                                                    free_only=self.free_only)) as response:
+                while True:
+                    try:
+                        ev = await asyncio.wait_for(anext(response), VOICE_PROGRESS_TIMEOUT_S)
+                    except StopAsyncIteration:
+                        break
+                    if ev["type"] == "cancelled":
+                        cancelled = True
+                        break
+                    if ev["type"] == "first":
+                        timing["first_token_s"] = round(time.perf_counter() - t_heard, 3)
+                        model = ev["model"]
+                    elif ev["type"] == "token":
+                        await self.send({"type": "token", "text": ev["text"]})
+                        for sentence in chunker.push(ev["text"]):
+                            speaker.say(sentence)
+                    elif ev["type"] == "done":
+                        answer, model = ev["answer"], ev["model"]
+                    elif ev["type"] == "deep":
+                        self.turn_path, model = "deep", ev["model"]
+                        speaker.say(DEEP_ACK)
+                        answer = await self._deep(question, speaker)
+                        break
+                    elif ev["type"] == "error":
+                        await self.send({"type": "error", "error": ev["error"]})
+                        speaker.say("I've lost the connection to my models, sir.")
+                        break
             if not cancelled:
                 for sentence in chunker.flush():
                     speaker.say(sentence)
@@ -352,7 +401,6 @@ class LiveSession:
         if self.turn_path == "fast" and answer and not self.ephemeral:
             timing.update(await asyncio.to_thread(persist_turn, question, answer, self.session, model))
         await self._log(timing)
-        await self._after_turn()
 
     async def _merge_and_resubmit(self, base: Optional[np.ndarray]) -> None:
         """Old question audio + everything said since -> one new pending utterance.
@@ -378,7 +426,7 @@ class LiveSession:
             self.queued = []
             self.pending_t0 = time.perf_counter()
             self._start_pending(audio)
-        else:
+        elif self.pending_task is None or self.pending_task.done():
             await self._rest_state()
 
     async def _log(self, timing: Dict[str, Any]) -> None:
@@ -506,6 +554,8 @@ async def handle(hearth: Any, scope: Dict[str, Any], receive: Receive, send: Sen
             if task is not None and not task.done():
                 try:
                     await asyncio.wait_for(asyncio.shield(task), timeout=60)
+                except asyncio.TimeoutError:
+                    await live.cancel_turn()
                 except Exception:                           # noqa: BLE001
                     pass
 

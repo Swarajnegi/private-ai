@@ -72,6 +72,7 @@ STEP 6: The AskResult's answer + verdict + ledger go out as the terminal event,
 from __future__ import annotations
 
 import asyncio
+import threading
 import hashlib
 import hmac
 import json
@@ -295,17 +296,41 @@ class Hearth:
         # The request owns a dedicated event loop in a worker thread.  A caller
         # may configure a deadline for an unattended deployment, but the local
         # interactive hearth deliberately has no arbitrary two-minute cutoff.
-        def invoke() -> Any:
+        cancellation = threading.Event()
+        worker_lock = threading.Lock()
+        worker: Dict[str, Any] = {}
+
+        async def invoke_async() -> Any:
+            with worker_lock:
+                worker.update(loop=asyncio.get_running_loop(), task=asyncio.current_task())
+            if cancellation.is_set():
+                raise asyncio.CancelledError
             call = ask_fn(question, **kwargs)
             if self._cfg.ask_timeout_seconds is None:
-                return asyncio.run(call)
-            return asyncio.run(asyncio.wait_for(call, timeout=self._cfg.ask_timeout_seconds))
+                return await call
+            return await asyncio.wait_for(call, timeout=self._cfg.ask_timeout_seconds)
+
+        def invoke() -> Any:
+            return asyncio.run(invoke_async())
 
         task = asyncio.create_task(asyncio.to_thread(invoke))
         try:
             async for line in self._drain(queue, task):
                 await emit("log", {"line": line})
-            result = await task
+            result = await asyncio.shield(task)
+        except asyncio.CancelledError:
+            cancellation.set()
+            with worker_lock:
+                loop, running = worker.get("loop"), worker.get("task")
+                if loop is not None and not loop.is_closed() and running is not None:
+                    loop.call_soon_threadsafe(running.cancel)
+            # Retain the caller's single-flight slot until the worker has actually
+            # stopped; cancelling to_thread alone leaves its work running.
+            try:
+                await asyncio.shield(task)
+            except asyncio.CancelledError:
+                pass
+            raise
         except asyncio.TimeoutError:
             deadline = self._cfg.ask_timeout_seconds
             self.last_error = (

@@ -19,7 +19,11 @@ answering its own interview question, and the research papers were removed (2026
 **Active-host maintenance update, 2026-10-13 (Codex).** The native Windows
 host at `D:\J.A.R.V.I.S` is the owner's girlfriend's HP OMEN: i7-10750H,
 16 GB RAM, RTX 2060 with 6 GB VRAM. Current model work uses CPU-only Torch.
-Voice is restored locally; the UI and Core renderer are unchanged.
+Voice is restored locally. The 2026-10-13 UI recovery repair separates long
+transcripts from engine details and shortcuts, adds Stop, and cancels the old
+request before switching sessions. The particle renderer and its geometry are
+unchanged. Offline recovery tests, four browser widths and two uncaptured live
+voice-path answers passed.
 
 - Memory indexing validated against all 1,133 KB entries (1,930 chunks).
 - Domain labelling validated against 2,709 captured turns.

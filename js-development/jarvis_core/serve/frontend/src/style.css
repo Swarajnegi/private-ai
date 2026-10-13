@@ -103,10 +103,10 @@ button { cursor: pointer; }
 .states li[data-state="thinking"][data-active="true"] { background: var(--gold); }
 
 .caption {
-  position: absolute; left: 0; right: var(--drawer); top: 71svh; z-index: 2;
-  display: grid; justify-items: center; gap: 6px; padding: 0 var(--s4); text-align: center; pointer-events: none;
+  display: grid; align-content: start; justify-items: center; gap: 6px;
+  min-width: 0; max-height: 140px; grid-template-rows: minmax(0, 1fr) auto; text-align: center;
 }
-.heard { margin: 0; max-width: 46ch; font-size: 13px; letter-spacing: 0.14em; color: var(--ink); min-height: 1.6em; }
+.heard { margin: 0; max-width: 46ch; width: 100%; max-height: 112px; overflow: auto; font-size: 13px; letter-spacing: 0.04em; color: var(--ink); min-height: 1.6em; overflow-wrap: anywhere; text-transform: none; }
 .heard.tentative { color: var(--ink-3); }
 .whisper { margin: 0; font-size: 11px; color: var(--gold-dim); }
 .whisper.bad { color: var(--red); }
@@ -151,6 +151,9 @@ button { cursor: pointer; }
 .mic[aria-pressed="true"] { border-color: var(--blue); background: rgba(69, 155, 255, 0.16); color: var(--blue-2); }
 .send { background: var(--ink); color: #000; border-color: var(--ink); }
 .send:hover { background: var(--blue-2); color: #000; }
+.stop { flex: none; height: 40px; padding: 0 12px; border: 1px solid var(--hair-2); border-radius: 999px; background: none; font: 400 12px var(--mono); }
+.stop:hover:enabled { border-color: var(--blue); color: var(--blue-2); }
+.stop:disabled { opacity: .35; cursor: default; }
 
 /* ---- 02 sessions / 03 system ------------------------------------------- */
 .act-sessions, .act-system {
@@ -255,7 +258,8 @@ body.arriving .bar, body.arriving main, body.arriving .foot { opacity: 0; pointe
   .hud-right { left: 16px; right: auto; top: calc(var(--bar) + 64px); }
   .hud-right > .micro { display: none; }
   .states li { padding: 4px 8px; font-size: 10px; letter-spacing: 0.12em; }
-  .caption { top: calc(60svh - 58px); right: 0; padding: 0 16px; }
+  .core-footer { top: calc(60svh - 96px); bottom: auto; left: 16px; right: 16px; display: block; }
+  .caption { max-height: 80px; }
   .dialogue {
     position: relative; top: auto; right: auto; bottom: auto; width: auto; margin: 60svh 16px 0;
     min-height: 30svh; max-height: none; border: 1px solid var(--hair); border-radius: 6px;
@@ -289,21 +293,24 @@ kbd {
 .led.gold { background: var(--gold); box-shadow: 0 0 8px rgba(255, 181, 71, 0.6); }
 
 .facts {
-  position: absolute; left: var(--s4); bottom: 112px; z-index: 2; display: grid; gap: 6px;
+  display: grid; gap: 6px; min-width: 0; max-height: 140px; overflow: auto;
   font: 400 12px/1.5 var(--mono); color: var(--ink-2);
 }
 .fact-head { margin: 0; display: flex; align-items: center; gap: 9px; font: 500 11px/1 var(--mono);
   text-transform: uppercase; letter-spacing: 0.2em; color: var(--ink); }
 .fact-list { margin: 0; padding: 0; list-style: none; display: grid; gap: 3px; }
 .fact-list li::before { content: "• "; color: var(--ink-3); }
-.fact-list span { color: var(--ink); }
+.fact-list span { color: var(--ink); overflow-wrap: anywhere; }
 #session-id { overflow-wrap: anywhere; }
 
 .protocol {
-  position: absolute; right: calc(var(--drawer) + var(--s4)); bottom: 112px; z-index: 2; text-align: right;
-  display: grid; gap: 6px;
+  text-align: right; display: grid; align-content: end; gap: 6px; min-width: 0;
 }
 .protocol .keys { margin: 0; font: 400 12px/1.6 var(--mono); color: var(--ink-2); }
+.core-footer { position: absolute; left: var(--s4); right: calc(var(--drawer) + var(--s4)); bottom: 112px; z-index: 2; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) minmax(0, .8fr); gap: var(--s3); align-items: end; }
+.core-footer .facts { grid-column: 1; grid-row: 1; }
+.core-footer .caption { grid-column: 2; grid-row: 1; }
+.core-footer .protocol { grid-column: 3; grid-row: 1; }
 
 .dossier {
   display: inline-flex; align-items: center; gap: 9px; height: 30px; padding: 0 12px;
@@ -326,6 +333,7 @@ body.dialogue-folded { --drawer: 64px; }
 
 @media (max-width: 760px) {
   .facts, .protocol { display: none; }
+  .core-footer { top: calc(60svh - 96px); bottom: auto; left: 16px; right: 16px; display: block; }
   .core-title { font-size: 26px; }
 }
 
