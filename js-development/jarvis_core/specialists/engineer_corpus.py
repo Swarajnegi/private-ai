@@ -90,6 +90,7 @@ from jarvis_core.agent.capture import redact
 from jarvis_core.config import DATA_ROOT, JARVIS_ROOT, KB_PATH, SPECIALIST_CORPUS_ROOT
 from jarvis_core.memory.chunking import RecursiveWordChunker
 from jarvis_core.agent.curator import load_routing, routes_to
+from jarvis_core.specialists.training_review import TrainingReviewGate
 from jarvis_core.specialists.eval_exclusions import excluded_turn, has_canary, load_registry
 from jarvis_core.specialists.retractions import conv_turn_retracted, kb_retracted, load_retractions
 from jarvis_core.specialists.text_hygiene import corpus_admits
@@ -651,9 +652,15 @@ def assemble_corpus(output_path: Optional[Path] = None) -> CorpusStats:
     _seen_exact: set = set()
     total_records = 0
 
+    review_gate = TrainingReviewGate()
     with path.open("w", encoding="utf-8") as handle:
         for source_name, iterator_fn in _SOURCE_ITERATORS:
             for record in iterator_fn(dropped):
+                reviewed = review_gate.filter_record({"source_type": record.source_type,
+                    "source_path": record.source_path, "text": record.text, "metadata": {**record.metadata, "training_corpus": "engineer"}})
+                if reviewed is None:
+                    dropped[f"{source_name}:training_review_hold"] = dropped.get(f"{source_name}:training_review_hold", 0) + 1
+                    continue
                 admit = True
                 if source_name in _HYGIENE_SOURCES:
                     admit, _ = corpus_admits(record.text, min_chars=_MIN_RECORD_CHARS)
@@ -677,7 +684,7 @@ def assemble_corpus(output_path: Optional[Path] = None) -> CorpusStats:
                     "source_type": record.source_type,
                     "source_path": record.source_path,
                     "text": record.text,
-                    "metadata": record.metadata,
+                    "metadata": reviewed["metadata"],
                 }, ensure_ascii=False) + "\n")
                 per_source[source_name]["records"] += 1
                 per_source[source_name]["chars"] += len(record.text)

@@ -43,6 +43,47 @@ These measurements update maintenance on this host, not the older global
 Stage 5 survey below. Codex's individually reviewed backlog remains open;
 no bulk verdicts were submitted during this maintenance repair.
 
+**Milestone 1 training protection, 2026-10-14 (Codex).** The independent
+review registry and shared eligibility gate are implemented across engineer,
+personalization, blend, both SFT exports, pipeline health and the Stage 5
+training audit. The existing parse rule, source records and retrieval are
+unchanged. Eleven October 13 sources were individually reviewed: eight rejected,
+three approved; 122 other JARVIS source identities remain pending. Owner-only
+extracts and verified owner-supported facts are preserved. Six behavioural
+baseline cases are recorded in `jarvis_data/eval/milestone1/baseline.json`;
+five remain unresolved and ambiguous transcription has no original audio.
+
+Production verification passed through the exclusive supervisor: all five
+exports contain zero ineligible records and all 36 pipeline checks pass. The
+final rebuild took 64.11 seconds, with 5.41 GiB minimum available RAM and
+248.11 MiB peak process-tree commit. The 947-record client snapshot retains
+SHA-256 `2cdeb358d8eb5d4580265673fbc4e514b453e1607fffb72a54615b2a270529f0`.
+Codex fixed a shared-metadata alias discovered by the final hash check and added
+a regression proving review metadata never changes snapshot bytes. Hearth was
+restarted through its watchdog; UI and CPU voice capabilities are available,
+with no voice errors. Capture is listed and the dry-run reports no completed
+exchanges awaiting ingestion. Live review state is a hold (122 pending), with
+all five artifact audits OK. Core renderer and frontend sources are unchanged.
+Offline checks: 22 review/export/writer tests plus 20 reviewed Antigravity
+regression tests, 33 pipeline tests, 25 pipeline-health tests,
+230 Stage 5 harness checks, 46 scheduler checks, 13 maintenance-policy checks,
+and nine rebuild-chain checks pass, along with retraction/evaluation exclusions.
+Antigravity answered q056 and q057 with 20 passing fixture tests. Codex read the
+complete test file, removed its hardcoded root/temp fallback, strengthened the
+three-host and all-five-artifact assertions, and reran all 20 successfully.
+Only its bounded test source and mail evidence are integrated; it changed no
+policy, production records, dependencies or schedules.
+
+The scheduled episode-index catch-up reached the existing 30-minute limit,
+recorded rc=124 and confirmed process-tree cleanup; its partial progress is
+retained and its six-hour failure retry remains in force. That warning is
+accurate and was not cleared by the corpus repair. Codex parse backlog and
+older training-readiness/evaluation work remain separate. Milestone 1's quality
+gate, reviewed exclusions, production audits and behavioural baseline are closed;
+behavioural repairs are the next milestone. Generated corpus files and unrelated
+memory updates remain unstaged; only reviewed milestone sources/records/docs are
+included in the local commit.
+
 ## 2. What's mid-flight
 
 **The Memory Contract is live.** One parse rule (`jarvis_core/agent/parse_rule.py`), no paid background

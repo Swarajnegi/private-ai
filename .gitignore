@@ -315,6 +315,7 @@ jarvis_data/context_store/candidates/
 jarvis_data/.chroma_write.lock
 jarvis_data/.chroma_write.lock*
 jarvis_data/fact_provenance.jsonl.lock
+jarvis_data/training_reviews.jsonl.lock
 # Codex agent-mail hook runtime state; the actual q_/a_ messages are tracked.
 jarvis_data/.codex_agent_mail_seen.json
 jarvis_data/.codex_agent_mail_outbox.jsonl

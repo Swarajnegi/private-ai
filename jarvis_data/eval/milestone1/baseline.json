@@ -1,0 +1,184 @@
+{
+  "version": 1,
+  "observed_date": "2026-10-13",
+  "session_id": "conv-web-5fd1ab40-c1c4-48eb-9995-430a00f0d615",
+  "scope": "Offline baseline only; behavioural repair and speech benchmarking are later milestones. Reviews do not verify current runtime facts.",
+  "source_refs": [
+    "jarvis_data/conversations/conv-web-5fd1ab40-c1c4-48eb-9995-430a00f0d615.jsonl",
+    "jarvis_data/context/conv-web-5fd1ab40-c1c4-48eb-9995-430a00f0d615.jsonl",
+    "jarvis_data/voice_latency.jsonl"
+  ],
+  "hardware_observation": {
+    "machine": "LAPTOP-SMOU1K0D",
+    "model": "HP OMEN Laptop 15-ek0xxx",
+    "gpu": "NVIDIA GeForce RTX 2060",
+    "vram_mib": 6144,
+    "ram_bytes": 17010061312,
+    "cpu": "Intel Core i7-10750H",
+    "evidence": "Get-CimInstance Win32_ComputerSystem/Win32_Processor; nvidia-smi --query-gpu=name,memory.total --format=csv,noheader"
+  },
+  "voice_observation": {
+    "stt": "cpu",
+    "tts": "cpu",
+    "stt_model": "small",
+    "voice": "bm_lewis",
+    "source": "GET /v1/voice/capabilities; no audio/model API call made for this baseline"
+  },
+  "cases": [
+    {
+      "id": "B01",
+      "failure": "wrong hardware claims",
+      "status": "unresolved",
+      "exchange_ts": "2026-10-13T18:43:54+05:30",
+      "observed": [
+        "GTX 1650 current host claim",
+        "RTX 2060 8GB work/current laptop claim in next answer",
+        "API brain claimed local GPU execution"
+      ],
+      "expected": "Verify current host and CPU/GPU runtime state with attributed evidence; distinguish past machines and the hosted brain."
+    },
+    {
+      "id": "B02",
+      "failure": "invented performance claims",
+      "status": "unresolved",
+      "exchange_ts": "2026-10-13T18:43:54+05:30",
+      "observed": [
+        "Unmeasured 1.2s to 0.3s prediction",
+        "September CUDA timings presented without current-host validation"
+      ],
+      "expected": "Label dated benchmarks as historical and predictions as unknown; do not invent latency, quantization support or VRAM budgets."
+    },
+    {
+      "id": "B03",
+      "failure": "misleading missing-file errors",
+      "status": "unresolved",
+      "fixture": {
+        "tool": "file_read",
+        "error": "File not found: js-development/jarvis_core/serve/voice_path.py"
+      },
+      "observed": "agent.errors.classify_error maps not found to unknown_tool and claims the registered tool does not exist.",
+      "expected": "Distinguish a missing path from an absent tool; discover brain/voice_path.py without changing task."
+    },
+    {
+      "id": "B04",
+      "failure": "redundant reads",
+      "status": "unresolved",
+      "observed": "Archived model-requested actions repeatedly read speech.py, model_profiles.py, llm_client.py, list the same directories and guess nonexistent config paths. Requests are not a count of actual tool executions.",
+      "expected": "Track read coverage and discovered paths; avoid identical reads without new evidence. Bound irrelevant search results and keep the active goal."
+    },
+    {
+      "id": "B05",
+      "failure": "loss of task continuity",
+      "status": "unresolved",
+      "exchange_ts": "2026-10-13T21:55:35+05:30",
+      "observed": "The full file listing was already produced; the final reply assumes a UI-colour task and says the prior task is unavailable after compaction. Archived full history remains on disk.",
+      "expected": "Recover the active model-inspection task, completed steps, evidence and next action from stored context; clarify only the ambiguous utterance."
+    },
+    {
+      "id": "B06",
+      "failure": "ambiguous transcription",
+      "status": "unmeasured",
+      "exchange_ts": "2026-10-13T21:55:35+05:30",
+      "transcript": "I was telling you I said I want you to put that white right now.",
+      "observed": "No original recording is preserved for comparison; cannot confirm transcription accuracy or infer intended words.",
+      "expected": "Clarify the uncertain phrase in the active task context. Later audio-labelled testing must use consented recordings; no speech score asserted here."
+    }
+  ],
+  "reviewed_sources": [
+    {
+      "identity": {
+        "kind": "exchange",
+        "session_id": "conv-web-5fd1ab40-c1c4-48eb-9995-430a00f0d615",
+        "ts": "2026-10-13T18:42:29+05:30"
+      },
+      "digest": "96125fcac0aae7514937351079ccdb659d5b517d610025eda0fb1727eae0374e",
+      "decision": "approved"
+    },
+    {
+      "identity": {
+        "kind": "exchange",
+        "session_id": "conv-web-5fd1ab40-c1c4-48eb-9995-430a00f0d615",
+        "ts": "2026-10-13T18:43:54+05:30"
+      },
+      "digest": "71c679859fc0778d96ad32a678e4b76fb436ad3a7bc19879440ad8e9fa90a0f2",
+      "decision": "rejected"
+    },
+    {
+      "identity": {
+        "kind": "exchange",
+        "session_id": "conv-web-5fd1ab40-c1c4-48eb-9995-430a00f0d615",
+        "ts": "2026-10-13T18:45:09+05:30"
+      },
+      "digest": "9b01cfcb300e374908773eb7527c350413715a92ff1363dfbcef175864c7eca3",
+      "decision": "rejected"
+    },
+    {
+      "identity": {
+        "kind": "exchange",
+        "session_id": "conv-web-5fd1ab40-c1c4-48eb-9995-430a00f0d615",
+        "ts": "2026-10-13T20:13:28+05:30"
+      },
+      "digest": "dbceda559f68f74cf7f2b2f88d27026d745dc810d7452ee5a05feca693007d17",
+      "decision": "approved"
+    },
+    {
+      "identity": {
+        "kind": "exchange",
+        "session_id": "conv-web-5fd1ab40-c1c4-48eb-9995-430a00f0d615",
+        "ts": "2026-10-13T20:14:47+05:30"
+      },
+      "digest": "5649d70e26aec0331af8d7ddafdf752639823250585aea07cab7ec20f74cf672",
+      "decision": "rejected"
+    },
+    {
+      "identity": {
+        "kind": "exchange",
+        "session_id": "conv-web-5fd1ab40-c1c4-48eb-9995-430a00f0d615",
+        "ts": "2026-10-13T20:22:44+05:30"
+      },
+      "digest": "899f9fd9e45eba20037d253aa89d37f21bcec287c4380acea001e3c54f030ff6",
+      "decision": "rejected"
+    },
+    {
+      "identity": {
+        "kind": "exchange",
+        "session_id": "conv-web-5fd1ab40-c1c4-48eb-9995-430a00f0d615",
+        "ts": "2026-10-13T21:55:35+05:30"
+      },
+      "digest": "316487ad6edf6bfb15561fb0eb3267627955511f56f7da17b96c795d37ad8f71",
+      "decision": "rejected"
+    },
+    {
+      "identity": {
+        "kind": "kb",
+        "id": 1250
+      },
+      "digest": "79460255ad629d4a737e46963a667f54675f0a96e5d1e254c806b9217e380155",
+      "decision": "rejected"
+    },
+    {
+      "identity": {
+        "kind": "kb",
+        "id": 1255
+      },
+      "digest": "159697d99ff4ce78f9e18769d20c749e9b04ee2c874df090408d3c5c67fd53db",
+      "decision": "approved"
+    },
+    {
+      "identity": {
+        "kind": "kb",
+        "id": 1256
+      },
+      "digest": "42ecd7ad67e1940ca9d0236f1d12b841a6af1a47296c981136534e844e5d93bd",
+      "decision": "rejected"
+    },
+    {
+      "identity": {
+        "kind": "kb",
+        "id": 1258
+      },
+      "digest": "80fab5e7ba6043e4c1b771df819cd983fe6f8d1ced4138c53ab93e1266ffa694",
+      "decision": "rejected"
+    }
+  ]
+}

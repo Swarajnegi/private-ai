@@ -94,6 +94,7 @@ from jarvis_core.agent.provenance import ECHO_CEILING, EchoIndex  # noqa: E402
 from jarvis_core.config import DATA_ROOT, JARVIS_ROOT, KB_PATH  # noqa: E402
 from jarvis_core.specialists import third_parties  # noqa: E402
 from jarvis_core.specialists.eval_exclusions import excluded_turn, has_canary, load_registry  # noqa: E402
+from jarvis_core.specialists.training_review import TrainingReviewGate, ReviewError
 from jarvis_core.specialists.retractions import kb_retracted, load_retractions  # noqa: E402
 from jarvis_core.specialists.text_hygiene import (  # noqa: E402
     MACHINE_TEXT, OWNER_PROSE, classify,
@@ -542,7 +543,7 @@ def extract_user_explanations() -> Iterator[SFTPair]:
             bucket="personalization", source_type="sft_personalization",
             source_path=f"observation_queue.jsonl#{ts}",
             metadata={"origin": "authored_by_user", "form": "explanation",
-                      "echo_fraction": round(echoed, 3)})
+                      "session_id": str(rec.get("session_id", "")), "echo_fraction": round(echoed, 3)})
 
 
 def extract_kb_verbatim() -> Iterator[SFTPair]:
@@ -781,10 +782,17 @@ def build() -> Tuple[List[SFTPair], Dict[str, Dict[str, int]]]:
     kept: List[SFTPair] = []
     seen: set = set()
     stats: Dict[str, Dict[str, int]] = {}
+    review_gate = TrainingReviewGate()
     for name, fn in EXTRACTORS:
-        s = {"found": 0, "dropped_quality": 0, "dropped_dup": 0, "kept": 0}
+        s = {"found": 0, "dropped_quality": 0, "dropped_dup": 0, "kept": 0, "review_holds": 0}
         for pair in fn():
             s["found"] += 1
+            reviewed = review_gate.filter_record(pair.to_record())
+            if reviewed is None:
+                s["review_holds"] += 1
+                s["dropped_quality"] += 1
+                continue
+            pair.metadata.update(reviewed["metadata"])
             ok, _ = passes_quality(pair)
             if not ok:
                 s["dropped_quality"] += 1
@@ -821,10 +829,13 @@ def carve_heldout(pairs: List[SFTPair]) -> Tuple[List[SFTPair], List[SFTPair]]:
 def write_jsonl(pairs: List[SFTPair], path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     people = third_parties.load()
+    review_gate = TrainingReviewGate()
     tmp = path.with_suffix(".tmp")
     with tmp.open("w", encoding="utf-8") as fh:
         for p in pairs:
-            record = p.to_record()
+            record = review_gate.filter_record(p.to_record())
+            if record is None:
+                raise ReviewError("SFT export refused: source is no longer eligible")
             for message in record.get("messages", []):
                 message["content"], _ = third_parties.redact(message.get("content", ""), people)
             fh.write(json.dumps(record, ensure_ascii=False) + "\n")
@@ -832,6 +843,9 @@ def write_jsonl(pairs: List[SFTPair], path: Path) -> None:
 
 
 def report(pairs: List[SFTPair], stats: Dict[str, Dict[str, int]]) -> None:
+    holds = sum(row.get("review_holds", 0) for row in stats.values())
+    if holds:
+        print(f"  Independent training review: {holds} held pairs")
     print("=" * 74)
     print("  SFT pair extraction")
     print("=" * 74)

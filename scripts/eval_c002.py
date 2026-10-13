@@ -809,7 +809,7 @@ def _iter_jsonl_strings(path: Path) -> Iterator[Tuple[str, Dict[str, Any]]]:
 def audit(items: Sequence[Item], owner_gold: Dict[str, str], *, training_files: Sequence[Path],
           kb_path: Optional[Path], queue_path: Optional[Path], conversations_dir: Optional[Path],
           registry: eval_exclusions.Registry, n: int = 8, text_files: Sequence[Path] = (),
-          shard_files: Sequence[Path] = ()) -> Dict[str, Any]:
+          shard_files: Sequence[Path] = (), training_root: Optional[Path] = None) -> Dict[str, Any]:
     """Leakage gate. Training artifacts must hold no canary, no evaluation question, and (for owner
     gold) no verbatim run of 20+ tokens or more than 15% of its 8-grams. Engineering gold and
     evidence are EXPECTED to be in training (that is what in_training measures), so they are tagged,
@@ -830,11 +830,28 @@ def audit(items: Sequence[Item], owner_gold: Dict[str, str], *, training_files: 
     failures: List[str] = []
     scanned: Dict[str, int] = {}
     legacy: Dict[str, int] = {}
+    review_gate = None
+    if training_files:
+        from jarvis_core.specialists.training_review import TrainingReviewGate
+        candidate = training_root
+        if candidate is None and kb_path is not None:
+            candidate = kb_path.parent.parent
+        if candidate is None:
+            first = training_files[0]
+            candidate = next((p.parent for p in first.parents if p.name == "jarvis_data"), first.parent)
+        try:
+            review_gate = TrainingReviewGate(candidate)
+        except Exception as exc:
+            failures.append(f"independent training review registry invalid: {type(exc).__name__}: {exc}")
 
     def scan(label: str, text: str, raw_row: Any, *, training: bool) -> None:
         scanned[label] = scanned.get(label, 0) + 1
         if training:
             tidx.probe(text)
+            if review_gate is not None:
+                eligible = review_gate.eligibility(raw_row)
+                if not eligible.eligible:
+                    failures.append(f"independent training review denied {label} {raw_row.get('source_path')}: {eligible.status}: {eligible.reason}")
         if eval_exclusions.has_canary(registry, text):
             failures.append(f"canary found in {label}")
         if training:
@@ -890,6 +907,7 @@ def audit(items: Sequence[Item], owner_gold: Dict[str, str], *, training_files: 
                        "in_training": {"0.2": top is not None and top >= 0.2, "0.5": top is not None and top >= 0.5,
                                        "0.8": top is not None and top >= 0.8}}
     return {"ok": not failures, "failures": failures, "scanned": scanned, "tags": tags,
+            "training_review_counts": review_gate.counts() if review_gate is not None else {},
             "too_short_to_audit": sorted(set(idx.skipped) | set(tidx.skipped)), "n_gram": n}
 
 
@@ -1805,7 +1823,7 @@ def cmd_audit(args: argparse.Namespace) -> int:
                 queue_path=root / "observation_queue.jsonl", conversations_dir=root / "conversations", registry=registry,
                 text_files=[root / n for n in ("cognitive_profile.md", "personal_life.md", "activity_digest.md",
                                                "experience_map.md", "conversation_topics.md")],
-                shard_files=shards)
+                shard_files=shards, training_root=_REPO_ROOT)
     res.update(scope=args.scope, manifest_sha=manifest_sha, owner_gold_items=len(gold), n_pers=n_pers,
                items_sha=items_files_sha([ITEMS_ENG_PATH, ITEMS_PERS_PATH, RECALL_HELDOUT_PATH, RECALL_TUNING_PATH]),
                owner_answers_sha=file_sha256(OWNER_ANSWERS_PATH) if OWNER_ANSWERS_PATH.is_file() else None,

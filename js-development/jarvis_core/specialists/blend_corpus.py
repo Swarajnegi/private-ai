@@ -71,6 +71,7 @@ import json
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, Generator, Optional, Set, Tuple
+from jarvis_core.specialists.training_review import TrainingReviewGate
 
 from jarvis_core.config import SPECIALIST_CORPUS_ROOT
 from jarvis_core.specialists import third_parties
@@ -161,6 +162,7 @@ class BlendStats:
     missing_inputs: Tuple[str, ...] = field(default_factory=tuple)
     third_party_redactions: int = 0
     eval_excluded: int = 0
+    training_review_holds: int = 0
 
 
 def _text_key(text: str) -> str:
@@ -243,9 +245,15 @@ def blend(output_path: Optional[Path] = None) -> BlendStats:
     redactions = 0
     registry = load_registry()
     eval_excluded = 0
+    training_review_holds = 0
 
+    review_gate = TrainingReviewGate()
     with out.open("w", encoding="utf-8") as handle:
         for record in _iter_corpus(_ENGINEER_PATH, "engineer"):
+            record = review_gate.filter_record(record)
+            if record is None:
+                training_review_holds += 1
+                continue
             text = record.get("text", "")
             if has_canary(registry, text):
                 eval_excluded += 1
@@ -264,6 +272,10 @@ def blend(output_path: Optional[Path] = None) -> BlendStats:
 
         for _ in range(_PERSONALIZATION_REPEATS):
             for record in _iter_corpus(_PERSONALIZATION_PATH, "personalization"):
+                record = review_gate.filter_record(record)
+                if record is None:
+                    training_review_holds += 1
+                    continue
                 if has_canary(registry, record.get("text", "")):
                     eval_excluded += 1
                     continue
@@ -290,6 +302,7 @@ def blend(output_path: Optional[Path] = None) -> BlendStats:
         missing_inputs=missing,
         third_party_redactions=redactions,
         eval_excluded=eval_excluded,
+        training_review_holds=training_review_holds,
     )
 
 
@@ -338,6 +351,8 @@ def main() -> None:
         print()
         print(f"  Third-party identifiers redacted: {stats.third_party_redactions:,} (see jarvis_data/third_parties.json)")
 
+    if stats.training_review_holds:
+        print(f"\n  Independent training review: {stats.training_review_holds} held records")
     print(f"\n  Personalization upsampling: x{_PERSONALIZATION_REPEATS}")
     print(f"  Realized personalization share: {stats.personalization_share:.1%} of records, "
           f"{stats.personalization_char_share:.1%} of characters")

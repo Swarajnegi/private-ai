@@ -560,7 +560,7 @@ def fingerprint(job: str, root: Path = JARVIS_ROOT) -> str:
     if job != "run_all_tests":
         names = ("observation_queue.jsonl",) if job == "relabel_domains" else (
             "knowledge_base.jsonl", "observation_queue.jsonl", "turn_curation.jsonl",
-            "retractions.jsonl", "experience_map.md", "eval/c002/exclusions.json",
+            "retractions.jsonl", "training_reviews.jsonl", "experience_map.md", "eval/c002/exclusions.json",
             "training_corpus/client_work_snapshot.jsonl")
         paths.update(root / "jarvis_data" / name for name in names)
         if job == "rebuild_corpora":

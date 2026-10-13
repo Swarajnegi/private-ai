@@ -431,6 +431,17 @@ def check_inhale(voice_block: str, prefix: str, chain: List[str], catalog_path: 
 # Part 3: THE REPORT
 # =============================================================================
 
+def check_training_reviews(root: Path) -> Tuple[List[Breach], Any]:
+    from jarvis_core.specialists.training_review import TrainingReviewGate, audit_training_artifacts
+    gate = TrainingReviewGate(root)
+    counts = gate.counts()
+    reports = list(audit_training_artifacts(root, gate))
+    breaches = [{"check": "training review", "detail": f"{r['name']}: {r['ineligible']} ineligible of {r['records']} records",
+                 "output": "\n".join(r["examples"])} for r in reports if r["status"] == "FAIL"]
+    state = "invalid_artifacts" if breaches else ("hold" if counts["pending"] else "reviewed")
+    return breaches, {"counts": counts, "state": state, "audit": reports}
+
+
 def health_report(sources: Optional[Sources] = None, now: Optional[float] = None) -> Dict[str, Any]:
     """Every check, each isolated. Never raises."""
     src = sources or Sources()
@@ -457,6 +468,7 @@ def health_report(sources: Optional[Sources] = None, now: Optional[float] = None
                                        src.state_path or _default_state_path()))
     guarded("backlog", lambda: check_backlog(moment, (src.backlog or _default_backlog)()))
     guarded("corpora", lambda: check_corpora(moment, src.root))
+    guarded("training_reviews", lambda: check_training_reviews(src.root))
     guarded("projections", lambda: check_projections((src.projections or _default_projections)()))
     guarded("chroma", lambda: check_chroma((src.chroma or _default_chroma)()))
 
@@ -557,6 +569,9 @@ def _print_human(report: Dict[str, Any]) -> None:
         for host, slot in backlog.items():
             age = f"{slot['oldest_age_h']} h" if slot.get("oldest_age_h") is not None else "-"
             print(f"    {host:<12} {slot['pending']:>6} pending   oldest {slot['oldest'] or '-'} ({age})")
+    reviews = (report.get("sections") or {}).get("training_reviews") or {}
+    if reviews:
+        print(f"  independent training reviews: {reviews.get('counts')} — {reviews.get('state')}")
     inhale = (report.get("sections") or {}).get("inhale") or {}
     if inhale.get("smallest"):
         s = inhale["smallest"]

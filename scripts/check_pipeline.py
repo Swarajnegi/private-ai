@@ -774,7 +774,30 @@ def inv_no_retracted_material_in_training(a: Artifacts) -> List[Finding]:
         leaked[:3])]
 
 
+def inv_independent_training_reviews(a: Artifacts) -> List[Finding]:
+    from jarvis_core.specialists.training_review import TrainingReviewGate
+    try:
+        gate = TrainingReviewGate(a.root)
+        counts = gate.counts()
+        findings = [Finding("independent training review holds", OK if gate.sources else UNKNOWN,
+            f"{counts['pending']} pending require a hold; {counts['rejected']} rejected; {counts['approved']} approved source identities")]
+        for label, rows in (("engineer", a.engineer), ("personalization", a.personalization),
+                            ("blend", a.blend), ("sft", a.pairs), ("heldout", a.heldout)):
+            denied = []
+            for n, record in enumerate(rows):
+                result = gate.eligibility(record)
+                if not result.eligible:
+                    denied.append(f"{label}#{n} {record.get('source_path')}: {result.status}: {result.reason}")
+            findings.append(Finding(f"independent review gate: {label}", FAIL if denied else (OK if rows else UNKNOWN),
+                f"{len(denied)} ineligible of {len(rows)} records" if rows else "artifact absent", denied[:5]))
+        return findings
+    except Exception as exc:
+        # An unreadable approval registry must never turn into UNKNOWN/pass.
+        return [Finding("independent review registry integrity", FAIL, f"{type(exc).__name__}: {exc}")]
+
+
 INVARIANTS: Tuple[Callable[[Artifacts], List[Finding]], ...] = (
+    inv_independent_training_reviews,
     inv_no_retracted_material_in_training,
     inv_no_eval_canary_in_training,
     inv_no_exact_duplicates,   # includes inv_blend_duplication_is_explained

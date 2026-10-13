@@ -95,13 +95,31 @@ Measured 2026-10-07 (corpora last built 2026-10-05, unchanged) from `jarvis_data
   - [ ] Only if Stage 0 says PILOT: pilot adapter with a training manifest, `audit --manifest`, arms C and D*, `analyze`
   - Known untested on this machine: the real recall-router provider and index builder (`RouterProvider`, `build_snapshot_indexes`), the real tokenizer, and every live endpoint call. They are covered by hermetic fakes only.
 - [ ] Re-measure personalization character share. Last figure is 13.7% (2026-09-12) and is stale.
-- [ ] Rebuild corpus artifacts after parsing settles. Current ones date from 2026-10-05.
+- [ ] Rebuild corpus artifacts after parsing settles. They were rebuilt and quality-audited on 2026-10-14; future parse/review changes still require rebuilding.
 - [ ] Grow held-out set, especially personalization.
 - [ ] Rebalance blend: by characters, chat history 32.8%, code 24.1%, `client_work` 22.8%; identity/voice/writing sources are single digits.
 - [ ] **Owner decision: is `client_work` content allowed in training?** The push rule was relaxed 2026-10-06; training use was never decided.
 - [ ] More personalization source material: decision-explanation sessions in the owner's own voice (`SFT_SPEC.md` §6). **Owner.**
 - [ ] **Recheck the training-cost plan.** ENDGAME §3.6 budgets Engineer QLoRA on one A40, but §2 says the Kimi K2.6 base needs at least 4×A5000 just to serve. Read-only suspicion, untested.
 - [ ] Owner's stated stance (KB 1093): defer RunPod until the data is as rich as possible.
+
+**Current production measurement (2026-10-14, Milestone 1 rebuild):** engineer
+SFT 370 (333 train + 37 held-out), personalization SFT 192 (173 + 19),
+blended corpus 3,963 records. Independent training review holds 122 source
+identities pending; eight reviewed sources are rejected and three approved.
+This updates artifact counts, not the older c002 experiment or training approval.
+
+## E2. Milestone 1 — baseline and independent training review (2026-10-14)
+
+- [x] Append-only `training_reviews.jsonl`; complete source digests, independent reviewer identity, individual rationale and evidence. Self review, stale/missing sources and corrupt reviews are refused.
+- [x] One eligibility gate for queue exchanges, raw assistant turns, legacy session-distill KB records, derived sources and both SFT exports; Stage 5 and pipeline audits use the same policy.
+- [x] Preserve capture, history, retrieval, owner-only material and parse rule v1. Review decisions do not override retractions, routing or evaluation exclusions.
+- [x] Review seven October 13 exchanges plus four associated KB copies individually: three approvals, eight rejections. Other historical answers remain pending, outside this milestone's review scope.
+- [x] Record six baseline cases; hardware/performance/error/reads/continuity remain unresolved, ambiguous transcription is unmeasured without original audio.
+- [x] Targeted review, corpus-chain, scheduler, maintenance, pipeline, Stage 5, retraction and exclusion checks pass.
+- [x] Production rebuild/audit: all five exports have zero ineligible records; 36 pipeline checks pass. Final run 64.11 s, 5.41 GiB minimum free RAM, 248.11 MiB peak tree commit. Snapshot byte hash and 947 records preserved; metadata-alias regression added.
+- [x] Antigravity answered q056/q057 with 20 fixture tests. Codex reviewed the full file, corrected portable fixture paths and strengthened host/artifact assertions; all 20 rerun successfully.
+- [x] Live capture/UI/voice verified; live review hold counts 3 approved / 8 rejected / 122 pending. Core/frontend unchanged. Production sign-off complete; local milestone commit only, no push.
 
 ## F. Open commitments (`python3 scripts/commitments.py --list`)
 
