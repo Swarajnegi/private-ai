@@ -142,7 +142,12 @@ dependencies are installed in `.venv/`; package/model caches and installation te
 files use `.cache/` and `.runtime/tmp/` on D. The KB has 1,090 entries, including
 three evidenced facts from this session; `jarvis_memory` has 1,887 chunks after
 rebuilding. Hearth and its supervised Chroma server are up; authenticated health
-and the web UI return HTTP 200; the per-user logon watchdog is installed. Windows
+and the web UI return HTTP 200. On 2026-10-13, after a reboot left the old logon
+watchdog absent, it was replaced with the per-user Task Scheduler task
+`JARVIS Hearth Watchdog`. Its only trigger is sign-in; it starts the hidden
+watchdog, which starts the hearth. Battery operation is allowed, its execution
+time is unlimited, and the duplicate HKCU Run entry was removed. Manual task
+launch and UI HTTP 200 were verified; the next reboot/sign-in remains untested. Windows
 episode-index smoke checks pass 49/49, including both SQLite deletion paths.
 Codex capture found this session and seven unique keys were individually parsed;
 the inherited backlogs remain Codex 951 / Antigravity 167. `check_pipeline.py`
@@ -188,7 +193,7 @@ the work laptop must not be decommissioned on the strength of these partial chec
 - [ ] Restore `.jarvis_private/` into the home folder (owner-only permissions) and keep the chat backup with it.
 - [x] Python environment, `pip install -r requirements.txt`, `scripts/bootstrap_jarvis.py`, `scripts/index_memory.py` — verified on the native Windows host above.
 - [ ] Decide `jarvis_data/.paused_jobs` for that machine; if the heavy jobs may run, run `scripts/rebuild_corpora.py` and `scripts/index_episodes.py` once.
-- [~] Keep the hearth alive across reboots with that OS's scheduler — HKCU logon watchdog installed and running; a reboot/logon cycle has not been tested.
+- [~] Keep the hearth alive across reboots with that OS's scheduler — Task Scheduler logon watchdog installed and running; the next reboot/logon cycle has not been tested.
 
 **Verify nothing was lost**
 - [ ] `scripts/bootstrap_jarvis.py --check`, `scripts/pipeline_health.py`, `scripts/check_pipeline.py`, `scripts/parse_turns.py --status`.

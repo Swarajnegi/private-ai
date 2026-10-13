@@ -258,8 +258,27 @@ def _machine_readiness(root: Path, report: List[str]) -> None:
             persisted = "windows_hearth_watchdog.py" in str(value)
         except (FileNotFoundError, OSError):
             persisted = False
+        keepalive_source = "HKCU logon watchdog"
+        try:
+            import xml.etree.ElementTree as ET
+            task_query = subprocess.run(
+                ["schtasks", "/Query", "/TN", "JARVIS Hearth Watchdog", "/XML"],
+                capture_output=True, text=True, timeout=5)
+            if task_query.returncode == 0:
+                task = ET.fromstring(task_query.stdout)
+                trigger = task.find(".//{*}LogonTrigger")
+                arguments = task.findtext(".//{*}Exec/{*}Arguments", "")
+                watchdog_path = str(_ROOT / "scripts" / "windows_hearth_watchdog.py")
+                if (trigger is not None
+                        and task.findtext(".//{*}Settings/{*}Enabled", "true") == "true"
+                        and trigger.findtext("{*}Enabled", "true") == "true"
+                        and watchdog_path in arguments and "--watchdog" in arguments):
+                    persisted = True
+                    keepalive_source = "Task Scheduler logon watchdog"
+        except (OSError, subprocess.TimeoutExpired, ET.ParseError):
+            pass
         report.append("  clock keepalive : " + (
-            "installed (HKCU logon watchdog)" if persisted else
+            f"installed ({keepalive_source})" if persisted else
             "NOT installed -> python scripts/windows_hearth_watchdog.py --install"))
     elif shutil.which("crontab"):
         try:
