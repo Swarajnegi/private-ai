@@ -128,6 +128,10 @@ class LiveSession:
         self.brain = brain or BRAIN
         self.engine = engine or ENGINE
         self.session = ""
+        self.request_id = ""
+        self._cancelling = False
+        self._cancel_done = asyncio.Event()
+        self._cancel_done.set()
         self.voice = TTS_VOICE
         self.hands_free = True
         self.speak = True
@@ -140,6 +144,7 @@ class LiveSession:
         # the utterance being assembled before commit
         self.pending_audio: Optional[np.ndarray] = None
         self.pending_task: Optional[asyncio.Task] = None
+        self._transcriptions = set()
         self.pending_t0 = 0.0
         # the committed turn
         self.turn: Optional[asyncio.Task] = None
@@ -150,12 +155,13 @@ class LiveSession:
         self.merge_next = False
         self.merging = False          # between a cancelled answer and its merged resubmit
         self.queued: List[np.ndarray] = []
+        self.completed_actions: List[Dict[str, Any]] = []
         self.speaker: Optional[_Speaker] = None
 
     # ---- transport -------------------------------------------------------
 
     async def send(self, obj: Dict[str, Any]) -> None:
-        await self._emit({"type": "websocket.send", "text": json.dumps({"session": self.session, **obj}, ensure_ascii=False)})
+        await self._emit({"type": "websocket.send", "text": json.dumps({"session": self.session, "request_id": self.request_id, **obj}, ensure_ascii=False)})
 
     async def send_audio(self, pcm: bytes) -> None:
         await self._emit({"type": "websocket.send", "bytes": pcm})
@@ -180,6 +186,10 @@ class LiveSession:
         return self.turn is not None and not self.turn.done()
 
     async def _rest_state(self) -> None:
+        from jarvis_core.agent.execution import CLEANUP_UNCONFIRMED
+        if CLEANUP_UNCONFIRMED:
+            await self.set_state("stopping")
+            return
         await self.set_state("listening" if self.hands_free else "idle")
 
     # ---- inbound ---------------------------------------------------------
@@ -215,8 +225,10 @@ class LiveSession:
                 self.turn_audio = None
                 self.turn = asyncio.create_task(self.run_turn(question, t_heard=time.perf_counter()))
             elif question:
-                await self.send({"type": "error", "error": "A reply is already running. Use Stop or New conversation."})
+                await self.send({"type": "error", "error": "A reply is already running. Use Terminate or New conversation."})
         elif kind == "interrupt":
+            if msg.get("request_id") and msg["request_id"] != self.request_id:
+                return
             self.stop_audio.set()
             if msg.get("cancel_turn", True):
                 await self.cancel_turn()
@@ -267,15 +279,22 @@ class LiveSession:
     async def _pending(self, audio: np.ndarray) -> None:
         """Speculatively transcribe, wait the grace, then commit."""
         await self.set_state("transcribing")
+        worker = asyncio.create_task(asyncio.to_thread(self.engine.transcribe, audio))
+        self._transcriptions.add(worker)
         try:
-            text = await asyncio.to_thread(self.engine.transcribe, audio)
+            text = await asyncio.shield(worker)
         except asyncio.CancelledError:
+            try:
+                await asyncio.shield(worker)
+            finally:
+                self._transcriptions.discard(worker)
             raise
         except Exception as e:                              # noqa: BLE001
             await self.send({"type": "error", "error": f"transcription failed: {e}"})
             self.pending_audio, self.pending_task = None, None
             await self._rest_state()
             return
+        self._transcriptions.discard(worker)
         t_stt = time.perf_counter()
         if not text or len(text.strip(" .,!?")) < 2:
             self.pending_audio, self.pending_task = None, None
@@ -294,6 +313,16 @@ class LiveSession:
     # ---- a turn ----------------------------------------------------------
 
     async def cancel_turn(self) -> None:
+        if self._cancelling:
+            await self._cancel_done.wait()
+            return
+        self._cancelling = True
+        self._cancel_done.clear()
+        await self.set_state("stopping")
+        request = getattr(self.hearth, "approvals", None)
+        request = request.requests.get(self.request_id, {}) if request is not None else {}
+        if hasattr(self.hearth, "approvals") and self.request_id:
+            self.hearth.approvals.invalidate(self.request_id)
         self.stop_audio.set()
         await self.send({"type": "stop_audio"})
         self.queued = []
@@ -305,12 +334,33 @@ class LiveSession:
                     await task
                 except asyncio.CancelledError:
                     pass
+        if self._transcriptions:
+            await asyncio.gather(*(asyncio.shield(t) for t in tuple(self._transcriptions)), return_exceptions=True)
+            self._transcriptions.clear()
         self.pending_task = self.turn = None
         self.turn_speaking = False
+        from jarvis_core.agent.execution import CLEANUP_UNCONFIRMED
+        if CLEANUP_UNCONFIRMED:
+            raise RuntimeError("Execution cleanup cannot be confirmed; Hearth restart required")
+        self._cancelling = False
+        # Keep the broker record reference across worker cleanup: the final
+        # action event may have queued just before cancellation, without yet
+        # being forwarded to this socket.
+        completed = request.get("completed_actions", self.completed_actions)
+        await self.send({"type": "terminated", "completed_actions": completed})
         await self._rest_state()
+        self._cancel_done.set()
 
     async def run_turn(self, question: str, t_heard: float, t_stt: Optional[float] = None,
                        audio_s: Optional[float] = None) -> None:
+        self.request_id = uuid.uuid4().hex
+        self.completed_actions = []
+        if not self.session:
+            self.session = f"conv-web-{uuid.uuid4()}"
+        if hasattr(self.hearth, "approvals"):
+            self.hearth.approvals.register(self.request_id, self.session, self.cancel_turn, not self.closed)
+            self.hearth._live_requests[self.session] = self
+        await self.send({"type": "request", "request_id": self.request_id})
         try:
             await self._run_turn(question, t_heard, t_stt, audio_s)
         except asyncio.CancelledError:
@@ -325,6 +375,10 @@ class LiveSession:
                 self.speaker.abandon()
                 await self.speaker.finish()
                 self.speaker = None
+            if hasattr(self.hearth, "approvals"):
+                self.hearth.approvals.finish(self.request_id)
+                if self.hearth._live_requests.get(self.session) is self:
+                    self.hearth._live_requests.pop(self.session, None)
             await self._after_turn()
 
     async def _run_turn(self, question: str, t_heard: float, t_stt: Optional[float] = None,
@@ -338,7 +392,8 @@ class LiveSession:
         if not self.session:
             self.session = f"conv-web-{uuid.uuid4()}"
             await self.send({"type": "session", "session": self.session})
-        if self.hearth._slot.locked():
+        from jarvis_core.agent.execution import CLEANUP_UNCONFIRMED
+        if self.hearth._slot.locked() or CLEANUP_UNCONFIRMED:
             await self.send({"type": "error", "error": BUSY_MESSAGE})
             return
         await self.set_state("thinking")
@@ -346,8 +401,11 @@ class LiveSession:
         chunker = SentenceChunker()
         answer, model, cancelled = "", "", False
         async with self.hearth._slot:
-            async with aclosing(self.brain.respond(question, self.session, cancel=self.turn_cancel,
-                                                    free_only=self.free_only)) as response:
+            from jarvis_core.brain.voice_path import needs_harness
+            async def tool_request():
+                yield {"type": "deep", "model": ""}
+            source = tool_request() if needs_harness(question) else self.brain.respond(question, self.session, cancel=self.turn_cancel, free_only=self.free_only)
+            async with aclosing(source) as response:
                 while True:
                     try:
                         ev = await asyncio.wait_for(anext(response), VOICE_PROGRESS_TIMEOUT_S)
@@ -437,11 +495,12 @@ class LiveSession:
 
     async def _deep(self, question: str, speaker: "_Speaker") -> str:
         async def emit(event: str, data: Dict[str, Any]) -> None:
-            if event == "log":
-                await self.send({"type": "log", "line": data.get("line", "")})
+            if event == "action_completed":
+                self.completed_actions.append(data["action"])
+            await self.send({"type": event, **data})
         payload = await self.hearth.run_ask(question, emit, session=self.session,
                                             capture=False if self.ephemeral else None,
-                                            free_only=self.free_only)
+                                            free_only=self.free_only, request_id=self.request_id)
         self.hearth.requests_served += 1
         text = str(payload.get("answer") or "")
         await self.send({"type": "answer", "text": text, "path": "deep", "payload": payload})
@@ -547,17 +606,29 @@ async def handle(hearth: Any, scope: Dict[str, Any], receive: Receive, send: Sen
             if msg.get("bytes"):
                 await live.on_audio(msg["bytes"])
             elif msg.get("text"):
+                try:
+                    incoming = json.loads(msg["text"])
+                except ValueError:
+                    incoming = {}
+                if incoming.get("type") == "hello":
+                    old = getattr(hearth, "_live_requests", {}).get(incoming.get("session"))
+                    if old is not None and old is not live and hearth.approvals.has_pending(old.request_id):
+                        live = old
+                        live._send_raw = send
+                        live.closed = False
+                        hearth.approvals.attach(live.request_id, live.session)
+                        await live.send({"type": "request", "request_id": live.request_id})
+                        await live.send({"type": "state", "state": "awaiting_approval"})
+                        for approval in hearth.approvals.pending_for(live.session):
+                            await live.send({"type": "approval", **approval})
                 await live.on_text(msg["text"])
     finally:
-        live.stop_audio.set()
-        for task in (live.pending_task, live.turn):
-            if task is not None and not task.done():
-                try:
-                    await asyncio.wait_for(asyncio.shield(task), timeout=60)
-                except asyncio.TimeoutError:
-                    await live.cancel_turn()
-                except Exception:                           # noqa: BLE001
-                    pass
+        if live._send_raw is send:
+            live.closed = True
+            if hasattr(hearth, "approvals") and live.request_id in hearth.approvals.requests:
+                hearth.approvals.attach(live.request_id, live.session, False)
+            if not (hasattr(hearth, "approvals") and hearth.approvals.has_pending(live.request_id)):
+                await live.cancel_turn()
 
 
 # =============================================================================

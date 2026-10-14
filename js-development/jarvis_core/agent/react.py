@@ -105,7 +105,7 @@ import asyncio
 import inspect
 import json
 from collections import Counter
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any, Awaitable, Callable, Dict, List, Optional, Tuple, Union
 
 from jarvis_core.config import JARVIS_ROOT
@@ -351,6 +351,25 @@ class ReActLoop:
         is invisible to the loop and behaviour is exactly as before — this is what
         keeps every existing scripted test green (KB: plan-confabulation fix)."""
         result = ReActResult()
+        from jarvis_core.agent.read_cache import ReadCoverage
+        from jarvis_core.agent.tools.runtime import needs_inspection
+        coverage = ReadCoverage()
+        read_locks = {}
+        denied_actions = set()
+
+        async def invoke_call(tc):
+            tool = self._tools[tc.name]
+            if tc.name != "file_read":
+                return await safe_invoke(tool, dict(tc.arguments))
+            key = json.dumps(tc.arguments, sort_keys=True)
+            lock = read_locks.setdefault(key, asyncio.Lock())
+            async with lock:
+                reused = coverage.get(tc.arguments)
+                if reused is not None:
+                    return reused
+                read = await safe_invoke(tool, dict(tc.arguments))
+                coverage.remember(tc.arguments, read)
+                return read
 
         system_text = self._system_prompt or ""
 
@@ -414,6 +433,12 @@ class ReActLoop:
         answer_guards = 0  # "you reported process instead of answering" re-prompts (goal-substitution)
 
         try:
+            if "runtime_inspect" in self._tools and needs_inspection(query):
+                inspected = ToolCall(name="runtime_inspect", arguments={}, call_id="runtime_preflight")
+                snapshot = await invoke_call(inspected)
+                result.tool_calls.append((inspected, snapshot))
+                messages.append({"role": "system", "content": "For current-host questions, the following runtime measurement supersedes historical laptop facts. Use the measured fields; do not search personal memory to replace them. Use ram_gib and vram_mib exactly as returned, without estimating conversions. Unknown fields remain unknown, and no latency benchmark has been performed."})
+                messages.append({"role": "user", "content": self._format_tool_observation(inspected, snapshot)})
             for iteration in range(self._max_iterations):
                 result.iterations_used = iteration + 1
 
@@ -489,6 +514,7 @@ class ReActLoop:
                         stripped.startswith("{")
                         or stripped.startswith("[")
                         or stripped.startswith("```")
+                        or "<|tool_call" in stripped
                         or "<tool_call" in stripped
                         or "<tool" in stripped
                         or ('"name"' in stripped and ('"arguments"' in stripped or '"args"' in stripped))
@@ -620,6 +646,19 @@ class ReActLoop:
                 # Stage 3.4.7 + 3.4.8 + 3.4.9: check permissions, partition,
                 # dispatch, format observations.
                 observations: List[str] = []
+                from jarvis_core.agent.tool import prepare_input
+                prepared_calls, invalid_results, coercion_by_call = [], {}, {}
+                for raw_call in tool_calls:
+                    tc = raw_call
+                    if tc.name in self._tools:
+                        try:
+                            validated, notes = prepare_input(self._tools[tc.name], dict(tc.arguments))
+                            tc = replace(tc, arguments=validated.model_dump())
+                            coercion_by_call[id(tc)] = notes
+                        except Exception as exc:
+                            invalid_results[id(tc)] = ToolResult(error=f"Input validation failed for '{tc.name}': {exc}", metadata={"error_code": "invalid_arguments"})
+                    prepared_calls.append(tc)
+                tool_calls = prepared_calls
                 for tc in tool_calls:
                     await self._publish(
                         StepType.TOOL_CALL, self._tool_call_payload(tc)
@@ -631,11 +670,18 @@ class ReActLoop:
                 blocked: List[Tuple[ToolCall, str]] = []
 
                 for tc in tool_calls:
+                    if id(tc) in invalid_results:
+                        continue
                     if tc.name not in self._tools:
                         blocked.append((tc, f"tool '{tc.name}' not registered"))
                         continue
+                    action_key = (tc.name, json.dumps(tc.arguments, sort_keys=True, default=str))
+                    if action_key in denied_actions:
+                        blocked.append((tc, "this exact action was already denied; no retry or execution"))
+                        continue
                     decision = await self._check_permission(tc.name, tc.arguments)
                     if decision == PermissionDecision.DENY:
+                        denied_actions.add(action_key)
                         blocked.append((tc, f"permission DENY for '{tc.name}'"))
                         continue
                     if decision == PermissionDecision.ASK:
@@ -644,6 +690,7 @@ class ReActLoop:
                         # DENY, None, or any non-ALLOW value blocks.
                         resolved = await self._call_ask_handler(tc.name, tc.arguments)
                         if resolved != PermissionDecision.ALLOW:
+                            denied_actions.add(action_key)
                             blocked.append((
                                 tc,
                                 f"permission ASK->{resolved.value} for '{tc.name}'",
@@ -660,7 +707,7 @@ class ReActLoop:
                 safe_results: List[Tuple[ToolCall, ToolResult]] = []
                 if safe_calls:
                     coros = [
-                        safe_invoke(self._tools[tc.name], dict(tc.arguments))
+                        invoke_call(tc)
                         for tc in safe_calls
                     ]
                     raw_results = await asyncio.gather(*coros, return_exceptions=False)
@@ -669,17 +716,17 @@ class ReActLoop:
                 # Run unsafe calls serially
                 unsafe_results: List[Tuple[ToolCall, ToolResult]] = []
                 for tc in unsafe_calls:
-                    res = await safe_invoke(self._tools[tc.name], dict(tc.arguments))
+                    res = await invoke_call(tc)
                     unsafe_results.append((tc, res))
 
                 # Synthesize blocked results (no dispatch)
                 blocked_results: List[Tuple[ToolCall, ToolResult]] = [
-                    (tc, ToolResult(error=f"[BLOCKED] {reason}"))
+                    (tc, ToolResult(error=f"[BLOCKED] {reason}", metadata={"error_code": "unknown_tool" if "not registered" in reason else "permission_denied"}))
                     for tc, reason in blocked
                 ]
 
                 # Preserve original order: rebuild iterating over tool_calls
-                results_by_call: Dict[int, ToolResult] = {}
+                results_by_call: Dict[int, ToolResult] = dict(invalid_results)
                 for tc, res in safe_results + unsafe_results + blocked_results:
                     results_by_call[id(tc)] = res
                 ordered_pairs: List[Tuple[ToolCall, ToolResult]] = []
@@ -687,6 +734,9 @@ class ReActLoop:
                     res = results_by_call.get(id(tc))
                     if res is None:
                         res = ToolResult(error="internal: missing dispatch result")
+                    notes = coercion_by_call.get(id(tc))
+                    if notes:
+                        res = replace(res, metadata={**(res.metadata or {}), "coercion_notes": notes})
                     ordered_pairs.append((tc, res))
 
                 # Publish + format. Every observation is rendered WHOLE.
@@ -759,7 +809,13 @@ class ReActLoop:
                     "iteration": self._max_iterations, "synthesis_forced": True})
                 raw = await self._call_llm(messages)
                 messages.append({"role": "assistant", "content": raw})
-                result.final_text = self._strip_reflection(raw)
+                final = self._strip_reflection(raw)
+                if any(isinstance(item, ToolCall) for item in parse_tool_calls(final)) or final.lstrip().startswith(("<|tool_call", "<dots_function_call", "<tool_call")):
+                    result.final_text = ""
+                    result.terminated_reason = TERMINATED_ERROR
+                    result.error = "The model requested another tool after its final-answer step; it did not complete the answer."
+                    return result
+                result.final_text = final
                 result.terminated_reason = TERMINATED_SYNTHESIZED
                 await self._publish(StepType.PLAN_COMPLETED, {
                     "iterations": self._max_iterations, "synthesized": True})
@@ -935,6 +991,7 @@ class ReActLoop:
                     {"name": spec.get("name", name), "arguments": _example_args(ischema)},
                     ensure_ascii=False)
                 lines.append(f"- {spec.get('name', name)}: {spec.get('description', '')}\n"
+                             f"  requires_permission: {self._tools[name].requires_permission}\n"
                              f"  input_schema: {schema}\n"
                              f"  example: {example}")
             except Exception:
@@ -1127,8 +1184,10 @@ class ReActLoop:
         if res.is_error:
             try:
                 classified = classify_error(res, attempted_tool_name=tc.name)
+                if classified.kind == ToolErrorKind.UNKNOWN_TOOL:
+                    classified = replace(classified, repair_hint="This tool is unavailable in this request. Available tools: " + ", ".join(sorted(self._tools)))
                 if classified.kind in (ToolErrorKind.VALIDATION_FAILED,
-                                       ToolErrorKind.UNKNOWN_TOOL):
+                                       ToolErrorKind.UNKNOWN_TOOL, ToolErrorKind.EXECUTION_FAILED):
                     base = f"{base}\n{classified.to_observation()}"
             except Exception:
                 pass
@@ -1421,11 +1480,9 @@ if __name__ == "__main__":
             max_iterations=4,
         )
         r5 = await loop5.run("Loop forever.")
-        # The cap still bounds the loop (iterations == 4); evidence was gathered, so
-        # the convergence backstop closes it out with a forced synthesis turn instead
-        # of returning empty (TERMINATED_SYNTHESIZED, not _MAX_ITERATIONS).
-        check("T5a cap fires -> backstop synthesizes (not empty max-iter)",
-              r5.terminated_reason == TERMINATED_SYNTHESIZED, r5.terminated_reason)
+        # A backstop that returns another tool call has not synthesized an answer.
+        check("T5a repeated tool calls cannot masquerade as a synthesized answer",
+              r5.terminated_reason == TERMINATED_ERROR and not r5.final_text and "did not complete" in (r5.error or ""), r5.terminated_reason)
         check("T5b iterations == 4 (cap held)", r5.iterations_used == 4)
 
         # ---- T6: Permission DENY blocks dispatch -------------------------

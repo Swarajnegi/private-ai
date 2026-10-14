@@ -46,6 +46,11 @@ STEP 4: Returns ToolResult(output={"results": [...]}).
 
 from __future__ import annotations
 
+import asyncio
+from urllib.parse import urlencode
+from urllib.request import Request, urlopen
+import xml.etree.ElementTree as ET
+
 from typing import Any, Callable, Dict, List, Optional
 
 from pydantic import Field
@@ -58,23 +63,15 @@ SearchClient = Callable[[str, int], List[Dict[str, str]]]
 
 
 # =============================================================================
-# Part 1: DEFAULT BACKEND (lazy duckduckgo-search; fail-loud if missing)
+# Part 1: DEFAULT BACKEND (optional DuckDuckGo package; native RSS fallback)
 # =============================================================================
 
 def _default_ddg_client(query: str, max_results: int) -> List[Dict[str, str]]:
-    """Default backend using duckduckgo-search. Lazy-imports so missing dep
-    only fails when the tool is actually invoked, not at module load.
-
-    Returns a list of dicts with keys {url, title, snippet}.
-    Raises ImportError with install instruction if duckduckgo-search missing.
-    """
+    """Return provider results using the optional SDK or the keyless RSS fallback."""
     try:
         from duckduckgo_search import DDGS  # type: ignore
-    except ImportError as e:
-        raise ImportError(
-            "duckduckgo-search not installed. Install with: "
-            "pip install duckduckgo-search"
-        ) from e
+    except ImportError:
+        return _native_rss_client(query, max_results)
 
     results: List[Dict[str, str]] = []
     with DDGS() as ddgs:
@@ -85,6 +82,19 @@ def _default_ddg_client(query: str, max_results: int) -> List[Dict[str, str]]:
                 "snippet": str(r.get("body") or r.get("snippet") or ""),
             })
     return results
+
+
+def _native_rss_client(query: str, max_results: int) -> List[Dict[str, str]]:
+    """Keyless RSS search fallback; every returned field comes from the provider."""
+    url = "https://www.bing.com/search?" + urlencode({"format": "rss", "q": query})
+    request = Request(url, headers={"User-Agent": "JARVIS/1.0"})
+    with urlopen(request, timeout=10) as response:
+        body = response.read()
+    parsed = ET.fromstring(body)
+    if parsed.tag != "rss":
+        raise RuntimeError("Search provider returned an unavailable/non-RSS response")
+    return [{"url": item.findtext("link", ""), "title": item.findtext("title", ""),
+             "snippet": item.findtext("description", "")} for item in parsed.findall("./channel/item")[:max_results]]
 
 
 # =============================================================================
@@ -101,11 +111,11 @@ class WebSearchInput(ToolInput):
 
 @Tool.register("web_search")
 class WebSearchTool(Tool):
-    """Web search via DuckDuckGo (no API key required)."""
+    """Keyless public-web search with an available native fallback."""
 
     name = "web_search"
     description = (
-        "Search the public web via DuckDuckGo. Returns a list of "
+        "Search the public web via DuckDuckGo or native RSS when its optional package is absent. Returns a list of "
         "{url, title, snippet} results for the given query. Use when the "
         "agent needs information NOT in JARVIS Memory (current events, "
         "external state, recent research)."
@@ -114,6 +124,8 @@ class WebSearchTool(Tool):
 
     def __init__(self, client: Optional[SearchClient] = None) -> None:
         self._client: SearchClient = client or _default_ddg_client
+        import importlib.util
+        self.backend = "custom" if client else "duckduckgo" if importlib.util.find_spec("duckduckgo_search") else "bing-rss"
 
     @property
     def is_concurrency_safe(self) -> bool:
@@ -121,12 +133,17 @@ class WebSearchTool(Tool):
 
     async def invoke(self, tool_input: WebSearchInput) -> ToolResult:
         try:
-            results = self._client(tool_input.query, tool_input.max_results)
+            worker = asyncio.create_task(asyncio.to_thread(self._client, tool_input.query, tool_input.max_results))
+            try:
+                results = await asyncio.shield(worker)
+            except asyncio.CancelledError:
+                await asyncio.shield(worker)
+                raise
         except ImportError as e:
-            return ToolResult(error=str(e))
+            return ToolResult(error=str(e), metadata={"error_code": "unavailable"})
         except Exception as e:
-            return ToolResult(error=f"Web search failed: {type(e).__name__}: {e}")
-        return ToolResult(output={"results": results, "count": len(results)})
+            return ToolResult(error=f"Web search failed: {type(e).__name__}: {e}", metadata={"error_code": "unavailable"})
+        return ToolResult(output={"results": results, "count": len(results), "provider": self.backend})
 
 
 # =============================================================================

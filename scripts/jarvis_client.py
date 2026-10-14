@@ -21,9 +21,8 @@ a client that cannot run because of a missing dependency is not a client. SSE
 over urllib works because urlopen returns a file-like object that yields lines
 as they arrive.
 
-WHAT THIS DELIBERATELY CANNOT DO: approve a permission prompt. The hearth
-denies them (no human is reachable over a socket) and says so in the output.
-Remote approval is the Commitment gate — step 10 — not a client feature.
+Permission prompts stream to an interactive terminal and bind approval to one
+exact action. Non-interactive and buffered clients deny changes.
 """
 
 from __future__ import annotations
@@ -91,7 +90,7 @@ def ask_streaming(question: str, base_url: str, token: str,
                   max_iterations: Optional[int] = None,
                   budget: Optional[float] = None,
                   timeout: float = 900.0,
-                  printer: Any = print) -> Dict[str, Any]:
+                  printer: Any = print, approval_handler: Any = None) -> Dict[str, Any]:
     """POST /v1/ask as SSE; print each log frame; return the answer payload.
 
     EXECUTION FLOW:
@@ -106,7 +105,8 @@ def ask_streaming(question: str, base_url: str, token: str,
         ended without one — a truncated stream must not look like success.
     """
     req_data: Dict[str, Any] = {"question": question, "session": session,
-                                "new_session": new_session}
+                                "new_session": new_session,
+                                "interactive_approvals": approval_handler is not None or bool(sys.stdin and sys.stdin.isatty())}
     if model:
         req_data["model"] = model
     if full:
@@ -142,6 +142,22 @@ def ask_streaming(question: str, base_url: str, token: str,
                     continue
                 if event == "log":
                     printer(data.get("line", ""))
+                elif event == "approval":
+                    handler = approval_handler
+                    if handler is None:
+                        sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "js-development"))
+                        from jarvis_core.brain.permgate import terminal_ask_handler
+                        handler = terminal_ask_handler
+                    decision = handler(data["tool"], data["proposal"])
+                    value = getattr(decision, "value", decision)
+                    approved = value == "allow" or value is True
+                    receipt = {"request_id": data["request_id"], "session": data["session"], "digest": data["digest"], "decision": "approve" if approved else "deny"}
+                    action = urllib.request.Request(f"{base_url}/v1/approvals/{data['id']}", data=json.dumps(receipt).encode(), method="POST",
+                        headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"})
+                    with urllib.request.urlopen(action, timeout=10) as reply:
+                        reply.read()
+                elif event == "terminated":
+                    final = {"ok": False, "error": "Request terminated", **data}
                 elif event == "answer":
                     final = data
     if not final:
@@ -160,7 +176,7 @@ def ask_buffered(question: str, base_url: str, token: str,
                  timeout: float = 900.0) -> Dict[str, Any]:
     """POST /v1/ask and wait for one JSON body. For scripts, not for humans."""
     req_data: Dict[str, Any] = {"question": question, "session": session,
-                                "new_session": new_session}
+                                "new_session": new_session, "interactive_approvals": False}
     if model:
         req_data["model"] = model
     if full:
@@ -200,7 +216,7 @@ def main() -> int:
     p.add_argument("--model", "--brain", default=None,
                    help="model to route to (e.g. google/gemini-3.6-flash)")
     p.add_argument("--full", action="store_true", help="Enable full toolset")
-    p.add_argument("--allow-all", action="store_true", help="Auto-allow all tool executions")
+    p.add_argument("--allow-all", action="store_true", help="Legacy flag; rejected by Hearth (individual approval required)")
     p.add_argument("--reasoning-effort", choices=["low", "medium", "high"], default=None,
                    help="Reasoning/thinking effort level")
     p.add_argument("--max-iterations", type=int, default=None, help="ReAct iteration ceiling")

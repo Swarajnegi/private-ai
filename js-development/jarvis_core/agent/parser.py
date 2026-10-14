@@ -76,6 +76,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import ast
 import re
 import time
 from dataclasses import dataclass, field
@@ -322,6 +323,50 @@ def _extract_xml_tool_calls(raw: str) -> List[ToolCall]:
 _ARG_FIELD_ALIASES = {"arguments", "args", "input", "parameters", "params"}
 
 
+def _native_tool_calls(raw: str) -> Optional[List[ToolCall | ParseError]]:
+    """Parse delimited native function notation as literals, never evaluate it."""
+    if "<|tool_call_start|>" not in raw:
+        return None
+    bodies = re.findall(r"<\|tool_call_start\|>(.*?)<\|tool_call_end\|>", raw, re.DOTALL)
+    if not bodies or len(bodies) != raw.count("<|tool_call_start|>") or len(bodies) != raw.count("<|tool_call_end|>"):
+        return [ParseError("Incomplete native tool-call delimiter", raw)]
+    calls = []
+    for body in bodies:
+        try:
+            try:
+                structured = json.loads(body)
+            except json.JSONDecodeError:
+                structured = None
+            if isinstance(structured, dict) or (isinstance(structured, list) and structured and all(isinstance(item, dict) for item in structured)):
+                parsed = parse_tool_calls(body)
+                if any(isinstance(item, ParseError) for item in parsed):
+                    raise ValueError("Invalid structured native call")
+                calls.extend(parsed)
+                continue
+            expression = ast.parse(body.strip(), mode="eval").body
+            nodes = expression.elts if isinstance(expression, (ast.List, ast.Tuple)) else [expression]
+            if not nodes:
+                raise ValueError("Empty native call batch")
+            for node in nodes:
+                if not isinstance(node, ast.Call) or node.args:
+                    raise ValueError("Native tool calls require named literal arguments")
+                if isinstance(node.func, ast.Name):
+                    name = node.func.id
+                elif isinstance(node.func, ast.Attribute) and isinstance(node.func.value, ast.Name) and node.func.value.id in {"tools", "functions"}:
+                    name = node.func.attr
+                else:
+                    raise ValueError("Unsupported native tool namespace")
+                arguments = {}
+                for keyword in node.keywords:
+                    if keyword.arg is None or keyword.arg in arguments:
+                        raise ValueError("Expanded or duplicate native arguments are refused")
+                    arguments[keyword.arg] = ast.literal_eval(keyword.value)
+                calls.append(ToolCall(name=name, arguments=arguments))
+        except (SyntaxError, ValueError, TypeError) as exc:
+            return [ParseError(f"Invalid native tool call: {exc}", raw)]
+    return calls
+
+
 def parse_tool_call(raw_text: str) -> ToolCall | ParseError:
     """
     Parse a single tool call from raw LLM output.
@@ -339,6 +384,9 @@ def parse_tool_call(raw_text: str) -> ToolCall | ParseError:
     Returns:
         ToolCall on success, ParseError on failure.
     """
+    native = _native_tool_calls(raw_text)
+    if native is not None:
+        return native[0]
     json_str = _extract_json_str(raw_text)
     if json_str is None:
         xml_calls = _extract_xml_tool_calls(raw_text)
@@ -421,6 +469,9 @@ def parse_tool_calls(raw_text: str) -> List[ToolCall | ParseError]:
     Returns:
         List of ToolCall or ParseError instances, one per detected call.
     """
+    native = _native_tool_calls(raw_text)
+    if native is not None:
+        return native
     decoder = json.JSONDecoder()
 
     # Check for markdown fenced JSON array
@@ -513,7 +564,7 @@ async def dispatch(tool_call: ToolCall) -> ToolResult:
     except KeyError as e:
         return ToolResult(
             error=f"Unknown tool '{tool_call.name}': {e}",
-            metadata={"tool_name": tool_call.name, "elapsed_ms": 0.0},
+            metadata={"tool_name": tool_call.name, "elapsed_ms": 0.0, "error_code": "unknown_tool"},
         )
 
     tool_instance = tool_cls()

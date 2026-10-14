@@ -1,73 +1,18 @@
-"""
-shell.py
+"""LAYER: Agent — approval-gated native shell execution.
 
-JARVIS Agent Layer: Shell command tool (Category A — Callable, UNSAFE).
+THE BIG PICTURE: Windows commands require PowerShell syntax and supervised trees.
+THE FLOW: validate/resolve shell and cwd -> permission -> native process -> complete output.
 
-Import-time registration:
-    @Tool.register("shell_run")
-
-LAYER: Agent (Tools)
-
-=============================================================================
-THE BIG PICTURE
-=============================================================================
-
-Without shell_run:
-    -> Agent can't invoke system utilities (git, ls, grep, find, curl, etc.).
-       Many real-world tasks require shell glue that's painful to reimplement
-       as Python tools.
-
-With shell_run:
-    -> Agent emits {"tool":"shell_run","input":{"command":"git status","timeout_seconds":30}}.
-    -> We spawn the command via asyncio.create_subprocess_shell with a hard
-       timeout and capture stdout/stderr/exit_code.
-    -> NOT concurrency-safe — shell commands mutate everything: filesystem,
-       network, environment, git state.
-    -> requires_permission=True — STEAL #9 permission engine (Stage 3.4)
-       gates by command. STEAL #10 bash-AST classifier auto-approves the safe
-       allowlist (grep/cat/ls/head/tail/wc/find) before the user is prompted.
-
-WHY create_subprocess_SHELL and not _EXEC:
-    Shell pipelines (cmd1 | cmd2), redirections (> file), globs (*.py), and
-    environment expansion ($HOME) need the shell. _exec gives us tighter
-    process isolation but loses these features. The tradeoff is captured
-    via permission gating + the AST classifier — the shell flexibility is
-    intentional, the safety is checked above this layer.
-
-SECURITY NOTE:
-    Shell injection is a concern at the permission layer, NOT here. This
-    tool is purpose-built to run shell commands. The defense is "only let
-    the agent invoke it through STEAL #9 + STEAL #10".
-
-=============================================================================
-THE FLOW
-=============================================================================
-
-STEP 1: Agent emits {"tool":"shell_run","input":{"command":"...","timeout_seconds":30}}.
-        |
-        v
-STEP 2: (Stage 3.4+) permission engine + bash AST classifier decide allow/ask/deny.
-        At Stage 3.2 this is a no-op; gate fires when 3.4 ships.
-        |
-        v
-STEP 3: asyncio.create_subprocess_shell(cmd, stdout=PIPE, stderr=PIPE).
-        |
-        v
-STEP 4: asyncio.wait_for(proc.communicate(), timeout=N).
-        TimeoutError -> kill + ToolResult(error="timeout").
-        |
-        v
-STEP 5: Return ToolResult(output={"stdout","stderr","exit_code"}).
-
-=============================================================================
+PowerShell runs without profiles or interactive prompts. Bash remains the Linux
+shell. Execution is supervised by execution.ProcessRunner, with a 30-second
+standard timeout and a 300-second maximum; output is paged by the ReAct ledger.
 """
 
 from __future__ import annotations
 
 import asyncio
 import os
-import signal
-from typing import Set
+from typing import Literal
 
 from pydantic import Field
 
@@ -84,9 +29,10 @@ class ShellRunInput(ToolInput):
         default=30, ge=1, le=300,
         description="Hard timeout. Process killed if exceeded.",
     )
+    shell: Literal["auto", "powershell", "bash"] = "auto"
     cwd: str = Field(
         default="",
-        description="Working directory. Empty string = inherit caller's cwd.",
+        description="Resolved working directory. Empty string = workspace root.",
     )
 
 
@@ -96,100 +42,46 @@ class ShellRunInput(ToolInput):
 
 @Tool.register("shell_run")
 class ShellRunTool(Tool):
-    """Run a shell command with timeout. UNSAFE — gated by STEAL #9 + #10 at 3.4."""
+    """Run a supervised command under the interactive permission policy."""
 
     name = "shell_run"
     description = (
-        "Run a shell command line via the system shell (supports pipes, "
+        "Run a shell command line via the explicit native shell (PowerShell on Windows; Bash on Linux; supports pipes, "
         "redirects, globs, env expansion). Returns stdout, stderr, exit code. "
         "Hard timeout enforced (default 30s, max 300s). DANGEROUS: shell can "
         "modify filesystem, network, git state. Permission engine gates by command."
     )
     input_schema = ShellRunInput
-    requires_permission = True  # STEAL #9 + #10 gate at 3.4
+    requires_permission = True
 
-    def __init__(self) -> None:
-        # Per-instance live subprocess registry for teardown hygiene
-        # (Stage 3.2.3). Each entry is the shell process; teardown SIGKILLs
-        # its entire process group (start_new_session=True at spawn).
-        self._active_procs: Set[asyncio.subprocess.Process] = set()
-
-    @property
-    def is_concurrency_safe(self) -> bool:
-        return False  # Mutates everything
-
-    @staticmethod
-    def _kill_proc_group(proc: asyncio.subprocess.Process) -> None:
-        """SIGKILL the shell process group (Unix) or kill the process (Windows)."""
-        try:
-            import sys as _sys
-            if _sys.platform != "win32" and hasattr(os, "killpg") and hasattr(os, "getpgid"):
-                os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
-            else:
-                proc.kill()
-        except (ProcessLookupError, PermissionError, AttributeError):
-            try:
-                proc.kill()
-            except (ProcessLookupError, OSError):
-                pass
-
-    async def teardown(self) -> None:
-        """Lifecycle hook (Stage 3.2.3): SIGKILL any shell process trees
-        still alive at dispatcher shutdown. Without this, an interrupted
-        shell_run (e.g., `sleep 60 | grep x`) leaves an orphaned child until
-        the OS reaps it. We use the same process-group SIGKILL pattern as
-        the timeout path so subprocess transports close cleanly.
-        """
-        for proc in list(self._active_procs):
-            if proc.returncode is None:
-                self._kill_proc_group(proc)
-                try:
-                    await asyncio.wait_for(proc.communicate(), timeout=2.0)
-                except (asyncio.TimeoutError, Exception):
-                    pass
-            self._active_procs.discard(proc)
-        return None
+    def normalize_input(self, tool_input: ToolInput) -> ToolInput:
+        from pathlib import Path
+        from jarvis_core.config import JARVIS_ROOT
+        shell = tool_input.shell
+        if shell == "auto":
+            shell = "powershell" if os.name == "nt" else "bash"
+        cwd = Path(tool_input.cwd or JARVIS_ROOT).resolve()
+        if not cwd.is_dir():
+            raise ValueError("Working directory does not exist")
+        return tool_input.model_copy(update={"shell": shell, "cwd": str(cwd)})
 
     async def invoke(self, tool_input: ShellRunInput) -> ToolResult:
-        cwd = tool_input.cwd or None  # asyncio uses None to mean "caller's cwd"
-        try:
-            # start_new_session=True puts the shell in its own process group
-            # so we can SIGKILL the entire tree on timeout (preventing orphaned
-            # children like `sleep 60` from leaking subprocess transports).
-            proc = await asyncio.create_subprocess_shell(
-                tool_input.command,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-                cwd=cwd,
-                start_new_session=True,
-            )
-        except OSError as e:
-            return ToolResult(error=f"Failed to spawn shell: {e}")
-
-        self._active_procs.add(proc)
-        try:
+        from jarvis_core.agent.execution import ProcessRunner, powershell_path
+        import base64
+        import shutil
+        if tool_input.shell == "powershell":
             try:
-                stdout_bytes, stderr_bytes = await asyncio.wait_for(
-                    proc.communicate(),
-                    timeout=tool_input.timeout_seconds,
-                )
-            except asyncio.TimeoutError:
-                self._kill_proc_group(proc)
-                # Drain remaining output so the asyncio subprocess transport
-                # closes cleanly (avoids 3.10 __del__ noise on interpreter exit).
-                try:
-                    await asyncio.wait_for(proc.communicate(), timeout=2.0)
-                except (asyncio.TimeoutError, Exception):
-                    pass
-                return ToolResult(error=f"shell_run timeout after {tool_input.timeout_seconds}s; process group killed")
-
-            return ToolResult(output={
-                "stdout": stdout_bytes.decode("utf-8", errors="replace"),
-                "stderr": stderr_bytes.decode("utf-8", errors="replace"),
-                "exit_code": proc.returncode if proc.returncode is not None else -1,
-            })
-        finally:
-            self._active_procs.discard(proc)
+                exe = powershell_path()
+            except FileNotFoundError as exc:
+                return ToolResult(error=str(exc), metadata={"error_code": "unavailable"})
+            command = "[Console]::OutputEncoding=[Text.UTF8Encoding]::new(); " + tool_input.command
+            argv = [exe, "-NoProfile", "-NonInteractive", "-EncodedCommand", base64.b64encode(command.encode("utf-16-le")).decode()]
+        else:
+            exe = shutil.which("bash")
+            if not exe:
+                return ToolResult(error="Bash is unavailable; use native PowerShell on Windows", metadata={"error_code": "unavailable"})
+            argv = [exe, "--noprofile", "--norc", "-c", tool_input.command]
+        return await ProcessRunner().run(argv, cwd=tool_input.cwd, timeout=tool_input.timeout_seconds)
 
 
 # =============================================================================
@@ -206,18 +98,18 @@ if __name__ == "__main__":
 
     async def run() -> None:
         tool = ShellRunTool()
+        is_win = os.name == "nt"
 
         # 1. Trivial echo
-        r1 = await safe_invoke(tool, {"command": "echo hello jarvis"})
+        cmd1 = "Write-Output 'hello jarvis'" if is_win else "echo hello jarvis"
+        r1 = await safe_invoke(tool, {"command": cmd1})
         assert r1.is_success, f"got {r1}"
         assert "hello jarvis" in r1.output["stdout"]
         assert r1.output["exit_code"] == 0
-        print(f"  [OK] 'echo hello jarvis' works")
+        print(f"  [OK] literal output works")
 
         # 2. Pipeline + glob (shell features)
-        import sys
-        is_win = sys.platform == "win32"
-        cmd2 = "echo one & echo TWO" if is_win else "echo one; echo two | tr a-z A-Z"
+        cmd2 = "Write-Output one; Write-Output TWO" if is_win else "echo one; echo two | tr a-z A-Z"
         r2 = await safe_invoke(tool, {"command": cmd2})
         assert r2.is_success and "TWO" in r2.output["stdout"]
         print(f"  [OK] pipeline/sequential '{cmd2}' works (shell interpretation)")
@@ -225,22 +117,23 @@ if __name__ == "__main__":
         # 3. Non-zero exit
         cmd3 = "exit 1" if is_win else "false"
         r3 = await safe_invoke(tool, {"command": cmd3})
-        assert r3.is_success and r3.output["exit_code"] != 0
+        assert r3.is_error and r3.output["exit_code"] != 0
         print(f"  [OK] non-zero exit code propagated (got {r3.output['exit_code']})")
 
         # 4. Stderr capture
-        r4b = await safe_invoke(tool, {"command": "echo errmsg 1>&2"})
+        cmd4 = "[Console]::Error.WriteLine('errmsg')" if is_win else "echo errmsg 1>&2"
+        r4b = await safe_invoke(tool, {"command": cmd4})
         assert r4b.is_success and "errmsg" in r4b.output["stderr"]
         print(f"  [OK] stderr captured separately")
 
         # 5. Timeout kills runaway
-        cmd5 = "ping -n 61 127.0.0.1" if is_win else "sleep 60"
+        cmd5 = "Start-Sleep -Seconds 60" if is_win else "sleep 60"
         r5 = await safe_invoke(tool, {"command": cmd5, "timeout_seconds": 1})
         assert r5.is_error and "timeout" in r5.error.lower()
         print(f"  [OK] timeout kills '{cmd5}' after 1s: {r5.error}")
 
         # 6. cwd override
-        cmd6 = "cd" if is_win else "pwd"
+        cmd6 = "(Get-Location).Path" if is_win else "pwd"
         with tempfile.TemporaryDirectory() as tmpdir:
             r6 = await safe_invoke(tool, {"command": cmd6, "cwd": tmpdir})
             assert r6.is_success
@@ -259,15 +152,6 @@ if __name__ == "__main__":
         schema = ShellRunTool.schema_for_llm()
         assert "command" in schema["input_schema"]["properties"]
         print(f"  [OK] registered + schema valid")
-
-        # 9. Active-proc set drained after successful invoke (Stage 3.2.3)
-        assert len(tool._active_procs) == 0
-        print(f"  [OK] _active_procs drained after invoke (len=0)")
-
-        # 10. teardown() is idempotent on empty registry
-        await tool.teardown()
-        assert len(tool._active_procs) == 0
-        print(f"  [OK] teardown() idempotent on empty registry")
 
         print("=" * 60)
         print("  All 10 smoke tests passed.")

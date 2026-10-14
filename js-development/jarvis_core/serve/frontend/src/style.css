@@ -431,3 +431,16 @@ body.dialogue-folded .dialogue-head { padding: var(--s3) 7px var(--s2); }
   .act-system .issue-row > .diagnostic-details[open] { grid-column: 1 / -1; grid-row: 3; }
 }
 @media (max-width: 520px) { .act-system #system-grid { grid-template-columns: minmax(0, 1fr); } }
+
+/* Approval owns its own scrolling; complete action text remains available. */
+.approval { padding: var(--s3); border-bottom: 1px solid var(--gold); background: var(--bg); }
+.approval[hidden] { display: none; }
+.approval h2 { font: 500 15px var(--mono); color: var(--gold); margin: 0 0 10px; }
+.approval p { font: 12px/1.5 var(--mono); overflow-wrap: anywhere; }
+.approval pre { max-height: 28vh; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font: 12px/1.5 var(--mono); border: 1px solid var(--hair); padding: 12px; }
+.approval-actions { display: flex; gap: 10px; }
+.dialogue-head { gap: 8px; flex-wrap: wrap; }
+.dialogue-head .stop { min-width: 94px; }
+body.dialogue-folded .dialogue-head .stop { min-width: 0; width: 50px; padding: 0 2px; font-size: 9px; }
+body.dialogue-folded .approval { visibility: hidden; }
+#approval-error { color: var(--red); }

@@ -356,7 +356,14 @@ def classify_error(
     raw_lower = raw_msg.lower()
 
     # Unknown tool: dispatcher wraps KeyError from get_or_raise
-    if "unknown tool" in raw_lower or "not found" in raw_lower:
+    code = (failure.metadata or {}).get("error_code")
+    if code == "permission_denied":
+        return ClassifiedError(
+            kind=ToolErrorKind.EXECUTION_FAILED, raw_message=raw_msg,
+            tool_name=tool_name,
+            repair_hint="Owner/policy denied this action. Do not retry it through another tool. Explain that no action ran; continue only permitted read-only work.",
+        )
+    if code == "unknown_tool" or (code is None and ("unknown tool" in raw_lower or "not registered" in raw_lower)):
         extracted_name = tool_name or "unknown"
         return ClassifiedError(
             kind=ToolErrorKind.UNKNOWN_TOOL,
@@ -366,7 +373,7 @@ def classify_error(
         )
 
     # Validation failure: safe_invoke wraps Pydantic ValidationError
-    if "validation" in raw_lower or "input validation failed" in raw_lower:
+    if code == "invalid_arguments" or (code is None and "validation" in raw_lower):
         return ClassifiedError(
             kind=ToolErrorKind.VALIDATION_FAILED,
             raw_message=raw_msg,
@@ -374,6 +381,13 @@ def classify_error(
             repair_hint=_build_repair_hint_for_validation(
                 tool_name or "unknown", raw_msg
             ),
+        )
+
+    if code == "path_not_found" or (code is None and ("file not found" in raw_lower or "subdir not found" in raw_lower)):
+        return ClassifiedError(
+            kind=ToolErrorKind.EXECUTION_FAILED, raw_message=raw_msg,
+            tool_name=tool_name,
+            repair_hint="The requested path is missing; the tool exists. Use file_search to discover the exact path, then file_read. Do not guess another path.",
         )
 
     # Execution failure: tool.invoke() raised

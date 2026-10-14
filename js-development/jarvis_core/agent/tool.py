@@ -87,6 +87,8 @@ hooks; hook failures are swallowed so a misbehaving hook never breaks invocation
 
 from __future__ import annotations
 
+from contextvars import ContextVar
+
 import asyncio
 from abc import abstractmethod
 from dataclasses import dataclass, replace
@@ -196,6 +198,10 @@ class Tool(RegistryBase["Tool"]):
     # touch the network, or execute arbitrary code MUST set this True so the
     # permission engine gates them before invocation. Default False = safe.
     requires_permission: ClassVar[bool] = False
+
+    def normalize_input(self, tool_input: ToolInput) -> ToolInput:
+        """Resolve execution defaults before permission binds the action."""
+        return tool_input
 
     @abstractmethod
     async def invoke(self, tool_input: ToolInput) -> ToolResult:
@@ -313,6 +319,16 @@ class Tool(RegistryBase["Tool"]):
 # Part 4: SAFE INVOKE WRAPPER (catches exceptions, returns ToolResult)
 # =============================================================================
 
+def prepare_input(tool: Tool, raw_input: Dict[str, Any]) -> tuple[ToolInput, List[str]]:
+    coerced, notes = coerce_arguments(raw_input, tool.input_schema)
+    validated = tool.input_schema.model_validate(coerced)
+    normalized = tool.normalize_input(validated)
+    return tool.input_schema.model_validate(normalized.model_dump()), notes
+
+
+ACTION_REPORTER: ContextVar[Any] = ContextVar("jarvis_action_reporter", default=None)
+
+
 async def safe_invoke(tool: Tool, raw_input: Dict[str, Any]) -> ToolResult:
     """
     Validate input and invoke a tool, catching all exceptions.
@@ -335,12 +351,12 @@ async def safe_invoke(tool: Tool, raw_input: Dict[str, Any]) -> ToolResult:
     # JSON with near-miss field names (file_name vs path); map them onto the
     # canonical schema fields. Conservative: anything ambiguous is left verbatim
     # so validation still fails cleanly and the repair layer shows the schema.
-    coerced_input, coercion_notes = coerce_arguments(raw_input, tool.input_schema)
     try:
-        validated = tool.input_schema.model_validate(coerced_input)
+        validated, coercion_notes = prepare_input(tool, raw_input)
     except Exception as e:
         return ToolResult(
-            error=f"Input validation failed for '{tool.name}': {e}"
+            error=f"Input validation failed for '{tool.name}': {e}",
+            metadata={"error_code": "invalid_arguments"},
         )
 
     # Lifecycle hook: on_invoke_start. Hook failures must NEVER propagate;
@@ -354,8 +370,23 @@ async def safe_invoke(tool: Tool, raw_input: Dict[str, Any]) -> ToolResult:
         result = await tool.invoke(validated)
     except Exception as e:
         result = ToolResult(
-            error=f"Tool '{tool.name}' raised: {type(e).__name__}: {e}"
+            error=f"Tool '{tool.name}' raised: {type(e).__name__}: {e}",
+            metadata={"error_code": "path_not_found" if isinstance(e, FileNotFoundError) else "permission_denied" if isinstance(e, PermissionError) else "timeout" if isinstance(e, TimeoutError) else "execution_failed"},
         )
+
+    if result.is_error and not (result.metadata or {}).get("error_code"):
+        result = replace(result, metadata={**(result.metadata or {}), "error_code": "execution_failed"})
+
+    # Report actual completion before another model call can be cancelled.
+    # Approval alone is never evidence that a change was performed.
+    reporter = ACTION_REPORTER.get()
+    if reporter is not None and tool.name in {"file_create", "file_edit", "shell_run", "code_exec"} and isinstance(result.output, dict):
+        output = result.output
+        if output.get("status") in {"created", "edited", "completed", "failed"}:
+            action = {"tool": tool.name, **{k: output[k] for k in ("path", "sha256", "status", "exit_code") if k in output}}
+            if tool.name in {"shell_run", "code_exec"}:
+                action["cwd"] = getattr(validated, "cwd", "")
+            reporter(action)
 
     # Lifecycle hook: on_invoke_end (fires for BOTH success and error paths).
     try:

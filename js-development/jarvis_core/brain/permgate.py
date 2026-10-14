@@ -53,6 +53,7 @@ STEP 3: on ASK, ReActLoop calls terminal_ask_handler -> [y/N] -> ALLOW | DENY.
 from __future__ import annotations
 
 import sys
+import os
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -82,6 +83,8 @@ def _repo_scoped_file_read_classifier(repo_root: Path):
             target = target.resolve()
         except (OSError, RuntimeError, ValueError):
             return PermissionDecision.ASK
+        if any(part.lower().startswith(".env") or part.lower() in {".hearth_token", "credentials", ".git"} for part in target.parts):
+            return PermissionDecision.DENY
         if target == root or root in target.parents:
             return PermissionDecision.ALLOW
         return PermissionDecision.ASK  # out-of-repo -> human decides (cloud-leak guard)
@@ -112,6 +115,7 @@ _READ_ONLY_TOOLS = frozenset({
     "file_search", "list_dir", "corpus_stats",
     "context_expand",   # reads one append-only ledger by handle; cannot write
     "web_search",
+    "runtime_inspect", "memory_recall", "episode_read",
     "memory_semantic_search", "memory_mmr_search", "memory_bm25_search",
     "memory_hybrid_search", "memory_rerank", "memory_unified_retrieve",
     "memory_graph_search",
@@ -146,7 +150,12 @@ def build_permission_context(
     ]
     ctx = PermissionContext(rules=rules, default=PermissionDecision.ASK)
     if "shell_run" in tools:
-        ctx.register_classifier("shell_run", BashClassifier().classify_async)
+        async def shell_policy(arguments: Dict[str, Any]) -> PermissionDecision:
+            if arguments.get("shell") == "powershell" or (arguments.get("shell", "auto") == "auto" and os.name == "nt"):
+                from jarvis_core.agent.powershell_classifier import PowerShellClassifier
+                return await PowerShellClassifier(repo_root).classify_async(arguments)
+            return await BashClassifier().classify_async(arguments)
+        ctx.register_classifier("shell_run", shell_policy)
     if "file_read" in tools:
         ctx.register_classifier("file_read", _repo_scoped_file_read_classifier(repo_root))
     return ctx
@@ -216,7 +225,7 @@ def _run_self_test() -> None:
               await ctx.check("code_exec", {"code": "print(1)"}) == PermissionDecision.ASK)
 
         # T3: shell_run classifier — safe cmd ALLOW, dangerous ASK/DENY
-        d_ls = await ctx.check("shell_run", {"command": "ls -la"})
+        d_ls = await ctx.check("shell_run", {"command": "Get-Location" if os.name == "nt" else "ls -la"})
         d_rm = await ctx.check("shell_run", {"command": "rm -rf /tmp/x"})
         check("T3 shell safe ALLOW", d_ls == PermissionDecision.ALLOW, str(d_ls))
         check("T3b shell dangerous not ALLOW", d_rm != PermissionDecision.ALLOW, str(d_rm))

@@ -115,6 +115,13 @@ VOICE_REGISTER = f"""VOICE MODE. You are speaking aloud, not writing. Everything
 - If answering properly needs reading files, running tools, browsing, checking the knowledge base, or anything you cannot see in this conversation, reply with exactly {SENTINEL} and nothing else. Never guess at the contents of a file or a log."""
 
 
+def needs_harness(question: str) -> bool:
+    from jarvis_core.agent.tools.runtime import needs_inspection
+    if needs_inspection(question):
+        return True
+    return bool(re.search(r"(?i)\b(hardware|specs|specifications|gpu|vram|cpu|this (?:pc|laptop|machine)|current (?:model|runtime|host)|powershell|bash|terminal|file_read|file_create|file_edit|shell_run)\b|\b(?:read|find|locate|create|edit|change|write|delete)\b.{0,60}\b(?:file|folder|directory|project|code)\b|\b(?:run|execute)\s+(?:a |the |this )?(?:command|script|test)|\b(?:browse|search)\b.{0,30}\b(?:web|internet|online)\b", question))
+
+
 def load_chain(path: Optional[Path] = None) -> List[str]:
     try:
         data = json.loads((path or MODELS_PATH).read_text(encoding="utf-8"))
@@ -319,11 +326,12 @@ class VoiceBrain:
                     if kind == "piece":
                         held[i] += val
                     probe = held[i].lstrip()
-                    if kind == "piece" and len(probe) < len(SENTINEL) and SENTINEL.startswith(probe):
+                    control_heads = (SENTINEL, "<|tool_call_start|>", "<dots_function_call>", "<tool_call>")
+                    if kind == "piece" and any(len(probe) < len(head) and head.startswith(probe) for head in control_heads):
                         continue
                     if kind == "piece" and _maybe_verdict(probe) and not _CLASSIFIER_VERDICT.match(probe):
                         continue
-                    if probe.startswith(SENTINEL):
+                    if probe.startswith(control_heads):
                         stop_all()
                         yield {"type": "deep", "model": chain[i], "ttft": ttft()}
                         return

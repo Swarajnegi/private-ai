@@ -135,7 +135,7 @@ class FileSearchTool(Tool):
         if root != root_base and root_base not in root.parents:
             return ToolResult(error=f"subdir escapes the project root: {tool_input.subdir}")
         if not root.exists():
-            return ToolResult(error=f"subdir not found: {tool_input.subdir}")
+            return ToolResult(error=f"subdir not found: {tool_input.subdir}", metadata={"error_code": "path_not_found"})
 
         try:
             pattern = re.compile(tool_input.content_regex) if tool_input.content_regex else None
@@ -170,6 +170,8 @@ class FileSearchTool(Tool):
         for dirpath, dirnames, filenames in os.walk(root):
             dirnames[:] = sorted(d for d in dirnames if d not in _SKIP_DIRS)
             for fname in sorted(filenames):
+                if fname.lower().startswith(".env") or fname.lower() in {".hearth_token", "credentials"}:
+                    continue
                 if name_glob and not fnmatch.fnmatch(fname, name_glob):
                     continue
                 fpath = Path(dirpath) / fname

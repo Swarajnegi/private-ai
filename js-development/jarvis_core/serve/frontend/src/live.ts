@@ -5,12 +5,15 @@
  * the server is the one place that knows whether JARVIS is listening,
  * thinking or speaking. This file mirrors that state; it never invents it.
  */
-import { liveUrl } from "./api";
+import { liveUrl, cancelRequest, Approval } from "./api";
 
 export type CoreState = "waking" | "idle" | "listening" | "transcribing" | "thinking" | "speaking";
+export type LiveState = CoreState | "awaiting_approval" | "stopping";
 
 export type LiveEvents = {
-  state: (s: CoreState) => void;
+  approval: (a: Approval | null) => void;
+  terminated: (actions: Record<string, unknown>[]) => void;
+  state: (s: LiveState) => void;
   link: (s: "connecting" | "open" | "closed" | "refused") => void;
   heard: (text: string) => void;
   partial: (text: string) => void;
@@ -40,8 +43,11 @@ export class Live {
   private wantHandsFree = false;
   private closedByUs = false;
   private acceptAudio = false;
+  private requestId = "";
+  private stopping: Promise<void> | null = null;
+  private stopped: (() => void) | null = null;
   micLevel = 0;
-  state: CoreState = "waking";
+  state: LiveState = "waking";
 
   constructor(private session: string, private speakReplies = true, private freeOnly = false) {}
 
@@ -102,7 +108,32 @@ export class Live {
   private onJson(raw: string): void {
     const ev = JSON.parse(raw);
     if (ev.session && ev.session !== this.session && ev.type !== "session") return;
+    if (ev.type === "request") this.requestId = ev.request_id || "";
+    if (ev.request_id && this.requestId && ev.request_id !== this.requestId) return;
+    if (this.stopping && ["token", "answer", "audio_start"].includes(ev.type)) return;
     switch (ev.type) {
+      case "approval":
+        this.handlers.approval?.(ev as Approval);
+        this.state = "awaiting_approval";
+        this.handlers.state?.(this.state);
+        break;
+      case "approval_unavailable":
+        this.handlers.error?.(`The proposed action cannot proceed: ${ev.reason}`);
+        break;
+      case "approval_resolved":
+        this.handlers.approval?.(null);
+        break;
+      case "approval_expired":
+        this.handlers.approval?.(null);
+        this.handlers.error?.("Approval expired. The proposed action was not executed.");
+        break;
+      case "terminated":
+        this.handlers.approval?.(null);
+        this.handlers.terminated?.(ev.completed_actions ?? []);
+        this.stopped?.();
+        this.stopped = null;
+        this.requestId = "";
+        break;
       case "state":
         this.state = ev.state;
         this.handlers.state?.(ev.state);
@@ -180,10 +211,30 @@ export class Live {
   }
 
   /** Stop JARVIS mid-sentence, locally at once and on the server. */
-  interrupt(): void {
+  interrupt(): Promise<void> {
     this.flushPlayback();
     this.acceptAudio = false;
-    this.send({ type: "interrupt", cancel_turn: true });
+    if (this.stopping) return this.stopping;
+    const requestId = this.requestId;
+    this.handlers.state?.("stopping");
+    this.stopping = new Promise<void>((resolve, reject) => {
+      const timeout = setTimeout(() => reject(new Error("The server has not confirmed execution cleanup")), 30000);
+      this.stopped = () => { clearTimeout(timeout); resolve(); };
+      if (this.ws?.readyState === WebSocket.OPEN) {
+        this.send({ type: "interrupt", cancel_turn: true, request_id: requestId });
+      } else if (requestId) {
+        void cancelRequest(requestId, this.session).then((result) => {
+          clearTimeout(timeout);
+          this.requestId = "";
+          this.handlers.approval?.(null);
+          this.handlers.terminated?.(result.completed_actions ?? []);
+          this.handlers.state?.("idle");
+          resolve();
+        }).catch((e) => { clearTimeout(timeout); reject(e); });
+      } else { clearTimeout(timeout); reject(new Error("Reconnect to terminate this request")); }
+    }).catch((e) => { this.handlers.error?.(`Termination could not be confirmed: ${(e as Error).message}`); throw e; })
+      .finally(() => { this.stopping = null; this.stopped = null; });
+    return this.stopping;
   }
 
   ask(question: string): void {
@@ -205,10 +256,13 @@ export class Live {
     this.send({ type: "config", free_only: on });
   }
 
-  setSession(id: string): void {
+  async setSession(id: string): Promise<void> {
+    if (this.requestId || ["transcribing", "thinking", "speaking", "awaiting_approval"].includes(this.state)) await this.interrupt();
     this.flushPlayback();
     this.acceptAudio = false;
+    this.requestId = "";
     this.session = id;
+    this.handlers.approval?.(null);
     this.send({ type: "config", session: id });
   }
 

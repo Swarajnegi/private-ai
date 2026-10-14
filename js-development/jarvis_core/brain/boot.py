@@ -133,8 +133,8 @@ def default_toolset(
 
     file_read (repo-scoped at the permission layer) + file_search (repo-scoped
     by construction) ship by default — a JARVIS that cannot see local files is
-    not worth much. Heavy/dangerous tools (web/exec/shell/finance/full memory)
-    stay behind full_toolset()."""
+    not worth much. Native shell and text changes are available with per-action approval.
+    Code execution, finance and advanced retrieval remain in full_toolset()."""
     from jarvis_core.agent.tools.fs import FileReadTool
     from jarvis_core.agent.tools.fs_search import FileSearchTool
     from jarvis_core.agent.tools.fs_dir import ListDirTool
@@ -149,6 +149,12 @@ def default_toolset(
         "list_dir": ListDirTool(),
         "corpus_stats": CorpusStatsTool(),
     }
+    from jarvis_core.agent.tools.runtime import RuntimeInspectTool
+    from jarvis_core.agent.tools.shell import ShellRunTool
+    from jarvis_core.agent.tools.file_write import FileCreateTool, FileEditTool
+    from jarvis_core.agent.tools.web import WebSearchTool
+    tools.update({"shell_run": ShellRunTool(), "file_create": FileCreateTool(), "file_edit": FileEditTool(), "web_search": WebSearchTool()})
+    tools["runtime_inspect"] = RuntimeInspectTool(tools=tools)
     if store is not None:
         tools["memory_semantic_search"] = MemorySemanticSearchTool(store=store)
     tools.update(_recall_tools())
@@ -220,11 +226,17 @@ def full_toolset(
              lambda: MemoryUnifiedRetrieveTool(store=store, llm_call=llm_call)),
         ]
     tools: Dict[str, Tool] = {}
+    unavailable = {}
     for name, factory in specs:
         try:
             tools[name] = factory()
-        except Exception:
-            pass  # skip an unconstructable tool; the harness runs with the rest
+        except Exception as exc:
+            unavailable[name] = f"{type(exc).__name__}: {exc}"
+    from jarvis_core.agent.tools.runtime import RuntimeInspectTool
+    from jarvis_core.agent.tools.file_write import FileCreateTool, FileEditTool
+    tools.update({"file_create": FileCreateTool(), "file_edit": FileEditTool()})
+    tools["runtime_inspect"] = RuntimeInspectTool(tools=tools)
+    tools["runtime_inspect"].unavailable_tools = unavailable
     for name, tool in _recall_tools().items():
         tools.setdefault(name, tool)
     return tools
@@ -626,7 +638,7 @@ def _run_self_test() -> None:
                   str(sorted(mind14._tools)))
             check("T14b report flags full mode + gated dangerous tools",
                   report14.tool_mode == "full"
-                  and set(report14.gated) == {"shell_run", "code_exec"}, str(report14.gated))
+                  and set(report14.gated) == {"shell_run", "code_exec", "file_create", "file_edit"}, str(report14.gated))
 
             # T15: permission_context + ask_handler reach the Mind (and ReActLoop)
             sentinel_ctx, sentinel_handler = object(), object()

@@ -56,11 +56,13 @@ STEP 3: Return ToolResult(output={"content", "path", "bytes_read",
 from __future__ import annotations
 
 from pathlib import Path
+import hashlib
 from typing import Optional
 
 from pydantic import Field
 
 from jarvis_core.agent.tool import Tool, ToolInput, ToolResult
+from jarvis_core.config import JARVIS_ROOT
 
 
 # =============================================================================
@@ -106,6 +108,12 @@ class FileReadTool(Tool):
     )
     input_schema = FileReadInput
 
+    def normalize_input(self, tool_input: ToolInput) -> ToolInput:
+        path = Path(tool_input.path).expanduser()
+        if not path.is_absolute():
+            path = Path(JARVIS_ROOT) / path
+        return tool_input.model_copy(update={"path": str(path.resolve())})
+
     @property
     def is_concurrency_safe(self) -> bool:
         return True  # Pure read; no shared state mutation
@@ -118,7 +126,8 @@ class FileReadTool(Tool):
             return ToolResult(
                 error=f"File not found: {tool_input.path}. Use file_search to "
                       f"locate the file (by name or content), then read the exact "
-                      f"path it returns — do not guess another filename.")
+                      f"path it returns — do not guess another filename.",
+                metadata={"error_code": "path_not_found"})
         except OSError as e:
             return ToolResult(error=f"OS error resolving path: {e}")
 
@@ -126,7 +135,8 @@ class FileReadTool(Tool):
             return ToolResult(error=f"Path is not a regular file: {resolved}")
 
         try:
-            size = resolved.stat().st_size
+            before = resolved.stat()
+            size = before.st_size
             with resolved.open("rb") as f:
                 f.seek(tool_input.offset)
                 raw = f.read() if tool_input.max_bytes is None else f.read(tool_input.max_bytes)
@@ -152,7 +162,13 @@ class FileReadTool(Tool):
                 )
 
         complete = end >= size
+        with resolved.open("rb") as fh:
+            digest = hashlib.file_digest(fh, "sha256").hexdigest()
+        after = resolved.stat()
+        if (before.st_mtime_ns, before.st_size, before.st_ino) != (after.st_mtime_ns, after.st_size, after.st_ino):
+            return ToolResult(error="File changed during reading; retry the current file", metadata={"error_code": "conflict"})
         return ToolResult(output={
+            "sha256": digest,
             "content": content,
             "path": str(resolved),
             "size_bytes": size,

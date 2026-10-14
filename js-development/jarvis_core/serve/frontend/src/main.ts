@@ -10,28 +10,28 @@ import DOMPurify from "dompurify";
 import { marked } from "marked";
 import * as api from "./api";
 import { Field } from "./field";
-import { Live, type CoreState } from "./live";
+import { Live, type LiveState } from "./live";
 import { SessionsView } from "./sessions";
 import { SystemView } from "./system";
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
-const WHISPER: Record<CoreState, string> = {
+const WHISPER: Record<LiveState, string> = {
   waking: "Waking the core",
   idle: "Idle — type below, or turn on hands-free",
   listening: "Listening",
   transcribing: "Transcribing",
   thinking: "Thinking",
-  speaking: "Speaking",
+  speaking: "Speaking", awaiting_approval: "Waiting for your approval", stopping: "Stopping…",
 };
-const PILL: Record<CoreState, string> = {
+const PILL: Record<LiveState, string> = {
   waking: "idle", idle: "idle", listening: "listening",
-  transcribing: "thinking", thinking: "thinking", speaking: "speaking",
+  transcribing: "thinking", thinking: "thinking", speaking: "speaking", awaiting_approval: "thinking", stopping: "thinking",
 };
 
-const TITLE: Record<CoreState, string> = {
+const TITLE: Record<LiveState, string> = {
   waking: "Waking.", idle: "Idle.", listening: "Listening.",
-  transcribing: "Hearing you.", thinking: "Thinking.", speaking: "Speaking.",
+  transcribing: "Hearing you.", thinking: "Thinking.", speaking: "Speaking.", awaiting_approval: "Your approval.", stopping: "Stopping.",
 };
 
 function toggleDialogue(): void {
@@ -239,9 +239,12 @@ function whisper(text: string, bad = false): void {
 // ---- live events -----------------------------------------------------------
 live
   .on("state", (s) => {
-    $("stop").toggleAttribute("disabled", !["thinking", "transcribing", "speaking"].includes(s));
-    field?.setState(s);
-    if (!$("whisper").classList.contains("bad") || !["idle", "listening"].includes(s)) whisper(WHISPER[s] || s);
+    $("stop").toggleAttribute("disabled", !["thinking", "transcribing", "speaking", "awaiting_approval"].includes(s));
+    $("stop").textContent = s === "stopping" ? "Stopping…" : "Terminate";
+    $("send").toggleAttribute("disabled", $("new-session").hasAttribute("disabled") || ["thinking", "transcribing", "speaking", "awaiting_approval", "stopping"].includes(s));
+    field?.setState(s === "awaiting_approval" || s === "stopping" ? "thinking" : s);
+    if (!["idle", "listening"].includes(s)) terminationNotice = false;
+    if (!terminationNotice && (!$("whisper").classList.contains("bad") || !["idle", "listening"].includes(s))) whisper(WHISPER[s] || s);
     $("core-title").textContent = TITLE[s] || s;
     document.querySelectorAll<HTMLLIElement>("#states li").forEach((li) =>
       li.setAttribute("data-active", String(li.dataset.state === PILL[s])),
@@ -287,10 +290,46 @@ live
       pending.el.classList.add("error");
       const detail = document.createElement("span");
       detail.className = "turn-meta";
-      detail.textContent = msg;
+      detail.textContent = msg.startsWith("Reply stopped") ? "Incomplete · terminated" : msg;
       pending.el.append(detail);
       pending = null;
     } else addTurn("jarvis", msg, "Request status").el.classList.add("error");
+  })
+  .on("approval", (a) => {
+    const restoreFocus = $("approval").contains(document.activeElement);
+    currentApproval = a;
+    if (!a && restoreFocus) $("prompt").focus({preventScroll: true});
+    $("approval").hidden = !a;
+    $("approval-error").textContent = "";
+    if (a) {
+      if (document.body.classList.contains("dialogue-folded")) toggleDialogue();
+      $("approval-reason").textContent = `${a.tool}: ${a.reason}`;
+      const proposal = a.proposal;
+      $("approval-action").textContent = proposal.proposed_diff ? String(proposal.proposed_diff) : JSON.stringify(proposal, null, 2);
+      $("approval-expiry").textContent = `Expires ${new Date(a.expires_at * 1000).toLocaleTimeString()}`;
+      $("approval-allow").toggleAttribute("disabled", false);
+      $("approval-deny").toggleAttribute("disabled", false);
+      $("approval-deny").focus({preventScroll: true});
+    }
+  })
+  .on("terminated", (actions) => {
+    terminationNotice = true;
+    const files = actions.filter(a => a.status === "created" || a.status === "edited");
+    whisper("Terminated. Completed changes remain; you can ask another question.");
+    if (files.length) {
+      const note = document.createElement("p");
+      note.className = "turn-meta";
+      note.textContent = "Completed changes retained: " + files.map(a => `${a.tool}: ${a.path}`).join("; ");
+      $("turns").append(note);
+    }
+    if (pending) {
+      pending.el.classList.remove("pending");
+      const label = document.createElement("span");
+      label.className = "turn-meta";
+      label.textContent = "Incomplete · terminated";
+      pending.el.append(label);
+      pending = null;
+    }
   })
   .on("session", remember)
   .on("ready", (engine) => {
@@ -300,6 +339,21 @@ live
   });
 
 let engineInfo: Record<string, unknown> = {};
+let currentApproval: api.Approval | null = null;
+let terminationNotice = false;
+async function decide(decision: "approve" | "deny"): Promise<void> {
+  if (!currentApproval) return;
+  $("approval-allow").toggleAttribute("disabled", true);
+  $("approval-deny").toggleAttribute("disabled", true);
+  try { await api.decideApproval(currentApproval, decision); }
+  catch (e) {
+    $("approval-error").textContent = (e as Error).message;
+    $("approval-allow").toggleAttribute("disabled", false);
+    $("approval-deny").toggleAttribute("disabled", false);
+  }
+}
+$("approval-allow").addEventListener("click", () => void decide("approve"));
+$("approval-deny").addEventListener("click", () => void decide("deny"));
 
 // ---- controls ------------------------------------------------------------
 async function setHandsFree(on: boolean): Promise<void> {
@@ -345,21 +399,30 @@ $("composer").addEventListener("submit", (e) => {
   e.preventDefault();
   const input = $<HTMLInputElement>("prompt");
   const q = input.value.trim();
-  if (!q) return;
+  if (!q || $("send").hasAttribute("disabled") || $("new-session").hasAttribute("disabled")) return;
   addTurn("user", q);
   $("heard").textContent = "";
   live.ask(q);
   input.value = "";
 });
 $("dialogue-toggle").addEventListener("click", toggleDialogue);
-$("stop").addEventListener("click", () => live.interrupt());
-$("new-session").addEventListener("click", () => {
-  $("heard").textContent = "";
-  whisper("Starting a new conversation");
-  remember(api.newSessionId());
-  live.setSession(session);
-  void loadHistory();
+$("stop").addEventListener("click", () => void live.interrupt().catch(() => {}));
+$("new-session").addEventListener("click", async () => {
+  $("new-session").toggleAttribute("disabled", true);
+  try {
+    const next = api.newSessionId();
+    await live.setSession(next);
+    remember(next);
+    $("heard").textContent = "";
+    whisper("Starting a new conversation");
+    await loadHistory();
+  } catch (e) { whisper((e as Error).message, true); }
+  finally {
+    $("new-session").toggleAttribute("disabled", false);
+    $("send").toggleAttribute("disabled", ["thinking", "transcribing", "speaking", "awaiting_approval", "stopping"].includes(live.state));
+  }
 });
+
 let paused = false;
 $("motion").addEventListener("click", () => {
   paused = !paused;
@@ -369,7 +432,7 @@ $("motion").addEventListener("click", () => {
 });
 addEventListener("keydown", (e) => {
   const typing = (e.target as HTMLElement).matches("input, textarea");
-  if (e.key === "Escape") live.interrupt();
+  if (e.key === "Escape") void live.interrupt().catch(() => {});
   if (typing) return;
   if (e.key === " " || e.key.toLowerCase() === "h") {
     e.preventDefault();
@@ -382,8 +445,8 @@ addEventListener("keydown", (e) => {
 
 // ---- 02 sessions / 03 system -----------------------------------------------
 const sessionsView = new SessionsView($("sessions"), () => session, sigil, async (id) => {
+  await live.setSession(id);
   remember(id);
-  live.setSession(id);
   await loadHistory();
   $("core").scrollIntoView();
 });

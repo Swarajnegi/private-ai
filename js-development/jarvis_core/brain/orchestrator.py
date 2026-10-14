@@ -270,6 +270,11 @@ def _degenerate_diagnosis(result: MindResult) -> Tuple[str, str]:
     reason = getattr(react, "terminated_reason", "") or ""
     err = (getattr(react, "error", "") or "").strip()
     if reason == TERMINATED_ERROR and err:
+        if "model requested another tool" in err.lower():
+            return (
+                "I gathered evidence, but the model kept requesting tools instead of producing a final answer. "
+                "The task is incomplete; no unexecuted tool call has been treated as an answer.",
+                f"model did not produce a final answer: {err}")
         if "budget" in err.lower():
             return (
                 "I couldn't produce a clean answer this run — it hit the session "
@@ -517,9 +522,15 @@ async def ask(
     # the capture session_id, so the observation queue groups terminal turns into
     # real conversations.
     cstore = conv_store if conv_store is not None else ConversationStore()
-    sess = resolve_terminal_session(
-        window_hours=continue_window_hours, new=new_session, explicit=session,
-        state_path=session_state_path)
+    if capture:
+        sess = resolve_terminal_session(
+            window_hours=continue_window_hours, new=new_session, explicit=session,
+            state_path=session_state_path)
+    else:
+        from jarvis_core.brain.conversation import SessionResolution
+        import uuid
+        sess = SessionResolution(session or "ephemeral-" + uuid.uuid4().hex, continued=False)
+        distill = False
     # Build a query-aware working-memory pack.  A raw recent-turn tail loses
     # the instruction that gives a long answer (or a short follow-up) meaning;
     # this keeps complete exchanges and pages in older relevant ones.
@@ -533,6 +544,8 @@ async def ask(
     # set's shell/exec are. Boot is the mechanism that applies them.
     prebuilt = (full_toolset(store=store, kb_path=kb_path, llm_call=client)
                 if full else default_toolset(store=store, kb_path=kb_path, llm_call=client))
+    if "runtime_inspect" in prebuilt:
+        prebuilt["runtime_inspect"].brain_model = str(model or "")
     p_ctx = permission_context or build_permission_context(prebuilt)
     p_handler = ask_handler or terminal_ask_handler
     gated = sorted(n for n, t in prebuilt.items()
@@ -798,9 +811,10 @@ async def ask(
     # A failed turn still keeps the QUESTION, with a short marker in place of
     # the answer: on 2026-09-27 a spoken correction died on a 402 and, unstored,
     # the next turns had no idea the user had objected at all.
-    cstore.append_turn(sess.session_id, "user", strip_harness_blocks(question))
-    cstore.append_turn(sess.session_id, "assistant",
-                       answer if not degenerate else _failed_turn_marker(failure_cause))
+    if capture:
+        cstore.append_turn(sess.session_id, "user", strip_harness_blocks(question))
+        cstore.append_turn(sess.session_id, "assistant",
+                           answer if not degenerate else _failed_turn_marker(failure_cause))
 
     ledger: Dict[str, Any] = {}
     if route_pool is not None and llm_call is None:
@@ -895,7 +909,7 @@ async def ask(
         conflict_detected=conflict_detected, conflict_detail=conflict_detail,
         escalation_question=escalation_question,
         degenerate=degenerate,
-        persisted=not degenerate,
+        persisted=bool(capture and not degenerate),
     )
 
 
@@ -1392,7 +1406,7 @@ def _run_self_test() -> None:
                             inhale=False, printer=lines.append)
             check("T11 exhale opt-outs honored",
                   r11.captured is False and r11.distill_status == "skipped"
-                  and queue.read_text(encoding="utf-8") == before)
+                  and queue.read_text(encoding="utf-8") == before and not r11.persisted)
 
             # T12: awareness judge — mechanical checks fire correctly
             v, _ = _judge_awareness("autobiography", r, "2026-06-12")
@@ -1564,15 +1578,15 @@ def _run_self_test() -> None:
                 gate=ConfidenceGate(embed_fn=scripted_embed),
                 writer=SessionMemoryWriter(append_fn=lambda **k: {"status": "appended", "id": 1}),
                 inhale=False, use_profile=False, printer=lines.append)
-            check("T20 default path stays minimal (no full toolset, no gating)",
-                  r20.boot.tool_mode == "minimal" and r20.boot.gated == ())
+            check("T20 default toolset exposes approval-gated workspace actions",
+                  r20.boot.tool_mode == "minimal" and set(r20.boot.gated) == {"shell_run", "file_create", "file_edit"})
 
             # T21: DEFAULT --ask now has EYES — file_read + file_search ship without
             # --full, and a permission context is wired (the cloud-leak guard).
             check("T21 default toolset includes file_read + file_search",
                   {"file_read", "file_search"} <= set(r20.boot.tools), str(r20.boot.tools))
-            check("T21b default toolset stays lean (no shell/exec/web in default)",
-                  not ({"shell_run", "code_exec", "web_search"} & set(r20.boot.tools)))
+            check("T21b native shell/web are available while code_exec requires full mode",
+                  {"shell_run", "web_search", "runtime_inspect", "file_create", "file_edit"} <= set(r20.boot.tools) and "code_exec" not in r20.boot.tools)
 
             # T22: in DEFAULT mode an OUT-OF-REPO file_read is gated (cloud-leak guard),
             # in-repo auto-allows. Prove via the permission context the orchestrator builds.
@@ -2274,8 +2288,7 @@ def _ask_via_hearth(question: str, session: Optional[str] = None,
     print(f"\n  JARVIS  : {payload.get('answer', '')}")
     print(f"  confidence: {payload.get('verdict')} ({payload.get('confidence', 0.0):.2f})")
     for denial in payload.get("denials") or []:
-        print(f"  DENIED  : {denial['tool']} — the hearth has no human to ask; "
-              f"re-run without --via-hearth to approve it")
+        print(f"  DENIED  : {denial['tool']} — owner/policy did not approve this action")
     return 0
 
 
@@ -2392,7 +2405,9 @@ def main() -> int:
                                max_iterations=args.max_iterations,
                                budget=args.budget)
     if args.ask:
-        handler = allow_all_ask_handler if (args.full and args.allow_all) else None
+        if args.allow_all:
+            raise SystemExit("--allow-all is unavailable for production actions; use individual approval")
+        handler = None
         tgts = [m.strip() for m in args.targets.split(",")] if args.targets else None
         asyncio.run(ask(args.ask, capture=not args.no_capture,
                         use_profile=not args.no_profile,

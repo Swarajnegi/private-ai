@@ -115,11 +115,28 @@ This updates artifact counts, not the older c002 experiment or training approval
 - [x] One eligibility gate for queue exchanges, raw assistant turns, legacy session-distill KB records, derived sources and both SFT exports; Stage 5 and pipeline audits use the same policy.
 - [x] Preserve capture, history, retrieval, owner-only material and parse rule v1. Review decisions do not override retractions, routing or evaluation exclusions.
 - [x] Review seven October 13 exchanges plus four associated KB copies individually: three approvals, eight rejections. Other historical answers remain pending, outside this milestone's review scope.
-- [x] Record six baseline cases; hardware/performance/error/reads/continuity remain unresolved, ambiguous transcription is unmeasured without original audio.
+- [x] Record six baseline cases; hardware/performance/error/reads/continuity were unresolved at the baseline, ambiguous transcription is unmeasured without original audio. Current repair verification is in E3.
 - [x] Targeted review, corpus-chain, scheduler, maintenance, pipeline, Stage 5, retraction and exclusion checks pass.
 - [x] Production rebuild/audit: all five exports have zero ineligible records; 36 pipeline checks pass. Final run 64.11 s, 5.41 GiB minimum free RAM, 248.11 MiB peak tree commit. Snapshot byte hash and 947 records preserved; metadata-alias regression added.
 - [x] Antigravity answered q056/q057 with 20 fixture tests. Codex reviewed the full file, corrected portable fixture paths and strengthened host/artifact assertions; all 20 rerun successfully.
 - [x] Live capture/UI/voice verified; live review hold counts 3 approved / 8 rejected / 122 pending. Core/frontend unchanged. Production sign-off complete; local milestone commit only, no push.
+
+## E3. Milestone 2 — trustworthy interactive harness (2026-10-14)
+
+- [x] Timestamped current-host inspection without model loading; measured CPU/RAM/GPU/VRAM and actual CPU voice/embeddings/cloud brain, with explicit unknowns.
+- [x] Native PowerShell parser policy, validated arguments before permissions, safe automatic inspection and individual change approval; no `allow_all` bypass.
+- [x] Supervised tool process trees with bounded timeouts and fail-closed cleanup; ordinary requests do not acquire the maintenance lock.
+- [x] Workspace text create/edit with exact diff, full-file digest, unique replacement, atomic conflict checks and preserved encoding/line endings; authoritative stores protected.
+- [x] Accurate typed missing-path/unknown-tool errors and discovery hints; unchanged identical reads reused within each request.
+- [x] Authenticated request/session/action-bound one-time approval over HTTP and voice; fixed ten-minute expiry and reconnect retention.
+- [x] Visible Terminate including folded dialogue, Escape, local playback stop, exact request cancellation and cleanup before New conversation/fresh question. Completed file changes remain and are reported accurately.
+- [x] Antigravity q058/q059: 30 bounded fixture tests reviewed and rerun; Codex added 17 end-to-end checks. No policy/data/dependency/schedule changes by Antigravity.
+- [x] Desktop/mobile browser fixtures: 13 checks at 1440x900 and 390x844; TypeScript/build and relevant harness/service/Milestone 1/pipeline/scheduler regressions pass. Served bundle rebuilt, Hearth restarted through its watchdog.
+- [x] Live configured-provider inspection, file discovery, approved scratch creation and denied action verified. CPU voice available; no speech benchmark.
+- [ ] Additional production approved edit/controlled-command termination check: configured free brain returned OpenRouter 404 `No endpoints found` three times. Real-tool isolated service checks pass; retain this distinction until the live check can be completed. No model replacement performed.
+- [x] Uncaptured requests now leave no conversation/session/queue/KB writes; five earlier identifiable test histories preserved intact under `.runtime/milestone2/` with hash manifest.
+- [x] Core renderer/geometry/colours, landing, Sessions/System layout, client snapshot, training gate and schedules preserved; local commit only, no push.
+- [~] B01 fresh hardware evidence and B03 error handling verified; B04 same-request read reuse verified. General model decisions, B02 calibration, B05 continuity and B06 speech accuracy remain later work. Milestone closure waits for the outstanding live check above.
 
 ## F. Open commitments (`python3 scripts/commitments.py --list`)
 

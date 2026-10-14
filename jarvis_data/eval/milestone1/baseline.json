@@ -28,14 +28,22 @@
     {
       "id": "B01",
       "failure": "wrong hardware claims",
-      "status": "unresolved",
+      "status": "repaired",
       "exchange_ts": "2026-10-13T18:43:54+05:30",
       "observed": [
         "GTX 1650 current host claim",
         "RTX 2060 8GB work/current laptop claim in next answer",
         "API brain claimed local GPU execution"
       ],
-      "expected": "Verify current host and CPU/GPU runtime state with attributed evidence; distinguish past machines and the hosted brain."
+      "expected": "Verify current host and CPU/GPU runtime state with attributed evidence; distinguish past machines and the hosted brain.",
+      "milestone2_verification": {
+        "date": "2026-10-14",
+        "scope": "Fresh runtime_inspect observation before hardware answers; live i7-10750H, 15.842 GiB, RTX 2060 6144 MiB, cloud API brain, CPU voice. This verifies current evidence routing, not arbitrary model reasoning quality.",
+        "evidence": [
+          ".runtime/milestone2/live-hardware-final.json",
+          "scripts/test_milestone2_harness.py"
+        ]
+      }
     },
     {
       "id": "B02",
@@ -51,20 +59,36 @@
     {
       "id": "B03",
       "failure": "misleading missing-file errors",
-      "status": "unresolved",
+      "status": "repaired",
       "fixture": {
         "tool": "file_read",
         "error": "File not found: js-development/jarvis_core/serve/voice_path.py"
       },
       "observed": "agent.errors.classify_error maps not found to unknown_tool and claims the registered tool does not exist.",
-      "expected": "Distinguish a missing path from an absent tool; discover brain/voice_path.py without changing task."
+      "expected": "Distinguish a missing path from an absent tool; discover brain/voice_path.py without changing task.",
+      "milestone2_verification": {
+        "date": "2026-10-14",
+        "scope": "Stable error codes distinguish path_not_found from unknown_tool; file_search discovers the actual brain/voice_path.py. Historical observations and independent training rejections are preserved.",
+        "evidence": [
+          "scripts/test_milestone2_tools.py",
+          ".runtime/milestone2/live-service-results.json"
+        ]
+      }
     },
     {
       "id": "B04",
       "failure": "redundant reads",
-      "status": "unresolved",
+      "status": "partial",
       "observed": "Archived model-requested actions repeatedly read speech.py, model_profiles.py, llm_client.py, list the same directories and guess nonexistent config paths. Requests are not a count of actual tool executions.",
-      "expected": "Track read coverage and discovered paths; avoid identical reads without new evidence. Bound irrelevant search results and keep the active goal."
+      "expected": "Track read coverage and discovered paths; avoid identical reads without new evidence. Bound irrelevant search results and keep the active goal.",
+      "milestone2_verification": {
+        "date": "2026-10-14",
+        "scope": "Identical unchanged reads within a request reuse the verified observation. Changed files and ranges are re-read. Broader search loops and durable task progress remain later milestones.",
+        "evidence": [
+          "scripts/test_milestone2_harness.py",
+          "scripts/test_milestone2_tools.py"
+        ]
+      }
     },
     {
       "id": "B05",

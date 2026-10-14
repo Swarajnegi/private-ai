@@ -51,7 +51,8 @@ unchanged. Eleven October 13 sources were individually reviewed: eight rejected,
 three approved; 122 other JARVIS source identities remain pending. Owner-only
 extracts and verified owner-supported facts are preserved. Six behavioural
 baseline cases are recorded in `jarvis_data/eval/milestone1/baseline.json`;
-five remain unresolved and ambiguous transcription has no original audio.
+five were unresolved at that baseline and ambiguous transcription has no
+original audio; the Milestone 2 update below records the verified repairs.
 
 Production verification passed through the exclusive supervisor: all five
 exports contain zero ineligible records and all 36 pipeline checks pass. The
@@ -80,9 +81,59 @@ retained and its six-hour failure retry remains in force. That warning is
 accurate and was not cleared by the corpus repair. Codex parse backlog and
 older training-readiness/evaluation work remain separate. Milestone 1's quality
 gate, reviewed exclusions, production audits and behavioural baseline are closed;
-behavioural repairs are the next milestone. Generated corpus files and unrelated
+behavioural repairs continue below. Generated corpus files and unrelated
 memory updates remain unstaged; only reviewed milestone sources/records/docs are
 included in the local commit.
+
+**Milestone 2 harness implementation, 2026-10-14 (Codex).** Interactive
+requests now construct runtime inspection, native PowerShell, text creation/
+editing and public-web tools. Arguments are normalized before permission;
+verified read-only inspection runs automatically and mutations need individual
+approval. PowerShell uses its native parser and uncertain pipelines need
+approval. File edits bind the complete SHA-256 and unique replacement, preserve
+line endings/encoding, and cannot directly rewrite authoritative stores.
+Current host inspection measured i7-10750H, 15.842 GiB RAM, RTX 2060 with
+6,144 MiB VRAM, cloud brain and CPU voice/embeddings. Unavailable measurements
+stay unknown. Optional web-search SDK absence uses the tested native RSS
+fallback; no dependencies, CUDA or models were installed.
+
+Authenticated HTTP/voice approvals bind the exact action, request and session;
+one-time decisions expire ten minutes after issuance. Reconnect restores the
+same pending approval. Terminal prompts follow the same policy, unattended
+changes are denied and API/CLI `allow_all` cannot bypass approval. The dialogue
+header now has Terminate, also visible when folded. Escape and New conversation
+use the same cancellation/cleanup path. Windows Job Objects supervise tool
+trees; unconfirmed cleanup keeps Hearth busy rather than admitting another
+request. Completed file changes are reported accurately after termination and
+are retained; cancellation is not rollback. Identical unchanged reads reuse
+verified observations within a request.
+Core renderer/size, landing and Sessions/System layouts remain unchanged.
+
+Verification: 30 reviewed Antigravity tool tests (q058/q059), 17 Codex harness
+tests, 124 ReAct, 105 orchestrator, 42 Hearth, 46 scheduler, 25 health, 33
+pipeline, nine live-voice and six recovery checks pass. Desktop 1440x900 and
+mobile 390x844 browser fixtures passed all 13 approval/reconnect/keyboard/
+Terminate/New conversation checks using real dispatch, broker and processes.
+TypeScript and production build pass; the served bundle was rebuilt. Live
+Hearth verified file discovery, approved scratch creation, accurate denial and
+current runtime inspection. An additional real-provider approved edit/command
+cancellation check remains outstanding: three attempts returned OpenRouter 404
+`No endpoints found for apodex/apodex-1.1-mini:free`. These actions are verified
+in isolated service fixtures, but that is not a successful production provider
+check. The configured brain was not replaced. Do not call this remaining check
+complete or begin the next milestone without addressing it.
+
+Verification also repaired `capture=False`: it now skips conversation history
+and terminal-state persistence as well as queue/KB writes. Five identifiable
+test conversation files from the earlier bug were moved intact, with hashes,
+to `.runtime/milestone2/captured-test-records/`; no owner conversation was
+changed. Baseline B01's fresh-inspection route and B03's error distinction are
+verified; B04's duplicate-read subcase is repaired, broader search/task loops
+remain open. Performance calibration, durable continuity and speech accuracy
+remain later milestones. A model that exhausts its loop with another tool call
+now returns an honest incomplete result; this does not repair its decision
+quality. Training review protections, client snapshot and maintenance schedules
+are preserved. Evidence is under `.runtime/milestone2/`; local commit only.
 
 ## 2. What's mid-flight
 

@@ -113,3 +113,14 @@ export function liveUrl(): string {
 export function newSessionId(): string {
   return `conv-web-${crypto.randomUUID()}`;
 }
+
+export type Approval = { id: string; request_id: string; session: string; digest: string; tool: string;
+  arguments: Record<string, unknown>; proposal: Record<string, unknown>; reason: string; expires_at: number; status: string };
+export const approvals = (session: string) => json<{ approvals: Approval[]; requests: Array<{request_id: string; state: string; session: string}> }>(`/v1/approvals?session=${encodeURIComponent(session)}`);
+export const decideApproval = (a: Approval, decision: "approve" | "deny") => json(`/v1/approvals/${encodeURIComponent(a.id)}`, {
+  method: "POST", headers: {"Content-Type": "application/json"},
+  body: JSON.stringify({request_id: a.request_id, session: a.session, digest: a.digest, decision}),
+});
+export const cancelRequest = (id: string, session: string) => json<{completed_actions?: Record<string, unknown>[]}>(`/v1/requests/${encodeURIComponent(id)}/cancel`, {
+  method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({session}),
+});

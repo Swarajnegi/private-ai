@@ -27,7 +27,7 @@ def main() -> int:
     from jarvis_core.agent.tool import ToolResult
     case = next(c for c in baseline["cases"] if c["id"] == "B03")
     observed = classify_error(ToolResult(error=case["fixture"]["error"]), attempted_tool_name="file_read")
-    print("B03 offline reproduction:", observed.kind.value)
+    print("B03 current regression result:", observed.kind.value)
     for case in baseline["cases"]:
         print(f"{case['id']} {case['status']}: {case['failure']}")
     print(f"{len(baseline['reviewed_sources'])} complete source digests verified; six baseline cases retained.")

@@ -201,6 +201,17 @@ class Hearth:
         self.requests_served = 0
         self.requests_rejected = 0
         self.last_error = ""
+        from jarvis_core.serve.approvals import ApprovalBroker
+        self.approvals = ApprovalBroker(clock=clock)
+        self._live_requests = {}
+        self._http_requests = {}
+
+    async def shutdown(self) -> None:
+        for request_id, request in tuple(self.approvals.requests.items()):
+            try:
+                await self.approvals.cancel(request_id, request["session"])
+            except (ValueError, asyncio.CancelledError):
+                pass
 
     # ---- ask() resolution (late import: keeps smoke tests offline) -------
 
@@ -224,6 +235,8 @@ class Hearth:
         route_strategy: str = "priority",
         capture: Optional[bool] = None,
         free_only: bool = False,
+        request_id: Optional[str] = None,
+        interactive_approvals: bool = True,
     ) -> Dict[str, Any]:
         """One spine pass, narrated through `emit`. Returns the final payload.
 
@@ -236,31 +249,49 @@ class Hearth:
         Returns:
             A JSON-safe dict: answer, verdict, confidence, denials, ledger.
         """
-        queue: "asyncio.Queue[str]" = asyncio.Queue()
-        # The orchestration spine is async at its boundary, but several of its
-        # dependencies (embedding, local retrieval, and some provider clients)
-        # can still block the event loop.  Run it on a dedicated loop in a
-        # worker thread so /v1/health remains truthful while an answer is being
-        # built.  Printer callbacks cross back to this request's loop safely.
+        if allow_all:
+            raise ValueError("allow_all is unavailable on the production Hearth; actions require owner approval")
+        import uuid
+        request_id = request_id or uuid.uuid4().hex
+        session = session or "terminal-" + request_id
+        queue = asyncio.Queue()
         request_loop = asyncio.get_running_loop()
         denials: List[_Denial] = []
+        owner_task = asyncio.current_task()
+
+        async def cancel_owner():
+            owner_task.cancel()
+            if owner_task is not asyncio.current_task():
+                try:
+                    await owner_task
+                except asyncio.CancelledError:
+                    pass
+        owned_here = request_id not in self.approvals.requests
+        self.approvals.register(request_id, session, cancel_owner)
 
         def printer(line: str) -> None:
-            request_loop.call_soon_threadsafe(queue.put_nowait, str(line))
+            request_loop.call_soon_threadsafe(queue.put_nowait, ("log", {"line": str(line)}))
 
-        def deny_handler(tool_name: str, tool_input: Dict[str, Any]) -> Any:
-            from jarvis_core.agent.permissions import PermissionDecision
-            denials.append(_Denial(tool=str(tool_name), preview=str(tool_input)))
-            printer(f"  [permission] {tool_name} DENIED — no human is reachable "
-                    f"over the hearth; run it from --ask if you want to approve it")
-            return PermissionDecision.DENY
+        async def publish(event, data):
+            queue.put_nowait((event, data))
 
-        if allow_all:
-            from jarvis_core.brain.orchestrator import allow_all_ask_handler
-            active_handler = allow_all_ask_handler
-        else:
-            active_handler = deny_handler
-
+        async def approval_handler(tool_name: str, tool_input: Dict[str, Any]):
+            if not interactive_approvals:
+                from jarvis_core.agent.permissions import PermissionDecision
+                denials.append(_Denial(tool=str(tool_name), preview=str(tool_input)))
+                printer(f"  [permission] {tool_name} DENIED — this unattended client cannot approve changes")
+                return PermissionDecision.DENY
+            future = asyncio.run_coroutine_threadsafe(self.approvals.wait(request_id, tool_name, tool_input, publish), request_loop)
+            try:
+                decision = await asyncio.wrap_future(future)
+            except asyncio.CancelledError:
+                future.cancel()
+                raise
+            if decision.value == "deny":
+                denials.append(_Denial(tool=str(tool_name), preview=str(tool_input)))
+                printer(f"  [permission] {tool_name} DENIED by owner/policy; no action executed")
+            return decision
+        active_handler = approval_handler
         kwargs: Dict[str, Any] = dict(self._cfg.ask_kwargs)
         kwargs.update(printer=printer, ask_handler=active_handler,
                       session=session, new_session=new_session)
@@ -305,18 +336,31 @@ class Hearth:
                 worker.update(loop=asyncio.get_running_loop(), task=asyncio.current_task())
             if cancellation.is_set():
                 raise asyncio.CancelledError
-            call = ask_fn(question, **kwargs)
-            if self._cfg.ask_timeout_seconds is None:
-                return await call
-            return await asyncio.wait_for(call, timeout=self._cfg.ask_timeout_seconds)
+            from jarvis_core.agent.tool import ACTION_REPORTER
+            def record_action(action):
+                def record():
+                    request = self.approvals.requests.get(request_id)
+                    if request is not None:
+                        request["completed_actions"].append(action)
+                    queue.put_nowait(("action_completed", {"action": action}))
+                request_loop.call_soon_threadsafe(record)
+            token = ACTION_REPORTER.set(record_action)
+            try:
+                call = ask_fn(question, **kwargs)
+                if self._cfg.ask_timeout_seconds is None:
+                    return await call
+                return await asyncio.wait_for(call, timeout=self._cfg.ask_timeout_seconds)
+            finally:
+                ACTION_REPORTER.reset(token)
 
         def invoke() -> Any:
             return asyncio.run(invoke_async())
 
         task = asyncio.create_task(asyncio.to_thread(invoke))
         try:
-            async for line in self._drain(queue, task):
-                await emit("log", {"line": line})
+            await emit("request", {"request_id": request_id, "session": session})
+            async for event, data in self._drain(queue, task):
+                await emit(event, {"request_id": request_id, **data})
             result = await asyncio.shield(task)
         except asyncio.CancelledError:
             cancellation.set()
@@ -330,8 +374,12 @@ class Hearth:
                 await asyncio.shield(task)
             except asyncio.CancelledError:
                 pass
+            if owned_here:
+                self.approvals.finish(request_id)
             raise
         except asyncio.TimeoutError:
+            if owned_here:
+                self.approvals.finish(request_id)
             deadline = self._cfg.ask_timeout_seconds
             self.last_error = (
                 f"request exceeded {deadline:.0f}s and was cancelled"
@@ -341,10 +389,14 @@ class Hearth:
                              "because this deployment explicitly configured a deadline.",
                     "answer": "", "denials": [d.tool for d in denials]}
         except Exception as e:                 # a crash is an answer, not a hang
+            if owned_here:
+                self.approvals.finish(request_id)
             self.last_error = f"{type(e).__name__}: {e}"
             return {"ok": False, "error": self.last_error, "answer": "",
                     "denials": [d.tool for d in denials]}
-        return self._payload(result, denials)
+        if owned_here:
+            self.approvals.finish(request_id)
+        return {"request_id": request_id, **self._payload(result, denials)}
 
     @staticmethod
     async def _drain(queue: "asyncio.Queue[str]", task: "asyncio.Future[Any]"):
@@ -447,11 +499,13 @@ class Hearth:
                 pipeline = {"healthy": False, "backlog": {}, "breaches": [{
                     "check": "pipeline_health",
                     "detail": f"the health report itself failed: {type(e).__name__}: {e}"}]}
+        from jarvis_core.agent.execution import CLEANUP_UNCONFIRMED
         return {
-            "ok": True,
+            "ok": not CLEANUP_UNCONFIRMED,
+            "cleanup_unconfirmed": CLEANUP_UNCONFIRMED,
             "uptime_seconds": round(self._clock() - self._started_at, 1),
             "pid": os.getpid(),
-            "busy": self._slot.locked(),
+            "busy": self._slot.locked() or CLEANUP_UNCONFIRMED,
             "requests_served": self.requests_served,
             "requests_rejected": self.requests_rejected,
             "last_error": self.last_error,
@@ -815,6 +869,7 @@ def build_app(hearth: Hearth) -> Callable[..., Awaitable[None]]:
                 if message["type"] == "lifespan.startup":
                     await send({"type": "lifespan.startup.complete"})
                 elif message["type"] == "lifespan.shutdown":
+                    await hearth.shutdown()
                     await send({"type": "lifespan.shutdown.complete"})
                     return
         if scope["type"] == "websocket":
@@ -846,6 +901,29 @@ def build_app(hearth: Hearth) -> Callable[..., Awaitable[None]]:
                 await _respond(send, 403, _json_bytes({"ok": False, "error": "access denied"}))
             return
 
+        if path == "/v1/approvals" and method == "GET":
+            from urllib.parse import parse_qs
+            session = parse_qs(scope.get("query_string", b"").decode()).get("session", [""])[0]
+            requests = [{"request_id": rid, "state": r["state"], "session": r["session"]}
+                        for rid, r in hearth.approvals.requests.items() if r["session"] == session]
+            await _respond(send, 200, _json_bytes({"approvals": hearth.approvals.pending_for(session), "requests": requests}))
+            return
+        if ((path.startswith("/v1/approvals/") or path.startswith("/v1/requests/")) and method == "POST"):
+            try:
+                body = json.loads(await _read_body(receive))
+                if path.startswith("/v1/approvals/"):
+                    result = hearth.approvals.decide(path.rsplit("/", 1)[1], request_id=body["request_id"], session=body["session"], digest=body["digest"], decision=body["decision"])
+                elif path.endswith("/cancel"):
+                    rid = path.split("/")[-2]
+                    request = hearth.approvals.requests.get(rid, {})
+                    await hearth.approvals.cancel(rid, body["session"])
+                    result = {"status": "terminated", "completed_actions": request.get("completed_actions", [])}
+                else:
+                    raise ValueError("Unknown request action")
+                await _respond(send, 200, _json_bytes({"ok": True, **result}))
+            except (ValueError, KeyError, TypeError) as exc:
+                await _respond(send, 409, _json_bytes({"ok": False, "error": str(exc)}))
+            return
         if path in ("/v1/health", "/health") and method == "GET":
             await _respond(send, 200, _json_bytes(hearth.health()))
             return
@@ -954,6 +1032,15 @@ async def _handle_ask(hearth: Hearth, scope: Dict[str, Any],
         await _respond(send, 400, _json_bytes({"ok": False, "error": f"bad JSON: {e}"}))
         return
 
+    resume_id = body.get("resume_request")
+    if resume_id:
+        existing = hearth._http_requests.get(str(resume_id))
+        if existing is None or existing["session"] != body.get("session") or not hearth.approvals.has_pending(str(resume_id)):
+            await _respond(send, 409, _json_bytes({"ok": False, "error": "No pending request matches this session"}))
+            return
+        from jarvis_core.serve.http_requests import serve_exchange
+        await serve_exchange(hearth, existing, scope, receive, send)
+        return
     question = str(body.get("question", "")).strip()
     if not question:
         await _respond(send, 400, _json_bytes(
@@ -962,7 +1049,8 @@ async def _handle_ask(hearth: Hearth, scope: Dict[str, Any],
 
     # Single-flight. Rejecting beats queueing: a client blocked for three
     # minutes behind someone else's question cannot tell that from a hang.
-    if hearth._slot.locked():
+    from jarvis_core.agent.execution import CLEANUP_UNCONFIRMED
+    if hearth._slot.locked() or CLEANUP_UNCONFIRMED:
         hearth.requests_rejected += 1
         await _respond(send, 409, _json_bytes(
             {"ok": False, "error": "hearth is busy with another question",
@@ -991,6 +1079,9 @@ async def _handle_ask(hearth: Hearth, scope: Dict[str, Any],
         targets = None
     full = bool(body.get("full", False))
     allow_all = bool(body.get("allow_all", False))
+    if allow_all:
+        await _respond(send, 400, _json_bytes({"ok": False, "error": "allow_all cannot bypass individual owner approval"}))
+        return
     # No browser-specific reasoning ceiling.  When omitted, the orchestrator
     # resolves the selected model's own operating profile; an explicit value is
     # still honoured for a caller deliberately choosing a bounded run.
@@ -1000,42 +1091,11 @@ async def _handle_ask(hearth: Hearth, scope: Dict[str, Any],
     free_only = bool(body.get("free_only", False))
     streaming = _wants_stream(scope)
 
-    async with hearth._slot:
-        hearth.requests_served += 1
-        if not streaming:
-            collected: List[str] = []
-
-            async def collect(_event: str, data: Dict[str, Any]) -> None:
-                if "line" in data:
-                    collected.append(str(data["line"]))
-
-            payload = await hearth.run_ask(question, collect,
-                                           session=session, new_session=new_session,
-                                           targets=targets, full=full, allow_all=allow_all,
-                                           max_iterations=max_iterations, budget_usd=budget_usd,
-                                           reasoning_effort=reasoning_effort, free_only=free_only)
-            payload["log"] = collected
-            await _respond(send, 200 if payload.get("ok") else 500, _json_bytes(payload))
-            return
-
-        await send({"type": "http.response.start", "status": 200,
-                    "headers": [(b"content-type", b"text/event-stream"),
-                                (b"cache-control", b"no-store"),
-                                (b"connection", b"keep-alive"),
-                                (b"x-accel-buffering", b"no")]})
-
-        async def emit(event: str, data: Dict[str, Any]) -> None:
-            await send({"type": "http.response.body", "body": _sse(event, data),
-                        "more_body": True})
-
-        await emit("open", {"question": question})
-        payload = await hearth.run_ask(question, emit,
-                                       session=session, new_session=new_session,
-                                       targets=targets, full=full, allow_all=allow_all,
-                                       max_iterations=max_iterations, budget_usd=budget_usd,
-                                       reasoning_effort=reasoning_effort, free_only=free_only)
-        await emit("answer", payload)
-        await send({"type": "http.response.body", "body": b"", "more_body": False})
+    from jarvis_core.serve.http_requests import start_request
+    await start_request(hearth, question, dict(session=session, new_session=new_session,
+        targets=targets, full=full, allow_all=False, max_iterations=max_iterations,
+        budget_usd=budget_usd, reasoning_effort=reasoning_effort, free_only=free_only,
+        capture=body.get("capture"), interactive_approvals=bool(body.get("interactive_approvals", True))), scope, receive, send)
 
 
 # =============================================================================
@@ -1072,6 +1132,7 @@ def serve(config: HearthConfig, scheduler: Optional[Any] = None) -> int:
                         scheduler.start()
                         await send({"type": "lifespan.startup.complete"})
                     elif message["type"] == "lifespan.shutdown":
+                        await hearth.shutdown()
                         await scheduler.stop()
                         await send({"type": "lifespan.shutdown.complete"})
                         return
@@ -1135,6 +1196,7 @@ def _run_self_test() -> None:
 
         async def receive() -> Dict[str, Any]:
             if delivered["done"]:
+                await asyncio.Future()
                 return {"type": "http.disconnect"}
             delivered["done"] = True
             return {"type": "http.request", "body": body, "more_body": False}
@@ -1250,6 +1312,7 @@ def _run_self_test() -> None:
 
             async def receive() -> Dict[str, Any]:
                 if done["d"]:
+                    await asyncio.Future()
                     return {"type": "http.disconnect"}
                 done["d"] = True
                 return {"type": "http.request",
@@ -1313,7 +1376,7 @@ def _run_self_test() -> None:
     # T19-T20: permission prompts are denied AND reported.
     async def dangerous_ask(question: str, **kwargs: Any) -> FakeResult:
         handler = kwargs["ask_handler"]
-        decision = handler("shell_run", {"command": "rm -rf /"})
+        decision = await handler("shell_run", {"command": "fixture forbidden command"})
         # repr(), not str() or an f-string: PermissionDecision subclasses str, so
         # f"{d}" renders "deny" (str.__format__) while str(d) renders
         # "PermissionDecision.DENY" (Enum.__str__). repr() is unambiguous.
@@ -1321,6 +1384,10 @@ def _run_self_test() -> None:
         return FakeResult()
 
     gated = Hearth(HearthConfig(token="tok"), ask_fn=dangerous_ask)
+    async def fixture_deny(*args):
+        from jarvis_core.agent.permissions import PermissionDecision
+        return PermissionDecision.DENY
+    gated.approvals.wait = fixture_deny
     sent, _ = drive(build_app(gated), http_scope("POST", "/v1/ask"),
                     body=_json_bytes({"question": "delete everything"}))
     gated_payload = json.loads(body_of(sent))
