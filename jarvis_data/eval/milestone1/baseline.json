@@ -204,5 +204,18 @@
       "digest": "80fab5e7ba6043e4c1b771df819cd983fe6f8d1ced4138c53ab93e1266ffa694",
       "decision": "rejected"
     }
+  ],
+  "milestone2_observations": [
+    {
+      "id": "M2-01",
+      "date": "2026-10-14",
+      "failure": "promise to execute without tool dispatch",
+      "status": "unresolved",
+      "observed": "A default free-router reply described the requested controlled command and said it was proceeding, but produced no shell_run call or approval. No command executed in that probe.",
+      "expected": "Agentic requests require actual tool results, or an accurate statement that execution did not occur. Decision-quality repair is a later milestone.",
+      "evidence": ".runtime/milestone2/live-execution-observed.txt",
+      "evidence_sha256": "ea761ddca312005aa8c24152c1e7319f4d46b638acfd657476f8d76c0a491b82",
+      "ephemeral": true
+    }
   ]
 }

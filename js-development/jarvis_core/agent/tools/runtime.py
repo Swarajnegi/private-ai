@@ -34,6 +34,7 @@ class RuntimeInspectTool(Tool):
         self.snapshot_provider = snapshot_provider
         self.tools = tools if tools is not None else {}
         self.brain_model = ""
+        self.brain_state: Optional[Callable] = None
         self.unavailable_tools = {}
 
     @property
@@ -86,6 +87,8 @@ class RuntimeInspectTool(Tool):
                 snapshot["voice"] = None
                 unknown["voice"] = str(exc)
         hardware = snapshot.get("hardware")
+        if self.brain_state is not None:
+            snapshot["brain"] = self.brain_state()
         if isinstance(hardware, dict) and isinstance(hardware.get("ram_bytes"), (int, float)):
             hardware["ram_gib"] = round(hardware["ram_bytes"] / 1024**3, 3)
         if isinstance(snapshot.get("gpu"), list):

@@ -142,12 +142,62 @@ class HarnessTests(unittest.IsolatedAsyncioTestCase):
             conv_store=Store(), store_factory=lambda: None, inhale=False, use_profile=False,
             gate=ConfidenceGate(embed_fn=lambda texts:[[1.,0.] for _ in texts]), printer=lambda line:None)
         self.assertFalse(result.persisted)
+
         self.assertFalse(result.captured)
         self.assertEqual(result.distill_status,"skipped")
         self.assertEqual(appended,[])
         self.assertFalse(state.exists())
         self.assertFalse(queue.exists())
         self.assertEqual(kb.read_text(),"")
+
+    async def test_environment_fallbacks_preserve_paid_and_explicit_router_policy(self):
+        from jarvis_core.brain.orchestrator import environment_free_fallbacks
+        for model, expected in [('fixture/missing:free', ['fixture/missing:free', 'openrouter/free']), ('openrouter/free', None), ('fixture/paid', None), ('', None)]:
+            with patch.dict(os.environ, {'OPENROUTER_MODEL': model}):
+                self.assertEqual(environment_free_fallbacks(), expected)
+        inspector = RuntimeInspectTool(snapshot_provider=lambda:{'hardware': None, 'brain':{'model':'old configured primary'}})
+        inspector.brain_state = lambda:{'configured_model':'fixture/missing:free','requested_primary':'fixture/missing:free','model':'openrouter/free','location':'cloud API'}
+        snapshot = (await inspector.invoke(ToolInput())).output
+        self.assertEqual(snapshot['brain']['model'], 'openrouter/free')
+        self.assertEqual(snapshot['brain']['configured_model'], 'fixture/missing:free')
+
+    async def test_default_free_model_404_fails_over_with_reasoning_and_budget(self):
+        from jarvis_core.brain.orchestrator import ask
+        from jarvis_core.brain.llm_client import OpenRouterClient
+        from jarvis_core.brain.model_stats import ModelStatsStore
+        from jarvis_core.brain.confidence import ConfidenceGate
+        replies = iter([json.dumps([{'tool_name':'calculator','description':'compute'}]), json.dumps({'name':'calculator','arguments':{'expression':'1+1'}}), 'Two.'])
+        sent, constructed, captured = [], [], []
+        async def transport(url, headers, payload, timeout):
+            if url.endswith('/models'):
+                return 200, {'data':[{'id': m, 'pricing': {'prompt':'0', 'completion':'0'}} for m in ['fixture/missing:free', 'openrouter/free']]}
+            sent.append(payload)
+            if payload['model'] == 'fixture/missing:free':
+                return 404, {'error': {'code':404,'message':'No endpoints found'}}
+            return 200, {'model':'fixture/actual:free','choices':[{'message':{'content':next(replies)},'finish_reason':'stop'}], 'usage':{'prompt_tokens':5,'completion_tokens':5}}
+        def build(**kwargs):
+            constructed.append(kwargs)
+            return OpenRouterClient(api_key='fixture-only', transport=transport, **{k:v for k,v in kwargs.items() if v is not None})
+        class Store:
+            def load_context(self, *args): return []
+            def append_turn(self, *args): captured.append(args)
+        kb = self.root / 'fallback-kb.jsonl'
+        kb.write_text('')
+        lines = []
+        with patch.dict(os.environ, {'OPENROUTER_MODEL':'fixture/missing:free'}), patch('jarvis_core.brain.llm_client.build_llm_call', side_effect=build):
+            result = await ask('fixture addition', capture=False, session='fallback-fixture', kb_path=kb,
+                store_factory=lambda:None, conv_store=Store(), inhale=False, use_profile=False, reasoning_effort='high',
+                model_stats_store=ModelStatsStore(path=self.root/'fallback-stats.jsonl'), budget_usd=.01,
+                gate=ConfidenceGate(embed_fn=lambda texts:[[1.,0.] for _ in texts]), printer=lines.append)
+        self.assertEqual(result.answer, 'Two.')
+        self.assertFalse(result.persisted)
+        self.assertEqual(sum(p['model']=='fixture/missing:free' for p in sent), 1)
+        self.assertTrue(any(p['model']=='openrouter/free' for p in sent))
+        self.assertTrue(all(p['reasoning']=={'effort':'high'} for p in sent))
+        self.assertTrue(any('404' in line and 'failover' in line for line in lines))
+        self.assertTrue(all(c['budget_usd']==.01 for c in constructed))
+        self.assertIs(constructed[0]['cost_tracker'], constructed[1]['cost_tracker'])
+        self.assertEqual(captured, [])
 
     async def test_validation_precedes_policy_and_aliases_are_bound(self):
         calls = iter([json.dumps({"name": "file_create", "arguments": {"path": str(self.root / "bad.txt")}}), "Done"])

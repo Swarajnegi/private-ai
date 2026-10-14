@@ -337,6 +337,18 @@ def _read_roadmap_status_summary(root: Optional[Path] = None) -> str:
     return text[start: end if end != -1 else len(text)].strip()
 
 
+def environment_free_fallbacks() -> Optional[List[str]]:
+    """Give an implicit free-model default the already supported free fallback.
+
+    Explicit targets/routers and injected clients keep their own contracts.
+    Paid defaults stay unchanged; this path never adds another paid model.
+    """
+    configured = os.environ.get("OPENROUTER_MODEL", "").strip()
+    if configured.endswith(":free"):
+        return [configured, "openrouter/free"]
+    return None
+
+
 async def ask(
     question: str,
     llm_call: Optional[Any] = None,
@@ -417,10 +429,7 @@ async def ask(
     Returns:
         AskResult — the answer plus every judgement and bookkeeping fact.
 
-    Scope note: `reasoning_effort` only reaches the single-model default path
-    (`build_llm_call`/`OpenRouterClient`). A `pool`/`targets`/`route` run builds
-    its own `OpenRouterTarget`s (targets.py) and does not thread this through —
-    unfixed in this pass.
+    `reasoning_effort` reaches both the single client and built pool targets.
     """
     # Resolve the LLM endpoint (4.1 W2). Priority:
     #   1. injected llm_call (tests/programmatic) — used directly, no pool.
@@ -445,6 +454,9 @@ async def ask(
             strategy=route_strategy)
         targets = list(route_decision.targets)
 
+    if llm_call is None and pool is None and targets is None:
+        targets = environment_free_fallbacks()
+
     route_pool = pool
     # Stage 4.3.1: resolved ONCE, unconditionally — both the load (only when a
     # pool is BUILT below) and the flush (fires whenever ANY pool exists, incl.
@@ -467,6 +479,7 @@ async def ask(
         built = [OpenRouterTarget(m.strip(), budget_usd=budget_usd,
                                   registry=registry, use_profile=use_profile,
                                   cost_tracker=budget_tracker,
+                                  reasoning_effort=reasoning_effort,
                                   timeout_s=target_timeout_s,
                                   max_retries=target_max_retries)
                  for m in targets if m and m.strip()]
@@ -546,6 +559,14 @@ async def ask(
                 if full else default_toolset(store=store, kb_path=kb_path, llm_call=client))
     if "runtime_inspect" in prebuilt:
         prebuilt["runtime_inspect"].brain_model = str(model or "")
+        if route_pool is not None:
+            requested_primary = next(iter(route_pool.status()), model)
+            prebuilt["runtime_inspect"].brain_state = lambda: {
+                "location": "cloud API", "configured_model": os.environ.get("OPENROUTER_MODEL") or None,
+                "requested_primary": requested_primary,
+                "model": route_pool.last_chosen or model,
+                "model_meaning": "API route target; router aliases do not identify the underlying provider model",
+            }
     p_ctx = permission_context or build_permission_context(prebuilt)
     p_handler = ask_handler or terminal_ask_handler
     gated = sorted(n for n, t in prebuilt.items()

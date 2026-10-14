@@ -85,7 +85,7 @@ behavioural repairs continue below. Generated corpus files and unrelated
 memory updates remain unstaged; only reviewed milestone sources/records/docs are
 included in the local commit.
 
-**Milestone 2 harness implementation, 2026-10-14 (Codex).** Interactive
+**Milestone 2 harness closed, 2026-10-14 (Codex).** Interactive
 requests now construct runtime inspection, native PowerShell, text creation/
 editing and public-web tools. Arguments are normalized before permission;
 verified read-only inspection runs automatically and mutations need individual
@@ -109,19 +109,31 @@ are retained; cancellation is not rollback. Identical unchanged reads reuse
 verified observations within a request.
 Core renderer/size, landing and Sessions/System layouts remain unchanged.
 
-Verification: 30 reviewed Antigravity tool tests (q058/q059), 17 Codex harness
+Verification: 30 reviewed Antigravity tool tests (q058/q059), 19 Codex harness
 tests, 124 ReAct, 105 orchestrator, 42 Hearth, 46 scheduler, 25 health, 33
 pipeline, nine live-voice and six recovery checks pass. Desktop 1440x900 and
 mobile 390x844 browser fixtures passed all 13 approval/reconnect/keyboard/
 Terminate/New conversation checks using real dispatch, broker and processes.
 TypeScript and production build pass; the served bundle was rebuilt. Live
 Hearth verified file discovery, approved scratch creation, accurate denial and
-current runtime inspection. An additional real-provider approved edit/command
-cancellation check remains outstanding: three attempts returned OpenRouter 404
-`No endpoints found for apodex/apodex-1.1-mini:free`. These actions are verified
-in isolated service fixtures, but that is not a successful production provider
-check. The configured brain was not replaced. Do not call this remaining check
-complete or begin the next milestone without addressing it.
+current runtime inspection. The provider blocker is repaired: Apodex's free ID
+is absent from the current public catalog and its endpoint list is empty;
+the same key successfully calls `openrouter/free` at zero cost. Environment-
+default free-model requests now use the existing fallback pool. The configured
+primary remains unchanged; no paid fallback was added. Injected clients,
+explicit targets and paid defaults preserve their existing contracts; built
+pool targets now retain the requested reasoning effort and shared budget.
+Runtime inspection reports the configured primary and active API route
+separately; a router alias is not claimed to identify its underlying model.
+Added checks prove default 404 recovery and preserved routing/cost policy;
+16 target, 41 model-pool and 34 LLM-client checks pass.
+
+Production closure passed using the configured default path: approved edit
+preserved CRLF, the exact PowerShell worker was observed under Hearth, cancellation
+removed that worker, and a fresh question returned 323. Hearth is idle with
+confirmed cleanup and warm CPU voice. These live checks are uncaptured and
+all artifacts remain on D. Evidence: `openrouter-diagnosis.json` and
+`live-execution-results.json` under `.runtime/milestone2/`.
 
 Verification also repaired `capture=False`: it now skips conversation history
 and terminal-state persistence as well as queue/KB writes. Five identifiable
@@ -134,6 +146,10 @@ remain later milestones. A model that exhausts its loop with another tool call
 now returns an honest incomplete result; this does not repair its decision
 quality. Training review protections, client snapshot and maintenance schedules
 are preserved. Evidence is under `.runtime/milestone2/`; local commit only.
+An extra live probe produced a promise to execute a command without a tool
+call. This remains a model-decision regression for the later decision-quality
+milestone, recorded in the baseline; successful tool/cancellation checks do not
+prove that every model follows every natural-language instruction.
 
 ## 2. What's mid-flight
 

@@ -130,13 +130,13 @@ This updates artifact counts, not the older c002 experiment or training approval
 - [x] Accurate typed missing-path/unknown-tool errors and discovery hints; unchanged identical reads reused within each request.
 - [x] Authenticated request/session/action-bound one-time approval over HTTP and voice; fixed ten-minute expiry and reconnect retention.
 - [x] Visible Terminate including folded dialogue, Escape, local playback stop, exact request cancellation and cleanup before New conversation/fresh question. Completed file changes remain and are reported accurately.
-- [x] Antigravity q058/q059: 30 bounded fixture tests reviewed and rerun; Codex added 17 end-to-end checks. No policy/data/dependency/schedule changes by Antigravity.
+- [x] Antigravity q058/q059: 30 bounded fixture tests reviewed and rerun; Codex added 19 end-to-end checks, including default-model 404 recovery with preserved budget/reasoning. No policy/data/dependency/schedule changes by Antigravity.
 - [x] Desktop/mobile browser fixtures: 13 checks at 1440x900 and 390x844; TypeScript/build and relevant harness/service/Milestone 1/pipeline/scheduler regressions pass. Served bundle rebuilt, Hearth restarted through its watchdog.
 - [x] Live configured-provider inspection, file discovery, approved scratch creation and denied action verified. CPU voice available; no speech benchmark.
-- [ ] Additional production approved edit/controlled-command termination check: configured free brain returned OpenRouter 404 `No endpoints found` three times. Real-tool isolated service checks pass; retain this distinction until the live check can be completed. No model replacement performed.
+- [x] Production approved edit/controlled-command termination and fresh-question check: CRLF preserved, exact PowerShell worker observed under Hearth and confirmed gone, then 17 × 19 answered 323. The former 404 blocker was a vanished Apodex free endpoint; environment-default free requests now use the existing free fallback pool. Configured primary, paid defaults, explicit targets and injected clients preserved. No new paid route/model/dependency installed.
 - [x] Uncaptured requests now leave no conversation/session/queue/KB writes; five earlier identifiable test histories preserved intact under `.runtime/milestone2/` with hash manifest.
 - [x] Core renderer/geometry/colours, landing, Sessions/System layout, client snapshot, training gate and schedules preserved; local commit only, no push.
-- [~] B01 fresh hardware evidence and B03 error handling verified; B04 same-request read reuse verified. General model decisions, B02 calibration, B05 continuity and B06 speech accuracy remain later work. Milestone closure waits for the outstanding live check above.
+- [x] Milestone 2 closed after observed production recovery. B01 fresh hardware evidence and B03 error handling verified; B04 same-request read reuse verified. General model decisions, B02 calibration, B05 continuity and B06 speech accuracy remain later work. A live model's promise to execute without a tool call is retained as a later decision-quality regression.
 
 ## F. Open commitments (`python3 scripts/commitments.py --list`)
 

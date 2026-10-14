@@ -161,6 +161,7 @@ class OpenRouterTarget(RouteTarget):
         timeout_s: Optional[float] = None,
         max_retries: Optional[int] = None,
         max_tokens: Optional[int] = DEFAULT_MAX_TOKENS,
+        reasoning_effort: Optional[str] = None,
     ) -> None:
         self._registry = registry or ProfileRegistry()
         self._use_profile = use_profile
@@ -172,7 +173,7 @@ class OpenRouterTarget(RouteTarget):
             client = build_llm_call(budget_usd=budget_usd, model=model,
                                     cost_tracker=cost_tracker,
                                     timeout_s=timeout_s, max_retries=max_retries,
-                                    max_tokens=max_tokens)
+                                    max_tokens=max_tokens, reasoning_effort=reasoning_effort)
         self._client = client
         self.name = name or (str(getattr(client, "model", "")) or model or "openrouter")
         self._resolve_profile()
